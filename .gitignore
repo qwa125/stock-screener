@@ -44,3 +44,5 @@ pnpm-debug.log*
 
 .cozeproj/reduction
 node-compile-cache/
+deploy-package.zip
+public/deploy-package.zip
