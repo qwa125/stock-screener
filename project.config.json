@@ -1,0 +1,16 @@
+{
+  "miniprogramRoot": "./dist",
+  "projectname": "股票分析助手",
+  "description": "基于同花顺指标公式的智能股票分析",
+  "appid": "wxa7a82913e5de5daa",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "enhance": false,
+    "compileHotReLoad": false,
+    "postcss": false,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "packOptions": { "ignore": [{ "type": "folder", "value": "./assets" }] }
+}

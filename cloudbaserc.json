@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "run": [
+    {
+      "containerName": "stock-analysis-api",
+      "dockerfilePath": "./server/Dockerfile",
+      "context": ".",
+      "port": 3000,
+      "cpu": 0.5,
+      "mem": 512,
+      "minNum": 0,
+      "maxNum": 2,
+      "envParams": {
+        "NODE_ENV": "production",
+        "SERVER_PORT": "3000"
+      },
+      "policy": "cpus",
+      "healthCheckPath": "/api/stock/analyze?q=000001",
+      "initialDelaySeconds": 3
+    }
+  ]
+}
