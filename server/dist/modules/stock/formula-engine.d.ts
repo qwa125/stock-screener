@@ -1,0 +1,48 @@
+export declare class FormulaEngine {
+    private _open;
+    private _close;
+    private _high;
+    private _low;
+    private _volume;
+    private _amount;
+    private _length;
+    constructor(data: {
+        open: number[];
+        close: number[];
+        high: number[];
+        low: number[];
+        volume: number[];
+        amount: number[];
+    });
+    get length(): number;
+    get OPEN(): number[];
+    get CLOSE(): number[];
+    get HIGH(): number[];
+    get LOW(): number[];
+    get VOL(): number[];
+    get AMOUNT(): number[];
+    MA(data: number[], n: number): number[];
+    EMA(data: number[], n: number): number[];
+    LLV(data: number[], n: number): number[];
+    HHV(data: number[], n: number): number[];
+    REF(data: number[] | boolean[], n: number): number[];
+    CROSS(a: number[], b: number[]): boolean[];
+    COUNT(cond: boolean[], n: number): number[];
+    BARSLAST(cond: boolean[]): number[];
+    BARSCOUNT(): number[];
+    STD(data: number[], n: number): number[];
+    SUM(data: number[], n: number): number[];
+    IF(cond: boolean[], a: number[], b: number[]): number[];
+    MAX(a: number[], b: number[]): number[];
+    MAX_V(a: number, b: number): number;
+    MIN(a: number[], b: number[]): number[];
+    MIN_V(a: number, b: number): number;
+    ABS(data: number[]): number[];
+    LAST<T>(arr: T[]): T;
+    LAST_N<T>(arr: T[], n: number): T;
+    FILTER(cond: boolean[], n: number): boolean[];
+    HHVBARS(data: number[], n: number): number[];
+    LLVBARS(data: number[], n: number): number[];
+    XMA(data: number[], n: number): number[];
+    SMA(data: number[], n: number, m: number): number[];
+}

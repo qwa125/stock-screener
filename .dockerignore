@@ -2,9 +2,8 @@ node_modules/
 .pnpm-store/
 .git/
 .gitignore
-dist/
-dist-web/
-dist-tt/
+
+# Deploy artifacts (not the pre-built app artifacts)
 deploy/
 deploy-package.*
 *.tar.gz
