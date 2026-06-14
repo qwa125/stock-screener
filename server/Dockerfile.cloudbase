@@ -1,0 +1,16 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# Copy pre-built server artifacts
+COPY server/package.json ./
+COPY server/dist/ ./dist/
+COPY server/assets/ ./assets/
+
+# Copy pre-built frontend
+COPY dist-web/ ./dist-web/
+
+# Install production dependencies only
+RUN npm install --production
+
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
