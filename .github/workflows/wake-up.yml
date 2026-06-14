@@ -1,0 +1,14 @@
+name: Wake Up Render
+
+on:
+  schedule:
+    # 交易日 9:00 AM (北京时间，UTC+8 → UTC 1:00)
+    - cron: '0 1 * * 1-5'
+
+jobs:
+  wake-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up the stock screener service
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" "https://你的域名.onrender.com" || true
