@@ -167,7 +167,7 @@ export interface BacktestStats {
 /** 信号条目（中性描述，不包含买卖建议） */
 export interface SignalEntry {
   name: string;
-  type: 'positive' | 'negative' | 'neutral';
+  type: 'positive' | 'negative' | 'neutral' | 'warning';
   description?: string;
 }
 

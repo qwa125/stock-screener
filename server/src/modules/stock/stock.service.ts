@@ -211,6 +211,17 @@ export class StockService {
     const klines = await this.dataFetcher.getKLineData(stock.code, stock.market);
     this.logger.log(`获取到 ${klines.length} 条K线数据`);
 
+    // 3.5 新股提醒：不足60个交易日时追加警示
+    const isNewStock = klines.length < 60;
+    let newStockWarning: SignalEntry | null = null;
+    if (isNewStock) {
+      newStockWarning = {
+        name: `⚠️ 新股预警`,
+        type: 'warning',
+        description: `上市不足60个交易日（仅${klines.length}天），技术分析参考价值有限`
+      };
+    }
+
     // 4. 创建公式引擎
     const engine = new FormulaEngine({
       open: klines.map(k => k.open),
@@ -247,6 +258,11 @@ export class StockService {
 
     // 8. 生成中性信号列表
     const signals: SignalEntry[] = generateSignals({ formula: formulaResult });
+
+    // 新股预警追加到信号列表
+    if (newStockWarning) {
+      signals.push(newStockWarning);
+    }
 
     // 9. 60日线偏离提醒（仅做数据展示，非建议）
     const closePrices = klines.map(k => k.close);
@@ -296,6 +312,7 @@ export class StockService {
       high,
       low,
       klineCount: klines.length,
+      isNewStock,
       formula: formulaResult,
       signals,
       backtestStats,
