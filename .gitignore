@@ -7,6 +7,10 @@ dist/
 build/
 dist-*/
 
+# But allow deploy build artifacts (pre-built for Docker)
+!dist-web/
+!server/dist/
+
 # Misc
 .DS_Store
 .env
