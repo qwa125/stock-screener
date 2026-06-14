@@ -24,6 +24,14 @@ let GemScreenerController = class GemScreenerController {
         const { opportunities, timestamp } = await this.gemScreener.getMainBoardOpportunities();
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
     }
+    async getTopGem() {
+        const opportunities = await this.gemScreener.scanTopGem();
+        return { code: 200, msg: 'success', data: { opportunities } };
+    }
+    async getTopMainBoard() {
+        const opportunities = await this.gemScreener.scanTopMainBoard();
+        return { code: 200, msg: 'success', data: { opportunities } };
+    }
     async getTopOpportunities() {
         const opportunities = await this.gemScreener.scanTopOpportunities();
         return { code: 200, msg: 'success', data: { opportunities } };
@@ -43,7 +51,19 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getMainBoard", null);
 __decorate([
-    (0, common_1.Get)('top-opportunities'),
+    (0, common_1.Get)('top/gem'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getTopGem", null);
+__decorate([
+    (0, common_1.Get)('top/main-board'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getTopMainBoard", null);
+__decorate([
+    (0, common_1.Get)('top/opportunities'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

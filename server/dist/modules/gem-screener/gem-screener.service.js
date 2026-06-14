@@ -956,27 +956,45 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             results.push(...this.mainBoardCache.data);
         return results;
     }
+    async scanTopGem() {
+        return this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
+    }
+    async scanTopMainBoard() {
+        return this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
+    }
     async scanTopOpportunities() {
-        const allCandidates = [];
+        return this.scanTopFromCandidates(async () => {
+            const all = [];
+            try {
+                const gem = await this.fetchGEMCandidates();
+                if (gem?.length)
+                    all.push(...gem);
+            }
+            catch { }
+            try {
+                const main = await this.fetchMainBoardCandidates();
+                if (main?.length)
+                    all.push(...main);
+            }
+            catch { }
+            return all;
+        }, 10);
+    }
+    async scanTopFromCandidates(fetchFn, topN) {
+        const candidates = [];
         try {
-            const gem = await this.fetchGEMCandidates();
-            if (gem?.length)
-                allCandidates.push(...gem);
+            const c = await fetchFn();
+            if (c?.length)
+                candidates.push(...c);
         }
         catch { }
-        try {
-            const main = await this.fetchMainBoardCandidates();
-            if (main?.length)
-                allCandidates.push(...main);
-        }
-        catch { }
-        if (allCandidates.length === 0)
+        if (candidates.length === 0)
             return [];
         const results = [];
         const BATCH_SIZE = 20;
         let analyzed = 0;
-        for (let i = 0; i < allCandidates.length && analyzed < 120; i += BATCH_SIZE) {
-            const batch = allCandidates.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < candidates.length && analyzed < Math.max(topN * 3, 60); i += BATCH_SIZE) {
+            const batch = candidates.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(async (c) => {
                 try {
                     const stock = await this.quickAnalyze(c.code);
@@ -997,7 +1015,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const pb = ORDER[b.suggestion ?? ''] ?? 99;
             return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
         });
-        return results.slice(0, 10);
+        return results.slice(0, topN);
     }
     async quickAnalyze(code) {
         const raw = await this.dataFetcher.getKLineData(code);

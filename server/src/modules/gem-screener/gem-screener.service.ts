@@ -1111,24 +1111,52 @@ export class GemScreenerService implements OnApplicationBootstrap {
    * 全市场扫描Top10机会股
    * 对所有候选股运行完整公式分析，按交易建议排序，取前10
    */
+  /**
+   * 扫描创业板Top10机会股
+   */
+  async scanTopGem(): Promise<OpportunityStock[]> {
+    return this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
+  }
+
+  /**
+   * 扫描主板Top10机会股
+   */
+  async scanTopMainBoard(): Promise<OpportunityStock[]> {
+    return this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
+  }
+
+  /**
+   * 扫描全市场Top10机会股（保留，用于单区展示）
+   */
   async scanTopOpportunities(): Promise<OpportunityStock[]> {
-    const allCandidates: StockCandidate[] = [];
-    try {
-      const gem = await this.fetchGEMCandidates();
-      if (gem?.length) allCandidates.push(...gem);
-    } catch {}
-    try {
-      const main = await this.fetchMainBoardCandidates();
-      if (main?.length) allCandidates.push(...main);
-    } catch {}
-    if (allCandidates.length === 0) return [];
+    return this.scanTopFromCandidates(async () => {
+      const all: StockCandidate[] = [];
+      try {
+        const gem = await this.fetchGEMCandidates();
+        if (gem?.length) all.push(...gem);
+      } catch {}
+      try {
+        const main = await this.fetchMainBoardCandidates();
+        if (main?.length) all.push(...main);
+      } catch {}
+      return all;
+    }, 10);
+  }
+
+  private async scanTopFromCandidates(
+    fetchFn: () => Promise<StockCandidate[]>,
+    topN: number,
+  ): Promise<OpportunityStock[]> {
+    const candidates: StockCandidate[] = [];
+    try { const c = await fetchFn(); if (c?.length) candidates.push(...c); } catch {}
+    if (candidates.length === 0) return [];
 
     const results: OpportunityStock[] = [];
     const BATCH_SIZE = 20;
     let analyzed = 0;
 
-    for (let i = 0; i < allCandidates.length && analyzed < 120; i += BATCH_SIZE) {
-      const batch = allCandidates.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < candidates.length && analyzed < Math.max(topN * 3, 60); i += BATCH_SIZE) {
+      const batch = candidates.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (c) => {
         try {
           const stock = await this.quickAnalyze(c.code);
@@ -1146,7 +1174,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const pb = ORDER[b.suggestion ?? ''] ?? 99;
       return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
     });
-    return results.slice(0, 10);
+    return results.slice(0, topN);
   }
 
   private async quickAnalyze(code: string): Promise<OpportunityStock | null> {

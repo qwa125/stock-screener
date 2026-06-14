@@ -17,7 +17,19 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp } };
   }
 
-  @Get('top-opportunities')
+  @Get('top/gem')
+  async getTopGem() {
+    const opportunities = await this.gemScreener.scanTopGem();
+    return { code: 200, msg: 'success', data: { opportunities } };
+  }
+
+  @Get('top/main-board')
+  async getTopMainBoard() {
+    const opportunities = await this.gemScreener.scanTopMainBoard();
+    return { code: 200, msg: 'success', data: { opportunities } };
+  }
+
+  @Get('top/opportunities')
   async getTopOpportunities() {
     const opportunities = await this.gemScreener.scanTopOpportunities();
     return { code: 200, msg: 'success', data: { opportunities } };
