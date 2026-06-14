@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 
-# Install pnpm
-RUN npm install -g pnpm@latest
+# Install pnpm (pin to v9 to match lockfileVersion 9)
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 WORKDIR /app
 
