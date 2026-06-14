@@ -601,25 +601,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         let suggestionR = '观望';
         if (zoneR.includes('高位')) {
             if (trendStateR === 0)
-                suggestionR = '清仓';
+                suggestionR = hasBuySignalR ? '持有' : '清仓';
             else if (trendStateR === 1)
-                suggestionR = !macdBullishR ? '卖出' : '减仓';
+                suggestionR = hasBuySignalR && macdBullishR ? '可关注' : (!macdBullishR ? '卖出' : '减仓');
             else
-                suggestionR = '持有';
+                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
         }
         else if (zoneR.includes('中高位')) {
             if (trendStateR === 0)
-                suggestionR = '减仓';
+                suggestionR = hasBuySignalR ? '持有' : '减仓';
+            else if (trendStateR >= 2)
+                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
             else
-                suggestionR = '持有';
+                suggestionR = hasBuySignalR ? '可关注' : '持有';
         }
         else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
             if (trendStateR >= 2)
-                suggestionR = '轻仓买入';
+                suggestionR = hasBuySignalR ? '买入' : '轻仓买入';
             else if (trendStateR === 0)
-                suggestionR = '减仓';
+                suggestionR = hasBuySignalR ? '持有' : '减仓';
             else
-                suggestionR = '持有';
+                suggestionR = hasBuySignalR ? '可关注' : '持有';
         }
         else if (zoneR.includes('中低位')) {
             if (trendStateR >= 2 && hasBuySignalR)
@@ -645,10 +647,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             else {
                 suggestionR = hasBuySignalR ? '可关注' : '观望';
             }
-        }
-        const negativeActions = ['卖出', '清仓', '减仓', '不要介入', '观望'];
-        if (negativeActions.includes(suggestionR)) {
-            suggestionR = (trendStateR >= 2 || hasBuySignalR || isBaiXiaoBuy) ? '可关注' : '持有';
         }
         return {
             capitalRank: 0,
