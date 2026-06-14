@@ -111,6 +111,7 @@ interface LeadingStock {
   dea?: number;
   isGoldenCross?: boolean;
   buySignal?: string;
+  suggestion?: string;
 }
 
 interface SectorRankItem {
@@ -147,6 +148,7 @@ interface OpportunityStock {
   isGoldenCross?: boolean;
   amount?: number;
   buySignal?: string;
+  suggestion?: string;
 }
 
 
@@ -407,6 +409,9 @@ const ACTION_BADGE_COLOR: Record<string, string> = {
 
 /** 根据机会区股票数据生成操作建议（简化版，使用可用的数据字段） */
 function getOpportunitySuggestion(stock: OpportunityStock): string {
+  // 如果服务端已返回建议，优先使用（保证与完整分析一致）
+  if (stock.suggestion) return stock.suggestion;
+
   const pos = stock.pricePosition ?? 50;
   const changePct = stock.changePercent ?? 0;
   const increase = stock.priceIncrease ?? 0;

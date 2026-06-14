@@ -24,6 +24,7 @@ export interface OpportunityStock {
     diff?: number;
     dea?: number;
     isGoldenCross?: boolean;
+    suggestion?: string;
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
