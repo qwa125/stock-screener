@@ -680,7 +680,7 @@ const IndexPage = () => {
     }
   };
 
-  const handleSearchByCode = async (code: string) => {
+  const handleSearchByCode = async (code: string, knownSuggestion?: string) => {
     setQuery(code);
     setError('');
     setLoading(true);
@@ -696,7 +696,11 @@ const IndexPage = () => {
 
       const apiData = res.data as ApiResponse;
       if (apiData.code === 200 && apiData.data) {
-        setResult(apiData.data);
+        // 优先使用机会区已知的建议（确保与列表显示一致）
+        const resultData = knownSuggestion
+          ? { ...apiData.data as any, suggestion: knownSuggestion }
+          : apiData.data;
+        setResult(resultData);
       } else {
         setError(apiData.msg || '查询失败');
       }
@@ -1087,7 +1091,7 @@ const IndexPage = () => {
                 return (
                 <Card key={stock.code}>
                   <CardContent className="p-3">
-                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code)}>
+                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code, stock.suggestion)}>
                       <View style={{ flex: 1.2 }}>
                         <View className="flex flex-row items-center gap-1">
                           <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 py-0">
@@ -1186,7 +1190,7 @@ const IndexPage = () => {
                 return (
                 <Card key={stock.code}>
                   <CardContent className="p-3">
-                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code)}>
+                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code, stock.suggestion)}>
                       <View style={{ flex: 1.2 }}>
                         <View className="flex flex-row items-center gap-1">
                           <Badge className="px-1 bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0 py-0">
@@ -1320,7 +1324,7 @@ const IndexPage = () => {
                       return (
                       <Card key={`${item.code}-${idx}`}>
                         <CardContent className="p-3">
-                          <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code)}>
+                          <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code, item.suggestion)}>
                             <View style={{ flex: 1.2 }}>
                               <View className="flex flex-row items-center gap-1">
                                 <Badge className="px-1 bg-orange-50 text-orange-700 border-orange-200 flex-shrink-0 py-0">

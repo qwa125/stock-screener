@@ -305,7 +305,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // 均线 = (MA(C,3) + MA(C,5) + MA(C,8) + MA(C,13) + MA(C,21) + MA(C,34)*0.5) / 5.5
   // DEA = 均线;  DIFF = XMA(均线,5)*2 - 均线 - 修正值
   // ---------------------------------------------------------------------------
-  private calcCustomMACD(kline: KLine[]): {
+  calcCustomMACD(kline: KLine[]): {
     diff: number[];
     dea: number[];
     currentDiff: number;
@@ -1106,6 +1106,106 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (this.mainBoardCache?.data?.length) results.push(...this.mainBoardCache.data);
     return results;
   }
+  /**
+   * 统一建议计算（单次股票完整分析），供 quickAnalyze 和外部调用
+   * 确保机会区与详细分析的结果一致
+   */
+  async computeFullSuggestion(code: string): Promise<{ suggestion: string; score: number; name: string } | null> {
+    try {
+      const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
+      if (!raw?.length || raw.length < 60) return null;
+      const name = raw[0]?.name ?? '';
+      const klineV: any[] = raw.slice(-120);
+      const closeArr: number[] = klineV.map((k: any) => Number(k.close));
+      const volumeArr: number[] = klineV.map((k: any) => Number(k.volume));
+      const highArr: number[] = klineV.map((k: any) => Number(k.high));
+      const lowArr: number[] = klineV.map((k: any) => Number(k.low));
+      const price = closeArr[closeArr.length - 1];
+      const high60 = Math.max(...highArr.slice(-60));
+      const low60 = Math.min(...lowArr.slice(-60));
+      const pricePos = ((price - low60) / (high60 - low60)) * 100;
+      const ma5 = closeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
+      const ma10 = closeArr.slice(-10).reduce((a: number, b: number) => a + b, 0) / 10;
+      const ma20 = closeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
+      const macdR: any = this.calcCustomMACD(klineV as any);
+      const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
+      const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
+
+      const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+      const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+      let trendState = 1;
+      if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
+      else if (ma5 > ma10 && ma5Up) trendState = 2;
+      else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
+
+      const klineO: number[] = klineV.map((k: any) => Number(k.open));
+      const klineH: number[] = klineV.map((k: any) => Number(k.high));
+      const klineL: number[] = klineV.map((k: any) => Number(k.low));
+      const klineA: number[] = klineV.map((k: any) => Number(k.amount ?? 0));
+      const engine = new FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: volumeArr, amount: klineA });
+      const baiXing: any = calcBaiXing(engine);
+      const sanJiao: any = calcBaiSanJiao(engine);
+      const lingXing: any = calcBaiLingXing(engine);
+      const xingX: any = calcXingXing(engine);
+
+      const isGoldenCross = macdR?.isGoldenCross ?? false;
+      const hasBuy = !!(isGoldenCross || lingXing?.shortBuy || sanJiao?.jiaCang || (diff > dea && baiXing?.baiXiao));
+      const hasDanger = !!(xingX?.shortSell || xingX?.strongSell);
+
+      let volUp = false;
+      if (volumeArr.length >= 13) {
+        const v10 = volumeArr.slice(-13, -3).reduce((a: number, b: number) => a + b, 0) / 10;
+        const v3 = volumeArr.slice(-3).reduce((a: number, b: number) => a + b, 0) / 3;
+        volUp = v3 > v10 * 1.3;
+      }
+
+      const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
+      const isUp = trendState >= 2;
+      const isSide = trendState === 1;
+
+      let suggestion = '持有';
+      if (zone === '低位') {
+        if (isUp && hasBuy) suggestion = '重仓买入';
+        else if (isUp && volUp) suggestion = '买入';
+        else if (isUp) suggestion = '轻仓买入';
+        else if (isSide && hasBuy) suggestion = '准备买入';
+        else if (hasDanger) suggestion = '持有';
+        else suggestion = '轻仓买入';
+      } else if (zone === '中位') {
+        if (isUp && hasBuy) suggestion = '买入';
+        else if (isUp && volUp) suggestion = '轻仓买入';
+        else if (isUp) suggestion = '轻仓买入';
+        else if (isSide && hasBuy) suggestion = '准备买入';
+        else suggestion = '持有';
+      } else if (zone === '中高位') {
+        if (isUp && hasBuy) suggestion = '持有';
+        else if (isUp) suggestion = '持有';
+        else if (isSide && hasBuy) suggestion = '持有';
+        else if (isSide) suggestion = '观望';
+        else if (hasDanger) suggestion = '减仓';
+        else suggestion = '减仓';
+      } else {
+        if (isUp && hasBuy) suggestion = '持有';
+        else if (isUp) suggestion = '持有';
+        else if (hasDanger) suggestion = '卖出';
+        else suggestion = '减仓';
+      }
+
+      const BASE: Record<string, number> = {
+        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+      };
+      let score = BASE[suggestion] ?? 30;
+      if (pricePos < 30) score += 15;
+      else if (pricePos < 50) score += 8;
+      if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5]) score += 5;
+      else score -= 5;
+
+      return { suggestion, score, name };
+    } catch (e) {
+      return null;
+    }
+  }
+
 
   /**
    * 全市场扫描Top10机会股
