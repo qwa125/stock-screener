@@ -73,7 +73,8 @@ interface BacktestStats {
 
 interface SignalEntry {
   name: string;
-  type: 'positive' | 'negative' | 'neutral';
+  type: 'positive' | 'negative' | 'neutral' | 'warning';
+  description?: string;
 }
 
 interface StockResult {
@@ -227,8 +228,16 @@ const signalTypeMap: Record<string, 'positive' | 'negative' | 'neutral'> = {
   qiangShiHuiCai: 'positive',
 };
 
-function getActiveSignals(f: FormulaResult): { key: string; name: string; type: string }[] {
-  const result: { key: string; name: string; type: string }[] = [];
+function getActiveSignals(f: FormulaResult): { key: string; name: string; type: string; description?: string }[] {
+  const result: { key: string; name: string; type: string; description?: string }[] = [];
+
+  // 从 API signals 数组加入（新股预警等动态信号）
+  if (f.signals && Array.isArray(f.signals)) {
+    for (const s of f.signals) {
+      result.push({ key: s.name, name: s.name, type: s.type, description: s.description });
+    }
+  }
+
   const fields: Record<string, boolean | string[]> = {
     shortBuy: f.shortBuy,
     shortSell: f.shortSell,
@@ -261,6 +270,7 @@ const signalBadgeColor = (type: string): string => {
   switch (type) {
     case 'positive': return '#ff4d4f';
     case 'negative': return '#52c41a';
+    case 'warning': return '#fa8c16';
     default: return '#faad14';
   }
 };
@@ -856,9 +866,14 @@ const IndexPage = () => {
                 <View className="flex flex-row flex-wrap gap-2">
                   {getActiveSignals(f).length > 0 ? (
                     getActiveSignals(f).map((item, idx) => (
-                      <Badge key={idx} style={{ backgroundColor: signalBadgeColor(item.type), color: '#fff' }}>
-                        <Text className="block text-xs">{item.name}</Text>
-                      </Badge>
+                      <View key={idx} className="flex flex-col">
+                        <Badge style={{ backgroundColor: signalBadgeColor(item.type), color: '#fff' }}>
+                          <Text className="block text-xs">{item.name}</Text>
+                        </Badge>
+                        {item.description && (
+                          <Text className="block text-[10px] text-gray-400 mt-0.5">{item.description}</Text>
+                        )}
+                      </View>
                     ))
                   ) : (
                     <Text className="block text-xs text-gray-400">暂无触发信号</Text>
