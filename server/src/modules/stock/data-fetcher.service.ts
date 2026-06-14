@@ -168,6 +168,7 @@ export class DataFetcherService {
               amount: 0,
             };
           });
+          (result as any)._isMock = false;
         }
       }
     } catch (e) {
@@ -209,6 +210,7 @@ export class DataFetcherService {
                 amount: parseFloat(parts[6]) || 0,
               };
             });
+            (result as any)._isMock = false;
           }
         }
       } catch (e) {
@@ -216,16 +218,7 @@ export class DataFetcherService {
       }
     }
 
-    // 3. 尝试从腾讯获取实时价格，基于真实价格生成模拟K线
-    if (!result) {
-      const realTimeInfo = await this.fetchRealTimeQuote(code);
-      if (realTimeInfo) {
-        this.logger.log(`使用腾讯真实价格生成K线: ${code} 当前价=${realTimeInfo.price}`);
-        result = this.generateMockKLine(code, realTimeInfo.price, realTimeInfo.lastClose);
-      }
-    }
-
-    // 3.5 腾讯前复权日线 (ifzq.gtimg.cn，腾讯云环境最稳定)
+    // 3. 腾讯前复权日线 (ifzq.gtimg.cn，真实数据，优先于mock)
     if (!result) {
       try {
         const prefix = code.startsWith('6') ? 'sh' : 'sz';
@@ -235,24 +228,36 @@ export class DataFetcherService {
         if (tData?.data?.[`${prefix}${code}`]?.qfqday?.length > 20) {
           const lines = tData.data[`${prefix}${code}`].qfqday;
           result = lines.map((l: string[]) => ({
-            day: l[0], open: l[1], close: l[2], high: l[3], low: l[4],
-            volume: l[5], ma5: l[2], ma10: l[2], ma20: l[2], ma30: l[2]
+            date: l[0], open: parseFloat(l[1]), close: parseFloat(l[2]),
+            high: parseFloat(l[3]), low: parseFloat(l[4]),
+            volume: parseFloat(l[5]), amount: 0
           }));
+          (result as any)._isMock = false;
           this.logger.log(`[K线] 腾讯前复权日线成功: ${code} ${result!.length}条`);
         }
       } catch {}
     }
 
-    // 4. 纯模拟降级
+    // 4. 尝试从腾讯获取实时价格，基于真实价格生成模拟K线
+    if (!result) {
+      const realTimeInfo = await this.fetchRealTimeQuote(code);
+      if (realTimeInfo) {
+        this.logger.log(`使用腾讯真实价格生成K线: ${code} 当前价=${realTimeInfo.price}`);
+        result = this.generateMockKLine(code, realTimeInfo.price, realTimeInfo.lastClose);
+        (result as any)._isMock = true;
+      }
+    }
+
+    // 5. 纯模拟降级
     if (!result) {
       this.logger.warn(`所有数据接口不可用，使用纯模拟数据: ${code}`);
       result = this.generateMockKLine(code, undefined, undefined);
+      (result as any)._isMock = true;
     }
 
-    // 标记是否为模拟数据 (模拟K线 -> _isMock)
-    const isMock = !(result && result.length > 0 && ('day' in (result[0] ?? {}) || 'date' in (result[0] ?? {})));
-    if (isMock && result) {
-      (result as any)._isMock = true;
+    // 确保 _isMock 已设置 (未被显式赋值的走自动检测)
+    if (result && (result as any)._isMock === undefined) {
+      (result as any)._isMock = !(result.length > 0 && ('date' in (result[0] ?? {}) || 'day' in (result[0] ?? {})));
     }
 
     // 写入缓存
