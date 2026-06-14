@@ -84,7 +84,15 @@ interface StockResult {
   high?: number;
   low?: number;
   klineCount: number;
+  isNewStock?: boolean;
   formula: FormulaResult;
+  signals?: SignalEntry[];
+}
+
+interface SignalEntry {
+  name: string;
+  type: string;
+  description?: string;
 }
 
 interface ApiResponse {
@@ -228,12 +236,12 @@ const signalTypeMap: Record<string, 'positive' | 'negative' | 'neutral'> = {
   qiangShiHuiCai: 'positive',
 };
 
-function getActiveSignals(f: FormulaResult): { key: string; name: string; type: string; description?: string }[] {
+function getActiveSignals(f: FormulaResult, extraSignals?: SignalEntry[]): { key: string; name: string; type: string; description?: string }[] {
   const result: { key: string; name: string; type: string; description?: string }[] = [];
 
-  // 从 API signals 数组加入（新股预警等动态信号）
-  if (f.signals && Array.isArray(f.signals)) {
-    for (const s of f.signals) {
+  // 从外层 signals 数组加入（新股预警等动态信号）
+  if (extraSignals && Array.isArray(extraSignals)) {
+    for (const s of extraSignals) {
       result.push({ key: s.name, name: s.name, type: s.type, description: s.description });
     }
   }
@@ -864,8 +872,8 @@ const IndexPage = () => {
                 {/* 关键信号标识（中性展示） */}
                 <Text className="block text-xs font-medium text-gray-600 mb-2">触发信号</Text>
                 <View className="flex flex-row flex-wrap gap-2">
-                  {getActiveSignals(f).length > 0 ? (
-                    getActiveSignals(f).map((item, idx) => (
+                  {getActiveSignals(f, result?.signals).length > 0 ? (
+                    getActiveSignals(f, result?.signals).map((item, idx) => (
                       <View key={idx} className="flex flex-col">
                         <Badge style={{ backgroundColor: signalBadgeColor(item.type), color: '#fff' }}>
                           <Text className="block text-xs">{item.name}</Text>
