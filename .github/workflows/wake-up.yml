@@ -1,0 +1,15 @@
+name: Wake Up Render
+
+on:
+  schedule:
+    # 交易日 09:00 北京时 (01:00 UTC)，周一到周五
+    - cron: '0 1 * * 1-5'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  wake-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake Render service
+        run: |
+          curl -s --max-time 30 https://stock-screener-ext7.onrender.com > /dev/null 2>&1 && echo "✅ 唤醒成功" || echo "⚠️ 唤醒请求已发送"
