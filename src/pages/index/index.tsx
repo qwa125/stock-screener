@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Info } from 'lucide-react-taro';
+import { Info, Clock } from 'lucide-react-taro';
 import { Separator } from '@/components/ui/separator';
 
 // ===== 类型定义 =====
@@ -425,69 +425,144 @@ const IndexPage = () => {
   const [mainBoardData, setMainBoardData] = useState<OpportunityStock[] | null>(null);
   const [mainBoardTimestamp, setMainBoardTimestamp] = useState<number>(0);
 
-  
+  // ====== 用户认证状态 ======
+  const [authChecking, setAuthChecking] = useState(true);
+  const [user, setUser] = useState<{ username: string; trialEnd: string; subscriptionEnd: string | null } | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regError, setRegError] = useState('');
+  const [regLoading, setRegLoading] = useState(false);
+  const [regSuccess, setRegSuccess] = useState('');
 
-  // 设备访问控制
-  const [accessChecking, setAccessChecking] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
-  const [denyReason, setDenyReason] = useState('');
-
-  // 注册设备指纹（单次、3秒超时，失败则禁止访问）
+  // 检查登录状态
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
-      // 生成设备ID
-      let deviceId = '';
-      try { deviceId = localStorage.getItem('_device_id') || ''; } catch {}
-      if (!deviceId) {
-        deviceId = 'd_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-        try { localStorage.setItem('_device_id', deviceId); } catch {}
-      }
-
       try {
-        // 用 AbortController 加 3s 超时，URL 使用 window.location.origin 避免域名问题
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-        const base = typeof window !== 'undefined' ? window.location.origin : '';
-        const res = await fetch(`${base}/api/access/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        const apiData = await res.json();
-        console.log('[设备注册] 响应:', apiData);
-
-        if (!cancelled) {
-          if (apiData?.code === 200 && apiData?.data) {
-            if (!apiData.data.allowed) {
-              setAccessDenied(true);
-              setDenyReason(apiData.data.message || '访问名额已满');
+        const token = localStorage.getItem('_token');
+        if (!token) {
+          if (!cancelled) { setAuthChecking(false); setShowLogin(true); }
+          return;
+        }
+        const res = await Network.request({ url: '/api/auth/me', header: { Authorization: `Bearer ${token}` } });
+        const apiData = res.data as any;
+        console.log('[认证检查]', apiData);
+        if (apiData.code === 200 && apiData.data) {
+          if (!cancelled) {
+            const u = apiData.data;
+            // 检查是否过期
+            const now = Date.now();
+            const trial = new Date(u.trial_end).getTime();
+            const subEnd = u.subscription_end ? new Date(u.subscription_end).getTime() : 0;
+            if (trial < now && subEnd < now) {
+              // 已过期
+              setUser(u);
+              setShowLogin(false); // 不显示登录框，显示过期信息
+            } else {
+              setUser(u);
+              setShowLogin(false);
             }
-          } else {
-            // 接口返回异常
-            setAccessDenied(true);
-            setDenyReason('服务暂不可用');
           }
+        } else {
+          localStorage.removeItem('_token');
+          if (!cancelled) setShowLogin(true);
         }
       } catch (e) {
-        console.error('[设备注册] 失败:', e);
-        if (!cancelled) {
-          setAccessDenied(true);
-          setDenyReason('无法连接到服务器');
-        }
+        console.error('[认证检查] 失败', e);
+        if (!cancelled) { setShowLogin(true); }
       } finally {
-        if (!cancelled) setAccessChecking(false);
+        if (!cancelled) setAuthChecking(false);
       }
     })();
-
     return () => { cancelled = true; };
   }, []);
 
+  
+
+  // 认证系统 — 替换旧的设备注册
+
+
+  // ====== 登录/注册操作 ======
+  const handleLogin = async () => {
+    if (!loginUsername || !loginPassword) { setLoginError('请输入用户名和密码'); return; }
+    setLoginLoading(true); setLoginError('');
+    try {
+      const res = await Network.request({ url: '/api/auth/login', method: 'POST', data: { username: loginUsername, password: loginPassword } });
+      const apiData = res.data as any;
+      console.log('[登录]', apiData);
+      if (apiData.code === 200 && apiData.data?.token) {
+        localStorage.setItem('_token', apiData.data.token);
+        setUser({ username: apiData.data.user.username, trialEnd: apiData.data.user.trial_end, subscriptionEnd: apiData.data.user.subscription_end });
+        setShowLogin(false);
+      } else {
+        setLoginError(apiData.msg || '登录失败');
+      }
+    } catch (e: any) {
+      setLoginError(e?.message || '网络错误');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!regUsername || !regPassword) { setRegError('请输入用户名和密码'); return; }
+    if (regPassword.length < 4) { setRegError('密码至少4位'); return; }
+    setRegLoading(true); setRegError(''); setRegSuccess('');
+    try {
+      const res = await Network.request({ url: '/api/auth/register', method: 'POST', data: { username: regUsername, password: regPassword } });
+      const apiData = res.data as any;
+      console.log('[注册]', apiData);
+      if (apiData.code === 200) {
+        setRegSuccess('注册成功！赠送7天试用期，请登录');
+        setIsRegister(false);
+        setTimeout(() => setRegSuccess(''), 3000);
+      } else {
+        setRegError(apiData.msg || '注册失败');
+      }
+    } catch (e: any) {
+      setRegError(e?.message || '网络错误');
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  // 注册成功后自动登录
+  const handleLoginAuto = async () => {
+    if (!regUsername || !regPassword) { setShowLogin(true); return; }
+    try {
+      const res = await Network.request({ url: '/api/auth/login', method: 'POST', data: { username: regUsername, password: regPassword } });
+      const apiData = res.data as any;
+      if (apiData.code === 200 && apiData.data?.token) {
+        const token = apiData.data.token;
+        localStorage.setItem('_token', token);
+        setShowLogin(false);
+        setUser(apiData.data.user);
+      }
+    } catch (_e) { /* ignore */ }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('_token');
+    setUser(null);
+    setShowLogin(true);
+  };
+
+  // 计算剩余天数
+  const getRemainingDays = () => {
+    if (!user) return 0;
+    const now = Date.now();
+    const subEnd = user.subscriptionEnd ? new Date(user.subscriptionEnd).getTime() : 0;
+    const trialEnd = new Date(user.trialEnd).getTime();
+    const end = Math.max(subEnd, trialEnd);
+    if (end < now) return 0;
+    return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+  };
 
   // 页面加载时获取板块热点数据
   useEffect(() => {
@@ -684,23 +759,128 @@ const IndexPage = () => {
 
   return (
     <View className="h-full bg-gray-50">
-      {accessDenied ? (
-        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '40vh' }}>
-          <Info size={56} color="#ff4d4f" />
-          <Text className="block text-lg font-bold text-gray-800 mt-4 text-center">访问受限</Text>
+      {showLogin ? (
+        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '20vh' }}>
+          {/* 标题 */}
+          <Text className="block text-2xl font-bold text-gray-900 mb-2">股票技术分析</Text>
+          <Text className="block text-sm text-gray-500 mb-8">请登录或注册后使用</Text>
+
+          {/* 登录/注册切换 */}
+          <View className="flex flex-row mb-6 w-full max-w-xs">
+            <View
+              className={`flex-1 py-2 text-center ${!isRegister ? 'border-b-2 border-blue-500' : 'border-b border-gray-200'}`}
+              onClick={() => setIsRegister(false)}
+            >
+              <Text className={`block text-center text-sm font-medium ${!isRegister ? 'text-blue-500' : 'text-gray-500'}`}>登录</Text>
+            </View>
+            <View
+              className={`flex-1 py-2 text-center ${isRegister ? 'border-b-2 border-blue-500' : 'border-b border-gray-200'}`}
+              onClick={() => { setIsRegister(true); setRegSuccess(false); }}
+            >
+              <Text className={`block text-center text-sm font-medium ${isRegister ? 'text-blue-500' : 'text-gray-500'}`}>注册</Text>
+            </View>
+          </View>
+
+          {/* 登录表单 */}
+          {!isRegister && (
+            <View className="w-full max-w-xs">
+              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
+                <Input
+                  className="w-full bg-transparent text-sm"
+                  placeholder="用户名"
+                  value={loginUsername}
+                  onInput={(e) => setLoginUsername(e.detail.value)}
+                />
+              </View>
+              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
+                <Input
+                  className="w-full bg-transparent text-sm"
+                  placeholder="密码"
+                  password
+                  value={loginPassword}
+                  onInput={(e) => setLoginPassword(e.detail.value)}
+                />
+              </View>
+              {loginError && (
+                <Text className="block text-xs text-red-500 mb-2">{loginError}</Text>
+              )}
+              <Button
+                className="w-full bg-blue-500 text-white rounded-xl py-3"
+                onClick={handleLogin}
+                loading={loginLoading}
+              >
+                登录
+              </Button>
+              <Text className="block text-xs text-gray-400 text-center mt-3">
+                新用户？点击上方「注册」即可获赠7天免费体验
+              </Text>
+            </View>
+          )}
+
+          {/* 注册表单 */}
+          {isRegister && !regSuccess && (
+            <View className="w-full max-w-xs">
+              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
+                <Input
+                  className="w-full bg-transparent text-sm"
+                  placeholder="用户名"
+                  value={regUsername}
+                  onInput={(e) => setRegUsername(e.detail.value)}
+                />
+              </View>
+              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
+                <Input
+                  className="w-full bg-transparent text-sm"
+                  placeholder="密码（至少6位）"
+                  password
+                  value={regPassword}
+                  onInput={(e) => setRegPassword(e.detail.value)}
+                />
+              </View>
+              {regError && (
+                <Text className="block text-xs text-red-500 mb-2">{regError}</Text>
+              )}
+              <Button
+                className="w-full bg-green-500 text-white rounded-xl py-3"
+                onClick={handleRegister}
+                loading={regLoading}
+              >
+                注册（7天免费）
+              </Button>
+            </View>
+          )}
+
+          {/* 注册成功提示 */}
+          {isRegister && regSuccess && (
+            <View className="w-full max-w-xs">
+              <View className="bg-green-50 rounded-xl p-6 text-center mb-4">
+                <Text className="block text-green-600 font-bold text-lg mb-2">注册成功 🎉</Text>
+                <Text className="block text-sm text-green-700">用户名：{regUsername}</Text>
+                <Text className="block text-xs text-green-500 mt-2">7天免费试用已开始</Text>
+              </View>
+              <Button
+                className="w-full bg-blue-500 text-white rounded-xl py-3"
+                onClick={() => { setShowLogin(false); handleLoginAuto(); }}
+              >
+                开始使用
+              </Button>
+            </View>
+          )}
+        </View>
+      ) : expired ? (
+        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '35vh' }}>
+          <Clock size={56} color="#fa8c16" />
+          <Text className="block text-lg font-bold text-gray-800 mt-4 text-center">试用已到期</Text>
           <Text className="block text-sm text-gray-500 mt-2 text-center leading-relaxed">
-            {denyReason || '该页面已达到最大设备访问数量'}
+            您的免费试用已结束，如需继续使用请联系开发者续费
           </Text>
-          <Text className="block text-xs text-gray-400 mt-4 text-center">
-            如需增加访问名额，请联系开发者
-          </Text>
+          <View className="mt-6 w-full max-w-xs">
+            <Button className="w-full bg-blue-500 text-white rounded-xl py-3" onClick={handleLogout}>
+              切换账号
+            </Button>
+          </View>
         </View>
-      ) : accessChecking ? (
-        <View className="flex flex-col items-center justify-center h-full" style={{ paddingTop: '45vh' }}>
-          <Skeleton className="h-4 w-32 mb-2" />
-          <Skeleton className="h-3 w-48" />
-        </View>
-      ) : (
+      ) : authChecking ? (
         <ScrollView className="h-full bg-gray-50">
       <View className="p-4">
         {/* 标题 */}
@@ -1294,7 +1474,7 @@ const IndexPage = () => {
           </View>
         </View>
     </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 };

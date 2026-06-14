@@ -17,12 +17,13 @@ const gem_screener_module_1 = require("./modules/gem-screener/gem-screener.modul
 const access_control_module_1 = require("./modules/access-control/access-control.module");
 const device_module_1 = require("./modules/device/device.module");
 const access_limit_guard_1 = require("./guards/access-limit.guard");
+const auth_module_1 = require("./modules/auth/auth.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [stock_module_1.StockModule, sector_module_1.SectorModule, gem_screener_module_1.GemScreenerModule, access_control_module_1.AccessControlModule, device_module_1.DeviceModule],
+        imports: [auth_module_1.AuthModule, stock_module_1.StockModule, sector_module_1.SectorModule, gem_screener_module_1.GemScreenerModule, access_control_module_1.AccessControlModule, device_module_1.DeviceModule],
         controllers: [app_controller_1.AppController],
         providers: [
             app_service_1.AppService,

@@ -8,9 +8,10 @@ import { GemScreenerModule } from '@/modules/gem-screener/gem-screener.module';
 import { AccessControlModule } from '@/modules/access-control/access-control.module';
 import { DeviceModule } from '@/modules/device/device.module';
 import { AccessLimitGuard } from '@/guards/access-limit.guard';
+import { AuthModule } from '@/modules/auth/auth.module';
 
 @Module({
-  imports: [StockModule, SectorModule, GemScreenerModule, AccessControlModule, DeviceModule],
+  imports: [AuthModule, StockModule, SectorModule, GemScreenerModule, AccessControlModule, DeviceModule],
   controllers: [AppController],
   providers: [
     AppService,
