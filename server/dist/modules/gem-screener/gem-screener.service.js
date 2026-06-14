@@ -14,6 +14,9 @@ exports.GemScreenerService = void 0;
 const common_1 = require("@nestjs/common");
 const bai_xing_1 = require("../stock/bai-xing");
 const formula_engine_1 = require("../stock/formula-engine");
+const bai_san_jiao_1 = require("../stock/bai-san-jiao");
+const bai_ling_xing_1 = require("../stock/bai-ling-xing");
+const xing_xing_1 = require("../stock/xing-xing");
 const fs_1 = require("fs");
 const node_path_1 = require("node:path");
 const iconv = require("iconv-lite");
@@ -952,6 +955,183 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (this.mainBoardCache?.data?.length)
             results.push(...this.mainBoardCache.data);
         return results;
+    }
+    async scanTopOpportunities() {
+        const allCandidates = [];
+        try {
+            const gem = await this.fetchGEMCandidates();
+            if (gem?.length)
+                allCandidates.push(...gem);
+        }
+        catch { }
+        try {
+            const main = await this.fetchMainBoardCandidates();
+            if (main?.length)
+                allCandidates.push(...main);
+        }
+        catch { }
+        if (allCandidates.length === 0)
+            return [];
+        const results = [];
+        const BATCH_SIZE = 20;
+        let analyzed = 0;
+        for (let i = 0; i < allCandidates.length && analyzed < 120; i += BATCH_SIZE) {
+            const batch = allCandidates.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (c) => {
+                try {
+                    const stock = await this.quickAnalyze(c.code);
+                    if (stock) {
+                        results.push(stock);
+                        analyzed++;
+                    }
+                }
+                catch { }
+            }));
+        }
+        const ORDER = {
+            '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
+            '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+        };
+        results.sort((a, b) => {
+            const pa = ORDER[a.suggestion ?? ''] ?? 99;
+            const pb = ORDER[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+        });
+        return results.slice(0, 10);
+    }
+    async quickAnalyze(code) {
+        const raw = await this.dataFetcher.getKLineData(code);
+        if (!raw?.length || raw.length < 60)
+            return null;
+        const klineV = raw.slice(-120);
+        const closeArr = klineV.map((k) => Number(k.close));
+        const volumeArr = klineV.map((k) => Number(k.volume));
+        const highArr = klineV.map((k) => Number(k.high));
+        const lowArr = klineV.map((k) => Number(k.low));
+        const price = closeArr[closeArr.length - 1];
+        const high60 = Math.max(...highArr.slice(-60));
+        const low60 = Math.min(...lowArr.slice(-60));
+        const pricePos = ((price - low60) / (high60 - low60)) * 100;
+        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const macdR = this.calcCustomMACD(klineV);
+        const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
+        const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
+        const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+        const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+        let trendState = 1;
+        if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
+            trendState = 3;
+        else if (ma5 > ma10 && ma5Up)
+            trendState = 2;
+        else if (ma5 < ma10 && ma10 < ma20)
+            trendState = 0;
+        const klineO = klineV.map((k) => Number(k.open));
+        const klineH = klineV.map((k) => Number(k.high));
+        const klineL = klineV.map((k) => Number(k.low));
+        const klineA = klineV.map((k) => Number(k.amount ?? 0));
+        const engine = new formula_engine_1.FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: volumeArr, amount: klineA });
+        const baiXing = (0, bai_xing_1.calcBaiXing)(engine);
+        const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
+        const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
+        const xingX = (0, xing_xing_1.calcXingXing)(engine);
+        const isGoldenCross = macdR?.isGoldenCross ?? false;
+        const hasBuy = !!(isGoldenCross || lingXing?.shortBuy || sanJiao?.jiaCang || (diff > dea && baiXing?.baiXiao));
+        const hasDanger = !!(xingX?.shortSell || xingX?.strongSell);
+        let volUp = false;
+        if (volumeArr.length >= 13) {
+            const v10 = volumeArr.slice(-13, -3).reduce((a, b) => a + b, 0) / 10;
+            const v3 = volumeArr.slice(-3).reduce((a, b) => a + b, 0) / 3;
+            volUp = v3 > v10 * 1.3;
+        }
+        const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
+        const isUp = trendState >= 2;
+        const isSide = trendState === 1;
+        let suggestion = '持有';
+        if (zone === '低位') {
+            if (isUp && hasBuy)
+                suggestion = '重仓买入';
+            else if (isUp && volUp)
+                suggestion = '买入';
+            else if (isUp)
+                suggestion = '轻仓买入';
+            else if (isSide && hasBuy)
+                suggestion = '准备买入';
+            else if (hasDanger)
+                suggestion = '持有';
+            else
+                suggestion = '轻仓买入';
+        }
+        else if (zone === '中位') {
+            if (isUp && hasBuy)
+                suggestion = '买入';
+            else if (isUp && volUp)
+                suggestion = '轻仓买入';
+            else if (isUp)
+                suggestion = '轻仓买入';
+            else if (isSide && hasBuy)
+                suggestion = '准备买入';
+            else
+                suggestion = '持有';
+        }
+        else if (zone === '中高位') {
+            if (isUp && hasBuy)
+                suggestion = '持有';
+            else if (isUp)
+                suggestion = '持有';
+            else if (isSide && hasBuy)
+                suggestion = '持有';
+            else if (isSide)
+                suggestion = '观望';
+            else if (hasDanger)
+                suggestion = '减仓';
+            else
+                suggestion = '减仓';
+        }
+        else {
+            if (isUp && hasBuy)
+                suggestion = '持有';
+            else if (isUp)
+                suggestion = '持有';
+            else if (hasDanger)
+                suggestion = '卖出';
+            else
+                suggestion = '减仓';
+        }
+        const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
+        if (NEGATIVE.includes(suggestion))
+            return null;
+        const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
+        const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
+        const BASE = {
+            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+        };
+        let score = BASE[suggestion] ?? 30;
+        if (pricePos < 30)
+            score += 15;
+        else if (pricePos < 50)
+            score += 8;
+        if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5])
+            score += 5;
+        else
+            score -= 5;
+        return {
+            code, name: '',
+            currentPrice: price,
+            changePercent: Math.round(changePct * 100) / 100,
+            priceIncrease: Math.round(priceIncrease * 100) / 100,
+            mainForceInflow: 0,
+            pricePosition: Math.round(pricePos),
+            capitalRank: 0,
+            baiXiaoDays: 0,
+            score,
+            suggestion,
+            isGoldenCross,
+            diff,
+            dea,
+            buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || lingXing?.shortBuy) ? '有信号' : '',
+        };
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];

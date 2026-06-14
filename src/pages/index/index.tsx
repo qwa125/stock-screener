@@ -97,42 +97,7 @@ interface ApiResponse {
   data: StockResult | null;
 }
 
-// ===== 板块热点类型 =====
-interface LeadingStock {
-  code: string;
-  name: string;
-  price: number;
-  changePercent: number;
-  weight: number;
-  priceIncrease?: number;
-  pricePosition?: number;
-  mainForceInflow?: number;
-  score?: number;
-  baiXiaoDays?: number;
-  diff?: number;
-  dea?: number;
-  isGoldenCross?: boolean;
-  buySignal?: string;
-  suggestion?: string;
-}
-
-interface SectorRankItem {
-  code: string;
-  name: string;
-  price: number;
-  changePercent: number;
-  changeAmount: number;
-  leadingStocks: LeadingStock[];
-  opportunityStocks: LeadingStock[];
-}
-
-interface SectorHotData {
-  month1: SectorRankItem[];
-  quarter1: SectorRankItem[];
-  halfYear: SectorRankItem[];
-  year1: SectorRankItem[];
-  updateTime: string;
-}
+// ===== 辅助函数 =====
 
 interface OpportunityStock {
   code: string;
@@ -152,10 +117,6 @@ interface OpportunityStock {
   buySignal?: string;
   suggestion?: string;
 }
-
-
-
-// ===== 辅助函数 =====
 const trendText = (state: number): string => {
   switch (state) {
     case 3: return '主升浪';
@@ -406,20 +367,6 @@ const signalBadgeColor = (type: string): string => {
   }
 };
 
-/** 操作建议优先级排序（数值越小越靠前） */
-const ACTION_PRIORITY: Record<string, number> = {
-  '重仓买入': 0,
-  '买入': 1,
-  '轻仓买入': 2,
-  '准备买入': 3,
-  '持有': 4,
-  '观望': 5,
-  '减仓': 6,
-  '卖出': 7,
-  '清仓': 8,
-  '不要介入': 9,
-};
-
 /** 操作建议颜色映射 */
 const ACTION_BADGE_COLOR: Record<string, string> = {
   '重仓买入': '#dc2626',
@@ -440,15 +387,6 @@ function getOpportunitySuggestion(stock: OpportunityStock): string {
   if (stock.suggestion) return stock.suggestion;
   // 没有 suggestion 时默认空（不展示）
   return '';
-}
-
-/** 获取机会区列表：过滤+排序 */
-function getFilteredOpportunityStocks(list: any[]): any[] {
-  // 只保留正面建议的股票
-  return list.filter(s => {
-    const sug = s.suggestion || getOpportunitySuggestion(s);
-    return !(['减仓','卖出','清仓','不要介入','关注','观望'].includes(sug));
-  });
 }
 
 // ===== 组件 =====
@@ -580,79 +518,33 @@ const IndexPage = () => {
   const [result, setResult] = useState<StockResult | null>(null);
   const [error, setError] = useState('');
 
-  // 板块热点状态
-  const [sectorData, setSectorData] = useState<SectorHotData | null>(null);
-  const [sectorLoading, setSectorLoading] = useState(true);
-  const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
+  // 全市场Top10机会区状态
+  const [topData, setTopData] = useState<OpportunityStock[] | null>(null);
+  const [topTimestamp, setTopTimestamp] = useState<number>(0);
+  const [topLoading, setTopLoading] = useState<boolean>(true);
 
-  // 创业板机会区状态
-  const [oppData, setOppData] = useState<OpportunityStock[] | null>(null);
-  const [oppTimestamp, setOppTimestamp] = useState<number>(0);
-  
-  // 主板机会区状态
-  const [mainBoardData, setMainBoardData] = useState<OpportunityStock[] | null>(null);
-  const [mainBoardTimestamp, setMainBoardTimestamp] = useState<number>(0);
-
-  // 页面加载时获取板块热点数据
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await Network.request({ url: '/api/sector/hot', method: 'GET' });
-        console.log('[板块热点] 响应:', res.data);
-        const apiData = res.data as { code: number; data: SectorHotData };
-        if (apiData.code === 200 && apiData.data) {
-          setSectorData(apiData.data);
-          setSectorTimestamp(Date.now());
-        }
-      } catch (e) {
-        console.error('[板块热点] 加载失败:', e);
-      } finally {
-        setSectorLoading(false);
-      }
-    })();
-  }, []);
-
-  // 获取创业板机会区数据（首次 + 每 15s 轮询）
-  const fetchOpportunities = useCallback(async () => {
+  // 获取全市场Top10机会区数据（首次 + 每 15s 轮询）
+  const fetchTopOpportunities = useCallback(async () => {
     try {
-      const res = await Network.request({ url: '/api/gem/opportunities' });
-      if ((res.data as any).code === 200 && (res.data as any).data?.opportunities) {
-        setOppData((res.data as any).data.opportunities);
-        setOppTimestamp((res.data as any).data.timestamp ?? 0);
-      } else if ((res.data as any).data?.opportunities) {
-        setOppData((res.data as any).data.opportunities);
-        setOppTimestamp((res.data as any).data.timestamp ?? 0);
-      }
-    } catch (e) {
-      console.error('获取创业板机会区失败:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOpportunities();
-    const timer = setInterval(fetchOpportunities, 15000);
-    return () => clearInterval(timer);
-  }, [fetchOpportunities]);
-
-  // 获取主板机会区数据
-  const fetchMainBoard = useCallback(async () => {
-    try {
-      const res = await Network.request({ url: '/api/gem/main-board' });
+      setTopLoading(true);
+      const res = await Network.request({ url: '/api/gem/top-opportunities' });
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
-        setMainBoardData(apiData.data.opportunities);
-        setMainBoardTimestamp(apiData.data.timestamp ?? 0);
+        setTopData(apiData.data.opportunities);
+        setTopTimestamp(Date.now());
       }
     } catch (e) {
-      console.error('获取主板机会区失败:', e);
+      console.error('获取全市场Top10机会区失败:', e);
+    } finally {
+      setTopLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchMainBoard();
-    const timer = setInterval(fetchMainBoard, 15000);
+    fetchTopOpportunities();
+    const timer = setInterval(fetchTopOpportunities, 15000);
     return () => clearInterval(timer);
-  }, [fetchMainBoard]);
+  }, [fetchTopOpportunities]);
 
   // 搜索建议状态
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
@@ -750,29 +642,6 @@ const IndexPage = () => {
       const apiData = res.data as ApiResponse;
       if (apiData.code === 200 && apiData.data) {
         setResult(apiData.data);
-        // 用分析结果更新板块数据中的涨跌幅，确保显示一致
-        const freshChangePercent = apiData.data.changePercent;
-        if (freshChangePercent !== undefined && freshChangePercent !== null) {
-          setSectorData(prev => {
-            if (!prev) return prev;
-            const updated = { ...prev };
-            const stockCode = code;
-            for (const key of ['month1', 'quarter1', 'halfYear', 'year1'] as const) {
-              const sectors = updated[key];
-              if (!sectors) continue;
-              updated[key] = sectors.map(sector => {
-                const newLeading = sector.leadingStocks.map(s =>
-                  s.code === stockCode ? { ...s, changePercent: freshChangePercent } : s
-                );
-                const newOpportunity = sector.opportunityStocks.map(s =>
-                  s.code === stockCode ? { ...s, changePercent: freshChangePercent } : s
-                );
-                return { ...sector, leadingStocks: newLeading, opportunityStocks: newOpportunity };
-              });
-            }
-            return updated;
-          });
-        }
       } else {
         setError(apiData.msg || '查询失败');
       }
@@ -1111,22 +980,22 @@ const IndexPage = () => {
           </View>
         )}
 
-        {/* 创业板机会区 */}
+        {/* 全市场 Top10 机会区 */}
         <View className="mt-4">
           <View className="flex flex-row items-center gap-2 mb-2">
-            <Text className="block text-sm font-semibold">创业板机会区</Text>
+            <Text className="block text-sm font-semibold">🏆 全市场 Top10 机会区</Text>
             <View className="flex-1" />
             <Text className="block text-xs text-gray-400">
-              {oppTimestamp ? (() => {
-                const diff = Math.floor((Date.now() - oppTimestamp) / 60000);
+              {topTimestamp ? (() => {
+                const diff = Math.floor((Date.now() - topTimestamp) / 60000);
                 if (diff < 1) return '刚刚更新';
                 return `${diff} 分钟前更新`;
               })() : '自动刷新中'}
             </Text>
           </View>
-          {oppData === null ? (
+          {topLoading && topData === null ? (
             <View className="flex flex-col gap-2">
-              {[1, 2, 3].map(i => (
+              {[1, 2, 3, 4, 5].map(i => (
                 <Card key={i}>
                   <CardContent className="p-3">
                     <Skeleton className="h-5 w-32 mb-2" />
@@ -1135,91 +1004,8 @@ const IndexPage = () => {
                 </Card>
               ))}
             </View>
-          ) : oppData.length > 0 ? (
+          ) : topData && topData.length > 0 ? (
             <View className="flex flex-col gap-2">
-              {/* 创业板机会区 - 表头（5列） */}
-              <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
-                <View style={{ flex: 1.2 }}>
-                  <Text className="block text-xs text-gray-400">名称</Text>
-                </View>
-                <View style={{ flex: 0.7 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">操作</Text>
-                </View>
-                <View style={{ flex: 0.9 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">价格</Text>
-                </View>
-                <View style={{ flex: 0.9 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">累计涨幅</Text>
-                </View>
-                <View style={{ flex: 1 }} className="text-right">
-                  <Text className="block text-xs text-gray-400">主力资金</Text>
-                </View>
-              </View>
-              {[...getFilteredOpportunityStocks(oppData)]
-                .sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99))
-                .map((stock, idx) => {
-                const action = stock.suggestion || getOpportunitySuggestion(stock);
-                return (
-                <Card key={stock.code}>
-                  <CardContent className="p-3">
-                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code)}>
-                      <View style={{ flex: 1.2 }}>
-                        <View className="flex flex-row items-center gap-1">
-                          <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 py-0">
-                            <Text className="block text-xs">#{idx + 1}</Text>
-                          </Badge>
-                          <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{stock.name}</Text>
-                            <Text className="block text-xs text-gray-400">{stock.code}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={{ flex: 0.7 }} className="text-center">
-                        <Text className="block text-xs text-white font-bold px-1 py-0.5 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
-                      </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
-                        <Text className="block text-xs" style={{ color: stock.changePercent >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
-                        </Text>
-                      </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: stock.priceIncrease <= 10 ? '#22c55e' : stock.priceIncrease <= 20 ? '#eab308' : '#ef4444' }}>
-                          {stock.priceIncrease > 0 ? '+' : ''}{stock.priceIncrease?.toFixed(1)}%
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: stock.mainForceInflow >= 0 ? '#ef4444' : '#22c55e' }}>{stock.mainForceInflow === 0 ? '0' : `${stock.mainForceInflow >= 0 ? '+' : '-'}${Math.abs(stock.mainForceInflow) >= 100000000 ? `${(Math.abs(stock.mainForceInflow) / 100000000).toFixed(2)}亿` : `${(Math.abs(stock.mainForceInflow) / 10000).toFixed(0)}万`}`}</Text>
-                      </View>
-                    </View>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            </View>
-          ) : (
-            <View className="p-4 bg-gray-50 rounded-xl">
-              <Text className="block text-xs text-gray-400 text-center">
-                暂无符合条件的信号
-              </Text>
-            </View>
-          )}
-
-          {/* 主板机会区 */}
-          {mainBoardData && mainBoardData.length > 0 ? (
-            <View className="flex flex-col gap-2 mt-3">
-              <View className="flex flex-row items-center gap-2">
-                <Text className="block text-sm font-semibold">主板机会区</Text>
-                <View className="flex-1" />
-                <Text className="block text-xs text-gray-400">
-                  {mainBoardTimestamp > 0 ? (() => {
-                    const diff = Math.floor((Date.now() - mainBoardTimestamp) / 60000);
-                    if (diff < 1) return '刚刚更新';
-                    return `${diff} 分钟前更新`;
-                  })() : '自动刷新中'}
-                </Text>
-              </View>
               {/* 表头（5列） */}
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
                 <View style={{ flex: 1.2 }}>
@@ -1238,21 +1024,20 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">主力资金</Text>
                 </View>
               </View>
-              {[...getFilteredOpportunityStocks(mainBoardData)]
-                .sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99)).map((item, idx) => {
-                const action = item.suggestion || getOpportunitySuggestion(item);
+              {topData.slice(0, 10).map((stock, idx) => {
+                const action = stock.suggestion || getOpportunitySuggestion(stock);
                 return (
-                <Card key={item.code}>
+                <Card key={stock.code}>
                   <CardContent className="p-3">
-                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code)}>
+                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code)}>
                       <View style={{ flex: 1.2 }}>
                         <View className="flex flex-row items-center gap-1">
-                          <Badge className="px-1 bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0 py-0">
+                          <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
                           </Badge>
                           <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{item.name}</Text>
-                            <Text className="block text-xs text-gray-400">{item.code}</Text>
+                            <Text className="block text-xs font-medium truncate">{stock.name || stock.code}</Text>
+                            <Text className="block text-xs text-gray-400">{stock.code}</Text>
                           </View>
                         </View>
                       </View>
@@ -1260,19 +1045,27 @@ const IndexPage = () => {
                         <Text className="block text-xs text-white font-bold px-1 py-0.5 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
                       </View>
                       <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
-                        <Text className="block text-xs" style={{ color: item.changePercent >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {item.changePercent >= 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
+                        <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
+                        <Text className="block text-xs" style={{ color: (stock.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
+                          {(stock.changePercent ?? 0) >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
                         </Text>
                       </View>
                       <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (item.priceIncrease || 0) <= 10 ? '#22c55e' : (item.priceIncrease || 0) <= 20 ? '#eab308' : '#ef4444' }}>
-                          {(item.priceIncrease || 0) > 0 ? '+' : ''}{(item.priceIncrease || 0).toFixed(1)}%
+                        <Text className="block text-xs" style={{ color: (stock.priceIncrease ?? 0) <= 10 ? '#22c55e' : (stock.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
+                          {(stock.priceIncrease ?? 0) > 0 ? '+' : ''}{(stock.priceIncrease ?? 0).toFixed(1)}%
                         </Text>
                       </View>
                       <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(item.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: item.mainForceInflow >= 0 ? '#ef4444' : '#22c55e' }}>{item.mainForceInflow === 0 ? '0' : `${item.mainForceInflow >= 0 ? '+' : '-'}${Math.abs(item.mainForceInflow) >= 100000000 ? `${(Math.abs(item.mainForceInflow) / 100000000).toFixed(2)}亿` : `${(Math.abs(item.mainForceInflow) / 10000).toFixed(0)}万`}`}</Text>
+                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: (stock.mainForceInflow ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
+                          {!stock.mainForceInflow && stock.mainForceInflow !== 0 ? '-' : 
+                           stock.mainForceInflow === 0 ? '0' : 
+                           `${stock.mainForceInflow >= 0 ? '+' : '-'}${
+                             Math.abs(stock.mainForceInflow) >= 100000000 
+                               ? `${(Math.abs(stock.mainForceInflow) / 100000000).toFixed(2)}亿` 
+                               : `${(Math.abs(stock.mainForceInflow) / 10000).toFixed(0)}万`
+                           }`}
+                        </Text>
                       </View>
                     </View>
                   </CardContent>
@@ -1281,196 +1074,14 @@ const IndexPage = () => {
             })}
             </View>
           ) : (
-            <View className="mt-3">
-              <View className="flex flex-row items-center gap-2">
-                <Text className="block text-sm font-semibold">主板机会区</Text>
-                <Text className="block text-xs text-gray-400">暂无符合条件的股票</Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* 主流热点细分板块机会区 */}
-        <View className="mt-6">
-          <View className="flex flex-row items-center gap-2 mb-3">
-            <Text className="block text-base font-bold text-gray-900">🔥 主流热点细分板块机会区</Text>
-            {sectorTimestamp > 0 && (() => {
-              const diff = Math.floor((Date.now() - sectorTimestamp) / 60000);
-              const text = diff < 1 ? '刚刚更新' : `${diff} 分钟前更新`;
-              return <Text className="block text-xs text-gray-400 ml-auto">{text}</Text>;
-            })()}
-          </View>
-
-          {sectorLoading ? (
-            <View className="flex flex-col gap-2">
-              {[1, 2, 3].map(i => (
-                <Card key={i}>
-                  <CardContent className="p-3">
-                    <Skeleton className="h-5 w-32 mb-2" />
-                    <Skeleton className="h-3 w-48" />
-                  </CardContent>
-                </Card>
-              ))}
-            </View>
-          ) : sectorData && sectorData.month1 ? (
-            (() => {
-              // 从所有月板块中收集机会股（使用GEM同款格式展示）
-              interface SectorOppItem {
-                code: string;
-                name: string;
-                sectorName: string;
-                currentPrice?: number;
-                changePercent?: number;
-                priceIncrease?: number;
-                pricePosition?: number;
-                mainForceInflow?: number;
-                score?: number;
-                baiXiaoDays?: number;
-                isGoldenCross?: boolean;
-                buySignal?: string;
-                suggestion?: string;
-              }
-              const allOpportunities: SectorOppItem[] = [];
-              for (const sector of sectorData.month1) {
-                if (sector.opportunityStocks && sector.opportunityStocks.length > 0) {
-                  for (const os of sector.opportunityStocks) {
-                    allOpportunities.push({
-                      code: os.code,
-                      name: os.name,
-                      sectorName: sector.name,
-                      currentPrice: os.price,
-                      changePercent: os.changePercent,
-                      priceIncrease: os.priceIncrease,
-                      pricePosition: os.pricePosition,
-                      mainForceInflow: os.mainForceInflow,
-                      score: os.score,
-                      baiXiaoDays: os.baiXiaoDays,
-                      isGoldenCross: os.isGoldenCross,
-                      buySignal: os.buySignal,
-                      suggestion: os.suggestion,
-                    });
-                  }
-                }
-              }
-              return allOpportunities.length > 0 ? (
-                <View className="flex flex-col gap-2">
-                  {/* 表头（5列） */}
-                  <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
-                    <View style={{ flex: 1.2 }}>
-                      <Text className="block text-xs text-gray-400">名称</Text>
-                    </View>
-                    <View style={{ flex: 0.7 }} className="text-center">
-                      <Text className="block text-xs text-gray-400">操作</Text>
-                    </View>
-                    <View style={{ flex: 0.9 }} className="text-center">
-                      <Text className="block text-xs text-gray-400">价格</Text>
-                    </View>
-                    <View style={{ flex: 0.9 }} className="text-center">
-                      <Text className="block text-xs text-gray-400">累计涨幅</Text>
-                    </View>
-                    <View style={{ flex: 1 }} className="text-right">
-                      <Text className="block text-xs text-gray-400">主力资金</Text>
-                    </View>
-                  </View>
-                  {getFilteredOpportunityStocks(allOpportunities).sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99)).map((item, idx) => {
-                    const action = item.suggestion || getOpportunitySuggestion(item);
-                    return (
-                    <Card key={`${item.code}-${idx}`}>
-                      <CardContent className="p-3">
-                        <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code)}>
-                          <View style={{ flex: 1.2 }}>
-                            <View className="flex flex-row items-center gap-1">
-                              <Badge className="px-1 bg-orange-50 text-orange-700 border-orange-200 flex-shrink-0 py-0">
-                                <Text className="block text-xs">#{idx + 1}</Text>
-                              </Badge>
-                              <View className="min-w-0 flex-1">
-                                <Text className="block text-xs font-medium truncate">{item.name}</Text>
-                                <Text className="block text-xs text-gray-400">{item.sectorName}</Text>
-                              </View>
-                            </View>
-                          </View>
-                          <View style={{ flex: 0.7 }} className="text-center">
-                            <Text className="block text-xs text-white font-bold px-1 py-0.5 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
-                          </View>
-                          <View style={{ flex: 0.9 }} className="text-center">
-                            <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
-                            <Text className="block text-xs" style={{ color: (item.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
-                              {(item.changePercent ?? 0) >= 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
-                            </Text>
-                          </View>
-                          <View style={{ flex: 0.9 }} className="text-center">
-                            <Text className="block text-xs" style={{ color: (item.priceIncrease ?? 0) <= 10 ? '#22c55e' : (item.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
-                              {(item.priceIncrease ?? 0) > 0 ? '+' : ''}{(item.priceIncrease ?? 0).toFixed(1)}%
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1 }} className="text-right">
-                            <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(item.pricePosition ?? 0).toFixed(0)}%</Text>
-                            <Text className="block text-xs" style={{ color: (item.mainForceInflow ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>{item.mainForceInflow === 0 || item.mainForceInflow === undefined || item.mainForceInflow === null ? '0' : `${item.mainForceInflow >= 0 ? '+' : '-'}${Math.abs(item.mainForceInflow) >= 100000000 ? `${(Math.abs(item.mainForceInflow) / 100000000).toFixed(2)}亿` : `${(Math.abs(item.mainForceInflow) / 10000).toFixed(0)}万`}`}</Text>
-                          </View>
-                        </View>
-                      </CardContent>
-                    </Card>
-                  );})}
-                </View>
-              ) : (
-                <View className="p-4 bg-gray-50 rounded-xl">
-                  <Text className="block text-sm text-gray-400 text-center">
-                    暂无符合条件的信号
-                  </Text>
-                </View>
-              );
-            })()
-          ) : (
             <View className="p-4 bg-gray-50 rounded-xl">
-              <Text className="block text-sm text-gray-400 text-center">
-                板块数据加载中，请稍候...
+              <Text className="block text-xs text-gray-400 text-center">
+                暂无符合条件的信号
               </Text>
             </View>
           )}
-
-          {/* 热门细分板块 */}
-          {sectorData && sectorData.month1 && sectorData.month1.length > 0 && (
-            <View className="mt-4 pt-2">
-              <View className="flex flex-row items-center justify-between">
-                <Text className="block text-sm font-medium text-gray-900 mb-2">🏷️ 热门细分板块</Text>
-                {sectorTimestamp > 0 && (() => {
-                  const diff = Math.floor((Date.now() - sectorTimestamp) / 60000);
-                  const text = diff < 1 ? '刚刚更新' : `${diff} 分钟前更新`;
-                  return <Text className="block text-xs text-gray-400 mb-2">{text}</Text>;
-                })()}
-              </View>
-              <View className="grid grid-cols-5 gap-1">
-                {sectorData.month1
-                  .filter((s: any) => s.changePercent !== undefined)
-                  .sort((a: any, b: any) => b.changePercent - a.changePercent)
-                  .slice(0, 10)
-                  .map((s: any, i: number) => (
-                    <Badge key={i} className="px-1 py-1 bg-orange-50 text-orange-700 border-orange-200 text-xs rounded-full flex items-center justify-center">
-                      <Text className="block text-xs font-medium truncate">{s.name}</Text>
-                    </Badge>
-                  ))}
-              </View>
-            </View>
-          )}
-
-          {/* 数据更新时间 */}
-          {sectorTimestamp > 0 && (
-            <View style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-              {(() => {
-                const d = new Date(sectorTimestamp + 8 * 60 * 60 * 1000);
-                const year = d.getUTCFullYear();
-                const month = d.getUTCMonth() + 1;
-                const day = d.getUTCDate();
-                const h = String(d.getUTCHours()).padStart(2, '0');
-                const m = String(d.getUTCMinutes()).padStart(2, '0');
-                const s = String(d.getUTCSeconds()).padStart(2, '0');
-                return <Text className="block text-xs text-gray-400">{year}年{month}月{day}日 {h}:{m}:{s}</Text>;
-              })()}
-            </View>
-          )}
         </View>
-
-          {/* 底部信息 */}
+        {/* 底部信息 */}
           <View className="mt-6 pt-4 border-t border-gray-100">
             <Text className="block text-xs text-gray-400 text-center">
               开发者：呱呱小白狗

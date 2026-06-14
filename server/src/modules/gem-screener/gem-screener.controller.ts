@@ -17,4 +17,10 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp } };
   }
 
+  @Get('top-opportunities')
+  async getTopOpportunities() {
+    const opportunities = await this.gemScreener.scanTopOpportunities();
+    return { code: 200, msg: 'success', data: { opportunities } };
+  }
+
 }

@@ -24,6 +24,10 @@ let GemScreenerController = class GemScreenerController {
         const { opportunities, timestamp } = await this.gemScreener.getMainBoardOpportunities();
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
     }
+    async getTopOpportunities() {
+        const opportunities = await this.gemScreener.scanTopOpportunities();
+        return { code: 200, msg: 'success', data: { opportunities } };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -38,6 +42,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getMainBoard", null);
+__decorate([
+    (0, common_1.Get)('top-opportunities'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getTopOpportunities", null);
 exports.GemScreenerController = GemScreenerController = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
