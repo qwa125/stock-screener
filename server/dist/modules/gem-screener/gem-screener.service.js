@@ -474,6 +474,74 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else {
             buySignal = '突破上涨';
         }
+        const macdBullishR = macdResult.currentDiff > macdResult.currentDea;
+        let trendStateR = 1;
+        if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01) {
+            trendStateR = 3;
+        }
+        else if (ma5 > ma10 && ma10 > ma20) {
+            trendStateR = 2;
+        }
+        const trendStrengthR = ((ma5 / ma10 - 1) * 100);
+        const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
+        const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const volumeBullishR = recentVolR > avgVolR * 1.1;
+        const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai || isPullbackRecovery;
+        const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
+        const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
+        let suggestionR = '观望';
+        if (zoneR.includes('高位')) {
+            if (trendStateR === 0)
+                suggestionR = hasBuySignalR ? '持有' : '清仓';
+            else if (trendStateR === 1)
+                suggestionR = hasBuySignalR && macdBullishR ? '持有' : (!macdBullishR ? '卖出' : '减仓');
+            else
+                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
+        }
+        else if (zoneR.includes('中高位')) {
+            if (trendStateR === 0)
+                suggestionR = hasBuySignalR ? '持有' : '减仓';
+            else if (trendStateR >= 2)
+                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
+            else
+                suggestionR = hasBuySignalR ? '持有' : '持有';
+        }
+        else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
+            if (trendStateR >= 2)
+                suggestionR = hasBuySignalR ? '买入' : '轻仓买入';
+            else if (trendStateR === 0)
+                suggestionR = hasBuySignalR ? '持有' : '减仓';
+            else
+                suggestionR = hasBuySignalR ? '持有' : '持有';
+        }
+        else if (zoneR.includes('中低位')) {
+            if (trendStateR >= 2 && hasBuySignalR)
+                suggestionR = '轻仓买入';
+            else if (trendStateR === 0)
+                suggestionR = '持有';
+            else
+                suggestionR = '持有';
+        }
+        else {
+            if (longDeclineR && trendStateR === 1 && !macdBullishR && !volumeBullishR) {
+                suggestionR = '不要介入';
+            }
+            else if (trendStateR === 1 && macdBullishR && volumeBullishR) {
+                suggestionR = '买入';
+            }
+            else if (trendStateR === 0) {
+                suggestionR = hasBuySignalR ? '轻仓买入' : '观望';
+            }
+            else if (trendStateR >= 2) {
+                suggestionR = (trendStateR >= 3 && hasBuySignalR) ? '重仓买入' : '买入';
+            }
+            else {
+                suggestionR = hasBuySignalR ? '持有' : '观望';
+            }
+        }
+        const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
+        if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
+            return null;
         return {
             capitalRank: 0,
             code: s.code,
@@ -489,6 +557,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             diff: Math.round(macdResult.currentDiff * 10000) / 10000,
             dea: Math.round(macdResult.currentDea * 10000) / 10000,
             isGoldenCross,
+            suggestion: suggestionR,
         };
     }
     async checkOpportunityRelaxed(s) {

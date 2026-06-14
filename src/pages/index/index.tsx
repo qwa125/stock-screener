@@ -436,61 +436,19 @@ const ACTION_BADGE_COLOR: Record<string, string> = {
 
 /** 根据机会区股票数据生成操作建议（简化版，使用可用的数据字段） */
 function getOpportunitySuggestion(stock: OpportunityStock): string {
-  // 如果服务端已返回建议，优先使用（保证与完整分析一致）
+  // 只认后端 computed suggestion
   if (stock.suggestion) return stock.suggestion;
+  // 没有 suggestion 时默认空（不展示）
+  return '';
+}
 
-  const pos = stock.pricePosition ?? 50;
-  const changePct = stock.changePercent ?? 0;
-  const increase = stock.priceIncrease ?? 0;
-  const diff = stock.diff ?? 0;
-  const dea = stock.dea ?? 0;
-  const isGolden = stock.isGoldenCross ?? false;
-  const mainForce = stock.mainForceInflow ?? 0;
-
-  // 推断趋势
-  const trendUp = increase > 5 && changePct > 0;  // 累计涨幅较大+当日上涨
-  const trendStrongUp = increase > 10 && changePct > 2;
-  const trendDown = increase < -5 || changePct < -3;
-  const macdBullish = diff > dea;
-
-  // 低位区
-  if (pos < 25) {
-    if (trendStrongUp && isGolden) return '重仓买入';
-    if (trendUp && (isGolden || mainForce > 0)) return '买入';
-    if (trendUp) return '轻仓买入';
-    if (trendDown && increase < -15 && changePct > -1) return '不要介入';
-    if (macdBullish || isGolden) return '准备买入';
-    return '观望';
-  }
-
-  // 中低位区
-  if (pos < 45) {
-    if (trendStrongUp) return '买入';
-    if (trendUp) return '轻仓买入';
-    if (macdBullish || isGolden) return '准备买入';
-    if (trendDown) return '观望';
-    return '准备买入';
-  }
-
-  // 中位区
-  if (pos < 55) {
-    if (trendUp && mainForce > 0) return '轻仓买入';
-    if (macdBullish && mainForce > 0) return '准备买入';
-    if (trendDown) return '减仓';
-    return '持有';
-  }
-
-  // 中高位区
-  if (pos < 75) {
-    if (trendUp && mainForce > 0) return '持有';
-    if (trendDown || mainForce < -50000000) return '减仓';
-    return '持有';
-  }
-
-  // 高位区
-  if (macdBullish && trendUp) return '持有';
-  if (!macdBullish && trendDown) return '卖出';
-  return '减仓';
+/** 获取机会区列表：过滤+排序 */
+function getFilteredOpportunityStocks(list: any[]): any[] {
+  // 只保留正面建议的股票
+  return list.filter(s => {
+    const sug = s.suggestion || getOpportunitySuggestion(s);
+    return !(['减仓','卖出','清仓','不要介入','关注','观望'].includes(sug));
+  });
 }
 
 // ===== 组件 =====
@@ -1197,11 +1155,10 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">主力资金</Text>
                 </View>
               </View>
-              {[...oppData]
-                .filter(s => !(['减仓','卖出','清仓','不要介入'].includes(getOpportunitySuggestion(s))))
-                .sort((a, b) => (ACTION_PRIORITY[getOpportunitySuggestion(a)] ?? 99) - (ACTION_PRIORITY[getOpportunitySuggestion(b)] ?? 99))
+              {[...getFilteredOpportunityStocks(oppData)]
+                .sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99))
                 .map((stock, idx) => {
-                const action = getOpportunitySuggestion(stock);
+                const action = stock.suggestion || getOpportunitySuggestion(stock);
                 return (
                 <Card key={stock.code}>
                   <CardContent className="p-3">
@@ -1281,10 +1238,9 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">主力资金</Text>
                 </View>
               </View>
-              {[...mainBoardData]
-                .filter(s => !(['减仓','卖出','清仓','不要介入'].includes(getOpportunitySuggestion(s))))
-                .sort((a, b) => (ACTION_PRIORITY[getOpportunitySuggestion(a)] ?? 99) - (ACTION_PRIORITY[getOpportunitySuggestion(b)] ?? 99)).map((item, idx) => {
-                const action = getOpportunitySuggestion(item);
+              {[...getFilteredOpportunityStocks(mainBoardData)]
+                .sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99)).map((item, idx) => {
+                const action = item.suggestion || getOpportunitySuggestion(item);
                 return (
                 <Card key={item.code}>
                   <CardContent className="p-3">
@@ -1416,8 +1372,8 @@ const IndexPage = () => {
                       <Text className="block text-xs text-gray-400">主力资金</Text>
                     </View>
                   </View>
-                  {allOpportunities.map((item, idx) => {
-                    const action = item.suggestion || (item.buySignal ? '关注' : '');
+                  {getFilteredOpportunityStocks(allOpportunities).sort((a, b) => (ACTION_PRIORITY[a.suggestion ?? ''] ?? 99) - (ACTION_PRIORITY[b.suggestion ?? ''] ?? 99)).map((item, idx) => {
+                    const action = item.suggestion || getOpportunitySuggestion(item);
                     return (
                     <Card key={`${item.code}-${idx}`}>
                       <CardContent className="p-3">
