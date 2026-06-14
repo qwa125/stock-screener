@@ -308,47 +308,40 @@ export class DataFetcherService {
     // 使用真实价格或默认价格
     const targetPrice = currentPrice || (100 + Math.random() * 50);
 
-    // 起始价为目标价的 50%-80%（偏保守，需要上涨才能达标）
-    const startPrice = targetPrice * (0.5 + Math.random() * 0.3);
-
-    // 保守随机游走：无固定大涨阶段，整体略微偏空
-    // 均线回归力让价格缓慢向 targetPrice 靠拢，避免人为制造趋势
-    let price = startPrice;
+    // 使用正弦波模拟：价格围绕目标价波动，确保有合理的高/低点范围
+    // 振幅为目标价的 ±20%~35%，避免极端位置（≥90%）
+    const amplitude = targetPrice * (0.20 + Math.random() * 0.15);
+    const cycles = 2.5 + Math.random() * 1.5; // 2.5~4个完整周期
 
     const baseDate = new Date('2024-01-01');
 
     for (let i = 0; i < totalDays; i++) {
-      // 均线回归：价格偏离目标越远，回调力越强（±0.15%/偏离1%）
-      const distance = (targetPrice - price) / targetPrice;
-      const meanReversion = distance * 0.0015;
+      // 正弦波 + 随机噪声
+      const phase = Math.PI * 2 * i / totalDays * cycles;
+      const sineComponent = Math.sin(phase) * amplitude;
+      const noise = (Math.random() - 0.5) * amplitude * 0.12;
 
-      // 随机噪声（日振幅核心）
-      const noise = (Math.random() - 0.5) * 0.032;
-
-      // 微弱的负偏置，使模拟数据整体偏保守（-5% over 500天）
-      const bearishBias = -0.0001;
-
-      // 最后 20 天强收敛到 targetPrice
-      let converge = 0;
-      if (i > totalDays - 20) {
-        const remaining = totalDays - i;
-        converge = distance * (1 / remaining) * 0.4;
+      // 最后5天逐渐消除波动，收敛到目标价
+      let convergeFactor = 0;
+      let remain = 0;
+      if (i > totalDays - 5) {
+        remain = totalDays - i;
+        convergeFactor = 1 - remain / 5; // 0% → 80%
       }
+      const currentSine = sineComponent * (1 - convergeFactor);
+      const currentNoise = noise * (1 - convergeFactor);
 
-      const dailyReturn = meanReversion + bearishBias + noise + converge;
-      const prevClose = price;
-      price = price * (1 + dailyReturn);
+      let close = targetPrice + currentSine + currentNoise;
+      close = Math.max(close, 0.5);
 
       // 生成OHLC
-      const volatility = Math.max(price * 0.022, 0.01); // 日振幅 ~2.2%
-      const open = prevClose * (1 + (Math.random() - 0.5) * 0.01);
-      const close = price;
-      const high = Math.max(open, close) + Math.random() * volatility * 0.6;
-      const low = Math.min(open, close) - Math.random() * volatility * 0.6;
+      const volatility = Math.max(close * 0.02, 0.01);
+      const open = close * (1 + (Math.random() - 0.5) * 0.02);
+      const high = Math.max(open, close) + Math.random() * volatility * 0.8;
+      const low = Math.min(open, close) - Math.random() * volatility * 0.8;
 
       const baseVolume = 2000000 + Math.random() * 8000000;
-      const volMultiplier = 1 + Math.abs(dailyReturn) * 30;
-      const volume = baseVolume * volMultiplier;
+      const volume = baseVolume * (1 + Math.sin(phase) * 0.5);
       const amount = volume * (open + close) / 2;
 
       const date = new Date(baseDate);
