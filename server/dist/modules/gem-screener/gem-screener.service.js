@@ -997,7 +997,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const batch = candidates.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(async (c) => {
                 try {
-                    const stock = await this.quickAnalyze(c.code);
+                    const stock = await this.quickAnalyze(c.code, c.name);
                     if (stock) {
                         results.push(stock);
                         analyzed++;
@@ -1017,7 +1017,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         });
         return results.slice(0, topN);
     }
-    async quickAnalyze(code) {
+    async quickAnalyze(code, name) {
         const raw = await this.dataFetcher.getKLineData(code);
         if (!raw?.length || raw.length < 60)
             return null;
@@ -1135,7 +1135,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else
             score -= 5;
         return {
-            code, name: '',
+            code, name: name ?? '',
             currentPrice: price,
             changePercent: Math.round(changePct * 100) / 100,
             priceIncrease: Math.round(priceIncrease * 100) / 100,

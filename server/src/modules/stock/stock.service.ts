@@ -254,7 +254,7 @@ export class StockService {
       ...baiXingResult,
       ...xingXingResult,
       concentrationDisplay,
-    };
+    } as any;
 
     // 8. 生成中性信号列表
     const signals: SignalEntry[] = generateSignals({ formula: formulaResult });
@@ -292,7 +292,89 @@ export class StockService {
     const high = realTime?.high;
     const low = realTime?.low;
 
-    // 13. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
+    // 13. 计算交易建议（与quickAnalyze保持一致）
+    const closeArr = closePrices;
+    const volumeArr = klines.map(k => k.volume);
+    const highArr = klines.map(k => k.high);
+    const lowArr = klines.map(k => k.low);
+    const lastPrice = currentPrice ?? closePrices[closePrices.length - 1];
+    const high60 = Math.max(...highArr.slice(-60));
+    const low60 = Math.min(...lowArr.slice(-60));
+    const pricePos = high60 > low60 ? ((lastPrice - low60) / (high60 - low60)) * 100 : 50;
+    const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+    const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+    let trendState = 1;
+    if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
+    else if (ma5 > ma10 && ma5Up) trendState = 2;
+    else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
+
+    // 简化MACD计算（使用公式引擎数据或直接计算）
+    let macdDiff = 0, macdDea = 0, isGoldenCross = false;
+    try {
+      const ema12 = closeArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
+      const ema26 = closeArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
+      macdDiff = ema12 - ema26;
+      const deaArr: number[] = closeArr.reduce((arr: number[], v, i) => {
+        const prev = arr.length ? arr[arr.length - 1] : 0;
+        arr.push(i === 0 ? (closeArr[0]) : prev + ( ((ema12 - ema26) - prev) * 2 / 9 ));
+        return arr;
+      }, []);
+      macdDea = deaArr[deaArr.length - 1] || 0;
+      if (closeArr.length > 2) {
+        const prevDiff = closeArr.slice(-3).reduce((s, v, i, a) => {
+          if (i === a.length - 1) return s;
+          return s + v;
+        }, 0);
+        isGoldenCross = macdDiff > macdDea;
+      }
+    } catch {}
+
+    const hasBuy = !!(isGoldenCross || formulaResult.shortBuy || formulaResult.jiaCang || (macdDiff > macdDea && formulaResult.baiXiao));
+    const hasDanger = !!(formulaResult.shortSell || formulaResult.strongSell);
+
+    let volUp = false;
+    if (volumeArr.length >= 13) {
+      const v10 = volumeArr.slice(-13, -3).reduce((a, b) => a + b, 0) / 10;
+      const v3 = volumeArr.slice(-3).reduce((a, b) => a + b, 0) / 3;
+      volUp = v3 > v10 * 1.3;
+    }
+
+    const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
+    const isUp = trendState >= 2;
+    const isSide = trendState === 1;
+
+    let suggestion = '持有';
+    if (zone === '低位') {
+      if (isUp && hasBuy) suggestion = '重仓买入';
+      else if (isUp && volUp) suggestion = '买入';
+      else if (isUp) suggestion = '轻仓买入';
+      else if (isSide && hasBuy) suggestion = '准备买入';
+      else if (hasDanger) suggestion = '持有';
+      else suggestion = '轻仓买入';
+    } else if (zone === '中位') {
+      if (isUp && hasBuy) suggestion = '买入';
+      else if (isUp && volUp) suggestion = '轻仓买入';
+      else if (isUp) suggestion = '轻仓买入';
+      else if (isSide && hasBuy) suggestion = '准备买入';
+      else suggestion = '持有';
+    } else if (zone === '中高位') {
+      if (isUp && hasBuy) suggestion = '持有';
+      else if (isUp) suggestion = '持有';
+      else if (isSide && hasBuy) suggestion = '持有';
+      else if (isSide) suggestion = '观望';
+      else if (hasDanger) suggestion = '减仓';
+      else suggestion = '减仓';
+    } else {
+      if (isUp && hasBuy) suggestion = '持有';
+      else if (isUp) suggestion = '持有';
+      else if (hasDanger) suggestion = '卖出';
+      else suggestion = '减仓';
+    }
+
+    // 14. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
     if (usesRealKline) {
       const cacheEntry = {
         stock, currentPrice, changePercent, high, low,
@@ -300,6 +382,7 @@ export class StockService {
         formula: formulaResult,
         signals,
         backtestStats,
+        suggestion,
       };
       this.analysisCache.set(stock.code, cacheEntry);
       this.saveAnalysisCache();
@@ -316,6 +399,7 @@ export class StockService {
       formula: formulaResult,
       signals,
       backtestStats,
+      suggestion,
     };
   }
 }

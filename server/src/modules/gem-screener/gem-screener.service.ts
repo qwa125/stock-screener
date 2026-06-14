@@ -1159,7 +1159,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const batch = candidates.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (c) => {
         try {
-          const stock = await this.quickAnalyze(c.code);
+          const stock = await this.quickAnalyze(c.code, c.name);
           if (stock) { results.push(stock); analyzed++; }
         } catch {}
       }));
@@ -1177,7 +1177,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return results.slice(0, topN);
   }
 
-  private async quickAnalyze(code: string): Promise<OpportunityStock | null> {
+  private async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
     const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 60) return null;
 
@@ -1273,7 +1273,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     else score -= 5;
 
     return {
-      code, name: '',
+      code, name: name ?? '',
       currentPrice: price,
       changePercent: Math.round(changePct * 100) / 100,
       priceIncrease: Math.round(priceIncrease * 100) / 100,

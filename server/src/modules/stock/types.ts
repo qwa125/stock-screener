@@ -191,6 +191,8 @@ export interface StockAnalysisResult {
   signals?: SignalEntry[];
   /** 历史回测统计 */
   backtestStats?: BacktestStats;
+  /** 交易建议 */
+  suggestion?: string;
 }
 
 /** 股票筛选条件 */

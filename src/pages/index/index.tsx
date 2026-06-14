@@ -89,6 +89,7 @@ interface StockResult {
   isNewStock?: boolean;
   formula: FormulaResult;
   signals?: SignalEntry[];
+  suggestion?: string;
 }
 
 interface ApiResponse {
@@ -841,7 +842,11 @@ const IndexPage = () => {
 
             {/* 操作建议卡片 */}
             {(() => {
-              const suggestion = getTradingSuggestion(f);
+              // 优先使用服务端统一计算的建议（与机会区一致），兜底用前端算法
+              const serverAction = result?.suggestion;
+              const clientSuggestion = getTradingSuggestion(f);
+              const effectiveAction = serverAction || clientSuggestion.action;
+              const suggestion = { ...clientSuggestion, action: effectiveAction };
 
               const actionColors: Record<string, string> = {
                 '重仓买入': 'bg-red-600', '买入': 'bg-green-600', '轻仓买入': 'bg-green-500',
