@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Info, Clock } from 'lucide-react-taro';
+import { Info, Clock, AArrowUp, AArrowDown, TriangleAlert, Minus } from 'lucide-react-taro';
 import { Separator } from '@/components/ui/separator';
 
 // ===== 类型定义 =====
@@ -235,6 +235,102 @@ const signalTypeMap: Record<string, 'positive' | 'negative' | 'neutral'> = {
   baiXiaoBuy2: 'positive',
   qiangShiHuiCai: 'positive',
 };
+
+interface TradingSuggestion {
+  /** 操作动作: 重仓买入, 买入, 轻仓买入, 持有, 减仓, 卖出, 清仓, 不要介入 */
+  action: string;
+  /** 动作对应的颜色 */
+  color: string;
+  /** 动作对应的图标色 */
+  iconColor: string;
+  /** 理由简述 */
+  reason: string;
+  /** 未来1-2日预测 */
+  futurePrediction: string;
+  /** 预测文字颜色 */
+  futureColor: string;
+}
+
+function getPositionLabel(position: number): string {
+  if (position < 15) return '低位区';
+  if (position < 35) return '中低位区';
+  if (position < 55) return '中位区';
+  if (position < 75) return '中高位区';
+  return '高位区';
+}
+
+function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
+  const pos = f.pricePosition ?? 50;
+  const trend = f.trendState ?? 1;
+  const strength = f.trendStrength ?? 0;
+  const zone = f.positionZone || getPositionLabel(pos);
+  const diff = f.diff ?? 0;
+  const dea = f.dea ?? 0;
+  const macdBullish = diff > dea; // MACD金叉状态
+  const volumeBullish = (f.volumeStructure ?? 50) > 50; // 量能偏多
+  const safe = f.safe ?? false;
+  const hasBuySignal = !!f.shortBuy || !!f.strictBuy || !!f.jiaCang || macdBullish;
+  const hasSellSignal = !!f.shortSell || !!f.strongSell || !!f.jianCang;
+  const longDecline = pos < 20 && strength < -3; // 长期下跌
+
+  // 1) 高位区 - 高风险
+  if (zone.includes('高位')) {
+    if (trend === 0) { // 下降
+      if (hasSellSignal) return { action: '清仓', color: 'bg-red-600', iconColor: '#dc2626', reason: '高位下降趋势，风险较大', futurePrediction: '未来1-2日预计继续回落，建议卖出', futureColor: '#dc2626' };
+      return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', futurePrediction: '未来1-2日谨慎观望，有回调风险', futureColor: '#f59e0b' };
+    }
+    if (trend === 1) { // 横盘
+      if (!macdBullish && hasSellSignal) return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位横盘+死叉，风险信号', futurePrediction: '未来1-2日预计卖出信号', futureColor: '#dc2626' };
+      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', futurePrediction: '未来1-2日若跌破支撑，建议卖出', futureColor: '#f59e0b' };
+    }
+    // 上升
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但仍有上升动能', futurePrediction: '未来1-2日可持有，设好止盈', futureColor: '#eab308' };
+  }
+
+  // 2) 中高位区 - 偏风险
+  if (zone.includes('中高位')) {
+    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中高位+下降趋势', futurePrediction: '未来1-2日预计偏弱，减仓观察', futureColor: '#f59e0b' };
+    if (trend >= 2) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', futurePrediction: '未来1-2日关注能否突破压力位', futureColor: '#eab308' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', futurePrediction: '未来1-2日方向不明，观望为主', futureColor: '#6b7280' };
+  }
+
+  // 3) 中位区 - 中性
+  if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
+    if (trend >= 2) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', futurePrediction: '未来1-2日有望延续，可轻仓参与', futureColor: '#16a34a' };
+    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中位区+下降趋势', futurePrediction: '未来1-2日预计偏弱', futureColor: '#f59e0b' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', futurePrediction: '未来1-2日等待方向选择', futureColor: '#6b7280' };
+  }
+
+  // 4) 中低位区 - 偏机会
+  if (zone.includes('中低位')) {
+    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', futurePrediction: '未来1-2日有反弹预期，可关注', futureColor: '#16a34a' };
+    if (trend === 0) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位下降，等待企稳', futurePrediction: '未来1-2日可能继续探底', futureColor: '#f59e0b' };
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', futurePrediction: '未来1-2日出现放量可考虑介入', futureColor: '#3b82f6' };
+  }
+
+  // 5) 低位区 - 机会/风险并存
+  // 跌了很久+横盘→不要介入
+  if (longDecline && trend === 1 && !macdBullish && !volumeBullish) {
+    return { action: '不要介入', color: 'bg-gray-500', iconColor: '#6b7280', reason: '长期下跌后横盘，无量能支撑', futurePrediction: '等待放量突破信号再考虑', futureColor: '#6b7280' };
+  }
+  // 低位+横盘+MACD金叉+放量→可关注/未来买入
+  if (trend === 1 && macdBullish && volumeBullish) {
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', futurePrediction: '未来1-2日若继续放量可考虑买入', futureColor: '#16a34a' };
+  }
+  // 低位+下降趋势
+  if (trend === 0) {
+    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '低位+下降末端，有买入信号', futurePrediction: '未来1-2日有望止跌反弹', futureColor: '#16a34a' };
+    return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位下降趋势，尚未企稳', futurePrediction: '未来1-2日可能继续探底，观望为主', futureColor: '#f59e0b' };
+  }
+  // 低位+上升趋势
+  if (trend >= 2) {
+    if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', iconColor: '#dc2626', reason: '低位强上升+买入信号共振', futurePrediction: '未来1-2日预计继续上攻', futureColor: '#16a34a' };
+    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', futurePrediction: '未来1-2日延续反弹，可积极关注', futureColor: '#16a34a' };
+  }
+  // 低位横盘（默认）
+  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', futurePrediction: '未来1-2日关注量能变化', futureColor: '#3b82f6' };
+  return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', futurePrediction: '未来1-2日等待方向确认', futureColor: '#6b7280' };
+}
 
 function getActiveSignals(f: FormulaResult, extraSignals?: SignalEntry[]): { key: string; name: string; type: string; description?: string }[] {
   const result: { key: string; name: string; type: string; description?: string }[] = [];
@@ -1008,6 +1104,70 @@ const IndexPage = () => {
                 </View>
               </CardContent>
             </Card>
+
+            {/* 操作建议卡片 */}
+            {(() => {
+              const suggestion = getTradingSuggestion(f);
+              const actionColors: Record<string, string> = {
+                '重仓买入': 'bg-red-600', '买入': 'bg-red-500', '轻仓买入': 'bg-orange-500',
+                '持有': 'bg-blue-500', '减仓': 'bg-yellow-500', '卖出': 'bg-green-600',
+                '清仓': 'bg-green-800', '不要介入': 'bg-gray-500'
+              };
+              const actionIcons: Record<string, string> = {
+                '重仓买入': 'buy', '买入': 'buy', '轻仓买入': 'buy',
+                '持有': 'hold', '减仓': 'sell', '卖出': 'sell',
+                '清仓': 'sell', '不要介入': 'stop'
+              };
+              const iconMap: Record<string, React.ReactNode> = {
+                'buy': <AArrowUp color="#fff" size={20} />,
+                'hold': <Minus color="#fff" size={20} />,
+                'sell': <AArrowDown color="#fff" size={20} />,
+                'stop': <TriangleAlert color="#fff" size={20} />
+              };
+              return (
+                <Card className={suggestion.isWarning ? 'border-2 border-orange-300' : ''}>
+                  <CardContent className="p-4">
+                    <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <Text className="block text-base font-bold text-gray-900">操作建议</Text>
+                      {suggestion.isWarning && <Badge style={{ backgroundColor: '#fa8c16', color: '#fff' }}><Text className="block text-xs">⚠️ 谨慎</Text></Badge>}
+                    </View>
+
+                    {/* 主操作按钮 */}
+                    <View className="mb-3">
+                      <View className={'rounded-xl py-3 px-4 ' + (actionColors[suggestion.action] || 'bg-blue-500')}
+                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                          {iconMap[actionIcons[suggestion.action]] || iconMap['hold']}
+                          <Text className="block text-lg font-bold text-white">{suggestion.action}</Text>
+                        </View>
+                        <Text className="block text-xs text-white/80">{suggestion.reason}</Text>
+                      </View>
+                    </View>
+
+                    {/* 未来1-2日预测 */}
+                    {suggestion.prediction && (
+                      <View className="bg-gray-50 rounded-xl p-3"
+                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                        <Text className="block text-xs font-medium text-gray-600 whitespace-nowrap">未来1-2日</Text>
+                        <Text className="block text-sm font-semibold text-gray-800">{suggestion.prediction}</Text>
+                      </View>
+                    )}
+
+                    {/* 详情说明 */}
+                    {suggestion.details.length > 0 && (
+                      <View className="mt-2">
+                        {suggestion.details.map((d, i) => (
+                          <View key={i} className="flex flex-row items-start gap-1 mt-1">
+                            <Text className="block text-xs text-gray-400">{'•'}</Text>
+                            <Text className="block text-xs text-gray-500">{d}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* 技术指标卡片 */}
             <Card>
