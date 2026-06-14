@@ -377,6 +377,90 @@ const signalBadgeColor = (type: string): string => {
   }
 };
 
+/** 操作建议优先级排序（数值越小越靠前） */
+const ACTION_PRIORITY: Record<string, number> = {
+  '重仓买入': 0,
+  '买入': 1,
+  '轻仓买入': 2,
+  '可关注': 3,
+  '持有': 4,
+  '观望': 5,
+  '减仓': 6,
+  '卖出': 7,
+  '清仓': 8,
+  '不要介入': 9,
+};
+
+/** 操作建议颜色映射 */
+const ACTION_BADGE_COLOR: Record<string, string> = {
+  '重仓买入': '#dc2626',
+  '买入': '#16a34a',
+  '轻仓买入': '#22c55e',
+  '可关注': '#3b82f6',
+  '持有': '#eab308',
+  '观望': '#9ca3af',
+  '减仓': '#f97316',
+  '卖出': '#ef4444',
+  '清仓': '#dc2626',
+  '不要介入': '#6b7280',
+};
+
+/** 根据机会区股票数据生成操作建议（简化版，使用可用的数据字段） */
+function getOpportunitySuggestion(stock: OpportunityStock): string {
+  const pos = stock.pricePosition ?? 50;
+  const changePct = stock.changePercent ?? 0;
+  const increase = stock.priceIncrease ?? 0;
+  const diff = stock.diff ?? 0;
+  const dea = stock.dea ?? 0;
+  const isGolden = stock.isGoldenCross ?? false;
+  const mainForce = stock.mainForceInflow ?? 0;
+
+  // 推断趋势
+  const trendUp = increase > 5 && changePct > 0;  // 累计涨幅较大+当日上涨
+  const trendStrongUp = increase > 10 && changePct > 2;
+  const trendDown = increase < -5 || changePct < -3;
+  const macdBullish = diff > dea;
+
+  // 低位区
+  if (pos < 25) {
+    if (trendStrongUp && isGolden) return '重仓买入';
+    if (trendUp && (isGolden || mainForce > 0)) return '买入';
+    if (trendUp) return '轻仓买入';
+    if (trendDown && increase < -15 && changePct > -1) return '不要介入';
+    if (macdBullish || isGolden) return '可关注';
+    return '观望';
+  }
+
+  // 中低位区
+  if (pos < 45) {
+    if (trendStrongUp) return '买入';
+    if (trendUp) return '轻仓买入';
+    if (macdBullish || isGolden) return '可关注';
+    if (trendDown) return '观望';
+    return '可关注';
+  }
+
+  // 中位区
+  if (pos < 55) {
+    if (trendUp && mainForce > 0) return '轻仓买入';
+    if (macdBullish && mainForce > 0) return '可关注';
+    if (trendDown) return '减仓';
+    return '持有';
+  }
+
+  // 中高位区
+  if (pos < 75) {
+    if (trendUp && mainForce > 0) return '持有';
+    if (trendDown || mainForce < -50000000) return '减仓';
+    return '持有';
+  }
+
+  // 高位区
+  if (macdBullish && trendUp) return '持有';
+  if (!macdBullish && trendDown) return '卖出';
+  return '减仓';
+}
+
 // ===== 组件 =====
 /** 信息行 */
 const InfoItem = ({ label, value }: { label: string; value: string }) => (
@@ -1077,7 +1161,11 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">主力资金</Text>
                 </View>
               </View>
-              {oppData.map((stock, idx) => (
+              {[...oppData]
+                .sort((a, b) => (ACTION_PRIORITY[getOpportunitySuggestion(a)] ?? 99) - (ACTION_PRIORITY[getOpportunitySuggestion(b)] ?? 99))
+                .map((stock, idx) => {
+                const action = getOpportunitySuggestion(stock);
+                return (
                 <Card key={stock.code}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code)}>
@@ -1086,8 +1174,11 @@ const IndexPage = () => {
                           <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
                           </Badge>
-                          <View className="min-w-0">
-                            <Text className="block text-xs font-medium truncate">{stock.name}</Text>
+                          <View className="min-w-0 flex-1">
+                            <View className="flex flex-row items-center gap-1">
+                              <Text className="block text-xs font-medium truncate max-w-[60px]">{stock.name}</Text>
+                              <Text className="block text-[9px] text-white font-bold px-1 rounded-sm leading-4" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action}</Text>
+                            </View>
                             <Text className="block text-xs text-gray-400">{stock.code}</Text>
                           </View>
                         </View>
@@ -1110,7 +1201,8 @@ const IndexPage = () => {
                     </View>
                   </CardContent>
                 </Card>
-              ))}
+              );
+            })}
             </View>
           ) : (
             <View className="p-4 bg-gray-50 rounded-xl">
@@ -1149,7 +1241,9 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">主力资金</Text>
                 </View>
               </View>
-              {mainBoardData.map((item, idx) => (
+              {[...mainBoardData].sort((a, b) => (ACTION_PRIORITY[getOpportunitySuggestion(a)] ?? 99) - (ACTION_PRIORITY[getOpportunitySuggestion(b)] ?? 99)).map((item, idx) => {
+                const action = getOpportunitySuggestion(item);
+                return (
                 <Card key={item.code}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code)}>
@@ -1158,8 +1252,11 @@ const IndexPage = () => {
                           <Badge className="px-1 bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
                           </Badge>
-                          <View className="min-w-0">
-                            <Text className="block text-xs font-medium truncate">{item.name}</Text>
+                          <View className="min-w-0 flex-1">
+                            <View className="flex flex-row items-center gap-1">
+                              <Text className="block text-xs font-medium truncate max-w-[60px]">{item.name}</Text>
+                              <Text className="block text-[9px] text-white font-bold px-1 rounded-sm leading-4" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action}</Text>
+                            </View>
                             <Text className="block text-xs text-gray-400">{item.code}</Text>
                           </View>
                         </View>
@@ -1182,7 +1279,8 @@ const IndexPage = () => {
                     </View>
                   </CardContent>
                 </Card>
-              ))}
+              );
+            })}
             </View>
           ) : (
             <View className="mt-3">
