@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Info, Clock, AArrowUp, AArrowDown, TriangleAlert, Minus } from 'lucide-react-taro';
+import { Info, AArrowUp, AArrowDown, TriangleAlert, Minus } from 'lucide-react-taro';
 import { Separator } from '@/components/ui/separator';
 
 // ===== 类型定义 =====
@@ -87,12 +87,6 @@ interface StockResult {
   isNewStock?: boolean;
   formula: FormulaResult;
   signals?: SignalEntry[];
-}
-
-interface SignalEntry {
-  name: string;
-  type: string;
-  description?: string;
 }
 
 interface ApiResponse {
@@ -246,9 +240,13 @@ interface TradingSuggestion {
   /** 理由简述 */
   reason: string;
   /** 未来1-2日预测 */
-  futurePrediction: string;
+  prediction: string;
   /** 预测文字颜色 */
-  futureColor: string;
+  predictionColor: string;
+  /** 是否为警告 */
+  isWarning?: boolean;
+  /** 详细说明列表 */
+  details?: string[];
 }
 
 function getPositionLabel(position: number): string {
@@ -270,66 +268,66 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   const volumeBullish = (f.volumeStructure ?? 50) > 50; // 量能偏多
   const safe = f.safe ?? false;
   const hasBuySignal = !!f.shortBuy || !!f.strictBuy || !!f.jiaCang || macdBullish;
-  const hasSellSignal = !!f.shortSell || !!f.strongSell || !!f.jianCang;
+  const hasSellSignal = !!f.shortSell || !!f.strongSell || !!f.jiaCang;
   const longDecline = pos < 20 && strength < -3; // 长期下跌
 
   // 1) 高位区 - 高风险
   if (zone.includes('高位')) {
     if (trend === 0) { // 下降
-      if (hasSellSignal) return { action: '清仓', color: 'bg-red-600', iconColor: '#dc2626', reason: '高位下降趋势，风险较大', futurePrediction: '未来1-2日预计继续回落，建议卖出', futureColor: '#dc2626' };
-      return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', futurePrediction: '未来1-2日谨慎观望，有回调风险', futureColor: '#f59e0b' };
+      if (hasSellSignal) return { action: '清仓', color: 'bg-red-600', iconColor: '#dc2626', reason: '高位下降趋势，风险较大', prediction: '未来1-2日预计继续回落，建议卖出', predictionColor: '#dc2626' };
+      return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', prediction: '未来1-2日谨慎观望，有回调风险', predictionColor: '#f59e0b' };
     }
     if (trend === 1) { // 横盘
-      if (!macdBullish && hasSellSignal) return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位横盘+死叉，风险信号', futurePrediction: '未来1-2日预计卖出信号', futureColor: '#dc2626' };
-      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', futurePrediction: '未来1-2日若跌破支撑，建议卖出', futureColor: '#f59e0b' };
+      if (!macdBullish && hasSellSignal) return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位横盘+死叉，风险信号', prediction: '未来1-2日预计卖出信号', predictionColor: '#dc2626' };
+      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', prediction: '未来1-2日若跌破支撑，建议卖出', predictionColor: '#f59e0b' };
     }
     // 上升
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但仍有上升动能', futurePrediction: '未来1-2日可持有，设好止盈', futureColor: '#eab308' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但仍有上升动能', prediction: '未来1-2日可持有，设好止盈', predictionColor: '#eab308' };
   }
 
   // 2) 中高位区 - 偏风险
   if (zone.includes('中高位')) {
-    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中高位+下降趋势', futurePrediction: '未来1-2日预计偏弱，减仓观察', futureColor: '#f59e0b' };
-    if (trend >= 2) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', futurePrediction: '未来1-2日关注能否突破压力位', futureColor: '#eab308' };
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', futurePrediction: '未来1-2日方向不明，观望为主', futureColor: '#6b7280' };
+    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中高位+下降趋势', prediction: '未来1-2日预计偏弱，减仓观察', predictionColor: '#f59e0b' };
+    if (trend >= 2) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', prediction: '未来1-2日关注能否突破压力位', predictionColor: '#eab308' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', prediction: '未来1-2日方向不明，观望为主', predictionColor: '#6b7280' };
   }
 
   // 3) 中位区 - 中性
   if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
-    if (trend >= 2) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', futurePrediction: '未来1-2日有望延续，可轻仓参与', futureColor: '#16a34a' };
-    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中位区+下降趋势', futurePrediction: '未来1-2日预计偏弱', futureColor: '#f59e0b' };
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', futurePrediction: '未来1-2日等待方向选择', futureColor: '#6b7280' };
+    if (trend >= 2) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续，可轻仓参与', predictionColor: '#16a34a' };
+    if (trend === 0) return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中位区+下降趋势', prediction: '未来1-2日预计偏弱', predictionColor: '#f59e0b' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', prediction: '未来1-2日等待方向选择', predictionColor: '#6b7280' };
   }
 
   // 4) 中低位区 - 偏机会
   if (zone.includes('中低位')) {
-    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', futurePrediction: '未来1-2日有反弹预期，可关注', futureColor: '#16a34a' };
-    if (trend === 0) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位下降，等待企稳', futurePrediction: '未来1-2日可能继续探底', futureColor: '#f59e0b' };
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', futurePrediction: '未来1-2日出现放量可考虑介入', futureColor: '#3b82f6' };
+    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', prediction: '未来1-2日有反弹预期，可关注', predictionColor: '#16a34a' };
+    if (trend === 0) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位下降，等待企稳', prediction: '未来1-2日可能继续探底', predictionColor: '#f59e0b' };
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', prediction: '未来1-2日出现放量可考虑介入', predictionColor: '#3b82f6' };
   }
 
   // 5) 低位区 - 机会/风险并存
   // 跌了很久+横盘→不要介入
   if (longDecline && trend === 1 && !macdBullish && !volumeBullish) {
-    return { action: '不要介入', color: 'bg-gray-500', iconColor: '#6b7280', reason: '长期下跌后横盘，无量能支撑', futurePrediction: '等待放量突破信号再考虑', futureColor: '#6b7280' };
+    return { action: '不要介入', color: 'bg-gray-500', iconColor: '#6b7280', reason: '长期下跌后横盘，无量能支撑', prediction: '等待放量突破信号再考虑', predictionColor: '#6b7280' };
   }
   // 低位+横盘+MACD金叉+放量→可关注/未来买入
   if (trend === 1 && macdBullish && volumeBullish) {
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', futurePrediction: '未来1-2日若继续放量可考虑买入', futureColor: '#16a34a' };
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日若继续放量可考虑买入', predictionColor: '#16a34a' };
   }
   // 低位+下降趋势
   if (trend === 0) {
-    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '低位+下降末端，有买入信号', futurePrediction: '未来1-2日有望止跌反弹', futureColor: '#16a34a' };
-    return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位下降趋势，尚未企稳', futurePrediction: '未来1-2日可能继续探底，观望为主', futureColor: '#f59e0b' };
+    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '低位+下降末端，有买入信号', prediction: '未来1-2日有望止跌反弹', predictionColor: '#16a34a' };
+    return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位下降趋势，尚未企稳', prediction: '未来1-2日可能继续探底，观望为主', predictionColor: '#f59e0b' };
   }
   // 低位+上升趋势
   if (trend >= 2) {
-    if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', iconColor: '#dc2626', reason: '低位强上升+买入信号共振', futurePrediction: '未来1-2日预计继续上攻', futureColor: '#16a34a' };
-    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', futurePrediction: '未来1-2日延续反弹，可积极关注', futureColor: '#16a34a' };
+    if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', iconColor: '#dc2626', reason: '低位强上升+买入信号共振', prediction: '未来1-2日预计继续上攻', predictionColor: '#16a34a' };
+    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，可积极关注', predictionColor: '#16a34a' };
   }
   // 低位横盘（默认）
-  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', futurePrediction: '未来1-2日关注量能变化', futureColor: '#3b82f6' };
-  return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', futurePrediction: '未来1-2日等待方向确认', futureColor: '#6b7280' };
+  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', prediction: '未来1-2日关注量能变化', predictionColor: '#3b82f6' };
+  return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', prediction: '未来1-2日等待方向确认', predictionColor: '#6b7280' };
 }
 
 function getActiveSignals(f: FormulaResult, extraSignals?: SignalEntry[]): { key: string; name: string; type: string; description?: string }[] {
@@ -520,145 +518,6 @@ const IndexPage = () => {
   // 主板机会区状态
   const [mainBoardData, setMainBoardData] = useState<OpportunityStock[] | null>(null);
   const [mainBoardTimestamp, setMainBoardTimestamp] = useState<number>(0);
-
-  // ====== 用户认证状态 ======
-  const [authChecking, setAuthChecking] = useState(true);
-  const [user, setUser] = useState<{ username: string; trialEnd: string; subscriptionEnd: string | null } | null>(null);
-  const [showLogin, setShowLogin] = useState(false);
-  const [loginUsername, setLoginUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
-  const [regUsername, setRegUsername] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regError, setRegError] = useState('');
-  const [regLoading, setRegLoading] = useState(false);
-  const [regSuccess, setRegSuccess] = useState('');
-
-  // 检查登录状态
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = localStorage.getItem('_token');
-        if (!token) {
-          if (!cancelled) { setAuthChecking(false); setShowLogin(true); }
-          return;
-        }
-        const res = await Network.request({ url: '/api/auth/me', header: { Authorization: `Bearer ${token}` } });
-        const apiData = res.data as any;
-        console.log('[认证检查]', apiData);
-        if (apiData.code === 200 && apiData.data) {
-          if (!cancelled) {
-            const u = apiData.data;
-            // 检查是否过期
-            const now = Date.now();
-            const trial = new Date(u.trial_end).getTime();
-            const subEnd = u.subscription_end ? new Date(u.subscription_end).getTime() : 0;
-            if (trial < now && subEnd < now) {
-              // 已过期
-              setUser(u);
-              setShowLogin(false); // 不显示登录框，显示过期信息
-            } else {
-              setUser(u);
-              setShowLogin(false);
-            }
-          }
-        } else {
-          localStorage.removeItem('_token');
-          if (!cancelled) setShowLogin(true);
-        }
-      } catch (e) {
-        console.error('[认证检查] 失败', e);
-        if (!cancelled) { setShowLogin(true); }
-      } finally {
-        if (!cancelled) setAuthChecking(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  
-
-  // 认证系统 — 替换旧的设备注册
-
-
-  // ====== 登录/注册操作 ======
-  const handleLogin = async () => {
-    if (!loginUsername || !loginPassword) { setLoginError('请输入用户名和密码'); return; }
-    setLoginLoading(true); setLoginError('');
-    try {
-      const res = await Network.request({ url: '/api/auth/login', method: 'POST', data: { username: loginUsername, password: loginPassword } });
-      const apiData = res.data as any;
-      console.log('[登录]', apiData);
-      if (apiData.code === 200 && apiData.data?.token) {
-        localStorage.setItem('_token', apiData.data.token);
-        setUser({ username: apiData.data.user.username, trialEnd: apiData.data.user.trial_end, subscriptionEnd: apiData.data.user.subscription_end });
-        setShowLogin(false);
-      } else {
-        setLoginError(apiData.msg || '登录失败');
-      }
-    } catch (e: any) {
-      setLoginError(e?.message || '网络错误');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    if (!regUsername || !regPassword) { setRegError('请输入用户名和密码'); return; }
-    if (regPassword.length < 4) { setRegError('密码至少4位'); return; }
-    setRegLoading(true); setRegError(''); setRegSuccess('');
-    try {
-      const res = await Network.request({ url: '/api/auth/register', method: 'POST', data: { username: regUsername, password: regPassword } });
-      const apiData = res.data as any;
-      console.log('[注册]', apiData);
-      if (apiData.code === 200) {
-        setRegSuccess('注册成功！赠送7天试用期，请登录');
-        setIsRegister(false);
-        setTimeout(() => setRegSuccess(''), 3000);
-      } else {
-        setRegError(apiData.msg || '注册失败');
-      }
-    } catch (e: any) {
-      setRegError(e?.message || '网络错误');
-    } finally {
-      setRegLoading(false);
-    }
-  };
-
-  // 注册成功后自动登录
-  const handleLoginAuto = async () => {
-    if (!regUsername || !regPassword) { setShowLogin(true); return; }
-    try {
-      const res = await Network.request({ url: '/api/auth/login', method: 'POST', data: { username: regUsername, password: regPassword } });
-      const apiData = res.data as any;
-      if (apiData.code === 200 && apiData.data?.token) {
-        const token = apiData.data.token;
-        localStorage.setItem('_token', token);
-        setShowLogin(false);
-        setUser(apiData.data.user);
-      }
-    } catch (_e) { /* ignore */ }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('_token');
-    setUser(null);
-    setShowLogin(true);
-  };
-
-  // 计算剩余天数
-  const getRemainingDays = () => {
-    if (!user) return 0;
-    const now = Date.now();
-    const subEnd = user.subscriptionEnd ? new Date(user.subscriptionEnd).getTime() : 0;
-    const trialEnd = new Date(user.trialEnd).getTime();
-    const end = Math.max(subEnd, trialEnd);
-    if (end < now) return 0;
-    return Math.ceil((end - now) / (1000 * 60 * 60 * 24));
-  };
 
   // 页面加载时获取板块热点数据
   useEffect(() => {
@@ -855,129 +714,7 @@ const IndexPage = () => {
 
   return (
     <View className="h-full bg-gray-50">
-      {showLogin ? (
-        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '20vh' }}>
-          {/* 标题 */}
-          <Text className="block text-2xl font-bold text-gray-900 mb-2">股票技术分析</Text>
-          <Text className="block text-sm text-gray-500 mb-8">请登录或注册后使用</Text>
-
-          {/* 登录/注册切换 */}
-          <View className="flex flex-row mb-6 w-full max-w-xs">
-            <View
-              className={`flex-1 py-2 text-center ${!isRegister ? 'border-b-2 border-blue-500' : 'border-b border-gray-200'}`}
-              onClick={() => setIsRegister(false)}
-            >
-              <Text className={`block text-center text-sm font-medium ${!isRegister ? 'text-blue-500' : 'text-gray-500'}`}>登录</Text>
-            </View>
-            <View
-              className={`flex-1 py-2 text-center ${isRegister ? 'border-b-2 border-blue-500' : 'border-b border-gray-200'}`}
-              onClick={() => { setIsRegister(true); setRegSuccess(false); }}
-            >
-              <Text className={`block text-center text-sm font-medium ${isRegister ? 'text-blue-500' : 'text-gray-500'}`}>注册</Text>
-            </View>
-          </View>
-
-          {/* 登录表单 */}
-          {!isRegister && (
-            <View className="w-full max-w-xs">
-              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
-                <Input
-                  className="w-full bg-transparent text-sm"
-                  placeholder="用户名"
-                  value={loginUsername}
-                  onInput={(e) => setLoginUsername(e.detail.value)}
-                />
-              </View>
-              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
-                <Input
-                  className="w-full bg-transparent text-sm"
-                  placeholder="密码"
-                  password
-                  value={loginPassword}
-                  onInput={(e) => setLoginPassword(e.detail.value)}
-                />
-              </View>
-              {loginError && (
-                <Text className="block text-xs text-red-500 mb-2">{loginError}</Text>
-              )}
-              <Button
-                className="w-full bg-blue-500 text-white rounded-xl py-3"
-                onClick={handleLogin}
-                loading={loginLoading}
-              >
-                登录
-              </Button>
-              <Text className="block text-xs text-gray-400 text-center mt-3">
-                新用户？点击上方「注册」即可获赠7天免费体验
-              </Text>
-            </View>
-          )}
-
-          {/* 注册表单 */}
-          {isRegister && !regSuccess && (
-            <View className="w-full max-w-xs">
-              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
-                <Input
-                  className="w-full bg-transparent text-sm"
-                  placeholder="用户名"
-                  value={regUsername}
-                  onInput={(e) => setRegUsername(e.detail.value)}
-                />
-              </View>
-              <View className="bg-gray-50 rounded-xl px-4 py-3 mb-3">
-                <Input
-                  className="w-full bg-transparent text-sm"
-                  placeholder="密码（至少6位）"
-                  password
-                  value={regPassword}
-                  onInput={(e) => setRegPassword(e.detail.value)}
-                />
-              </View>
-              {regError && (
-                <Text className="block text-xs text-red-500 mb-2">{regError}</Text>
-              )}
-              <Button
-                className="w-full bg-green-500 text-white rounded-xl py-3"
-                onClick={handleRegister}
-                loading={regLoading}
-              >
-                注册（7天免费）
-              </Button>
-            </View>
-          )}
-
-          {/* 注册成功提示 */}
-          {isRegister && regSuccess && (
-            <View className="w-full max-w-xs">
-              <View className="bg-green-50 rounded-xl p-6 text-center mb-4">
-                <Text className="block text-green-600 font-bold text-lg mb-2">注册成功 🎉</Text>
-                <Text className="block text-sm text-green-700">用户名：{regUsername}</Text>
-                <Text className="block text-xs text-green-500 mt-2">7天免费试用已开始</Text>
-              </View>
-              <Button
-                className="w-full bg-blue-500 text-white rounded-xl py-3"
-                onClick={() => { setShowLogin(false); handleLoginAuto(); }}
-              >
-                开始使用
-              </Button>
-            </View>
-          )}
-        </View>
-      ) : expired ? (
-        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '35vh' }}>
-          <Clock size={56} color="#fa8c16" />
-          <Text className="block text-lg font-bold text-gray-800 mt-4 text-center">试用已到期</Text>
-          <Text className="block text-sm text-gray-500 mt-2 text-center leading-relaxed">
-            您的免费试用已结束，如需继续使用请联系开发者续费
-          </Text>
-          <View className="mt-6 w-full max-w-xs">
-            <Button className="w-full bg-blue-500 text-white rounded-xl py-3" onClick={handleLogout}>
-              切换账号
-            </Button>
-          </View>
-        </View>
-      ) : authChecking ? (
-        <ScrollView className="h-full bg-gray-50">
+      <ScrollView className="h-full bg-gray-50">
       <View className="p-4">
         {/* 标题 */}
         <View className="mb-6">
@@ -1134,31 +871,35 @@ const IndexPage = () => {
 
                     {/* 主操作按钮 */}
                     <View className="mb-3">
-                      <View className={'rounded-xl py-3 px-4 ' + (actionColors[suggestion.action] || 'bg-blue-500')}
-                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View
+                        className={'rounded-xl py-3 px-4 ' + (actionColors[suggestion.action] || 'bg-blue-500')}
+                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                      >
                         <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
                           {iconMap[actionIcons[suggestion.action]] || iconMap['hold']}
                           <Text className="block text-lg font-bold text-white">{suggestion.action}</Text>
                         </View>
-                        <Text className="block text-xs text-white/80">{suggestion.reason}</Text>
+                        <Text className="block text-xs text-white text-opacity-80">{suggestion.reason}</Text>
                       </View>
                     </View>
 
                     {/* 未来1-2日预测 */}
                     {suggestion.prediction && (
-                      <View className="bg-gray-50 rounded-xl p-3"
-                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                      <View
+                        className="bg-gray-50 rounded-xl p-3"
+                        style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}
+                      >
                         <Text className="block text-xs font-medium text-gray-600 whitespace-nowrap">未来1-2日</Text>
                         <Text className="block text-sm font-semibold text-gray-800">{suggestion.prediction}</Text>
                       </View>
                     )}
 
                     {/* 详情说明 */}
-                    {suggestion.details.length > 0 && (
+                    {suggestion.details && suggestion.details.length > 0 && (
                       <View className="mt-2">
                         {suggestion.details.map((d, i) => (
                           <View key={i} className="flex flex-row items-start gap-1 mt-1">
-                            <Text className="block text-xs text-gray-400">{'•'}</Text>
+                            <Text className="block text-xs text-gray-400">•</Text>
                             <Text className="block text-xs text-gray-500">{d}</Text>
                           </View>
                         ))}
@@ -1219,7 +960,7 @@ const IndexPage = () => {
                           <Text className="block text-xs">{item.name}</Text>
                         </Badge>
                         {item.description && (
-                          <Text className="block text-[10px] text-gray-400 mt-0.5">{item.description}</Text>
+                          <Text className="block text-xs text-gray-400 mt-1">{item.description}</Text>
                         )}
                       </View>
                     ))
@@ -1634,7 +1375,6 @@ const IndexPage = () => {
           </View>
         </View>
     </ScrollView>
-      ) : null}
     </View>
   );
 };
