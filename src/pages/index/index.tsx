@@ -287,76 +287,76 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   if (zone.includes('高位')) {
     if (trend === 0) { // 下降
       if (hasSellSignal || strongSell) return { action: '清仓', color: 'bg-red-600', iconColor: '#dc2626', reason: '高位下降趋势，风险较大', prediction: '未来1-2日预计继续回落，建议卖出', predictionColor: '#dc2626' };
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但有买入信号，暂持观察', prediction: '未来1-2日关注能否放量企稳', predictionColor: '#eab308' };
-      return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', prediction: '未来1-2日谨慎观望，有回调风险', predictionColor: '#f59e0b' };
+      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但有买入信号，暂持观察', prediction: '未来1-2日信号待验证，建议持有', predictionColor: '#eab308' };
+      return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', prediction: '未来1-2日预计偏弱，建议卖出', predictionColor: '#f59e0b' };
     }
     if (trend === 1) { // 横盘
-      if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '高位横盘+买入信号，可能是空中加油', prediction: '未来1-2日放量突破可跟随买入', predictionColor: '#16a34a' };
+      if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '高位横盘+买入信号，可能是空中加油', prediction: '未来1-2日有望突破，建议买入', predictionColor: '#16a34a' };
       if (hasSellSignal) return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位横盘+卖出信号', prediction: '未来1-2日预计回落', predictionColor: '#dc2626' };
-      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', prediction: '未来1-2日若跌破支撑，建议卖出', predictionColor: '#f59e0b' };
+      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', prediction: '未来1-2日预计震荡调整，建议减仓', predictionColor: '#f59e0b' };
     }
     // 上升
-    if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '高位上升+买入信号，强势延续', prediction: '未来1-2日有望继续上攻，设好止盈', predictionColor: '#16a34a' };
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但仍有上升动能', prediction: '未来1-2日可持有，设好止盈', predictionColor: '#eab308' };
+    if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '高位上升+买入信号，强势延续', prediction: '未来1-2日有望上攻，建议买入', predictionColor: '#16a34a' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位但仍有上升动能', prediction: '未来1-2日继续持有', predictionColor: '#eab308' };
   }
 
   // 2) 中高位区 - 偏风险，但有强买入信号时以信号为准
   if (zone.includes('中高位')) {
     if (trend === 0) {
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位下降但有买入信号，暂持', prediction: '未来1-2日关注买入信号能否兑现', predictionColor: '#eab308' };
-      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中高位+下降趋势', prediction: '未来1-2日预计偏弱，减仓观察', predictionColor: '#f59e0b' };
+      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有', predictionColor: '#eab308' };
+      return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中高位+下降趋势', prediction: '未来1-2日预计偏弱，建议减仓', predictionColor: '#f59e0b' };
     }
     if (trend >= 2) {
-      if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中高位上升+买入信号，趋势偏强', prediction: '未来1-2日有望突破，可轻仓参与', predictionColor: '#16a34a' };
-      return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', prediction: '未来1-2日关注能否突破压力位', predictionColor: '#eab308' };
+      if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中高位上升+买入信号，趋势偏强', prediction: '未来1-2日有望突破，建议买入', predictionColor: '#16a34a' };
+      return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', prediction: '未来1-2日建议继续持有看突破', predictionColor: '#eab308' };
     }
-    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中高位横盘+买入信号，关注突破', prediction: '未来1-2日放量可考虑介入', predictionColor: '#16a34a' };
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', prediction: '未来1-2日方向不明，观望为主', predictionColor: '#6b7280' };
+    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中高位横盘+买入信号，关注突破', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', prediction: '未来1-2日方向不明，建议持有', predictionColor: '#6b7280' };
   }
 
   // 3) 中位区 - 中性，强信号可改变判断
   if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
     if (trend >= 2) {
       if (strongBuy) return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '中位区上升+买入信号，看好', prediction: '未来1-2日有望延续上涨', predictionColor: '#16a34a' };
-      return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续，可轻仓参与', predictionColor: '#16a34a' };
+      return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入', predictionColor: '#16a34a' };
     }
     if (trend === 0) {
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区下降但有买入信号，暂持', prediction: '未来1-2日关注信号能否扭转趋势', predictionColor: '#eab308' };
+      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有', predictionColor: '#eab308' };
       return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中位区+下降趋势', prediction: '未来1-2日预计偏弱', predictionColor: '#f59e0b' };
     }
-    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中位区横盘+买入信号，关注', prediction: '未来1-2日放量可介入', predictionColor: '#16a34a' };
-    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', prediction: '未来1-2日等待方向选择', predictionColor: '#6b7280' };
+    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中位区横盘+买入信号，关注', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#6b7280' };
   }
 
   // 4) 中低位区 - 偏机会
   if (zone.includes('中低位')) {
-    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', prediction: '未来1-2日有反弹预期，可关注', predictionColor: '#16a34a' };
+    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', prediction: '未来1-2日有反弹预期，建议买入', predictionColor: '#16a34a' };
     if (trend === 0) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位下降，等待企稳', prediction: '未来1-2日可能继续探底', predictionColor: '#f59e0b' };
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', prediction: '未来1-2日出现放量可考虑介入', predictionColor: '#3b82f6' };
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', prediction: '未来1-2日需等待放量确认，建议持有', predictionColor: '#3b82f6' };
   }
 
   // 5) 低位区 - 机会/风险并存
   // 跌了很久+横盘→不要介入
   if (longDecline && trend === 1 && !macdBullish && !volumeBullish) {
-    return { action: '不要介入', color: 'bg-gray-500', iconColor: '#6b7280', reason: '长期下跌后横盘，无量能支撑', prediction: '等待放量突破信号再考虑', predictionColor: '#6b7280' };
+    return { action: '不要介入', color: 'bg-gray-500', iconColor: '#6b7280', reason: '长期下跌后横盘，无量能支撑', prediction: '未来1-2日无量能支撑，建议回避', predictionColor: '#6b7280' };
   }
   // 低位+横盘+MACD金叉+放量→可关注/未来买入
   if (trend === 1 && macdBullish && volumeBullish) {
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日若继续放量可考虑买入', predictionColor: '#16a34a' };
+    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日有望放量启动，建议买入', predictionColor: '#16a34a' };
   }
   // 低位+下降趋势
   if (trend === 0) {
-    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '低位+下降末端，有买入信号', prediction: '未来1-2日有望止跌反弹', predictionColor: '#16a34a' };
-    return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位下降趋势，尚未企稳', prediction: '未来1-2日可能继续探底，观望为主', predictionColor: '#f59e0b' };
+    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '低位+下降末端，有买入信号', prediction: '未来1-2日止跌反弹，建议买入', predictionColor: '#16a34a' };
+    return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位下降趋势，尚未企稳', prediction: '未来1-2日预计继续探底，建议卖出', predictionColor: '#f59e0b' };
   }
   // 低位+上升趋势
   if (trend >= 2) {
     if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', iconColor: '#dc2626', reason: '低位强上升+买入信号共振', prediction: '未来1-2日预计继续上攻', predictionColor: '#16a34a' };
-    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，可积极关注', predictionColor: '#16a34a' };
+    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，建议买入', predictionColor: '#16a34a' };
   }
   // 低位横盘（默认）
-  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', prediction: '未来1-2日关注量能变化', predictionColor: '#3b82f6' };
-  return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', prediction: '未来1-2日等待方向确认', predictionColor: '#6b7280' };
+  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#3b82f6' };
+  return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', prediction: '未来1-2日方向未明，建议持有', predictionColor: '#6b7280' };
 }
 
 function getActiveSignals(f: FormulaResult, extraSignals?: SignalEntry[]): { key: string; name: string; type: string; description?: string }[] {
