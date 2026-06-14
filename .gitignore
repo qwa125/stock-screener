@@ -46,3 +46,4 @@ pnpm-debug.log*
 node-compile-cache/
 deploy-package.zip
 public/deploy-package.zip
+deploy/

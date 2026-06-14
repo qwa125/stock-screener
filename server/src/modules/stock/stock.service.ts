@@ -257,10 +257,27 @@ export class StockService {
     // 10. 计算回测统计
     const backtestStats = this.computeBacktestStats(closePrices);
 
-    // 11. 价格数据
+    // 11. 判断是否使用真实K线（避免缓存模拟数据）
+    const isMockData = !!(klines as any)._isMock;
+    const usesRealKline = klines.length > 100 && klines.length >= 480 && !isMockData;
+
+    // 12. 价格数据
     const changePercent = realTime?.changePercent ?? 0;
     const high = realTime?.high;
     const low = realTime?.low;
+
+    // 13. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
+    if (usesRealKline) {
+      const cacheEntry = {
+        stock, currentPrice, changePercent, high, low,
+        klineCount: klines.length,
+        formula: formulaResult,
+        signals,
+        backtestStats,
+      };
+      this.analysisCache.set(pureCode, cacheEntry);
+      this.saveAnalysisCache();
+    }
 
     return {
       stock,

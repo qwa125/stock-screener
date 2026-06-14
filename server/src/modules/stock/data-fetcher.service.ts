@@ -225,10 +225,34 @@ export class DataFetcherService {
       }
     }
 
+    // 3.5 腾讯前复权日线 (ifzq.gtimg.cn，腾讯云环境最稳定)
+    if (!result) {
+      try {
+        const prefix = code.startsWith('6') ? 'sh' : 'sz';
+        const tencentUrl = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,500,qfq`;
+        const tRes = await fetch(tencentUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const tData = await tRes.json();
+        if (tData?.data?.[`${prefix}${code}`]?.qfqday?.length > 20) {
+          const lines = tData.data[`${prefix}${code}`].qfqday;
+          result = lines.map((l: string[]) => ({
+            day: l[0], open: l[1], close: l[2], high: l[3], low: l[4],
+            volume: l[5], ma5: l[2], ma10: l[2], ma20: l[2], ma30: l[2]
+          }));
+          this.logger.log(`[K线] 腾讯前复权日线成功: ${code} ${result!.length}条`);
+        }
+      } catch {}
+    }
+
     // 4. 纯模拟降级
     if (!result) {
       this.logger.warn(`所有数据接口不可用，使用纯模拟数据: ${code}`);
       result = this.generateMockKLine(code, undefined, undefined);
+    }
+
+    // 标记是否为模拟数据 (模拟K线 -> _isMock)
+    const isMock = !(result && result.length > 0 && ('day' in (result[0] ?? {}) || 'date' in (result[0] ?? {})));
+    if (isMock && result) {
+      (result as any)._isMock = true;
     }
 
     // 写入缓存
