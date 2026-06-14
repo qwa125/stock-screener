@@ -291,7 +291,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
       return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位区域，注意风险', prediction: '未来1-2日预计偏弱，建议卖出', predictionColor: '#f59e0b' };
     }
     if (trend === 1) { // 横盘
-      if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '高位横盘+买入信号，可能是空中加油', prediction: '未来1-2日有望突破，建议买入', predictionColor: '#16a34a' };
+      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '高位横盘+买入信号，暂持观察', prediction: '未来1-2日有望突破，建议买入', predictionColor: '#16a34a' };
       if (hasSellSignal) return { action: '卖出', color: 'bg-red-500', iconColor: '#ef4444', reason: '高位横盘+卖出信号', prediction: '未来1-2日预计回落', predictionColor: '#dc2626' };
       return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '高位横盘，控制仓位', prediction: '未来1-2日预计震荡调整，建议减仓', predictionColor: '#f59e0b' };
     }
@@ -310,7 +310,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
       if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中高位上升+买入信号，趋势偏强', prediction: '未来1-2日有望突破，建议买入', predictionColor: '#16a34a' };
       return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位偏强，暂持', prediction: '未来1-2日建议继续持有看突破', predictionColor: '#eab308' };
     }
-    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中高位横盘+买入信号，关注突破', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
+    if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘+买入信号，关注突破', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
     return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中高位横盘震荡', prediction: '未来1-2日方向不明，建议持有', predictionColor: '#6b7280' };
   }
 
@@ -324,7 +324,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
       if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有', predictionColor: '#eab308' };
       return { action: '减仓', color: 'bg-orange-500', iconColor: '#f97316', reason: '中位区+下降趋势', prediction: '未来1-2日预计偏弱', predictionColor: '#f59e0b' };
     }
-    if (strongBuy) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中位区横盘+买入信号，关注', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
+    if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘+买入信号，关注', prediction: '未来1-2日有望启动，建议买入', predictionColor: '#16a34a' };
     return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区横盘，方向不明', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#6b7280' };
   }
 
@@ -332,7 +332,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   if (zone.includes('中低位')) {
     if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中低位+趋势转好', prediction: '未来1-2日有反弹预期，建议买入', predictionColor: '#16a34a' };
     if (trend === 0) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位下降，等待企稳', prediction: '未来1-2日可能继续探底', predictionColor: '#f59e0b' };
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '中低位横盘，等待信号', prediction: '未来1-2日需等待放量确认，建议持有', predictionColor: '#3b82f6' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中低位横盘，等待信号', prediction: '未来1-2日需等待放量确认，建议持有', predictionColor: '#3b82f6' };
   }
 
   // 5) 低位区 - 机会/风险并存
@@ -342,7 +342,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   }
   // 低位+横盘+MACD金叉+放量→可关注/未来买入
   if (trend === 1 && macdBullish && volumeBullish) {
-    return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日有望放量启动，建议买入', predictionColor: '#16a34a' };
+    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日有望放量启动，建议买入', predictionColor: '#16a34a' };
   }
   // 低位+下降趋势
   if (trend === 0) {
@@ -355,7 +355,7 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
     return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，建议买入', predictionColor: '#16a34a' };
   }
   // 低位横盘（默认）
-  if (safe) return { action: '可关注', color: 'bg-blue-500', iconColor: '#3b82f6', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#3b82f6' };
+  if (safe) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#3b82f6' };
   return { action: '观望', color: 'bg-gray-400', iconColor: '#9ca3af', reason: '低位横盘，方向不明', prediction: '未来1-2日方向未明，建议持有', predictionColor: '#6b7280' };
 }
 
@@ -960,20 +960,12 @@ const IndexPage = () => {
 
             {/* 操作建议卡片 */}
             {(() => {
-              // 机会区股票保底：机会区股票操作建议不低于"持有/可关注"
-              const isOppStock = oppData?.some(s => s.code === result?.stock?.code)
-                || mainBoardData?.some(s => s.code === result?.stock?.code);
-
-              const rawSuggestion = getTradingSuggestion(f);
-              const cappedAction = isOppStock && ['卖出', '清仓', '减仓', '不要介入', '观望'].includes(rawSuggestion.action)
-                ? ((rawSuggestion.prediction === '未来1-2天买入') ? rawSuggestion.action : '可关注')
-                : rawSuggestion.action;
-              const suggestion = { ...rawSuggestion, action: cappedAction };
+              const suggestion = getTradingSuggestion(f);
 
               const actionColors: Record<string, string> = {
-                '重仓买入': 'bg-red-600', '买入': 'bg-red-500', '轻仓买入': 'bg-orange-500',
-                '持有': 'bg-blue-500', '减仓': 'bg-yellow-500', '卖出': 'bg-green-600',
-                '清仓': 'bg-green-800', '不要介入': 'bg-gray-500'
+                '重仓买入': 'bg-red-600', '买入': 'bg-green-600', '轻仓买入': 'bg-green-500',
+                '持有': 'bg-blue-500', '减仓': 'bg-orange-500', '卖出': 'bg-red-500',
+                '清仓': 'bg-red-700', '不要介入': 'bg-gray-500', '观望': 'bg-gray-400'
               };
               const actionIcons: Record<string, string> = {
                 '重仓买入': 'buy', '买入': 'buy', '轻仓买入': 'buy',

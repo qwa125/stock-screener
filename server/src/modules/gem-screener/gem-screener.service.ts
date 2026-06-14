@@ -755,31 +755,31 @@ export class GemScreenerService implements OnApplicationBootstrap {
     let suggestionR = '观望';
     if (zoneR.includes('高位')) {
       if (trendStateR === 0) suggestionR = hasBuySignalR ? '持有' : '清仓';
-      else if (trendStateR === 1) suggestionR = hasBuySignalR && macdBullishR ? '可关注' : (!macdBullishR ? '卖出' : '减仓');
+      else if (trendStateR === 1) suggestionR = hasBuySignalR && macdBullishR ? '持有' : (!macdBullishR ? '卖出' : '减仓');
       else suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
     } else if (zoneR.includes('中高位')) {
       if (trendStateR === 0) suggestionR = hasBuySignalR ? '持有' : '减仓';
       else if (trendStateR >= 2) suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
-      else suggestionR = hasBuySignalR ? '可关注' : '持有';
+      else suggestionR = hasBuySignalR ? '持有' : '持有';
     } else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
       if (trendStateR >= 2) suggestionR = hasBuySignalR ? '买入' : '轻仓买入';
       else if (trendStateR === 0) suggestionR = hasBuySignalR ? '持有' : '减仓';
-      else suggestionR = hasBuySignalR ? '可关注' : '持有';
+      else suggestionR = hasBuySignalR ? '持有' : '持有';
     } else if (zoneR.includes('中低位')) {
       if (trendStateR >= 2 && hasBuySignalR) suggestionR = '轻仓买入';
       else if (trendStateR === 0) suggestionR = '持有';
-      else suggestionR = '可关注';
+      else suggestionR = '持有';
     } else {
       if (longDeclineR && trendStateR === 1 && !macdBullishR && !volumeBullishR) {
         suggestionR = '不要介入';
       } else if (trendStateR === 1 && macdBullishR && volumeBullishR) {
-        suggestionR = '可关注';
+        suggestionR = '买入';
       } else if (trendStateR === 0) {
         suggestionR = hasBuySignalR ? '轻仓买入' : '观望';
       } else if (trendStateR >= 2) {
         suggestionR = (trendStateR >= 3 && hasBuySignalR) ? '重仓买入' : '买入';
       } else {
-        suggestionR = hasBuySignalR ? '可关注' : '观望';
+        suggestionR = hasBuySignalR ? '持有' : '观望';
       }
     }
 
