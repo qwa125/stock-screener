@@ -411,7 +411,7 @@ const ACTION_PRIORITY: Record<string, number> = {
   '重仓买入': 0,
   '买入': 1,
   '轻仓买入': 2,
-  '可关注': 3,
+  '准备买入': 3,
   '持有': 4,
   '观望': 5,
   '减仓': 6,
@@ -425,7 +425,7 @@ const ACTION_BADGE_COLOR: Record<string, string> = {
   '重仓买入': '#dc2626',
   '买入': '#16a34a',
   '轻仓买入': '#22c55e',
-  '可关注': '#3b82f6',
+  '准备买入': '#22c55e',
   '持有': '#eab308',
   '观望': '#9ca3af',
   '减仓': '#f97316',
@@ -459,7 +459,7 @@ function getOpportunitySuggestion(stock: OpportunityStock): string {
     if (trendUp && (isGolden || mainForce > 0)) return '买入';
     if (trendUp) return '轻仓买入';
     if (trendDown && increase < -15 && changePct > -1) return '不要介入';
-    if (macdBullish || isGolden) return '可关注';
+    if (macdBullish || isGolden) return '准备买入';
     return '观望';
   }
 
@@ -467,15 +467,15 @@ function getOpportunitySuggestion(stock: OpportunityStock): string {
   if (pos < 45) {
     if (trendStrongUp) return '买入';
     if (trendUp) return '轻仓买入';
-    if (macdBullish || isGolden) return '可关注';
+    if (macdBullish || isGolden) return '准备买入';
     if (trendDown) return '观望';
-    return '可关注';
+    return '准备买入';
   }
 
   // 中位区
   if (pos < 55) {
     if (trendUp && mainForce > 0) return '轻仓买入';
-    if (macdBullish && mainForce > 0) return '可关注';
+    if (macdBullish && mainForce > 0) return '准备买入';
     if (trendDown) return '减仓';
     return '持有';
   }
