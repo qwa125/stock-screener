@@ -646,6 +646,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 suggestionR = hasBuySignalR ? '可关注' : '观望';
             }
         }
+        const negativeActions = ['卖出', '清仓', '减仓', '不要介入', '观望'];
+        if (negativeActions.includes(suggestionR)) {
+            suggestionR = (trendStateR >= 2 || hasBuySignalR || isBaiXiaoBuy) ? '可关注' : '持有';
+        }
         return {
             capitalRank: 0,
             code: s.code,

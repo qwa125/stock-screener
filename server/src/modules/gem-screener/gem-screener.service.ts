@@ -782,6 +782,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
+    // 机会区保底：既然进了机会区，操作建议不低于"持有/可关注"
+    const negativeActions = ['卖出', '清仓', '减仓', '不要介入', '观望'];
+    if (negativeActions.includes(suggestionR)) {
+      suggestionR = (trendStateR >= 2 || hasBuySignalR || isBaiXiaoBuy) ? '可关注' : '持有';
+    }
+
     return {
       capitalRank: 0,
       code: s.code,

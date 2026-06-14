@@ -933,7 +933,16 @@ const IndexPage = () => {
 
             {/* 操作建议卡片 */}
             {(() => {
-              const suggestion = getTradingSuggestion(f);
+              // 机会区股票保底：机会区股票操作建议不低于"持有/可关注"
+              const isOppStock = oppData?.some(s => s.code === result?.stock?.code)
+                || mainBoardData?.some(s => s.code === result?.stock?.code);
+
+              const rawSuggestion = getTradingSuggestion(f);
+              const cappedAction = isOppStock && ['卖出', '清仓', '减仓', '不要介入', '观望'].includes(rawSuggestion.action)
+                ? ((rawSuggestion.prediction === '未来1-2天买入') ? rawSuggestion.action : '可关注')
+                : rawSuggestion.action;
+              const suggestion = { ...rawSuggestion, action: cappedAction };
+
               const actionColors: Record<string, string> = {
                 '重仓买入': 'bg-red-600', '买入': 'bg-red-500', '轻仓买入': 'bg-orange-500',
                 '持有': 'bg-blue-500', '减仓': 'bg-yellow-500', '卖出': 'bg-green-600',
