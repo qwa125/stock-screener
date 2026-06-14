@@ -648,6 +648,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 suggestionR = hasBuySignalR ? '持有' : '观望';
             }
         }
+        const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
+        if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
+            return null;
         return {
             capitalRank: 0,
             code: s.code,

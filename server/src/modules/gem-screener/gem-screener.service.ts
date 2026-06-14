@@ -783,6 +783,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
+    // 排除负面建议：减仓/卖出/清仓/不要介入 → 不入机会区
+    const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
+    if (NEGATIVE_SUGGESTIONS.includes(suggestionR)) return null;
+
     return {
       capitalRank: 0,
       code: s.code,

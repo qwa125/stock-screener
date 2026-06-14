@@ -1,1 +1,357 @@
-'use strict';const _0x1464be=_0xb878;(function(_0x39bf23,_0xae71e7){const _0x301a40=_0xb878,_0x1faa32=_0x39bf23();while(!![]){try{const _0xaa9969=parseInt(_0x301a40(0x16a))/0x1+-parseInt(_0x301a40(0x193))/0x2+parseInt(_0x301a40(0x16c))/0x3*(parseInt(_0x301a40(0x127))/0x4)+-parseInt(_0x301a40(0x169))/0x5+parseInt(_0x301a40(0x141))/0x6+parseInt(_0x301a40(0x12f))/0x7*(-parseInt(_0x301a40(0x166))/0x8)+parseInt(_0x301a40(0x17c))/0x9*(parseInt(_0x301a40(0x15d))/0xa);if(_0xaa9969===_0xae71e7)break;else _0x1faa32['push'](_0x1faa32['shift']());}catch(_0x210a50){_0x1faa32['push'](_0x1faa32['shift']());}}}(_0x1934,0xbae11));var __decorate=this&&this[_0x1464be(0x186)]||function(_0x14ab47,_0x5d870f,_0x1c1cf5,_0x88ed8){const _0x48c065=_0x1464be,_0x12cd78={'kjiFS':function(_0x4ff772,_0x144b51){return _0x4ff772<_0x144b51;},'ergjx':function(_0x3033a6,_0x12cf47){return _0x3033a6===_0x12cf47;},'gnhIl':'function','iCcUR':function(_0x3cfea6,_0x221b83){return _0x3cfea6-_0x221b83;},'SvbKX':function(_0x11284a,_0x2b1f91){return _0x11284a>=_0x2b1f91;},'IrbmX':function(_0x5c0771,_0x51f4f0){return _0x5c0771>_0x51f4f0;}};var _0x34ac14=arguments[_0x48c065(0x152)],_0x1a880a=_0x12cd78['kjiFS'](_0x34ac14,0x3)?_0x5d870f:_0x12cd78[_0x48c065(0x155)](_0x88ed8,null)?_0x88ed8=Object['getOwnPropertyDescriptor'](_0x5d870f,_0x1c1cf5):_0x88ed8,_0x2b0c12;if(_0x12cd78[_0x48c065(0x155)](typeof Reflect,_0x48c065(0x142))&&typeof Reflect['decorate']===_0x12cd78['gnhIl'])_0x1a880a=Reflect['decorate'](_0x14ab47,_0x5d870f,_0x1c1cf5,_0x88ed8);else{for(var _0x1f1346=_0x12cd78['iCcUR'](_0x14ab47['length'],0x1);_0x12cd78[_0x48c065(0x122)](_0x1f1346,0x0);_0x1f1346--)if(_0x2b0c12=_0x14ab47[_0x1f1346])_0x1a880a=(_0x34ac14<0x3?_0x2b0c12(_0x1a880a):_0x34ac14>0x3?_0x2b0c12(_0x5d870f,_0x1c1cf5,_0x1a880a):_0x2b0c12(_0x5d870f,_0x1c1cf5))||_0x1a880a;}return _0x12cd78['IrbmX'](_0x34ac14,0x3)&&_0x1a880a&&Object['defineProperty'](_0x5d870f,_0x1c1cf5,_0x1a880a),_0x1a880a;},DataFetcherService_1;function _0xb878(_0x2d5066,_0xcca46b){_0x2d5066=_0x2d5066-0x120;const _0x193433=_0x1934();let _0xb87826=_0x193433[_0x2d5066];return _0xb87826;}Object['defineProperty'](exports,_0x1464be(0x128),{'value':!![]}),exports['DataFetcherService']=void 0x0;const common_1=require('@nestjs/common'),iconv=require('iconv-lite');let DataFetcherService=DataFetcherService_1=class DataFetcherService{constructor(){const _0x2dd7e2=_0x1464be,_0x5cac41={'pkvvF':_0x2dd7e2(0x180),'cXrDD':function(_0x497a70,_0x240c7d){return _0x497a70*_0x240c7d;},'ufLgI':function(_0x48939d,_0x21c290){return _0x48939d*_0x21c290;},'GwUSw':_0x2dd7e2(0x13b),'AalDd':_0x2dd7e2(0x197)},_0x573f28=_0x5cac41[_0x2dd7e2(0x16f)][_0x2dd7e2(0x182)]('|');let _0x22f303=0x0;while(!![]){switch(_0x573f28[_0x22f303++]){case'0':this[_0x2dd7e2(0x13c)]=_0x5cac41[_0x2dd7e2(0x19b)](_0x5cac41['ufLgI'](0xa,0x3c),0x3e8);continue;case'1':this[_0x2dd7e2(0x140)]=null;continue;case'2':this['klineCache']=new Map();continue;case'3':this[_0x2dd7e2(0x162)]=_0x2dd7e2(0x160);continue;case'4':this['TENCENT_QUOTE_URL']=_0x5cac41['GwUSw'];continue;case'5':this[_0x2dd7e2(0x13e)]=new common_1['Logger'](DataFetcherService_1[_0x2dd7e2(0x161)]);continue;case'6':this['EASTMONEY_KLINE_URL']=_0x5cac41['AalDd'];continue;}break;}}async['getAllStocks'](){const _0x355ac3=_0x1464be,_0x42bc7c={'fMkyQ':'https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048','LFkJf':function(_0x3da9ce,_0x423dee,_0x903b72){return _0x3da9ce(_0x423dee,_0x903b72);},'QdkQE':_0x355ac3(0x17e)};if(this[_0x355ac3(0x140)])return this[_0x355ac3(0x140)];try{const _0x52f066=_0x42bc7c['fMkyQ'],_0x3ffba3=await _0x42bc7c['LFkJf'](fetch,_0x52f066,{'headers':{'User-Agent':_0x355ac3(0x121),'Referer':_0x42bc7c[_0x355ac3(0x199)]},'signal':AbortSignal['timeout'](0x1f40)});if(_0x3ffba3['ok']){const _0x3c7289=await _0x3ffba3['text'](),_0x311002=JSON[_0x355ac3(0x181)](_0x3c7289),_0x42600c=(_0x311002?.[_0x355ac3(0x19a)]?.[_0x355ac3(0x1a6)]||[])[_0x355ac3(0x172)](_0x2863be=>({'code':String(_0x2863be[_0x355ac3(0x132)])['padStart'](0x6,'0'),'name':_0x2863be['f14']||'','market':0x0}))[_0x355ac3(0x192)](_0x1975d8=>_0x1975d8[_0x355ac3(0x161)]);return this['stockListCache']=_0x42600c,this['logger']['log']('加载全部A股列表:\x20'+_0x42600c[_0x355ac3(0x152)]+'只'),_0x42600c;}}catch(_0x405469){this[_0x355ac3(0x13e)]['warn'](_0x355ac3(0x16d)+_0x405469['message']);}const _0x395104=this['getHotStockList']();return this['stockListCache']=_0x395104,_0x395104;}['getHotStockList'](){const _0x5926ef=_0x1464be,_0x2d319c={'tkpto':'002594','heTYH':'300750','WlgJc':'600036','wmtWE':_0x5926ef(0x18a),'ldzZz':_0x5926ef(0x138),'CLCYF':_0x5926ef(0x173),'SmFvo':'601318','ptwPK':'601398','Nsist':'601857'},_0xf36a74=[_0x5926ef(0x15e),_0x5926ef(0x167),'000333','000651',_0x5926ef(0x183),'002415',_0x2d319c[_0x5926ef(0x145)],_0x2d319c[_0x5926ef(0x19d)],'600000',_0x2d319c[_0x5926ef(0x12d)],_0x2d319c['wmtWE'],_0x2d319c[_0x5926ef(0x171)],'600887',_0x5926ef(0x175),'601012',_0x2d319c[_0x5926ef(0x17f)],_0x2d319c[_0x5926ef(0x147)],_0x2d319c['ptwPK'],_0x2d319c[_0x5926ef(0x133)],_0x5926ef(0x136),'601939',_0x5926ef(0x1a9),'688981'];return _0xf36a74['map'](_0x45791a=>({'code':_0x45791a,'name':'','market':_0x45791a['startsWith']('6')||_0x45791a['startsWith']('9')?0x1:0x0}));}async['searchStock'](_0x30a6b9){const _0x27e5c2=_0x1464be,_0xb045a2={'bptVQ':function(_0x7935de,_0x3e48a5){return _0x7935de!==_0x3e48a5;},'kIQAB':function(_0x1470d7,_0x53a7a4){return _0x1470d7>_0x53a7a4;}},_0x36e3ba=/^\d{6}$/[_0x27e5c2(0x153)](_0x30a6b9['trim']());if(_0x36e3ba){const _0x6d0166=await this['fetchRealTimeQuote'](_0x30a6b9[_0x27e5c2(0x17b)]());if(_0x6d0166&&_0x6d0166[_0x27e5c2(0x161)]&&_0xb045a2['bptVQ'](_0x6d0166[_0x27e5c2(0x161)],'股票'+_0x30a6b9)&&_0xb045a2[_0x27e5c2(0x19f)](_0x6d0166[_0x27e5c2(0x161)],_0x30a6b9)&&_0x6d0166[_0x27e5c2(0x176)])return[_0x6d0166];const _0x31aff6=await this[_0x27e5c2(0x18f)](_0x30a6b9);if(_0xb045a2[_0x27e5c2(0x134)](_0x31aff6[_0x27e5c2(0x152)],0x0))return _0x31aff6;return[];}const _0x4dd493=await this['searchEastMoney'](_0x30a6b9);if(_0x4dd493['length']>0x0)return _0x4dd493;return this[_0x27e5c2(0x12a)](_0x30a6b9);}async[_0x1464be(0x18f)](_0x424fa6){const _0x4ba81f=_0x1464be,_0x43142b={'nQMLM':function(_0x56b799,_0xc152d0){return _0x56b799(_0xc152d0);},'Tuaqv':function(_0x328161,_0x496fbf,_0xe0c147){return _0x328161(_0x496fbf,_0xe0c147);},'pUUXL':'Mozilla/5.0\x20(Windows\x20NT\x2010.0;\x20Win64;\x20x64)\x20AppleWebKit/537.36','dqNua':function(_0x319713,_0x917385){return _0x319713>_0x917385;}};try{const _0x3abd6f=this[_0x4ba81f(0x162)]+_0x4ba81f(0x14b)+_0x43142b['nQMLM'](encodeURIComponent,_0x424fa6)+'&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19',_0x3da8bf=await _0x43142b[_0x4ba81f(0x131)](fetch,_0x3abd6f,{'headers':{'User-Agent':_0x43142b[_0x4ba81f(0x144)],'Referer':'https://quote.eastmoney.com/'},'signal':AbortSignal['timeout'](0x1388)});if(_0x3da8bf['ok']){const _0x64554b=await _0x3da8bf[_0x4ba81f(0x1a7)](),_0x10754b=_0x64554b?.['QuotationCodeTable']?.['Data']||[],_0x702e2=_0x10754b['filter'](_0xd7c6d=>_0xd7c6d[_0x4ba81f(0x165)]&&_0xd7c6d[_0x4ba81f(0x198)])[_0x4ba81f(0x172)](_0xfae0b6=>({'code':String(_0xfae0b6['Code'])['padStart'](0x6,'0'),'name':_0xfae0b6[_0x4ba81f(0x198)],'market':_0xfae0b6[_0x4ba81f(0x18b)]===0x1?0x1:0x0}));if(_0x43142b[_0x4ba81f(0x150)](_0x702e2['length'],0x0))return _0x702e2;}}catch(_0xd6bd1a){this['logger'][_0x4ba81f(0x137)]('搜索接口不可用，降级:\x20'+_0xd6bd1a[_0x4ba81f(0x16e)]);}return[];}async['getKLineData'](_0x58f89e,_0x463135){const _0x31a720=_0x1464be,_0x4dd317={'TKCWu':'number','NrIVq':function(_0x1b1f59,_0x3e352e){return _0x1b1f59(_0x3e352e);},'yFxjX':function(_0x2ff969,_0x210f7e){return _0x2ff969(_0x210f7e);},'LxpYo':function(_0x4424f5,_0x45f456){return _0x4424f5(_0x45f456);},'Xyulz':function(_0xa91cad,_0x5007ec){return _0xa91cad(_0x5007ec);},'Wlxeg':function(_0x42ffa4,_0xc5fe76){return _0x42ffa4(_0xc5fe76);},'cLbWE':function(_0x5bf400,_0x2f8835){return _0x5bf400===_0x2f8835;},'CGFdO':_0x31a720(0x190),'AkfIF':function(_0x22f91b,_0x5a9aaf,_0xfbeff0){return _0x22f91b(_0x5a9aaf,_0xfbeff0);},'QVfDI':'https://finance.sina.com.cn/','mERCX':function(_0x2a42cb,_0x291a5a){return _0x2a42cb+_0x291a5a;},'uePOb':'&fields1=f1,f2,f3,f4,f5,f6','ielqX':'&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61','jqYrV':_0x31a720(0x178),'qYQbE':function(_0x12aea,_0x44f2f8,_0x289d21){return _0x12aea(_0x44f2f8,_0x289d21);},'hpjba':_0x31a720(0x157),'Vnwcd':'https://quote.eastmoney.com/','OYUFo':function(_0x52b581,_0x498936){return _0x52b581>_0x498936;},'WhDpB':function(_0x39c2c5,_0x103212,_0x286162){return _0x39c2c5(_0x103212,_0x286162);},'VGyBI':'Mozilla/5.0','CzYyY':function(_0x4dbb1a,_0x30ef21){return _0x4dbb1a>_0x30ef21;},'oTrwb':function(_0x64d422,_0x539013){return _0x64d422===_0x539013;},'QjNLg':function(_0x5cd192,_0x18ddcc){return _0x5cd192 in _0x18ddcc;}},_0x29c00a=this[_0x31a720(0x168)]['get'](_0x58f89e);if(_0x29c00a&&Date[_0x31a720(0x1a2)]()-_0x29c00a['timestamp']<this[_0x31a720(0x13c)])return _0x29c00a[_0x31a720(0x19a)];let _0x1815a1=null;try{const _0xa6bbe6=_0x463135??this['detectMarket'](_0x58f89e);if(_0x4dd317['cLbWE'](_0xa6bbe6,0x2))throw new Error(_0x4dd317['CGFdO']);const _0x5cf905=this[_0x31a720(0x18c)](_0xa6bbe6),_0x19d115='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+_0x5cf905+_0x58f89e+'&scale=240&ma=5,10,20,30,60,120&datalen=500',_0x32513d=await _0x4dd317['AkfIF'](fetch,_0x19d115,{'headers':{'User-Agent':'Mozilla/5.0\x20(Windows\x20NT\x2010.0;\x20Win64;\x20x64)\x20AppleWebKit/537.36','Referer':_0x4dd317['QVfDI']},'signal':AbortSignal['timeout'](0x1388)});if(_0x32513d['ok']){const _0x885ea5=await _0x32513d[_0x31a720(0x159)](),_0x2bec4b=JSON['parse'](_0x885ea5);Array[_0x31a720(0x143)](_0x2bec4b)&&_0x2bec4b['length']>0x0&&(this['logger']['log'](_0x31a720(0x139)+_0x58f89e+'\x20'+_0x2bec4b[_0x31a720(0x152)]+'条'),_0x1815a1=_0x2bec4b['map'](_0x5acc20=>{const _0x72bf46=_0x31a720,_0x91fb5={'hoVYC':_0x4dd317[_0x72bf46(0x13f)],'PhVzm':function(_0xe2e350,_0x44cf00){return _0x4dd317['NrIVq'](_0xe2e350,_0x44cf00);}},_0xd2b30d=_0x461d43=>{const _0x261dc5=_0x72bf46;if(typeof _0x461d43===_0x91fb5['hoVYC'])return _0x461d43;const _0x3e7d97=String(_0x461d43),_0x43cd9e=_0x3e7d97['replace'](/^"+|"+$/g,'');return _0x91fb5[_0x261dc5(0x149)](parseFloat,_0x43cd9e);};return{'date':_0x5acc20[_0x72bf46(0x151)],'open':_0xd2b30d(_0x5acc20['open']),'close':_0xd2b30d(_0x5acc20[_0x72bf46(0x19c)]),'high':_0x4dd317['yFxjX'](_0xd2b30d,_0x5acc20['high']),'low':_0xd2b30d(_0x5acc20['low']),'volume':_0x4dd317[_0x72bf46(0x19e)](_0xd2b30d,_0x5acc20['volume']),'amount':0x0};}),_0x1815a1['_isMock']=![]);}}catch(_0x52ef94){this['logger']['warn'](_0x31a720(0x1a8)+_0x52ef94[_0x31a720(0x16e)]);}if(!_0x1815a1)try{const _0x144edf=_0x463135??this['detectMarket'](_0x58f89e),_0x140823=_0x144edf+'.'+_0x58f89e,_0x293aa0=_0x4dd317['mERCX'](_0x4dd317['mERCX'](this[_0x31a720(0x15b)]+_0x31a720(0x15f)+_0x140823+_0x4dd317['uePOb'],_0x4dd317[_0x31a720(0x170)]),_0x4dd317['jqYrV']),_0x5b3f50=await _0x4dd317['qYQbE'](fetch,_0x293aa0,{'headers':{'User-Agent':_0x4dd317[_0x31a720(0x17a)],'Referer':_0x4dd317[_0x31a720(0x179)]},'signal':AbortSignal['timeout'](0x1388)});if(_0x5b3f50['ok']){const _0x57d78e=await _0x5b3f50[_0x31a720(0x1a7)](),_0xf4fe4f=_0x57d78e?.['data']?.[_0x31a720(0x191)]||[];_0x4dd317[_0x31a720(0x188)](_0xf4fe4f[_0x31a720(0x152)],0x0)&&(_0x1815a1=_0xf4fe4f[_0x31a720(0x172)](_0x20f479=>{const _0x54b387=_0x31a720,_0xd38155=_0x20f479[_0x54b387(0x182)](',');return{'date':_0xd38155[0x0],'open':_0x4dd317['NrIVq'](parseFloat,_0xd38155[0x1]),'close':_0x4dd317[_0x54b387(0x14a)](parseFloat,_0xd38155[0x2]),'high':_0x4dd317[_0x54b387(0x19e)](parseFloat,_0xd38155[0x3]),'low':parseFloat(_0xd38155[0x4]),'volume':_0x4dd317['Wlxeg'](parseFloat,_0xd38155[0x5]),'amount':parseFloat(_0xd38155[0x6])||0x0};}),_0x1815a1[_0x31a720(0x12e)]=![]);}}catch(_0x371c57){this['logger'][_0x31a720(0x137)](_0x31a720(0x130)+_0x371c57[_0x31a720(0x16e)]);}if(!_0x1815a1)try{const _0x187d9d=_0x58f89e['startsWith']('6')?'sh':'sz',_0x2c7219=_0x31a720(0x189)+_0x187d9d+_0x58f89e+_0x31a720(0x13d),_0x574579=await _0x4dd317['WhDpB'](fetch,_0x2c7219,{'headers':{'User-Agent':_0x4dd317[_0x31a720(0x16b)]}}),_0x2fc2e3=await _0x574579[_0x31a720(0x1a7)]();if(_0x4dd317['CzYyY'](_0x2fc2e3?.['data']?.[''+_0x187d9d+_0x58f89e]?.[_0x31a720(0x174)]?.['length'],0x14)){const _0x166f43=_0x2fc2e3[_0x31a720(0x19a)][''+_0x187d9d+_0x58f89e]['qfqday'];_0x1815a1=_0x166f43[_0x31a720(0x172)](_0xc07fc=>({'date':_0xc07fc[0x0],'open':parseFloat(_0xc07fc[0x1]),'close':parseFloat(_0xc07fc[0x2]),'high':parseFloat(_0xc07fc[0x3]),'low':parseFloat(_0xc07fc[0x4]),'volume':parseFloat(_0xc07fc[0x5]),'amount':0x0})),_0x1815a1['_isMock']=![],this[_0x31a720(0x13e)]['log'](_0x31a720(0x12c)+_0x58f89e+'\x20'+_0x1815a1['length']+'条');}}catch{}if(!_0x1815a1){const _0x276a0f=await this[_0x31a720(0x14c)](_0x58f89e);_0x276a0f&&(this[_0x31a720(0x13e)]['log'](_0x31a720(0x1a1)+_0x58f89e+_0x31a720(0x120)+_0x276a0f['price']),_0x1815a1=this[_0x31a720(0x195)](_0x58f89e,_0x276a0f['price'],_0x276a0f['lastClose']),_0x1815a1['_isMock']=!![]);}return!_0x1815a1&&(this['logger'][_0x31a720(0x137)](_0x31a720(0x123)+_0x58f89e),_0x1815a1=this[_0x31a720(0x195)](_0x58f89e,undefined,undefined),_0x1815a1[_0x31a720(0x12e)]=!![]),_0x1815a1&&_0x4dd317['oTrwb'](_0x1815a1[_0x31a720(0x12e)],undefined)&&(_0x1815a1['_isMock']=!(_0x4dd317['CzYyY'](_0x1815a1['length'],0x0)&&(_0x4dd317['QjNLg'](_0x31a720(0x18d),_0x1815a1[0x0]??{})||'day'in(_0x1815a1[0x0]??{})))),this['klineCache']['set'](_0x58f89e,{'data':_0x1815a1,'timestamp':Date[_0x31a720(0x1a2)]()}),_0x1815a1;}async['fetchRealTimeQuote'](_0x3b26f9,_0x3992d8){const _0x2c3ed1=_0x1464be,_0x37d602={'yQOJe':function(_0x1c8164,_0x37ccfc,_0x5002c5){return _0x1c8164(_0x37ccfc,_0x5002c5);},'vyZTp':function(_0x4ebe2e,_0x27bdae){return _0x4ebe2e<_0x27bdae;}},_0x5eb79e=_0x3992d8??this[_0x2c3ed1(0x185)](_0x3b26f9),_0x5c8054=this[_0x2c3ed1(0x18c)](_0x5eb79e);try{const _0x202f37=await _0x37d602['yQOJe'](fetch,this['TENCENT_QUOTE_URL']+'='+_0x5c8054+_0x3b26f9,{'signal':AbortSignal[_0x2c3ed1(0x14e)](0x1388)});if(!_0x202f37['ok'])return null;const _0x4b2528=await _0x202f37['arrayBuffer'](),_0x513b51=iconv[_0x2c3ed1(0x1aa)](Buffer['from'](_0x4b2528),'gbk'),_0x489852=_0x513b51['match'](/"(.*)"/);if(!_0x489852)return null;const _0x458588=_0x489852[0x1]['split']('~');if(_0x37d602[_0x2c3ed1(0x148)](_0x458588[_0x2c3ed1(0x152)],0x28))return null;return{'code':_0x458588[0x2]||_0x3b26f9,'name':_0x458588[0x1]||'股票'+_0x3b26f9,'market':this['detectMarket'](_0x3b26f9),'price':parseFloat(_0x458588[0x3])||undefined,'lastClose':parseFloat(_0x458588[0x4])||undefined,'high':parseFloat(_0x458588[0x21])||undefined,'low':parseFloat(_0x458588[0x22])||undefined,'changePercent':parseFloat(_0x458588[0x20])||undefined};}catch(_0x1901de){return this[_0x2c3ed1(0x13e)]['warn']('腾讯实时行情不可用:\x20'+_0x1901de[_0x2c3ed1(0x16e)]),null;}}['fallbackSearch'](_0x50955e){const _0x1258d1=_0x1464be,_0xf0c802={'NuTfa':_0x1258d1(0x13a),'SIPpr':'000858','dkImT':'600276','EeGzn':'603259','MNXWx':'000333'},_0x2b2d74=/^\d{6}$/[_0x1258d1(0x153)](_0x50955e['trim']());if(_0x2b2d74)return[{'code':_0x50955e['trim'](),'name':'股票'+_0x50955e,'market':this[_0x1258d1(0x185)](_0x50955e['trim']())}];const _0x3e2da8={'茅台':'600519','贵州茅台':_0x1258d1(0x18a),'平安':'601318','中国平安':_0x1258d1(0x125),'招商银行':_0xf0c802[_0x1258d1(0x163)],'宁德时代':_0x1258d1(0x1a4),'比亚迪':_0x1258d1(0x1ab),'五粮液':_0xf0c802['SIPpr'],'恒瑞医药':_0xf0c802['dkImT'],'药明康德':_0xf0c802[_0x1258d1(0x14f)],'美的':_0xf0c802[_0x1258d1(0x135)],'格力':_0x1258d1(0x156),'盈方微':_0x1258d1(0x194)},_0x501145=_0x3e2da8[_0x50955e['trim']()];if(_0x501145)return[{'code':_0x501145,'name':_0x50955e[_0x1258d1(0x17b)](),'market':this['detectMarket'](_0x501145)}];return[{'code':'600000','name':_0x50955e,'market':0x1}];}[_0x1464be(0x195)](_0x20a09d,_0x2105d2,_0x276c8e){const _0x1b9812=_0x1464be,_0x4f3a51={'eAxCN':function(_0x264dbb,_0x161226){return _0x264dbb+_0x161226;},'TgbbJ':function(_0x3f90a2,_0x4f02ce){return _0x3f90a2+_0x4f02ce;},'XpeIT':function(_0x1afca9,_0x26c69b){return _0x1afca9*_0x26c69b;},'nZpao':function(_0x27ec9c,_0x1e15c8){return _0x27ec9c+_0x1e15c8;},'nMkCr':function(_0xcafa34,_0x320d85){return _0xcafa34*_0x320d85;},'kFyVx':function(_0x18ebc6,_0x2a9e8b){return _0x18ebc6*_0x2a9e8b;},'CYMuC':function(_0x4394f8,_0x2888a8){return _0x4394f8-_0x2888a8;},'RxRiy':function(_0x14a379,_0xfbbd62){return _0x14a379-_0xfbbd62;},'NIEqJ':function(_0x2c1afc,_0x4c38b4){return _0x2c1afc/_0x4c38b4;},'EDQnl':function(_0x3a0b6f,_0xeb5c71){return _0x3a0b6f*_0xeb5c71;},'SXOOL':function(_0xcaf969,_0x538da1){return _0xcaf969+_0x538da1;},'RgFXz':function(_0x138c2c,_0x2571ea){return _0x138c2c+_0x2571ea;},'LJZBi':function(_0x2aead6,_0x4f5f54){return _0x2aead6*_0x4f5f54;},'EgJUG':function(_0x2c0b2a,_0x45ad4e){return _0x2c0b2a*_0x45ad4e;},'FEqho':function(_0xbed35f,_0x42917b){return _0xbed35f+_0x42917b;},'aSFFn':function(_0x39286b,_0x560a56){return _0x39286b*_0x560a56;},'zqxMT':function(_0x1bff70,_0x54df63){return _0x1bff70*_0x54df63;},'XVxLV':function(_0x4f44c7,_0x593861){return _0x4f44c7+_0x593861;},'ZlSEe':function(_0x3cff1a,_0x554987){return _0x3cff1a===_0x554987;},'CNrOa':function(_0x3783b0,_0x4e832f){return _0x3783b0/_0x4e832f;},'icjSK':function(_0xc16ca,_0x12198a){return _0xc16ca*_0x12198a;},'NjgzF':function(_0x50a48a,_0x7b6f5b){return _0x50a48a/_0x7b6f5b;}},_0x59f9e2=[],_0x5eb274=0x1f4,_0x58da30=_0x2105d2||_0x4f3a51[_0x1b9812(0x14d)](0x64,Math['random']()*0x32),_0x4deb9e=_0x58da30*_0x4f3a51['TgbbJ'](0.2,_0x4f3a51['XpeIT'](Math['random'](),0.15)),_0x6a2c89=_0x4f3a51['nZpao'](2.5,Math[_0x1b9812(0x1a5)]()*1.5),_0x3620bb=new Date(_0x1b9812(0x15a));for(let _0x2938b8=0x0;_0x2938b8<_0x5eb274;_0x2938b8++){const _0xe962f2=_0x4f3a51[_0x1b9812(0x12b)](Math['PI'],0x2)*_0x2938b8/_0x5eb274*_0x6a2c89,_0x3450d0=Math['sin'](_0xe962f2)*_0x4deb9e,_0x1f4665=_0x4f3a51['kFyVx'](_0x4f3a51['CYMuC'](Math['random'](),0.5),_0x4deb9e)*0.12;let _0x2a7006=0x0,_0x464daf=0x0;_0x2938b8>_0x4f3a51['RxRiy'](_0x5eb274,0x5)&&(_0x464daf=_0x5eb274-_0x2938b8,_0x2a7006=0x1-_0x4f3a51['NIEqJ'](_0x464daf,0x5));const _0x5bad19=_0x4f3a51['EDQnl'](_0x3450d0,0x1-_0x2a7006),_0x3bd115=_0x4f3a51['XpeIT'](_0x1f4665,0x1-_0x2a7006);let _0x341f24=_0x4f3a51['SXOOL'](_0x4f3a51['RgFXz'](_0x58da30,_0x5bad19),_0x3bd115);_0x341f24=Math[_0x1b9812(0x164)](_0x341f24,0.5);const _0x151101=Math['max'](_0x4f3a51['LJZBi'](_0x341f24,0.02),0.01),_0x29431a=_0x341f24*(0x1+_0x4f3a51[_0x1b9812(0x154)](Math['random']()-0.5,0.02)),_0x96ce1e=_0x4f3a51['FEqho'](Math[_0x1b9812(0x164)](_0x29431a,_0x341f24),_0x4f3a51['aSFFn'](Math['random'](),_0x151101)*0.8),_0x347ee8=_0x4f3a51[_0x1b9812(0x187)](Math[_0x1b9812(0x1a0)](_0x29431a,_0x341f24),_0x4f3a51['zqxMT'](Math[_0x1b9812(0x1a5)]()*_0x151101,0.8)),_0x26276a=0x1e8480+_0x4f3a51['aSFFn'](Math['random'](),0x7a1200),_0x3547d4=_0x4f3a51[_0x1b9812(0x196)](_0x26276a,0x1+Math[_0x1b9812(0x146)](_0xe962f2)*0.5),_0x4e2f05=_0x4f3a51[_0x1b9812(0x184)](_0x3547d4*(_0x29431a+_0x341f24),0x2),_0x3f3f42=new Date(_0x3620bb);_0x3f3f42[_0x1b9812(0x129)](_0x4f3a51[_0x1b9812(0x15c)](_0x3f3f42[_0x1b9812(0x177)](),_0x2938b8));while(_0x4f3a51['ZlSEe'](_0x3f3f42['getDay'](),0x0)||_0x4f3a51['ZlSEe'](_0x3f3f42[_0x1b9812(0x1a3)](),0x6)){_0x3f3f42[_0x1b9812(0x129)](_0x3f3f42['getDate']()+0x1);}_0x59f9e2[_0x1b9812(0x17d)]({'date':_0x3f3f42['toISOString']()[_0x1b9812(0x182)]('T')[0x0],'open':_0x4f3a51[_0x1b9812(0x126)](Math[_0x1b9812(0x158)](_0x29431a*0x64),0x64),'close':_0x4f3a51['NIEqJ'](Math[_0x1b9812(0x158)](_0x341f24*0x64),0x64),'high':Math[_0x1b9812(0x158)](_0x4f3a51['icjSK'](_0x96ce1e,0x64))/0x64,'low':_0x4f3a51[_0x1b9812(0x124)](Math[_0x1b9812(0x158)](_0x347ee8*0x64),0x64),'volume':Math[_0x1b9812(0x158)](_0x3547d4),'amount':Math[_0x1b9812(0x158)](_0x4e2f05)});}return _0x59f9e2;}[_0x1464be(0x18c)](_0x370ae5){if(_0x370ae5===0x2)return'bj';return _0x370ae5===0x1?'sh':'sz';}['detectMarket'](_0x17f25e){const _0x447e12=_0x1464be;if(_0x17f25e['startsWith']('4')||_0x17f25e[_0x447e12(0x18e)]('8'))return 0x2;if(_0x17f25e[_0x447e12(0x18e)]('6')||_0x17f25e[_0x447e12(0x18e)]('9')||_0x17f25e[_0x447e12(0x18e)]('5'))return 0x1;if(_0x17f25e[_0x447e12(0x18e)]('0')||_0x17f25e[_0x447e12(0x18e)]('3')||_0x17f25e[_0x447e12(0x18e)]('1'))return 0x0;return 0x0;}};exports['DataFetcherService']=DataFetcherService,exports['DataFetcherService']=DataFetcherService=DataFetcherService_1=__decorate([(0x0,common_1['Injectable'])()],DataFetcherService);function _0x1934(){const _0xe491d1=['000858','NIEqJ','detectMarket','__decorate','CYMuC','OYUFo','https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=','600519','MarketType','getMarketPrefix','date','startsWith','searchEastMoney','北京股票使用东方财富数据','klines','filter','1484604GPOpEt','000670','generateMockKLine','EDQnl','https://push2his.eastmoney.com/api/qt/stock/kline/get','Name','QdkQE','data','cXrDD','close','heTYH','LxpYo','bptVQ','min','使用腾讯真实价格生成K线:\x20','now','getDay','300750','random','diff','json','新浪K线接口不可用:\x20','603259','decode','002594','\x20当前价=','Mozilla/5.0','SvbKX','所有数据接口不可用，使用纯模拟数据:\x20','NjgzF','601318','CNrOa','28ofrjnH','__esModule','setDate','fallbackSearch','nMkCr','[K线]\x20腾讯前复权日线成功:\x20','WlgJc','_isMock','5271ylUXLR','东方财富K线接口不可用:\x20','Tuaqv','f12','Nsist','kIQAB','MNXWx','601899','warn','600690','新浪K线数据获取成功:\x20','600036','https://qt.gtimg.cn/q','KLINE_CACHE_TTL',',day,,,500,qfq','logger','TKCWu','stockListCache','3926112fCRLBo','object','isArray','pUUXL','tkpto','sin','SmFvo','vyZTp','PhVzm','Xyulz','?input=','fetchRealTimeQuote','eAxCN','timeout','EeGzn','dqNua','day','length','test','EgJUG','ergjx','000651','Mozilla/5.0\x20(Windows\x20NT\x2010.0;\x20Win64;\x20x64)\x20AppleWebKit/537.36','round','text','2024-01-01','EASTMONEY_KLINE_URL','XVxLV','110SObQfI','000001','?secid=','https://searchadapter.eastmoney.com/api/suggest/get','name','EASTMONEY_SEARCH_URL','NuTfa','max','Code','4408PCneFJ','000002','klineCache','2124125sbqpSH','202716kIVFyk','VGyBI','130452KUhTvu','获取全部A股列表失败:\x20','message','pkvvF','ielqX','ldzZz','map','601166','qfqday','600900','price','getDate','&klt=101&fqt=1&end=20500101&lmt=500','Vnwcd','hpjba','trim','970389vuZdvx','push','https://quote.eastmoney.com/','CLCYF','5|6|3|4|2|0|1','parse','split'];_0x1934=function(){return _0xe491d1;};return _0x1934();}
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var DataFetcherService_1;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DataFetcherService = void 0;
+const common_1 = require("@nestjs/common");
+const iconv = require("iconv-lite");
+let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
+    constructor() {
+        this.logger = new common_1.Logger(DataFetcherService_1.name);
+        this.EASTMONEY_KLINE_URL = 'https://push2his.eastmoney.com/api/qt/stock/kline/get';
+        this.EASTMONEY_SEARCH_URL = 'https://searchadapter.eastmoney.com/api/suggest/get';
+        this.TENCENT_QUOTE_URL = 'https://qt.gtimg.cn/q';
+        this.klineCache = new Map();
+        this.KLINE_CACHE_TTL = 10 * 60 * 1000;
+        this.stockListCache = null;
+    }
+    async getAllStocks() {
+        if (this.stockListCache)
+            return this.stockListCache;
+        try {
+            const url = 'https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
+            const res = await fetch(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' },
+                signal: AbortSignal.timeout(8000),
+            });
+            if (res.ok) {
+                const text = await res.text();
+                const data = JSON.parse(text);
+                const list = (data?.data?.diff || []).map((item) => ({
+                    code: String(item.f12).padStart(6, '0'),
+                    name: item.f14 || '',
+                    market: 0,
+                })).filter((s) => s.name);
+                this.stockListCache = list;
+                this.logger.log(`加载全部A股列表: ${list.length}只`);
+                return list;
+            }
+        }
+        catch (e) {
+            this.logger.warn(`获取全部A股列表失败: ${e.message}`);
+        }
+        const fallback = this.getHotStockList();
+        this.stockListCache = fallback;
+        return fallback;
+    }
+    getHotStockList() {
+        const codes = [
+            '000001', '000002', '000333', '000651', '000858',
+            '002415', '002594', '300750', '600000', '600036',
+            '600519', '600690', '600887', '600900', '601012',
+            '601166', '601318', '601398', '601857', '601899',
+            '601939', '603259', '688981',
+        ];
+        return codes.map(code => ({
+            code, name: '',
+            market: code.startsWith('6') || code.startsWith('9') ? 1 : 0,
+        }));
+    }
+    async searchStock(keyword) {
+        const isCode = /^\d{6}$/.test(keyword.trim());
+        if (isCode) {
+            const info = await this.fetchRealTimeQuote(keyword.trim());
+            if (info && info.name && info.name !== `股票${keyword}` && info.name !== keyword && info.price) {
+                return [info];
+            }
+            const eastRes = await this.searchEastMoney(keyword);
+            if (eastRes.length > 0)
+                return eastRes;
+            return [];
+        }
+        const eastRes = await this.searchEastMoney(keyword);
+        if (eastRes.length > 0)
+            return eastRes;
+        return this.fallbackSearch(keyword);
+    }
+    async searchEastMoney(keyword) {
+        try {
+            const url = `${this.EASTMONEY_SEARCH_URL}?input=${encodeURIComponent(keyword)}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    Referer: 'https://quote.eastmoney.com/',
+                },
+                signal: AbortSignal.timeout(5000),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const list = data?.QuotationCodeTable?.Data || [];
+                const results = list
+                    .filter((item) => item.Code && item.Name)
+                    .map((item) => ({
+                    code: String(item.Code).padStart(6, '0'),
+                    name: item.Name,
+                    market: item.MarketType === 1 ? 1 : 0,
+                }));
+                if (results.length > 0)
+                    return results;
+            }
+        }
+        catch (e) {
+            this.logger.warn(`搜索接口不可用，降级: ${e.message}`);
+        }
+        return [];
+    }
+    async getKLineData(code, market) {
+        const cached = this.klineCache.get(code);
+        if (cached && Date.now() - cached.timestamp < this.KLINE_CACHE_TTL) {
+            return cached.data;
+        }
+        let result = null;
+        try {
+            const mkt = market ?? this.detectMarket(code);
+            if (mkt === 2)
+                throw new Error('北京股票使用东方财富数据');
+            const prefix = this.getMarketPrefix(mkt);
+            const url = `https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=${prefix}${code}&scale=240&ma=5,10,20,30,60,120&datalen=500`;
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    Referer: 'https://finance.sina.com.cn/',
+                },
+                signal: AbortSignal.timeout(5000),
+            });
+            if (response.ok) {
+                const text = await response.text();
+                const data = JSON.parse(text);
+                if (Array.isArray(data) && data.length > 0) {
+                    this.logger.log(`新浪K线数据获取成功: ${code} ${data.length}条`);
+                    result = data.map((item) => {
+                        const parseStr = (v) => {
+                            if (typeof v === 'number')
+                                return v;
+                            const s = String(v);
+                            const cleaned = s.replace(/^"+|"+$/g, '');
+                            return parseFloat(cleaned);
+                        };
+                        return {
+                            date: item.day,
+                            open: parseStr(item.open),
+                            close: parseStr(item.close),
+                            high: parseStr(item.high),
+                            low: parseStr(item.low),
+                            volume: parseStr(item.volume),
+                            amount: 0,
+                        };
+                    });
+                    result._isMock = false;
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`新浪K线接口不可用: ${e.message}`);
+        }
+        if (!result) {
+            try {
+                const secMarket = market ?? this.detectMarket(code);
+                const secid = `${secMarket}.${code}`;
+                const url = `${this.EASTMONEY_KLINE_URL}?secid=${secid}` +
+                    '&fields1=f1,f2,f3,f4,f5,f6' +
+                    '&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61' +
+                    '&klt=101&fqt=1&end=20500101&lmt=500';
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        Referer: 'https://quote.eastmoney.com/',
+                    },
+                    signal: AbortSignal.timeout(5000),
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const klines = data?.data?.klines || [];
+                    if (klines.length > 0) {
+                        result = klines.map((kline) => {
+                            const parts = kline.split(',');
+                            return {
+                                date: parts[0],
+                                open: parseFloat(parts[1]),
+                                close: parseFloat(parts[2]),
+                                high: parseFloat(parts[3]),
+                                low: parseFloat(parts[4]),
+                                volume: parseFloat(parts[5]),
+                                amount: parseFloat(parts[6]) || 0,
+                            };
+                        });
+                        result._isMock = false;
+                    }
+                }
+            }
+            catch (e) {
+                this.logger.warn(`东方财富K线接口不可用: ${e.message}`);
+            }
+        }
+        if (!result) {
+            try {
+                const prefix = code.startsWith('6') ? 'sh' : 'sz';
+                const tencentUrl = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,500,qfq`;
+                const tRes = await fetch(tencentUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+                const tData = await tRes.json();
+                if (tData?.data?.[`${prefix}${code}`]?.qfqday?.length > 20) {
+                    const lines = tData.data[`${prefix}${code}`].qfqday;
+                    result = lines.map((l) => ({
+                        date: l[0], open: parseFloat(l[1]), close: parseFloat(l[2]),
+                        high: parseFloat(l[3]), low: parseFloat(l[4]),
+                        volume: parseFloat(l[5]), amount: 0
+                    }));
+                    result._isMock = false;
+                    this.logger.log(`[K线] 腾讯前复权日线成功: ${code} ${result.length}条`);
+                }
+            }
+            catch { }
+        }
+        if (!result) {
+            const realTimeInfo = await this.fetchRealTimeQuote(code);
+            if (realTimeInfo) {
+                this.logger.log(`使用腾讯真实价格生成K线: ${code} 当前价=${realTimeInfo.price}`);
+                result = this.generateMockKLine(code, realTimeInfo.price, realTimeInfo.lastClose);
+                result._isMock = true;
+            }
+        }
+        if (!result) {
+            this.logger.warn(`所有数据接口不可用，使用纯模拟数据: ${code}`);
+            result = this.generateMockKLine(code, undefined, undefined);
+            result._isMock = true;
+        }
+        if (result && result._isMock === undefined) {
+            result._isMock = !(result.length > 0 && ('date' in (result[0] ?? {}) || 'day' in (result[0] ?? {})));
+        }
+        this.klineCache.set(code, { data: result, timestamp: Date.now() });
+        return result;
+    }
+    async fetchRealTimeQuote(code, market) {
+        const mkt = market ?? this.detectMarket(code);
+        const prefix = this.getMarketPrefix(mkt);
+        try {
+            const response = await fetch(`${this.TENCENT_QUOTE_URL}=${prefix}${code}`, {
+                signal: AbortSignal.timeout(5000),
+            });
+            if (!response.ok)
+                return null;
+            const buffer = await response.arrayBuffer();
+            const text = iconv.decode(Buffer.from(buffer), 'gbk');
+            const match = text.match(/"(.*)"/);
+            if (!match)
+                return null;
+            const fields = match[1].split('~');
+            if (fields.length < 40)
+                return null;
+            return {
+                code: fields[2] || code,
+                name: fields[1] || `股票${code}`,
+                market: this.detectMarket(code),
+                price: parseFloat(fields[3]) || undefined,
+                lastClose: parseFloat(fields[4]) || undefined,
+                high: parseFloat(fields[33]) || undefined,
+                low: parseFloat(fields[34]) || undefined,
+                changePercent: parseFloat(fields[32]) || undefined,
+            };
+        }
+        catch (e) {
+            this.logger.warn(`腾讯实时行情不可用: ${e.message}`);
+            return null;
+        }
+    }
+    fallbackSearch(keyword) {
+        const isCode = /^\d{6}$/.test(keyword.trim());
+        if (isCode) {
+            return [{
+                    code: keyword.trim(),
+                    name: `股票${keyword}`,
+                    market: this.detectMarket(keyword.trim()),
+                }];
+        }
+        const nameMap = {
+            '茅台': '600519', '贵州茅台': '600519',
+            '平安': '601318', '中国平安': '601318',
+            '招商银行': '600036', '宁德时代': '300750',
+            '比亚迪': '002594', '五粮液': '000858',
+            '恒瑞医药': '600276', '药明康德': '603259',
+            '美的': '000333', '格力': '000651',
+            '盈方微': '000670',
+        };
+        const code = nameMap[keyword.trim()];
+        if (code) {
+            return [{ code, name: keyword.trim(), market: this.detectMarket(code) }];
+        }
+        return [{ code: '600000', name: keyword, market: 1 }];
+    }
+    generateMockKLine(_code, currentPrice, lastClose) {
+        const result = [];
+        const totalDays = 500;
+        const targetPrice = currentPrice || (100 + Math.random() * 50);
+        const amplitude = targetPrice * (0.20 + Math.random() * 0.15);
+        const cycles = 2.5 + Math.random() * 1.5;
+        const baseDate = new Date('2024-01-01');
+        for (let i = 0; i < totalDays; i++) {
+            const phase = Math.PI * 2 * i / totalDays * cycles;
+            const sineComponent = Math.sin(phase) * amplitude;
+            const noise = (Math.random() - 0.5) * amplitude * 0.12;
+            let convergeFactor = 0;
+            let remain = 0;
+            if (i > totalDays - 5) {
+                remain = totalDays - i;
+                convergeFactor = 1 - remain / 5;
+            }
+            const currentSine = sineComponent * (1 - convergeFactor);
+            const currentNoise = noise * (1 - convergeFactor);
+            let close = targetPrice + currentSine + currentNoise;
+            close = Math.max(close, 0.5);
+            const volatility = Math.max(close * 0.02, 0.01);
+            const open = close * (1 + (Math.random() - 0.5) * 0.02);
+            const high = Math.max(open, close) + Math.random() * volatility * 0.8;
+            const low = Math.min(open, close) - Math.random() * volatility * 0.8;
+            const baseVolume = 2000000 + Math.random() * 8000000;
+            const volume = baseVolume * (1 + Math.sin(phase) * 0.5);
+            const amount = volume * (open + close) / 2;
+            const date = new Date(baseDate);
+            date.setDate(date.getDate() + i);
+            while (date.getDay() === 0 || date.getDay() === 6) {
+                date.setDate(date.getDate() + 1);
+            }
+            result.push({
+                date: date.toISOString().split('T')[0],
+                open: Math.round(open * 100) / 100,
+                close: Math.round(close * 100) / 100,
+                high: Math.round(high * 100) / 100,
+                low: Math.round(low * 100) / 100,
+                volume: Math.round(volume),
+                amount: Math.round(amount),
+            });
+        }
+        return result;
+    }
+    getMarketPrefix(market) {
+        if (market === 2)
+            return 'bj';
+        return market === 1 ? 'sh' : 'sz';
+    }
+    detectMarket(code) {
+        if (code.startsWith('4') || code.startsWith('8'))
+            return 2;
+        if (code.startsWith('6') || code.startsWith('9') || code.startsWith('5'))
+            return 1;
+        if (code.startsWith('0') || code.startsWith('3') || code.startsWith('1'))
+            return 0;
+        return 0;
+    }
+};
+exports.DataFetcherService = DataFetcherService;
+exports.DataFetcherService = DataFetcherService = DataFetcherService_1 = __decorate([
+    (0, common_1.Injectable)()
+], DataFetcherService);
