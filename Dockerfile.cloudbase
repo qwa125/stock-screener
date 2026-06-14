@@ -3,7 +3,7 @@ WORKDIR /app
 COPY server/package.json ./
 COPY server/dist/ ./dist/
 COPY server/assets/ ./assets/
-COPY dist-web/ ./dist-web/
+COPY dist-web/ ./public/
 RUN npm install --production
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

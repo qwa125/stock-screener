@@ -39,7 +39,7 @@ COPY server/package.json ./
 RUN npm install --production
 
 # Copy built artifacts from builder
-COPY --from=builder /app/dist-web/ ./dist-web/
+COPY --from=builder /app/dist-web/ ./public/
 COPY --from=builder /app/server/dist/ ./dist/
 COPY --from=builder /app/server/assets/ ./assets/
 COPY --from=builder /app/server/scripts/ ./scripts/
