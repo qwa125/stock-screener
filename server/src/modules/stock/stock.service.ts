@@ -183,12 +183,22 @@ export class StockService {
       return cached;
     }
 
+    // 如果是非数字查询（如 twgf），此处会走搜索流程
+    // 搜索后会用 stock.code 再次尝试命中缓存（见下方步骤 1.5）
+
     // 1. 搜索并确认股票
     const stocks = await this.dataFetcher.searchStock(query);
     if (!stocks || stocks.length === 0) {
       throw new Error(`未找到股票: ${query}`);
     }
     const stock = stocks[0];
+
+    // 1.5 用股票代码再次尝试命中缓存（解决 twgf→600438 缓存key不一致问题）
+    const cachedByCode = this.getCachedAnalysis(stock.code);
+    if (cachedByCode) {
+      this.logger.log(`📦 命中分析缓存: ${stock.code} (from keyword: ${query})`);
+      return cachedByCode;
+    }
 
     // 2. 获取实时行情
     const realTime = await this.dataFetcher.fetchRealTimeQuote(stock.code);
@@ -275,7 +285,7 @@ export class StockService {
         signals,
         backtestStats,
       };
-      this.analysisCache.set(pureCode, cacheEntry);
+      this.analysisCache.set(stock.code, cacheEntry);
       this.saveAnalysisCache();
     }
 
