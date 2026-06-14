@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const app_service_1 = require("./app.service");
+const access_limit_guard_1 = require("./guards/access-limit.guard");
 let AppController = class AppController {
     constructor(appService) {
         this.appService = appService;
@@ -41,6 +42,7 @@ let AppController = class AppController {
 exports.AppController = AppController;
 __decorate([
     (0, common_1.Get)('/'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Object)
@@ -53,6 +55,7 @@ __decorate([
 ], AppController.prototype, "getHelloAlias", null);
 __decorate([
     (0, common_1.Get)('health'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Object)

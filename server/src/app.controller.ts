@@ -2,12 +2,14 @@ import { Controller, Get, StreamableFile, Header } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { join } from 'path';
 import { AppService } from '@/app.service';
+import { SkipAccessLimit } from '@/guards/access-limit.guard';
 
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get('/')
+  @SkipAccessLimit()
   getHello(): { status: string; data: string } {
     return {
       status: 'success',
@@ -21,6 +23,7 @@ export class AppController {
   }
 
   @Get('health')
+  @SkipAccessLimit()
   getHealth(): { status: string; data: string } {
     return {
       status: 'success',

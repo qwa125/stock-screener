@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AccessControlController = void 0;
 const common_1 = require("@nestjs/common");
 const access_control_service_1 = require("./access-control.service");
+const access_limit_guard_1 = require("../../guards/access-limit.guard");
 let AccessControlController = class AccessControlController {
     constructor(service) {
         this.service = service;
@@ -131,5 +132,6 @@ __decorate([
 ], AccessControlController.prototype, "listDevices", null);
 exports.AccessControlController = AccessControlController = __decorate([
     (0, common_1.Controller)('access'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:paramtypes", [access_control_service_1.AccessControlService])
 ], AccessControlController);

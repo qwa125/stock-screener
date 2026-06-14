@@ -1,7 +1,9 @@
 import { Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { AccessControlService } from './access-control.service';
+import { SkipAccessLimit } from '@/guards/access-limit.guard';
 
 @Controller('access')
+@SkipAccessLimit()
 export class AccessControlController {
   constructor(private readonly service: AccessControlService) {}
 
