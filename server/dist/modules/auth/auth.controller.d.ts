@@ -99,11 +99,12 @@ export declare class AuthController {
         code: number;
         data: {
             devices: {
-                displayName: string;
                 firstSeenStr: string;
                 lastSeenStr: string;
                 index: number;
                 fingerprint: string;
+                displayName: string;
+                remark: string;
                 firstSeen: number;
                 lastSeen: number;
             }[];
@@ -120,6 +121,12 @@ export declare class AuthController {
         data: {
             registered: number;
         };
+    };
+    updateRemark(index: string, body: {
+        remark: string;
+    }): {
+        code: number;
+        msg: string;
     };
     clearDevices(): {
         code: number;

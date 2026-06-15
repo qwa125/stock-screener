@@ -157,9 +157,18 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             index: i,
             fingerprint: d.fingerprint,
             displayName: this.extractDisplayName(d.fingerprint),
+            remark: d.remark || '',
             firstSeen: d.firstSeen,
             lastSeen: d.lastSeen,
         }));
+    }
+    updateRemark(index, remark) {
+        if (index < 0 || index >= this.registry.length)
+            return false;
+        this.registry[index].remark = remark.trim();
+        this.saveRegistry();
+        this.logger.log(`✏️ 设备 #${index} 备注已更新: "${remark.trim()}"`);
+        return true;
     }
     removeDevice(index) {
         if (index < 0 || index >= this.registry.length)

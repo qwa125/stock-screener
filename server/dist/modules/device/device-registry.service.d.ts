@@ -22,9 +22,11 @@ export declare class DeviceRegistryService {
         index: number;
         fingerprint: string;
         displayName: string;
+        remark: string;
         firstSeen: number;
         lastSeen: number;
     }>;
+    updateRemark(index: number, remark: string): boolean;
     removeDevice(index: number): boolean;
     clearDevices(): void;
 }

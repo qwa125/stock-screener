@@ -108,7 +108,6 @@ export class AuthController {
   getDevices() {
     const devices = this.deviceRegistry.getDevices().map(d => ({
       ...d,
-      displayName: d.fingerprint.split('|')[0] || d.fingerprint,
       firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
       lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
     }));
@@ -124,6 +123,17 @@ export class AuthController {
       return { code: 404, msg: `设备 #${idx} 不存在` };
     }
     return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+  }
+
+  /** 更新设备备注 */
+  @Put('devices/:index/remark')
+  updateRemark(@Param('index') index: string, @Body() body: { remark: string }) {
+    const idx = parseInt(index, 10);
+    const ok = this.deviceRegistry.updateRemark(idx, body.remark || '');
+    if (!ok) {
+      return { code: 404, msg: `设备 #${idx} 不存在` };
+    }
+    return { code: 200, msg: '备注已更新' };
   }
 
   /** 清空所有已注册设备 */

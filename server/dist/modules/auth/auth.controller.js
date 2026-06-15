@@ -99,7 +99,6 @@ let AuthController = class AuthController {
     getDevices() {
         const devices = this.deviceRegistry.getDevices().map(d => ({
             ...d,
-            displayName: d.fingerprint.split('|')[0] || d.fingerprint,
             firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
             lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
         }));
@@ -112,6 +111,14 @@ let AuthController = class AuthController {
             return { code: 404, msg: `设备 #${idx} 不存在` };
         }
         return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+    }
+    updateRemark(index, body) {
+        const idx = parseInt(index, 10);
+        const ok = this.deviceRegistry.updateRemark(idx, body.remark || '');
+        if (!ok) {
+            return { code: 404, msg: `设备 #${idx} 不存在` };
+        }
+        return { code: 200, msg: '备注已更新' };
     }
     clearDevices() {
         this.deviceRegistry.clearDevices();
@@ -181,6 +188,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "removeDevice", null);
+__decorate([
+    (0, common_1.Put)('devices/:index/remark'),
+    __param(0, (0, common_1.Param)('index')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "updateRemark", null);
 __decorate([
     (0, common_1.Delete)('devices'),
     __metadata("design:type", Function),

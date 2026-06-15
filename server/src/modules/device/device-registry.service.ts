@@ -6,6 +6,7 @@ interface DeviceEntry {
   fingerprint: string;
   firstSeen: number;
   lastSeen: number;
+  remark?: string;
 }
 
 @Injectable()
@@ -174,14 +175,24 @@ export class DeviceRegistryService {
   }
 
   /** 获取所有已注册设备列表 */
-  getDevices(): Array<{ index: number; fingerprint: string; displayName: string; firstSeen: number; lastSeen: number }> {
+  getDevices(): Array<{ index: number; fingerprint: string; displayName: string; remark: string; firstSeen: number; lastSeen: number }> {
     return this.registry.map((d, i) => ({
       index: i,
       fingerprint: d.fingerprint,
       displayName: this.extractDisplayName(d.fingerprint),
+      remark: d.remark || '',
       firstSeen: d.firstSeen,
       lastSeen: d.lastSeen,
     }));
+  }
+
+  /** 更新设备备注 */
+  updateRemark(index: number, remark: string): boolean {
+    if (index < 0 || index >= this.registry.length) return false;
+    this.registry[index].remark = remark.trim();
+    this.saveRegistry();
+    this.logger.log(`✏️ 设备 #${index} 备注已更新: "${remark.trim()}"`);
+    return true;
   }
 
   /** 删除指定设备（按索引） */

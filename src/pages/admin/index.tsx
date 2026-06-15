@@ -24,6 +24,7 @@ interface DeviceInfo {
   index: number;
   fingerprint: string;
   displayName: string;
+  remark: string;
   firstSeen: number;
   lastSeen: number;
   firstSeenStr: string;
@@ -39,6 +40,23 @@ const AdminPage = () => {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [remarkInputs, setRemarkInputs] = useState<Record<number, string>>({});
+
+  /** 保存设备备注 */
+  const handleSaveRemark = async (index: number) => {
+    const remark = (remarkInputs[index] || '').trim();
+    try {
+      await Network.request({
+        url: `/api/auth/devices/${index}/remark`,
+        method: 'PUT',
+        data: { remark },
+      });
+      setDevices(prev => prev.map((d, i) => i === index ? { ...d, remark } : d));
+      Taro.showToast({ title: '备注已保存', icon: 'success' });
+    } catch (e: any) {
+      Taro.showToast({ title: e?.message || '保存失败', icon: 'none' });
+    }
+  };
 
   /** 获取当前设备限额和列表 */
   const fetchAll = useCallback(async () => {
@@ -243,10 +261,12 @@ const AdminPage = () => {
               <View className="space-y-2">
                 {/* 表头 */}
                 <View className="flex flex-row items-center px-3 py-2 bg-gray-50 rounded-lg">
-                  <Text className="block text-xs text-gray-400 w-8 text-center">#</Text>
-                  <Text className="block text-xs text-gray-400 flex-1">设备标识</Text>
-                  <Text className="block text-xs text-gray-400 w-16 text-right">首次访问</Text>
-                  <Text className="block text-xs text-gray-400 w-16 text-right mr-10">最近访问</Text>
+                  <Text className="block text-xs text-gray-400 w-6 text-center">#</Text>
+                  <Text className="block text-xs text-gray-400" style={{ flex: '0 0 100px' }}>设备标识</Text>
+                  <Text className="block text-xs text-gray-400" style={{ flex: '0 0 80px' }}>备注</Text>
+                  <Text className="block text-xs text-gray-400 w-14 text-right">首次</Text>
+                  <Text className="block text-xs text-gray-400 w-14 text-right">最近</Text>
+                  <Text className="block text-xs text-gray-400 text-center w-8">操作</Text>
                 </View>
                 {/* 设备行 */}
                 {devices.map((device) => (
@@ -255,11 +275,26 @@ const AdminPage = () => {
                     className="flex flex-row items-center px-3 py-3 bg-white border border-gray-100 rounded-lg"
                   >
                     <Text className="block text-xs text-gray-500 w-8 text-center">{device.index + 1}</Text>
-                    <View className="flex-1 min-w-0">
+                    <View className="flex-1 min-w-0" style={{ flex: '0 0 28%' }}>
                       <Text className="block text-xs font-medium text-gray-700 truncate">{device.displayName || device.fingerprint?.slice(0, 40) || '未知设备'}</Text>
                     </View>
-                    <Text className="block text-xs text-gray-400 w-16 text-right">{formatTime(device.firstSeen)}</Text>
-                    <Text className="block text-xs text-gray-400 w-16 text-right mr-2">{formatTime(device.lastSeen)}</Text>
+                    <View style={{ flex: '0 0 70px' }} className="mr-1">
+                      <Input
+                        className="w-full h-7 text-xs border border-gray-200 rounded px-1"
+                        value={remarkInputs[device.index] ?? device.remark ?? ''}
+                        onInput={(e) => setRemarkInputs(prev => ({ ...prev, [device.index]: e.detail.value }))}
+                        onBlur={() => {
+                          const val = (remarkInputs[device.index] ?? device.remark ?? '').trim();
+                          const orig = (device.remark ?? '').trim();
+                          if (val !== orig) handleSaveRemark(device.index);
+                        }}
+                        placeholder="备注"
+                      />
+                    </View>
+                    <View className="flex flex-row items-center gap-1 ml-auto">
+                      <Text className="block text-xs text-gray-400 w-14 text-right">{formatTime(device.firstSeen)}</Text>
+                      <Text className="block text-xs text-gray-400 w-14 text-right">{formatTime(device.lastSeen)}</Text>
+                    </View>
                     <Button
                       className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50"
                       onClick={() => {
