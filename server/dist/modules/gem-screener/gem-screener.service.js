@@ -389,7 +389,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : b.score - a.score;
+            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         const finalResults = results.slice(0, 10);
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
@@ -988,7 +988,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : b.score - a.score;
+            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         this.logger.log(`✅ 主板扫描完成, 共 ${results.length} 只机会股`);
         const finalResults = results.slice(0, 10);
@@ -1256,7 +1256,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             results.sort((a, b) => {
                 const pa = ORDER[a.suggestion ?? ''] ?? 99;
                 const pb = ORDER[b.suggestion ?? ''] ?? 99;
-                return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+                return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
             });
             const top = results.slice(0, 10);
             this.sectorCache = { data: top, timestamp: Date.now() };
@@ -1303,7 +1303,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         combined.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
             const pb = ORDER[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
     }
@@ -1340,7 +1340,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
             const pb = ORDER[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         return results.slice(0, topN);
     }
