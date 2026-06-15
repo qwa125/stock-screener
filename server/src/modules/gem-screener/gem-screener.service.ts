@@ -1338,13 +1338,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
         .sort((a: any, b: any) => b.changePercent - a.changePercent)
         .slice(0, 10);
 
-      const oppStocks: Array<{ code: string; name: string; sectorName: string; price?: number; changePercent?: number }> = [];
+      const oppStocks: Array<{ code: string; name: string; sectorName: string; price?: number; changePercent?: number; mainForceInflow?: number; baiXiaoDays?: number; pricePosition?: number; score?: number; priceIncrease?: number }> = [];
       for (const sector of topSectors) {
         const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
         for (const s of stocks) {
           oppStocks.push({
             code: s.code, name: s.name, sectorName: sector.name,
             price: s.price, changePercent: s.changePercent,
+            mainForceInflow: s.mainForceInflow,
+            baiXiaoDays: s.baiXiaoDays, pricePosition: s.pricePosition,
+            score: s.score, priceIncrease: s.priceIncrease,
           });
         }
       }
@@ -1381,14 +1384,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
           sectorName: s.sectorName,
           currentPrice: s.price ?? 0,
           changePercent: s.changePercent ?? 0,
-          pricePosition: 50,
-          mainForceInflow: 0,
-          score: 50,
+          pricePosition: s.pricePosition ?? 50,
+          mainForceInflow: s.mainForceInflow ?? 0,
+          score: s.score ?? 50,
           suggestion: '持有',
           trendState: 1,
           capitalRank: 0,
-          baiXiaoDays: 0,
-          priceIncrease: 0,
+          baiXiaoDays: s.baiXiaoDays ?? 0,
+          priceIncrease: s.priceIncrease ?? 0,
         }));
         results = fallbackStocks as any;
       } else {
@@ -1408,14 +1411,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
             sectorName: s.sectorName,
             currentPrice: s.price ?? 0,
             changePercent: s.changePercent ?? 0,
-            pricePosition: 50,
-            mainForceInflow: 0,
-            score: 50,
+            pricePosition: s.pricePosition ?? 50,
+            mainForceInflow: s.mainForceInflow ?? 0,
+            score: s.score ?? 50,
             suggestion: '持有',
             trendState: 1,
             capitalRank: 0,
-            baiXiaoDays: 0,
-            priceIncrease: 0,
+            baiXiaoDays: s.baiXiaoDays ?? 0,
+            priceIncrease: s.priceIncrease ?? 0,
           }));
           results = fallbackStocks as any;
         }

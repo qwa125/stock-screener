@@ -1170,6 +1170,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     oppStocks.push({
                         code: s.code, name: s.name, sectorName: sector.name,
                         price: s.price, changePercent: s.changePercent,
+                        mainForceInflow: s.mainForceInflow,
+                        baiXiaoDays: s.baiXiaoDays, pricePosition: s.pricePosition,
+                        score: s.score, priceIncrease: s.priceIncrease,
                     });
                 }
             }
@@ -1198,14 +1201,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     sectorName: s.sectorName,
                     currentPrice: s.price ?? 0,
                     changePercent: s.changePercent ?? 0,
-                    pricePosition: 50,
-                    mainForceInflow: 0,
-                    score: 50,
+                    pricePosition: s.pricePosition ?? 50,
+                    mainForceInflow: s.mainForceInflow ?? 0,
+                    score: s.score ?? 50,
                     suggestion: '持有',
                     trendState: 1,
                     capitalRank: 0,
-                    baiXiaoDays: 0,
-                    priceIncrease: 0,
+                    baiXiaoDays: s.baiXiaoDays ?? 0,
+                    priceIncrease: s.priceIncrease ?? 0,
                 }));
                 results = fallbackStocks;
             }
@@ -1224,14 +1227,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         sectorName: s.sectorName,
                         currentPrice: s.price ?? 0,
                         changePercent: s.changePercent ?? 0,
-                        pricePosition: 50,
-                        mainForceInflow: 0,
-                        score: 50,
+                        pricePosition: s.pricePosition ?? 50,
+                        mainForceInflow: s.mainForceInflow ?? 0,
+                        score: s.score ?? 50,
                         suggestion: '持有',
                         trendState: 1,
                         capitalRank: 0,
-                        baiXiaoDays: 0,
-                        priceIncrease: 0,
+                        baiXiaoDays: s.baiXiaoDays ?? 0,
+                        priceIncrease: s.priceIncrease ?? 0,
                     }));
                     results = fallbackStocks;
                 }
