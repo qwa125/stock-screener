@@ -1265,6 +1265,14 @@ const IndexPage = () => {
             </View>
           ) : sectorData && sectorData.length > 0 ? (
             <View className="flex flex-col gap-2">
+              {/* 热点标签 */}
+              <View className="flex flex-row flex-wrap gap-1 mb-2">
+                {[...new Set(sectorData.map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10).map((sname: string, i: number) => (
+                  <Badge key={i} className="px-2 py-1 bg-orange-50 text-orange-700 border-orange-200 text-xs rounded-full">
+                    <Text className="block text-xs truncate max-w-20">{sname}</Text>
+                  </Badge>
+                ))}
+              </View>
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
                 <View style={{ flex: 1.2 }}>
                   <Text className="block text-xs text-gray-400">名称 · 板块</Text>
