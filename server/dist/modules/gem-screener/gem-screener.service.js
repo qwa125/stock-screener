@@ -1142,8 +1142,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         try {
             const http = require('http');
+            const serverPort = process.env.SERVER_PORT || process.env.PORT || 3000;
             const sectorData = await new Promise((resolve, reject) => {
-                http.get('http://localhost:3000/api/sector/hot', (res) => {
+                http.get(`http://localhost:${serverPort}/api/sector/hot`, (res) => {
                     let body = '';
                     res.on('data', (chunk) => body += chunk);
                     res.on('end', () => { try {

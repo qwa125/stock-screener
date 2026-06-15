@@ -1320,8 +1320,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     try {
       const http = require('http');
+      const serverPort = process.env.SERVER_PORT || process.env.PORT || 3000;
       const sectorData = await new Promise<any>((resolve, reject) => {
-        http.get('http://localhost:3000/api/sector/hot', (res: any) => {
+        http.get(`http://localhost:${serverPort}/api/sector/hot`, (res: any) => {
           let body = '';
           res.on('data', (chunk: string) => body += chunk);
           res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('parse fail')); } });
