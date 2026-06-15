@@ -134,4 +134,18 @@ export class DeviceRegistryService {
   get maxAllowed(): number {
     return this.effectiveMax;
   }
+
+  /** 运行时动态设置设备限额（写入文件持久化，供 reloadRuntimeSlots 读取） */
+  setMaxSlots(value: number): void {
+    this.runtimeMaxSlots = Math.max(1, Math.min(100, Math.round(value)));
+    // 持久化到文件，确保重启/重新加载后仍保留
+    try {
+      const raw = existsSync(this.REGISTRY_FILE) ? readFileSync(this.REGISTRY_FILE, 'utf-8') : '{}';
+      const data = JSON.parse(raw);
+      const obj = typeof data === 'object' && !Array.isArray(data) ? data : { devices: {} };
+      obj.maxSlots = this.runtimeMaxSlots;
+      writeFileSync(this.REGISTRY_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch { /* ignore */ }
+    this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
+  }
 }

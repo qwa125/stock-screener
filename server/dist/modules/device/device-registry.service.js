@@ -108,6 +108,18 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     get maxAllowed() {
         return this.effectiveMax;
     }
+    setMaxSlots(value) {
+        this.runtimeMaxSlots = Math.max(1, Math.min(100, Math.round(value)));
+        try {
+            const raw = (0, fs_1.existsSync)(this.REGISTRY_FILE) ? (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8') : '{}';
+            const data = JSON.parse(raw);
+            const obj = typeof data === 'object' && !Array.isArray(data) ? data : { devices: {} };
+            obj.maxSlots = this.runtimeMaxSlots;
+            (0, fs_1.writeFileSync)(this.REGISTRY_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+        }
+        catch { }
+        this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
+    }
 };
 exports.DeviceRegistryService = DeviceRegistryService;
 exports.DeviceRegistryService = DeviceRegistryService = DeviceRegistryService_1 = __decorate([
