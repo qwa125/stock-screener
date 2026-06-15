@@ -1432,6 +1432,73 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '回落', '震荡', '注意风险'];
     if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw))) return null;
 
+    // === 交叉验证：用全部K线数据模拟详情页的分析结果 ===
+    // 详情页（stock/analyze）使用所有K线 + 简化版MACD（EMA12/EMA26）
+    // 可能与 quickAnalyze 的120-bar + calcCustomMACD 结果不同
+    // 如果交叉验证算出的建议级别更低 → 直接 out
+    const rawFull: any[] = raw;  // 全部K线数据
+    const fullCloseArr: number[] = rawFull.map((k: any) => Number(k.close));
+    const fullVolumeArr: number[] = rawFull.map((k: any) => Number(k.volume));
+    const fullHighArr: number[] = rawFull.map((k: any) => Number(k.high));
+    const fullLowArr: number[] = rawFull.map((k: any) => Number(k.low));
+    const fullOpenArr: number[] = rawFull.map((k: any) => Number(k.open));
+    const fullAmountArr: number[] = rawFull.map((k: any) => Number(k.amount ?? 0));
+
+    // 用全部数据初始化 FormulaEngine（与 stock/analyze 一致）
+    const fullEngine = new FormulaEngine({
+      open: fullOpenArr, close: fullCloseArr, high: fullHighArr,
+      low: fullLowArr, volume: fullVolumeArr, amount: fullAmountArr,
+    });
+    const fullBaiXing: any = calcBaiXing(fullEngine);
+    const fullSanJiao: any = calcBaiSanJiao(fullEngine);
+    const fullLingXing: any = calcBaiLingXing(fullEngine);
+    const fullXingXing: any = calcXingXing(fullEngine);
+
+    // 简化版MACD（与 stock/analyze 一致）
+    const fullLatest = fullCloseArr[fullCloseArr.length - 1];
+    const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
+    const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
+    const fullDiffV = szEma12 - szEma26;
+    const szDeaArr: number[] = fullCloseArr.reduce((arr: number[], v, i) => {
+      const prev = arr.length ? arr[arr.length - 1] : 0;
+      arr.push(i === 0 ? fullCloseArr[0] : prev + (((szEma12 - szEma26) - prev) * 2 / 9));
+      return arr;
+    }, []);
+    const fullDeaV = szDeaArr[szDeaArr.length - 1] || 0;
+    const fullIsGoldenCross = fullDiffV > fullDeaV;
+
+    // 交叉验证的输入（使用全量数据的 FormulaEngine 指标 + 简化版MACD）
+    const crossInput: any = {
+      pricePosition: pricePos,        // 同一个60-bar pricePos
+      trendState,                     // 同一个 MA 趋势判断
+      trendStrength: (fullBaiXing as any)?.trendStrength ?? (fullSanJiao as any)?.trendStrength ?? 0,
+      diff: fullDiffV,
+      dea: fullDeaV,
+      shortBuy: (fullLingXing as any)?.shortBuy ?? false,
+      strictBuy: (fullSanJiao as any)?.strictBuy ?? false,
+      jiaCang: (fullSanJiao as any)?.jiaCang ?? false,
+      shortSell: (fullXingXing as any)?.shortSell ?? false,
+      strongSell: (fullXingXing as any)?.strongSell ?? false,
+      safe: (fullBaiXing as any)?.safe ?? false,
+      macdGoldenCross: fullIsGoldenCross,
+      macdDeathCross: fullDiffV < fullDeaV,
+      baiXiaoDays: (fullBaiXing as any)?.baiXiaoDays ?? 0,
+      volumeStructure: (fullSanJiao as any)?.volumeStructure ?? 0,
+    };
+    const crossResult = getTradingSuggestion(crossInput);
+    const crossSuggestion = crossResult.action;
+
+    // 操作级别定义
+    const CROSS_LEVELS: Record<string, number> = {
+      '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+      '持有': 5, '观望': 6, '减仓': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
+    };
+    const mainLevel = CROSS_LEVELS[suggestion] ?? 99;
+    const crossLevel = CROSS_LEVELS[crossSuggestion] ?? 99;
+
+    // 如果交叉验证（模拟详情页）算出的建议级别更低 → 排除此票
+    if (crossLevel > mainLevel) return null;
+
     const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
     const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
 

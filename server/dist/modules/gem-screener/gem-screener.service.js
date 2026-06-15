@@ -1256,6 +1256,59 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '回落', '震荡', '注意风险'];
         if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
             return null;
+        const rawFull = raw;
+        const fullCloseArr = rawFull.map((k) => Number(k.close));
+        const fullVolumeArr = rawFull.map((k) => Number(k.volume));
+        const fullHighArr = rawFull.map((k) => Number(k.high));
+        const fullLowArr = rawFull.map((k) => Number(k.low));
+        const fullOpenArr = rawFull.map((k) => Number(k.open));
+        const fullAmountArr = rawFull.map((k) => Number(k.amount ?? 0));
+        const fullEngine = new formula_engine_1.FormulaEngine({
+            open: fullOpenArr, close: fullCloseArr, high: fullHighArr,
+            low: fullLowArr, volume: fullVolumeArr, amount: fullAmountArr,
+        });
+        const fullBaiXing = (0, bai_xing_1.calcBaiXing)(fullEngine);
+        const fullSanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(fullEngine);
+        const fullLingXing = (0, bai_ling_xing_1.calcBaiLingXing)(fullEngine);
+        const fullXingXing = (0, xing_xing_1.calcXingXing)(fullEngine);
+        const fullLatest = fullCloseArr[fullCloseArr.length - 1];
+        const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
+        const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
+        const fullDiffV = szEma12 - szEma26;
+        const szDeaArr = fullCloseArr.reduce((arr, v, i) => {
+            const prev = arr.length ? arr[arr.length - 1] : 0;
+            arr.push(i === 0 ? fullCloseArr[0] : prev + (((szEma12 - szEma26) - prev) * 2 / 9));
+            return arr;
+        }, []);
+        const fullDeaV = szDeaArr[szDeaArr.length - 1] || 0;
+        const fullIsGoldenCross = fullDiffV > fullDeaV;
+        const crossInput = {
+            pricePosition: pricePos,
+            trendState,
+            trendStrength: fullBaiXing?.trendStrength ?? fullSanJiao?.trendStrength ?? 0,
+            diff: fullDiffV,
+            dea: fullDeaV,
+            shortBuy: fullLingXing?.shortBuy ?? false,
+            strictBuy: fullSanJiao?.strictBuy ?? false,
+            jiaCang: fullSanJiao?.jiaCang ?? false,
+            shortSell: fullXingXing?.shortSell ?? false,
+            strongSell: fullXingXing?.strongSell ?? false,
+            safe: fullBaiXing?.safe ?? false,
+            macdGoldenCross: fullIsGoldenCross,
+            macdDeathCross: fullDiffV < fullDeaV,
+            baiXiaoDays: fullBaiXing?.baiXiaoDays ?? 0,
+            volumeStructure: fullSanJiao?.volumeStructure ?? 0,
+        };
+        const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
+        const crossSuggestion = crossResult.action;
+        const CROSS_LEVELS = {
+            '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+            '持有': 5, '观望': 6, '减仓': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
+        };
+        const mainLevel = CROSS_LEVELS[suggestion] ?? 99;
+        const crossLevel = CROSS_LEVELS[crossSuggestion] ?? 99;
+        if (crossLevel > mainLevel)
+            return null;
         const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
         const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
         const BASE = {
