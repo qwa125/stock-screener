@@ -194,14 +194,14 @@ export class DeviceRegistryService {
     } else if (/Mac OS X/.test(ua)) {
       name = 'macOS';
     } else if (/Linux/.test(ua)) name = 'Linux';
-    // 浏览器名
-    if (/Edg\//.test(ua)) name += ' · Edge';
+    // 浏览器名：优先识别微信/QQ/UC 等特定浏览器，再回退通用浏览器名
+    if (/MicroMessenger/i.test(ua)) name += ' · 微信';
+    else if (/MQQBrowser/i.test(ua)) name += ' · QQ浏览器';
+    else if (/UCBrowser/i.test(ua)) name += ' · UC';
+    else if (/Edg\//.test(ua)) name += ' · Edge';
     else if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) name += ' · Chrome';
     else if (/Firefox\//.test(ua)) name += ' · Firefox';
     else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) name += ' · Safari';
-    else if (/MicroMessenger/i.test(ua)) name += ' · 微信';
-    else if (/MQQBrowser/i.test(ua)) name += ' · QQ浏览器';
-    else if (/UCBrowser/i.test(ua)) name += ' · UC';
     if (isMobile) name += ' 📱';
     return name;
   }

@@ -168,7 +168,13 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         else if (/Linux/.test(ua))
             name = 'Linux';
-        if (/Edg\//.test(ua))
+        if (/MicroMessenger/i.test(ua))
+            name += ' · 微信';
+        else if (/MQQBrowser/i.test(ua))
+            name += ' · QQ浏览器';
+        else if (/UCBrowser/i.test(ua))
+            name += ' · UC';
+        else if (/Edg\//.test(ua))
             name += ' · Edge';
         else if (/Chrome\//.test(ua) && !/Edg\//.test(ua))
             name += ' · Chrome';
@@ -176,12 +182,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             name += ' · Firefox';
         else if (/Safari\//.test(ua) && !/Chrome\//.test(ua))
             name += ' · Safari';
-        else if (/MicroMessenger/i.test(ua))
-            name += ' · 微信';
-        else if (/MQQBrowser/i.test(ua))
-            name += ' · QQ浏览器';
-        else if (/UCBrowser/i.test(ua))
-            name += ' · UC';
         if (isMobile)
             name += ' 📱';
         return name;
