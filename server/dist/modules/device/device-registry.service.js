@@ -19,7 +19,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.REGISTRY_FILE = '/tmp/device-registry.json';
         this.runtimeMaxSlots = null;
         this.registry = [];
-        this.DEVICE_TTL = 24 * 60 * 60 * 1000;
         const envMax = parseInt(process.env.MAX_USERS || '', 10);
         this.envMaxUsers = !isNaN(envMax) && envMax > 0 ? envMax : 10;
         this.loadRegistry();
@@ -64,19 +63,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         catch { }
     }
-    createFingerprint(ip, _ua) {
-        return `${ip}`;
-    }
-    cleanupExpiredDevices() {
-        const now = Date.now();
-        const before = this.registry.length;
-        this.registry = this.registry.filter(d => (now - d.lastSeen) < this.DEVICE_TTL);
-        const removed = before - this.registry.length;
-        if (removed > 0) {
-            this.saveRegistry();
-            this.logger.log(`🧹 自动清理 ${removed} 个过期设备，剩余 ${this.registry.length} 个`);
-        }
-        return removed;
+    createFingerprint(_ip, ua) {
+        return `${ua}`;
     }
     reloadRuntimeSlots() {
         try {
@@ -92,12 +80,10 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     tryRegister(ip, ua) {
         this.reloadRuntimeSlots();
-        this.cleanupExpiredDevices();
         const fingerprint = this.createFingerprint(ip, ua);
         const existing = this.registry.find(e => e.fingerprint === fingerprint);
         if (existing) {
             existing.lastSeen = Date.now();
-            existing.ua = ua;
             this.saveRegistry();
             return { allowed: true };
         }

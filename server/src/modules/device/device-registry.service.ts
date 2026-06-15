@@ -20,8 +20,6 @@ export class DeviceRegistryService {
   private runtimeMaxSlots: number | null = null;
   /** 已注册设备列表 */
   private registry: DeviceEntry[] = [];
-  /** 设备过期时间：24 小时无访问自动释放名额 */
-  private readonly DEVICE_TTL = 24 * 60 * 60 * 1000;
 
   constructor() {
     const envMax = parseInt(process.env.MAX_USERS || '', 10);
@@ -73,22 +71,9 @@ export class DeviceRegistryService {
     } catch { /* ignore */ }
   }
 
-  /** 生成设备指纹（基于 IP 地址） */
-  private createFingerprint(ip: string, _ua: string): string {
-    return `${ip}`;
-  }
-
-  /** 清理过期设备（超过 DEVICE_TTL 未访问） */
-  private cleanupExpiredDevices(): number {
-    const now = Date.now();
-    const before = this.registry.length;
-    this.registry = this.registry.filter(d => (now - d.lastSeen) < this.DEVICE_TTL);
-    const removed = before - this.registry.length;
-    if (removed > 0) {
-      this.saveRegistry();
-      this.logger.log(`🧹 自动清理 ${removed} 个过期设备，剩余 ${this.registry.length} 个`);
-    }
-    return removed;
+  /** 生成设备指纹（基于浏览器 UA，固定不变，你可以在管理页备注是谁） */
+  private createFingerprint(_ip: string, ua: string): string {
+    return `${ua}`;
   }
 
   /** 从文件重新加载运行时名额 */
@@ -109,17 +94,12 @@ export class DeviceRegistryService {
     // 每次请求重新读运行时名额
     this.reloadRuntimeSlots();
 
-    // 先清理过期设备
-    this.cleanupExpiredDevices();
-
     const fingerprint = this.createFingerprint(ip, ua);
 
     // 已注册 → 更新最后访问时间
     const existing = this.registry.find(e => e.fingerprint === fingerprint);
     if (existing) {
       existing.lastSeen = Date.now();
-      // 更新 UA 信息（可能浏览器变了，但 IP 不变）
-      existing.ua = ua;
       this.saveRegistry();
       return { allowed: true };
     }
