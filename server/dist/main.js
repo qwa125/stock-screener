@@ -6,6 +6,12 @@ const express = require("express");
 const path = require("path");
 const http_status_interceptor_1 = require("./interceptors/http-status.interceptor");
 function parsePort() {
+    if (process.env.PORT) {
+        const port = parseInt(process.env.PORT, 10);
+        if (!isNaN(port) && port > 0 && port < 65536) {
+            return port;
+        }
+    }
     if (process.env.SERVER_PORT) {
         const port = parseInt(process.env.SERVER_PORT, 10);
         if (!isNaN(port) && port > 0 && port < 65536) {
