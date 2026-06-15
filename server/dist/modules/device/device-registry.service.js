@@ -120,6 +120,28 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         catch { }
         this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
     }
+    getDevices() {
+        return this.registry.map((d, i) => ({
+            index: i,
+            fingerprint: d.fingerprint,
+            firstSeen: d.firstSeen,
+            lastSeen: d.lastSeen,
+        }));
+    }
+    removeDevice(index) {
+        if (index < 0 || index >= this.registry.length)
+            return false;
+        const removed = this.registry.splice(index, 1)[0];
+        this.saveRegistry();
+        this.logger.log(`🗑️ 已删除设备 #${index}: ${removed.fingerprint}, 剩余 ${this.registry.length} 个`);
+        return true;
+    }
+    clearDevices() {
+        const count = this.registry.length;
+        this.registry = [];
+        this.saveRegistry();
+        this.logger.log(`🧹 已清空全部 ${count} 个已注册设备`);
+    }
 };
 exports.DeviceRegistryService = DeviceRegistryService;
 exports.DeviceRegistryService = DeviceRegistryService = DeviceRegistryService_1 = __decorate([

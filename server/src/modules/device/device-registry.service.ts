@@ -148,4 +148,31 @@ export class DeviceRegistryService {
     } catch { /* ignore */ }
     this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
   }
+
+  /** 获取所有已注册设备列表 */
+  getDevices(): Array<{ index: number; fingerprint: string; firstSeen: number; lastSeen: number }> {
+    return this.registry.map((d, i) => ({
+      index: i,
+      fingerprint: d.fingerprint,
+      firstSeen: d.firstSeen,
+      lastSeen: d.lastSeen,
+    }));
+  }
+
+  /** 删除指定设备（按索引） */
+  removeDevice(index: number): boolean {
+    if (index < 0 || index >= this.registry.length) return false;
+    const removed = this.registry.splice(index, 1)[0];
+    this.saveRegistry();
+    this.logger.log(`🗑️ 已删除设备 #${index}: ${removed.fingerprint}, 剩余 ${this.registry.length} 个`);
+    return true;
+  }
+
+  /** 清空所有已注册设备 */
+  clearDevices(): void {
+    const count = this.registry.length;
+    this.registry = [];
+    this.saveRegistry();
+    this.logger.log(`🧹 已清空全部 ${count} 个已注册设备`);
+  }
 }

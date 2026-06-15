@@ -95,4 +95,37 @@ export declare class AuthController {
         ok: boolean;
         maxSlots: number;
     };
+    getDevices(): {
+        code: number;
+        data: {
+            devices: {
+                displayName: string;
+                firstSeenStr: string;
+                lastSeenStr: string;
+                index: number;
+                fingerprint: string;
+                firstSeen: number;
+                lastSeen: number;
+            }[];
+            total: number;
+        };
+    };
+    removeDevice(index: string): {
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            registered: number;
+        };
+    };
+    clearDevices(): {
+        code: number;
+        msg: string;
+        data: {
+            registered: number;
+        };
+    };
 }

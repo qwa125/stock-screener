@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Query, Headers, HttpCode, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Query, Headers, HttpCode, UnauthorizedException, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
@@ -101,5 +101,35 @@ export class AuthController {
     const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
     this.deviceRegistry.setMaxSlots(slots);
     return { ok: true, maxSlots: slots };
+  }
+
+  /** 获取已注册设备列表 */
+  @Get('devices')
+  getDevices() {
+    const devices = this.deviceRegistry.getDevices().map(d => ({
+      ...d,
+      displayName: d.fingerprint.split('|')[0] || d.fingerprint,
+      firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
+      lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
+    }));
+    return { code: 200, data: { devices, total: devices.length } };
+  }
+
+  /** 删除指定设备（按索引） */
+  @Delete('devices/:index')
+  removeDevice(@Param('index') index: string) {
+    const idx = parseInt(index, 10);
+    const ok = this.deviceRegistry.removeDevice(idx);
+    if (!ok) {
+      return { code: 404, msg: `设备 #${idx} 不存在` };
+    }
+    return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+  }
+
+  /** 清空所有已注册设备 */
+  @Delete('devices')
+  clearDevices(): { code: number; msg: string; data: { registered: number } } {
+    this.deviceRegistry.clearDevices();
+    return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
   }
 }

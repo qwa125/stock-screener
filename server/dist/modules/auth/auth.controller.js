@@ -96,6 +96,27 @@ let AuthController = class AuthController {
         this.deviceRegistry.setMaxSlots(slots);
         return { ok: true, maxSlots: slots };
     }
+    getDevices() {
+        const devices = this.deviceRegistry.getDevices().map(d => ({
+            ...d,
+            displayName: d.fingerprint.split('|')[0] || d.fingerprint,
+            firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
+            lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
+        }));
+        return { code: 200, data: { devices, total: devices.length } };
+    }
+    removeDevice(index) {
+        const idx = parseInt(index, 10);
+        const ok = this.deviceRegistry.removeDevice(idx);
+        if (!ok) {
+            return { code: 404, msg: `设备 #${idx} 不存在` };
+        }
+        return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+    }
+    clearDevices() {
+        this.deviceRegistry.clearDevices();
+        return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -147,6 +168,25 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Object)
 ], AuthController.prototype, "setMaxSlots", null);
+__decorate([
+    (0, common_1.Get)('devices'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "getDevices", null);
+__decorate([
+    (0, common_1.Delete)('devices/:index'),
+    __param(0, (0, common_1.Param)('index')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "removeDevice", null);
+__decorate([
+    (0, common_1.Delete)('devices'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Object)
+], AuthController.prototype, "clearDevices", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
