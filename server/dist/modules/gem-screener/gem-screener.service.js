@@ -250,6 +250,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             });
         }
         this.triggerAnalysisPreCacheFromCache();
+        setInterval(() => {
+            if ((0, market_time_1.isMarketOpen)()) {
+                this.logger.log('⏰ 15分钟定时刷新触发');
+                this.triggerRefresh();
+            }
+        }, 15 * 60 * 1000);
     }
     calcCustomMACD(kline) {
         const closes = kline.map(k => k.close);
@@ -1253,7 +1259,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
         if (NEGATIVE.includes(suggestion))
             return null;
-        const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '回落', '震荡', '注意风险'];
+        const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
         if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
             return null;
         const rawFull = raw;
@@ -1271,7 +1277,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const fullSanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(fullEngine);
         const fullLingXing = (0, bai_ling_xing_1.calcBaiLingXing)(fullEngine);
         const fullXingXing = (0, xing_xing_1.calcXingXing)(fullEngine);
-        const fullLatest = fullCloseArr[fullCloseArr.length - 1];
         const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
         const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
         const fullDiffV = szEma12 - szEma26;
@@ -1301,13 +1306,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
         const crossSuggestion = crossResult.action;
-        const CROSS_LEVELS = {
-            '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
-            '持有': 5, '观望': 6, '减仓': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
-        };
-        const mainLevel = CROSS_LEVELS[suggestion] ?? 99;
-        const crossLevel = CROSS_LEVELS[crossSuggestion] ?? 99;
-        if (crossLevel > mainLevel)
+        const NEGATIVE_CROSS = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+        if (NEGATIVE_CROSS.includes(crossSuggestion))
             return null;
         const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
         const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
