@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import Taro from '@tarojs/taro';
 import { View, Text, ScrollView } from '@tarojs/components';
 import { Network } from '@/network';
 import { Button } from '@/components/ui/button';
@@ -565,6 +566,7 @@ const IndexPage = () => {
   // 热点板块机会区（板块数据）
   const [sectorData, setSectorData] = useState<any[] | null>(null);
   const [sectorLoading, setSectorLoading] = useState(true);
+  const [maxSlots, setMaxSlots] = useState(10);
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
   const fetchGemTop = useCallback(async () => {
@@ -676,6 +678,24 @@ const IndexPage = () => {
   const selectSuggestion = (code: string) => {
     setShowSuggestions(false);
     handleSearchByCode(code);
+  };
+
+  const handleSetMaxSlots = async () => {
+    const v = parseInt(String(maxSlots));
+    if (Number.isNaN(v) || v < 1 || v > 100) {
+      Taro.showToast({ title: '请输入1-100之间的数字', icon: 'none' });
+      return;
+    }
+    try {
+      await Network.request({
+        url: '/api/auth/max-slots',
+        method: 'PUT',
+        data: { maxSlots: v },
+      });
+      Taro.showToast({ title: `设备数已设置为 ${v}`, icon: 'success' });
+    } catch (e: any) {
+      Taro.showToast({ title: e?.message || '设置失败', icon: 'none' });
+    }
   };
 
   const handleInput = (e: any) => {
@@ -1393,6 +1413,27 @@ const IndexPage = () => {
               <Text className="block text-xs text-gray-400 text-center">暂无符合条件的信号</Text>
             </View>
           )}
+        </View>
+        {/* 设备控制 */}
+        <View className="mt-4 px-4 py-3 bg-gray-50 rounded-xl">
+          <View className="flex flex-row items-center justify-between">
+            <Text className="block text-sm text-gray-600">最大设备数</Text>
+            <View className="flex flex-row items-center gap-2">
+              <Input
+                className="w-20 h-8 text-center bg-white rounded-lg text-sm"
+                type="number"
+                value={String(maxSlots)}
+                onInput={(e) => {
+                  const v = parseInt(e.detail.value) || 10;
+                  setMaxSlots(Math.max(1, Math.min(100, v)));
+                }}
+              />
+              <Button
+                className="bg-blue-500 text-white px-3 py-1 rounded-lg text-xs"
+                onClick={handleSetMaxSlots}
+              >设置</Button>
+            </View>
+          </View>
         </View>
         {/* 底部信息 */}
           <View className="mt-6 pt-4 border-t border-gray-100">

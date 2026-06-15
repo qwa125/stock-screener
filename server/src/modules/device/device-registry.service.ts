@@ -21,7 +21,7 @@ export class DeviceRegistryService {
 
   constructor() {
     const envMax = parseInt(process.env.MAX_USERS || '', 10);
-    this.envMaxUsers = !isNaN(envMax) && envMax > 0 ? envMax : 5;
+    this.envMaxUsers = !isNaN(envMax) && envMax > 0 ? envMax : 10;
     this.loadRegistry();
     this.logger.log(`🔐 设备注册表已加载，环境变量 ${this.envMaxUsers}，运行时 ${this.runtimeMaxSlots ?? '未设置'}，有效限额 ${this.effectiveMax}`);
   }

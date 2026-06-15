@@ -11,118 +11,82 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var AuthController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
-const auth_service_1 = require("./auth.service");
 const access_limit_guard_1 = require("../../guards/access-limit.guard");
-let AuthController = class AuthController {
-    constructor(auth) {
-        this.auth = auth;
+const fs_1 = require("fs");
+let AuthController = AuthController_1 = class AuthController {
+    constructor() {
+        this.logger = new common_1.Logger(AuthController_1.name);
+        this.REGISTRY_FILE = '/tmp/device-registry.json';
     }
-    async register(body) {
-        if (!body.username || body.username.length < 2) {
-            return { code: 400, msg: '用户名至少 2 个字符' };
-        }
-        if (!body.password || body.password.length < 4) {
-            return { code: 400, msg: '密码至少 4 个字符' };
-        }
+    getStatus() {
+        return { ok: true };
+    }
+    getMaxSlots() {
+        let registered = 0;
+        let maxSlots = 10;
         try {
-            const result = await this.auth.register(body.username, body.password);
-            return { code: 200, msg: '注册成功，赠送 7 天试用', data: result };
+            if ((0, fs_1.existsSync)(this.REGISTRY_FILE)) {
+                const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    if (typeof parsed.maxSlots === 'number')
+                        maxSlots = parsed.maxSlots;
+                    if (parsed.devices && typeof parsed.devices === 'object') {
+                        registered = Object.keys(parsed.devices).length;
+                    }
+                }
+                else if (Array.isArray(parsed)) {
+                    registered = parsed.length;
+                }
+            }
         }
-        catch (e) {
-            return { code: 409, msg: e.message || '注册失败' };
-        }
+        catch { }
+        return { maxSlots, registered };
     }
-    async login(body) {
+    setMaxSlots(body) {
+        const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
+        let data = {};
         try {
-            const result = await this.auth.login(body.username, body.password);
-            return { code: 200, msg: '登录成功', data: result };
+            if ((0, fs_1.existsSync)(this.REGISTRY_FILE)) {
+                const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
+                data = JSON.parse(raw);
+            }
         }
-        catch (e) {
-            return { code: 401, msg: e.message || '登录失败' };
+        catch { }
+        if (typeof data !== 'object' || Array.isArray(data)) {
+            data = { devices: {} };
         }
-    }
-    async me(auth) {
-        if (!auth || !auth.startsWith('Bearer ')) {
-            return { code: 401, msg: '未登录', data: { isExpired: true, daysLeft: 0 } };
-        }
-        const token = auth.slice(7);
-        const payload = this.auth.verifyToken(token);
-        if (!payload) {
-            return { code: 401, msg: '登录已过期，请重新登录', data: { isExpired: true, daysLeft: 0 } };
-        }
-        const status = await this.auth.getUserStatus(payload.userId);
-        if (!status) {
-            return { code: 401, msg: '用户不存在', data: { isExpired: true, daysLeft: 0 } };
-        }
-        return { code: 200, msg: status.isExpired ? '已过期' : '有效', data: status };
-    }
-    async extend(body) {
-        if (!body.username || !body.days || body.days < 1) {
-            return { code: 400, msg: '请提供用户名和有效天数' };
-        }
-        try {
-            const result = await this.auth.extendSubscription(body.username, body.days);
-            return { code: 200, msg: `已为 ${body.username} 延长 ${body.days} 天`, data: result };
-        }
-        catch (e) {
-            return { code: 404, msg: e.message };
-        }
-    }
-    async setExpiry(body) {
-        if (!body.username || !body.expiryDate) {
-            return { code: 400, msg: '请提供用户名和到期日期' };
-        }
-        try {
-            const result = await this.auth.setExpiryDate(body.username, body.expiryDate);
-            return { code: 200, msg: `已设置 ${body.username} 到期日为 ${body.expiryDate}`, data: result };
-        }
-        catch (e) {
-            return { code: 404, msg: e.message };
-        }
+        data.maxSlots = slots;
+        (0, fs_1.writeFileSync)(this.REGISTRY_FILE, JSON.stringify(data, null, 2), 'utf-8');
+        this.logger.log(`🔐 设备限额已更新为 ${slots}`);
+        return { ok: true, maxSlots: slots };
     }
 };
 exports.AuthController = AuthController;
 __decorate([
-    (0, common_1.Post)('register'),
+    (0, common_1.Get)('status'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Object)
+], AuthController.prototype, "getStatus", null);
+__decorate([
+    (0, common_1.Get)('max-slots'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Object)
+], AuthController.prototype, "getMaxSlots", null);
+__decorate([
+    (0, common_1.Put)('max-slots'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "register", null);
-__decorate([
-    (0, common_1.Post)('login'),
-    (0, common_1.HttpCode)(200),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "login", null);
-__decorate([
-    (0, common_1.Get)('me'),
-    __param(0, (0, common_1.Headers)('authorization')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "me", null);
-__decorate([
-    (0, common_1.Post)('extend'),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "extend", null);
-__decorate([
-    (0, common_1.Post)('set-expiry'),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "setExpiry", null);
-exports.AuthController = AuthController = __decorate([
-    (0, common_1.Controller)('auth'),
+    __metadata("design:returntype", Object)
+], AuthController.prototype, "setMaxSlots", null);
+exports.AuthController = AuthController = AuthController_1 = __decorate([
     (0, access_limit_guard_1.SkipAccessLimit)(),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    (0, common_1.Controller)('auth')
 ], AuthController);
