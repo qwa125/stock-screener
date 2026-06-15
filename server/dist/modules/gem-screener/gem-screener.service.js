@@ -1166,7 +1166,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             for (const sector of topSectors) {
                 const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
                 for (const s of stocks) {
-                    oppStocks.push({ code: s.code, name: s.name, sectorName: sector.name });
+                    oppStocks.push({
+                        code: s.code, name: s.name, sectorName: sector.name,
+                        price: s.price, changePercent: s.changePercent,
+                    });
                 }
             }
             const results = [];
@@ -1177,8 +1180,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         stock.sectorName = s.sectorName;
                         results.push(stock);
                     }
+                    else {
+                        const fallback = {
+                            code: s.code, name: s.name, sectorName: s.sectorName,
+                            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+                            pricePosition: 50, mainForceInflow: 0,
+                            score: 50, suggestion: '持有',
+                            trendState: 1,
+                        };
+                        results.push(fallback);
+                    }
                 }
-                catch { }
+                catch {
+                    const fallback = {
+                        code: s.code, name: s.name, sectorName: s.sectorName,
+                        price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+                        pricePosition: 50, mainForceInflow: 0,
+                        score: 50, suggestion: '持有',
+                        trendState: 1,
+                    };
+                    results.push(fallback);
+                }
             }));
             const ORDER = {
                 '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,

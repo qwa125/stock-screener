@@ -1337,11 +1337,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
         .sort((a: any, b: any) => b.changePercent - a.changePercent)
         .slice(0, 10);
 
-      const oppStocks: Array<{ code: string; name: string; sectorName: string }> = [];
+      const oppStocks: Array<{ code: string; name: string; sectorName: string; price?: number; changePercent?: number }> = [];
       for (const sector of topSectors) {
         const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
         for (const s of stocks) {
-          oppStocks.push({ code: s.code, name: s.name, sectorName: sector.name });
+          oppStocks.push({
+            code: s.code, name: s.name, sectorName: sector.name,
+            price: s.price, changePercent: s.changePercent,
+          });
         }
       }
 
@@ -1352,8 +1355,28 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (stock) {
             (stock as any).sectorName = s.sectorName;
             results.push(stock);
+          } else {
+            // quickAnalyze 失败（如API超时），使用缓存基础数据兜底
+            const fallback: any = {
+              code: s.code, name: s.name, sectorName: s.sectorName,
+              price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+              pricePosition: 50, mainForceInflow: 0,
+              score: 50, suggestion: '持有',
+              trendState: 1,
+            };
+            results.push(fallback);
           }
-        } catch {}
+        } catch {
+          // 异常兜底：同上
+          const fallback: any = {
+            code: s.code, name: s.name, sectorName: s.sectorName,
+            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+            pricePosition: 50, mainForceInflow: 0,
+            score: 50, suggestion: '持有',
+            trendState: 1,
+          };
+          results.push(fallback);
+        }
       }));
 
       const ORDER: Record<string, number> = {
