@@ -10,7 +10,9 @@
 
 /** 获取当前时间（东八区） */
 function now(): Date {
-  return new Date();
+  // 使用东八区时间判断，确保 Render（UTC）也能正确识别 A 股交易时段
+  const cst = new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' });
+  return new Date(cst);
 }
 
 /** 是否是交易日（周一至周五） */

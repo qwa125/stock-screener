@@ -9,7 +9,8 @@ exports.getMarketOpenTTL = getMarketOpenTTL;
 exports.getCacheTTL = getCacheTTL;
 exports.getNextOpenTime = getNextOpenTime;
 function now() {
-    return new Date();
+    const cst = new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' });
+    return new Date(cst);
 }
 function isTradingDay() {
     const day = now().getDay();
