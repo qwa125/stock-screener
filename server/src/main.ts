@@ -5,16 +5,16 @@ import * as path from 'path';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 
 function parsePort(): number {
-  // Render 云平台 PORT 环境变量优先（标准）
-  if (process.env.PORT) {
-    const port = parseInt(process.env.PORT, 10);
+  // 自定义 SERVER_PORT 环境变量优先（本地开发使用 3000）
+  if (process.env.SERVER_PORT) {
+    const port = parseInt(process.env.SERVER_PORT, 10);
     if (!isNaN(port) && port > 0 && port < 65536) {
       return port;
     }
   }
-  // 自定义 SERVER_PORT 环境变量
-  if (process.env.SERVER_PORT) {
-    const port = parseInt(process.env.SERVER_PORT, 10);
+  // Render 云平台 PORT 环境变量
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
     if (!isNaN(port) && port > 0 && port < 65536) {
       return port;
     }

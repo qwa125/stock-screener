@@ -1349,7 +1349,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
 
       const results: OpportunityStock[] = [];
-      await Promise.all(oppStocks.slice(0, 30).map(async (s) => {
+
+      // 并行对最多30只股票进行 quickAnalyze，但整体超时20秒
+      const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s) => {
         try {
           const stock = await this.quickAnalyze(s.code, s.name);
           if (stock) {
@@ -1378,6 +1380,26 @@ export class GemScreenerService implements OnApplicationBootstrap {
           results.push(fallback);
         }
       }));
+
+      // 给整个分析过程设置 20 秒硬超时，超时后使用 sector 原始数据兜底
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 20000);
+      });
+      await Promise.race([analyzePromise, timeoutPromise]);
+
+      // 如果超时或结果为空，使用 sector 中的原始股票数据兜底
+      if (results.length === 0) {
+        for (const s of oppStocks.slice(0, 30)) {
+          const fallback: any = {
+            code: s.code, name: s.name, sectorName: s.sectorName,
+            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+            pricePosition: 50, mainForceInflow: 0,
+            score: 50, suggestion: '持有',
+            trendState: 1,
+          };
+          results.push(fallback);
+        }
+      }
 
       const ORDER: Record<string, number> = {
         '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,

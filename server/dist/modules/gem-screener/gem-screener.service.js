@@ -1173,7 +1173,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
             const results = [];
-            await Promise.all(oppStocks.slice(0, 30).map(async (s) => {
+            const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s) => {
                 try {
                     const stock = await this.quickAnalyze(s.code, s.name);
                     if (stock) {
@@ -1202,6 +1202,22 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     results.push(fallback);
                 }
             }));
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => resolve(), 20000);
+            });
+            await Promise.race([analyzePromise, timeoutPromise]);
+            if (results.length === 0) {
+                for (const s of oppStocks.slice(0, 30)) {
+                    const fallback = {
+                        code: s.code, name: s.name, sectorName: s.sectorName,
+                        price: s.price ?? 0, changePercent: s.changePercent ?? 0,
+                        pricePosition: 50, mainForceInflow: 0,
+                        score: 50, suggestion: '持有',
+                        trendState: 1,
+                    };
+                    results.push(fallback);
+                }
+            }
             const ORDER = {
                 '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
                 '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
