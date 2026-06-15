@@ -4,6 +4,7 @@ import { join } from 'path';
 
 interface DeviceEntry {
   fingerprint: string;
+  ua: string;
   firstSeen: number;
   lastSeen: number;
   remark?: string;
@@ -19,6 +20,8 @@ export class DeviceRegistryService {
   private runtimeMaxSlots: number | null = null;
   /** 已注册设备列表 */
   private registry: DeviceEntry[] = [];
+  /** 设备过期时间：24 小时无访问自动释放名额 */
+  private readonly DEVICE_TTL = 24 * 60 * 60 * 1000;
 
   constructor() {
     const envMax = parseInt(process.env.MAX_USERS || '', 10);
@@ -35,23 +38,21 @@ export class DeviceRegistryService {
       const parsed = JSON.parse(raw);
 
       // 对象格式 { maxSlots, devices: { id: {fingerprint, registeredAt, lastSeen} } }
-      // 由 AccessControlService 写入，包含运行时名额
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         if (typeof parsed.maxSlots === 'number') {
           this.runtimeMaxSlots = parsed.maxSlots;
         }
-        // 将对象格式的设备列表转为数组格式
         if (parsed.devices && typeof parsed.devices === 'object') {
           this.registry = Object.values(parsed.devices).map((d: any) => ({
             fingerprint: typeof d.fingerprint === 'string'
               ? d.fingerprint
               : (d.fingerprint ? JSON.stringify(d.fingerprint) : 'unknown'),
+            ua: d.ua || '',
             firstSeen: d.registeredAt || d.firstSeen || Date.now(),
             lastSeen: d.lastSeen || Date.now(),
           }));
         }
       } else if (Array.isArray(parsed)) {
-        // 数组格式（兼容旧版）
         this.registry = parsed as DeviceEntry[];
       }
 
@@ -72,28 +73,25 @@ export class DeviceRegistryService {
     } catch { /* ignore */ }
   }
 
-  /** 生成设备指纹（基于手机型号，同一手机不同浏览器计1个名额） */
-  private createFingerprint(_ip: string, ua: string): string {
-    // Android 设备：提取 "Android X; 手机型号（去掉Build/...）" → 不同浏览器生成相同指纹
-    const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-    if (androidMatch) {
-      let model = androidMatch[1].trim();
-      // 去掉 Build/... 后缀，只保留手机型号
-      model = model.replace(/\s*Build\/.*/i, '').trim();
-      return `ANDROID-${model}`;
-    }
-
-    // iPhone/iPad：提取型号标识
-    const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
-    if (iphoneMatch) return `IPHONE-${iphoneMatch[0]}`;
-    const ipadMatch = ua.match(/iPad\s*\d+[,\d]*/i);
-    if (ipadMatch) return `IPAD-${ipadMatch[0]}`;
-
-    // 桌面端：保留 UA 前 80 字符作为区分
-    return ua.substring(0, 80);
+  /** 生成设备指纹（基于 IP 地址） */
+  private createFingerprint(ip: string, _ua: string): string {
+    return `${ip}`;
   }
 
-  /** 从文件重新加载运行时名额（由后台 API set-slots 动态写入） */
+  /** 清理过期设备（超过 DEVICE_TTL 未访问） */
+  private cleanupExpiredDevices(): number {
+    const now = Date.now();
+    const before = this.registry.length;
+    this.registry = this.registry.filter(d => (now - d.lastSeen) < this.DEVICE_TTL);
+    const removed = before - this.registry.length;
+    if (removed > 0) {
+      this.saveRegistry();
+      this.logger.log(`🧹 自动清理 ${removed} 个过期设备，剩余 ${this.registry.length} 个`);
+    }
+    return removed;
+  }
+
+  /** 从文件重新加载运行时名额 */
   private reloadRuntimeSlots(): void {
     try {
       if (existsSync(this.REGISTRY_FILE)) {
@@ -108,8 +106,11 @@ export class DeviceRegistryService {
 
   /** 检查设备是否允许访问 */
   tryRegister(ip: string, ua: string): { allowed: boolean; message?: string } {
-    // 每次请求重新读运行时名额（后台 set-slots 写入文件后会即时生效）
+    // 每次请求重新读运行时名额
     this.reloadRuntimeSlots();
+
+    // 先清理过期设备
+    this.cleanupExpiredDevices();
 
     const fingerprint = this.createFingerprint(ip, ua);
 
@@ -117,6 +118,8 @@ export class DeviceRegistryService {
     const existing = this.registry.find(e => e.fingerprint === fingerprint);
     if (existing) {
       existing.lastSeen = Date.now();
+      // 更新 UA 信息（可能浏览器变了，但 IP 不变）
+      existing.ua = ua;
       this.saveRegistry();
       return { allowed: true };
     }
@@ -134,11 +137,12 @@ export class DeviceRegistryService {
     // 注册新设备
     this.registry.push({
       fingerprint,
+      ua,
       firstSeen: Date.now(),
       lastSeen: Date.now(),
     });
     this.saveRegistry();
-    this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ${ua.substring(0, 40)}`);
+    this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): IP=${ip}, UA=${ua.substring(0, 40)}`);
     return { allowed: true };
   }
 
@@ -147,15 +151,14 @@ export class DeviceRegistryService {
     return this.registry.length;
   }
 
-  /** 获取有效最大允许用户数（实时：运行时 > 环境变量） */
+  /** 获取有效最大允许用户数 */
   get maxAllowed(): number {
     return this.effectiveMax;
   }
 
-  /** 运行时动态设置设备限额（写入文件持久化，供 reloadRuntimeSlots 读取） */
+  /** 运行时动态设置设备限额 */
   setMaxSlots(value: number): void {
     this.runtimeMaxSlots = Math.max(1, Math.min(100, Math.round(value)));
-    // 持久化到文件，确保重启/重新加载后仍保留
     try {
       const raw = existsSync(this.REGISTRY_FILE) ? readFileSync(this.REGISTRY_FILE, 'utf-8') : '{}';
       const data = JSON.parse(raw);
@@ -166,15 +169,10 @@ export class DeviceRegistryService {
     this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
   }
 
-  /** 从 UA/指纹 提取可读设备名 */
+  /** 从 UA 提取可读设备名 */
   private extractDisplayName(ua: string): string {
-    // 新指纹格式: ANDROID-手机型号 / IPHONE-型号 / IPAD-型号
-    if (ua.startsWith('ANDROID-')) return `${ua.replace('ANDROID-', '')} 📱`;
-    if (ua.startsWith('IPHONE-')) return `${ua.replace('IPHONE-', '')} 📱`;
-    if (ua.startsWith('IPAD-')) return `${ua.replace('IPAD-', '')} 📱`;
-
-    // 旧格式兼容：从完整 UA 解析（已存储的老数据）
-    let name = '未知设备';
+    if (!ua) return '未知设备';
+    let name = '未识别';
     const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
     if (/iPhone/.test(ua)) {
       const m = ua.match(/iPhone\s*\d+[,\d]*/i);
@@ -184,7 +182,12 @@ export class DeviceRegistryService {
       name = m ? m[0] : 'iPad';
     } else if (/Android/.test(ua)) {
       const m = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-      name = m ? m[1].trim() : 'Android';
+      if (m) {
+        name = m[1].trim().replace(/\s*Build\/.*/i, '').trim();
+      } else {
+        const v = ua.match(/Android\s+[\d.]+/);
+        name = v ? v[0] : 'Android';
+      }
     } else if (/Windows/.test(ua)) {
       const m = ua.match(/Windows NT [\d.]+/);
       name = m ? m[0] : 'Windows';
@@ -196,6 +199,9 @@ export class DeviceRegistryService {
     else if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) name += ' · Chrome';
     else if (/Firefox\//.test(ua)) name += ' · Firefox';
     else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) name += ' · Safari';
+    else if (/MicroMessenger/i.test(ua)) name += ' · 微信';
+    else if (/MQQBrowser/i.test(ua)) name += ' · QQ浏览器';
+    else if (/UCBrowser/i.test(ua)) name += ' · UC';
     if (isMobile) name += ' 📱';
     return name;
   }
@@ -205,7 +211,7 @@ export class DeviceRegistryService {
     return this.registry.map((d, i) => ({
       index: i,
       fingerprint: d.fingerprint,
-      displayName: this.extractDisplayName(d.fingerprint),
+      displayName: this.extractDisplayName(d.ua),
       remark: d.remark || '',
       firstSeen: d.firstSeen,
       lastSeen: d.lastSeen,

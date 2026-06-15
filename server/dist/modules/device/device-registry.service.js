@@ -19,6 +19,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.REGISTRY_FILE = '/tmp/device-registry.json';
         this.runtimeMaxSlots = null;
         this.registry = [];
+        this.DEVICE_TTL = 24 * 60 * 60 * 1000;
         const envMax = parseInt(process.env.MAX_USERS || '', 10);
         this.envMaxUsers = !isNaN(envMax) && envMax > 0 ? envMax : 10;
         this.loadRegistry();
@@ -39,6 +40,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                         fingerprint: typeof d.fingerprint === 'string'
                             ? d.fingerprint
                             : (d.fingerprint ? JSON.stringify(d.fingerprint) : 'unknown'),
+                        ua: d.ua || '',
                         firstSeen: d.registeredAt || d.firstSeen || Date.now(),
                         lastSeen: d.lastSeen || Date.now(),
                     }));
@@ -62,20 +64,19 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         catch { }
     }
-    createFingerprint(_ip, ua) {
-        const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-        if (androidMatch) {
-            let model = androidMatch[1].trim();
-            model = model.replace(/\s*Build\/.*/i, '').trim();
-            return `ANDROID-${model}`;
+    createFingerprint(ip, _ua) {
+        return `${ip}`;
+    }
+    cleanupExpiredDevices() {
+        const now = Date.now();
+        const before = this.registry.length;
+        this.registry = this.registry.filter(d => (now - d.lastSeen) < this.DEVICE_TTL);
+        const removed = before - this.registry.length;
+        if (removed > 0) {
+            this.saveRegistry();
+            this.logger.log(`🧹 自动清理 ${removed} 个过期设备，剩余 ${this.registry.length} 个`);
         }
-        const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
-        if (iphoneMatch)
-            return `IPHONE-${iphoneMatch[0]}`;
-        const ipadMatch = ua.match(/iPad\s*\d+[,\d]*/i);
-        if (ipadMatch)
-            return `IPAD-${ipadMatch[0]}`;
-        return ua.substring(0, 80);
+        return removed;
     }
     reloadRuntimeSlots() {
         try {
@@ -91,10 +92,12 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     tryRegister(ip, ua) {
         this.reloadRuntimeSlots();
+        this.cleanupExpiredDevices();
         const fingerprint = this.createFingerprint(ip, ua);
         const existing = this.registry.find(e => e.fingerprint === fingerprint);
         if (existing) {
             existing.lastSeen = Date.now();
+            existing.ua = ua;
             this.saveRegistry();
             return { allowed: true };
         }
@@ -107,11 +110,12 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         this.registry.push({
             fingerprint,
+            ua,
             firstSeen: Date.now(),
             lastSeen: Date.now(),
         });
         this.saveRegistry();
-        this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ${ua.substring(0, 40)}`);
+        this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): IP=${ip}, UA=${ua.substring(0, 40)}`);
         return { allowed: true };
     }
     get registeredCount() {
@@ -133,13 +137,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
     }
     extractDisplayName(ua) {
-        if (ua.startsWith('ANDROID-'))
-            return `${ua.replace('ANDROID-', '')} 📱`;
-        if (ua.startsWith('IPHONE-'))
-            return `${ua.replace('IPHONE-', '')} 📱`;
-        if (ua.startsWith('IPAD-'))
-            return `${ua.replace('IPAD-', '')} 📱`;
-        let name = '未知设备';
+        if (!ua)
+            return '未知设备';
+        let name = '未识别';
         const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
         if (/iPhone/.test(ua)) {
             const m = ua.match(/iPhone\s*\d+[,\d]*/i);
@@ -151,7 +151,13 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         else if (/Android/.test(ua)) {
             const m = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-            name = m ? m[1].trim() : 'Android';
+            if (m) {
+                name = m[1].trim().replace(/\s*Build\/.*/i, '').trim();
+            }
+            else {
+                const v = ua.match(/Android\s+[\d.]+/);
+                name = v ? v[0] : 'Android';
+            }
         }
         else if (/Windows/.test(ua)) {
             const m = ua.match(/Windows NT [\d.]+/);
@@ -170,6 +176,12 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             name += ' · Firefox';
         else if (/Safari\//.test(ua) && !/Chrome\//.test(ua))
             name += ' · Safari';
+        else if (/MicroMessenger/i.test(ua))
+            name += ' · 微信';
+        else if (/MQQBrowser/i.test(ua))
+            name += ' · QQ浏览器';
+        else if (/UCBrowser/i.test(ua))
+            name += ' · UC';
         if (isMobile)
             name += ' 📱';
         return name;
@@ -178,7 +190,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         return this.registry.map((d, i) => ({
             index: i,
             fingerprint: d.fingerprint,
-            displayName: this.extractDisplayName(d.fingerprint),
+            displayName: this.extractDisplayName(d.ua),
             remark: d.remark || '',
             firstSeen: d.firstSeen,
             lastSeen: d.lastSeen,
