@@ -258,6 +258,16 @@ let SectorService = SectorService_1 = class SectorService {
     }
     async getHotSectors() {
         const ttl = this.getEffectiveTTL();
+        if (this.cache?.data?.month1?.length) {
+            if (!this.refreshing) {
+                this.refreshing = true;
+                this.doRefresh().then(data => {
+                    this.cache = { data, timestamp: Date.now() };
+                    this.saveCacheToDisk();
+                }).catch(() => { }).finally(() => { this.refreshing = false; });
+            }
+            return this.cache.data;
+        }
         if (this.cache && Date.now() - this.cache.timestamp < ttl) {
             return this.cache.data;
         }

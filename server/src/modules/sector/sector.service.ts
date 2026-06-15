@@ -308,6 +308,19 @@ export class SectorService implements OnApplicationBootstrap {
   async getHotSectors(): Promise<SectorHotResponse> {
     const ttl = this.getEffectiveTTL();
 
+    // ⭐ 强制缓存优先：只要缓存里有数据，立即返回（不卡任何请求）
+    if (this.cache?.data?.month1?.length) {
+      // 后台异步刷新（不阻塞）
+      if (!this.refreshing) {
+        this.refreshing = true;
+        this.doRefresh().then(data => {
+          this.cache = { data, timestamp: Date.now() };
+          this.saveCacheToDisk();
+        }).catch(() => {}).finally(() => { this.refreshing = false; });
+      }
+      return this.cache.data;
+    }
+
     // 缓存命中且未过期 → 直接返回
     if (this.cache && Date.now() - this.cache.timestamp < ttl) {
       return this.cache.data;
