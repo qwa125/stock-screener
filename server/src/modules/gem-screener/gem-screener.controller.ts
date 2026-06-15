@@ -19,20 +19,25 @@ export class GemScreenerController {
 
   @Get('top/gem')
   async getTopGem() {
-    const opportunities = await this.gemScreener.scanTopGem();
-    return { code: 200, msg: 'success', data: { opportunities } };
+    const result = await this.gemScreener.scanTopGem();
+    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
   @Get('top/main-board')
   async getTopMainBoard() {
-    const opportunities = await this.gemScreener.scanTopMainBoard();
-    return { code: 200, msg: 'success', data: { opportunities } };
+    const result = await this.gemScreener.scanTopMainBoard();
+    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
   @Get('top/opportunities')
   async getTopOpportunities() {
-    const opportunities = await this.gemScreener.scanTopOpportunities();
-    return { code: 200, msg: 'success', data: { opportunities } };
+    const result = await this.gemScreener.scanTopOpportunities();
+    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
+  @Get('top/sector')
+  async getTopSector() {
+    const result = await this.gemScreener.scanSectorOpportunities();
+    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+  }
 }

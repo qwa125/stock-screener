@@ -18,6 +18,16 @@ interface CacheEntry {
   timestamp: number;
 }
 
+/** 交易时段缓存TTL：5分钟 */
+const MARKET_OPEN_TTL = 5 * 60 * 1000;
+/** 盘后/休息缓存TTL：冻结（365天） */
+const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
+
+/** 根据当前时间获取合适的缓存TTL */
+function getOpportunityTTL(): number {
+  return isMarketOpen() ? MARKET_OPEN_TTL : FROZEN_TTL;
+}
+
 export interface StockCandidate {
   code: string;
   name: string;
@@ -67,6 +77,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private refreshPromise: Promise<void> | null = null;
   private mainBoardCache: CacheEntry | null = null;
   private mainBoardRefreshPromise: Promise<void> | null = null;
+  private sectorCache: CacheEntry | null = null;
   private readonly MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
   private readonly BUNDLED_MAIN_BOARD_CACHE = join(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
 
@@ -1205,33 +1216,112 @@ export class GemScreenerService implements OnApplicationBootstrap {
   /**
    * 扫描创业板Top10机会股
    */
-  async scanTopGem(): Promise<OpportunityStock[]> {
-    return this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
+
+  /**
+   * 扫描热点板块中的机会股，取Top10（调用本地sector API获取板块数据）
+   */
+  async scanSectorOpportunities(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
+    const ttl = getOpportunityTTL();
+    if (!force && this.sectorCache && (Date.now() - this.sectorCache.timestamp < ttl)) {
+      return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
+    }
+    try {
+      const http = require('http');
+      const sectorData = await new Promise<any>((resolve, reject) => {
+        http.get('http://localhost:3000/api/sector/hot', (res: any) => {
+          let body = '';
+          res.on('data', (chunk: string) => body += chunk);
+          res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('parse fail')); } });
+        }).on('error', reject);
+      });
+      const sectors: any[] = sectorData?.data?.month1 ?? sectorData?.month1 ?? [];
+      if (!sectors.length) {
+        return { opportunities: [], timestamp: Date.now() };
+      }
+      // 取涨幅前10的板块
+      const topSectors = sectors
+        .filter((s: any) => s.changePercent !== undefined)
+        .sort((a: any, b: any) => b.changePercent - a.changePercent)
+        .slice(0, 10);
+
+      const oppStocks: Array<{ code: string; name: string; sectorName: string }> = [];
+      for (const sector of topSectors) {
+        const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
+        for (const s of stocks) {
+          oppStocks.push({ code: s.code, name: s.name, sectorName: sector.name });
+        }
+      }
+
+      const results: OpportunityStock[] = [];
+      await Promise.all(oppStocks.slice(0, 30).map(async (s) => {
+        try {
+          const stock = await this.quickAnalyze(s.code, s.name);
+          if (stock) {
+            (stock as any).sectorName = s.sectorName;
+            results.push(stock);
+          }
+        } catch {}
+      }));
+
+      const ORDER: Record<string, number> = {
+        '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
+        '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+      };
+      results.sort((a, b) => {
+        const pa = ORDER[a.suggestion ?? ''] ?? 99;
+        const pb = ORDER[b.suggestion ?? ''] ?? 99;
+        return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+      });
+      const top = results.slice(0, 10);
+      this.sectorCache = { data: top, timestamp: Date.now() };
+      return { opportunities: top, timestamp: this.sectorCache.timestamp };
+    } catch (e) {
+      return { opportunities: [], timestamp: Date.now() };
+    }
+  }
+
+  async scanTopGem(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
+    const ttl = getOpportunityTTL();
+    if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl)) {
+      this.triggerAnalysisPreCache(this.cache.data);
+      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+    }
+    const data = await this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
+    this.cache = { data, timestamp: Date.now() };
+    return { opportunities: data, timestamp: this.cache.timestamp };
   }
 
   /**
    * 扫描主板Top10机会股
    */
-  async scanTopMainBoard(): Promise<OpportunityStock[]> {
-    return this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
+  async scanTopMainBoard(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
+    const ttl = getOpportunityTTL();
+    if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl)) {
+      this.triggerAnalysisPreCache(this.mainBoardCache.data);
+      return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
+    }
+    const data = await this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
+    this.mainBoardCache = { data, timestamp: Date.now() };
+    return { opportunities: data, timestamp: this.mainBoardCache.timestamp };
   }
 
   /**
    * 扫描全市场Top10机会股（保留，用于单区展示）
    */
-  async scanTopOpportunities(): Promise<OpportunityStock[]> {
-    return this.scanTopFromCandidates(async () => {
-      const all: StockCandidate[] = [];
-      try {
-        const gem = await this.fetchGEMCandidates();
-        if (gem?.length) all.push(...gem);
-      } catch {}
-      try {
-        const main = await this.fetchMainBoardCandidates();
-        if (main?.length) all.push(...main);
-      } catch {}
-      return all;
-    }, 10);
+  async scanTopOpportunities(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
+    const gem = await this.scanTopGem(force);
+    const main = await this.scanTopMainBoard(force);
+    const combined = [...gem.opportunities, ...main.opportunities];
+    const ORDER: Record<string, number> = {
+      '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
+      '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+    };
+    combined.sort((a, b) => {
+      const pa = ORDER[a.suggestion ?? ''] ?? 99;
+      const pb = ORDER[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+    });
+    return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
   }
 
   private async scanTopFromCandidates(

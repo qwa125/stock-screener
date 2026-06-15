@@ -24,6 +24,11 @@ const data_fetcher_service_1 = require("../stock/data-fetcher.service");
 const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
+const MARKET_OPEN_TTL = 5 * 60 * 1000;
+const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
+function getOpportunityTTL() {
+    return (0, market_time_1.isMarketOpen)() ? MARKET_OPEN_TTL : FROZEN_TTL;
+}
 let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     constructor(dataFetcher, stockService) {
         this.dataFetcher = dataFetcher;
@@ -45,6 +50,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.refreshPromise = null;
         this.mainBoardCache = null;
         this.mainBoardRefreshPromise = null;
+        this.sectorCache = null;
         this.MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
         this.BUNDLED_MAIN_BOARD_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
         this.prevGEMResults = [];
@@ -1045,29 +1051,102 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         }
     }
-    async scanTopGem() {
-        return this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
-    }
-    async scanTopMainBoard() {
-        return this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
-    }
-    async scanTopOpportunities() {
-        return this.scanTopFromCandidates(async () => {
-            const all = [];
-            try {
-                const gem = await this.fetchGEMCandidates();
-                if (gem?.length)
-                    all.push(...gem);
+    async scanSectorOpportunities(force = false) {
+        const ttl = getOpportunityTTL();
+        if (!force && this.sectorCache && (Date.now() - this.sectorCache.timestamp < ttl)) {
+            return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
+        }
+        try {
+            const http = require('http');
+            const sectorData = await new Promise((resolve, reject) => {
+                http.get('http://localhost:3000/api/sector/hot', (res) => {
+                    let body = '';
+                    res.on('data', (chunk) => body += chunk);
+                    res.on('end', () => { try {
+                        resolve(JSON.parse(body));
+                    }
+                    catch {
+                        reject(new Error('parse fail'));
+                    } });
+                }).on('error', reject);
+            });
+            const sectors = sectorData?.data?.month1 ?? sectorData?.month1 ?? [];
+            if (!sectors.length) {
+                return { opportunities: [], timestamp: Date.now() };
             }
-            catch { }
-            try {
-                const main = await this.fetchMainBoardCandidates();
-                if (main?.length)
-                    all.push(...main);
+            const topSectors = sectors
+                .filter((s) => s.changePercent !== undefined)
+                .sort((a, b) => b.changePercent - a.changePercent)
+                .slice(0, 10);
+            const oppStocks = [];
+            for (const sector of topSectors) {
+                const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
+                for (const s of stocks) {
+                    oppStocks.push({ code: s.code, name: s.name, sectorName: sector.name });
+                }
             }
-            catch { }
-            return all;
-        }, 10);
+            const results = [];
+            await Promise.all(oppStocks.slice(0, 30).map(async (s) => {
+                try {
+                    const stock = await this.quickAnalyze(s.code, s.name);
+                    if (stock) {
+                        stock.sectorName = s.sectorName;
+                        results.push(stock);
+                    }
+                }
+                catch { }
+            }));
+            const ORDER = {
+                '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
+                '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+            };
+            results.sort((a, b) => {
+                const pa = ORDER[a.suggestion ?? ''] ?? 99;
+                const pb = ORDER[b.suggestion ?? ''] ?? 99;
+                return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+            });
+            const top = results.slice(0, 10);
+            this.sectorCache = { data: top, timestamp: Date.now() };
+            return { opportunities: top, timestamp: this.sectorCache.timestamp };
+        }
+        catch (e) {
+            return { opportunities: [], timestamp: Date.now() };
+        }
+    }
+    async scanTopGem(force = false) {
+        const ttl = getOpportunityTTL();
+        if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl)) {
+            this.triggerAnalysisPreCache(this.cache.data);
+            return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+        }
+        const data = await this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
+        this.cache = { data, timestamp: Date.now() };
+        return { opportunities: data, timestamp: this.cache.timestamp };
+    }
+    async scanTopMainBoard(force = false) {
+        const ttl = getOpportunityTTL();
+        if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl)) {
+            this.triggerAnalysisPreCache(this.mainBoardCache.data);
+            return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
+        }
+        const data = await this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
+        this.mainBoardCache = { data, timestamp: Date.now() };
+        return { opportunities: data, timestamp: this.mainBoardCache.timestamp };
+    }
+    async scanTopOpportunities(force = false) {
+        const gem = await this.scanTopGem(force);
+        const main = await this.scanTopMainBoard(force);
+        const combined = [...gem.opportunities, ...main.opportunities];
+        const ORDER = {
+            '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
+            '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+        };
+        combined.sort((a, b) => {
+            const pa = ORDER[a.suggestion ?? ''] ?? 99;
+            const pb = ORDER[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb : (b.score ?? 0) - (a.score ?? 0);
+        });
+        return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
     }
     async scanTopFromCandidates(fetchFn, topN) {
         const candidates = [];

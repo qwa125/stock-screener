@@ -25,16 +25,20 @@ let GemScreenerController = class GemScreenerController {
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
     }
     async getTopGem() {
-        const opportunities = await this.gemScreener.scanTopGem();
-        return { code: 200, msg: 'success', data: { opportunities } };
+        const result = await this.gemScreener.scanTopGem();
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
     async getTopMainBoard() {
-        const opportunities = await this.gemScreener.scanTopMainBoard();
-        return { code: 200, msg: 'success', data: { opportunities } };
+        const result = await this.gemScreener.scanTopMainBoard();
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
     async getTopOpportunities() {
-        const opportunities = await this.gemScreener.scanTopOpportunities();
-        return { code: 200, msg: 'success', data: { opportunities } };
+        const result = await this.gemScreener.scanTopOpportunities();
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+    }
+    async getTopSector() {
+        const result = await this.gemScreener.scanSectorOpportunities();
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
 };
 exports.GemScreenerController = GemScreenerController;
@@ -68,6 +72,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopOpportunities", null);
+__decorate([
+    (0, common_1.Get)('top/sector'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getTopSector", null);
 exports.GemScreenerController = GemScreenerController = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
