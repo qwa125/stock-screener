@@ -96,6 +96,7 @@ echo "✅ Dependencies installed successfully!"
 # 3. 清理旧进程 + 端口
 # ---------------------------------------------------------
 SERVER_PORT=3000
+export SERVER_PORT
 
 cleanup_previous_run
 
