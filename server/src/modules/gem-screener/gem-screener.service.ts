@@ -925,7 +925,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const batch = allCodes.slice(b, b + this.TENANT_BATCH);
       const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
       try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
         const buf = await res.arrayBuffer();
         const raw = iconv.decode(Buffer.from(buf), 'gbk');
         const lines = raw.split('\n').filter(l => l.trim());
@@ -1030,7 +1030,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 1) 尝试腾讯行情
       try {
         const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
         const buf = await res.arrayBuffer();
         const raw = iconv.decode(Buffer.from(buf), 'gbk');
         const lines = raw.split('\n').filter(l => l.trim());
@@ -1074,7 +1074,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           const sinaBatch = batch.map(c => c.toLowerCase());
           const sinaUrl = `https://hq.sinajs.cn/list=${sinaBatch.join(',')}`;
           const sinaRes = await fetch(sinaUrl, {
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(30000),
             headers: { 'Referer': 'https://finance.sina.com.cn' },
           });
           const sinaText = await sinaRes.text();

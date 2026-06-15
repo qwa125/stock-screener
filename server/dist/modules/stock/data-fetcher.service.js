@@ -27,7 +27,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
             const url = 'https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
             const res = await fetch(url, {
                 headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' },
-                signal: AbortSignal.timeout(8000),
+                signal: AbortSignal.timeout(30000),
             });
             if (res.ok) {
                 const text = await res.text();
@@ -87,7 +87,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     Referer: 'https://quote.eastmoney.com/',
                 },
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(30000),
             });
             if (response.ok) {
                 const data = await response.json();
@@ -125,7 +125,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     Referer: 'https://finance.sina.com.cn/',
                 },
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(30000),
             });
             if (response.ok) {
                 const text = await response.text();
@@ -170,7 +170,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                         Referer: 'https://quote.eastmoney.com/',
                     },
-                    signal: AbortSignal.timeout(5000),
+                    signal: AbortSignal.timeout(30000),
                 });
                 if (response.ok) {
                     const data = await response.json();
@@ -239,7 +239,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
         const prefix = this.getMarketPrefix(mkt);
         try {
             const response = await fetch(`${this.TENCENT_QUOTE_URL}=${prefix}${code}`, {
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(30000),
             });
             if (!response.ok)
                 return null;
