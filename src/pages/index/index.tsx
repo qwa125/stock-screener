@@ -1182,16 +1182,6 @@ const IndexPage = () => {
                       <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
                       </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (stock.entryTiming ?? 50) >= 75 ? '#16a34a' : (stock.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(stock.entryTiming ?? 50).toFixed(0)}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (stock.safetyScore ?? 50) >= 75 ? '#16a34a' : (stock.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(stock.safetyScore ?? 50).toFixed(0)}
-                        </Text>
-                      </View>
                       <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
                         <Text className="block text-xs" style={{ color: (stock.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
@@ -1321,10 +1311,9 @@ const IndexPage = () => {
             <Text className="block text-sm font-semibold">🔥 热点板块机会区</Text>
             <View className="flex-1" />
             {sectorTimestamp > 0 && !sectorLoading && (() => {
-              const diff = Math.floor((Date.now() - sectorTimestamp) / 1000);
-              if (diff < 60) return <Text className="block text-xs text-green-500">自动刷新中 · 刚刚</Text>;
-              const min = Math.floor(diff / 60);
-              return <Text className="block text-xs text-green-500">自动刷新中 · {min} 分钟前</Text>;
+              const diff = Math.floor((Date.now() - sectorTimestamp) / 60000);
+              if (diff < 1) return <Text className="block text-xs text-green-500">刚刚更新</Text>;
+              return <Text className="block text-xs text-green-500">{diff} 分钟前更新</Text>;
             })()}
             {sectorLoading && <Text className="block text-xs text-gray-400">加载中...</Text>}
           </View>
