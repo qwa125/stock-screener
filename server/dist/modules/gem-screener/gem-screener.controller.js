@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
@@ -24,20 +27,20 @@ let GemScreenerController = class GemScreenerController {
         const { opportunities, timestamp } = await this.gemScreener.getMainBoardOpportunities();
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
     }
-    async getTopGem() {
-        const result = await this.gemScreener.scanTopGem();
+    async getTopGem(force) {
+        const result = await this.gemScreener.scanTopGem(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
-    async getTopMainBoard() {
-        const result = await this.gemScreener.scanTopMainBoard();
+    async getTopMainBoard(force) {
+        const result = await this.gemScreener.scanTopMainBoard(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
-    async getTopOpportunities() {
-        const result = await this.gemScreener.scanTopOpportunities();
+    async getTopOpportunities(force) {
+        const result = await this.gemScreener.scanTopOpportunities(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
-    async getTopSector() {
-        const result = await this.gemScreener.scanSectorOpportunities();
+    async getTopSector(force) {
+        const result = await this.gemScreener.scanSectorOpportunities(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
 };
@@ -56,26 +59,30 @@ __decorate([
 ], GemScreenerController.prototype, "getMainBoard", null);
 __decorate([
     (0, common_1.Get)('top/gem'),
+    __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopGem", null);
 __decorate([
     (0, common_1.Get)('top/main-board'),
+    __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopMainBoard", null);
 __decorate([
     (0, common_1.Get)('top/opportunities'),
+    __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopOpportunities", null);
 __decorate([
     (0, common_1.Get)('top/sector'),
+    __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopSector", null);
 exports.GemScreenerController = GemScreenerController = __decorate([

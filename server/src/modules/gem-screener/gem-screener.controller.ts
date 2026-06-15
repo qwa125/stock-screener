@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { GemScreenerService } from './gem-screener.service';
 
 @Controller('gem')
@@ -18,26 +18,26 @@ export class GemScreenerController {
   }
 
   @Get('top/gem')
-  async getTopGem() {
-    const result = await this.gemScreener.scanTopGem();
+  async getTopGem(@Query('force') force?: string) {
+    const result = await this.gemScreener.scanTopGem(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
   @Get('top/main-board')
-  async getTopMainBoard() {
-    const result = await this.gemScreener.scanTopMainBoard();
+  async getTopMainBoard(@Query('force') force?: string) {
+    const result = await this.gemScreener.scanTopMainBoard(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
   @Get('top/opportunities')
-  async getTopOpportunities() {
-    const result = await this.gemScreener.scanTopOpportunities();
+  async getTopOpportunities(@Query('force') force?: string) {
+    const result = await this.gemScreener.scanTopOpportunities(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
   @Get('top/sector')
-  async getTopSector() {
-    const result = await this.gemScreener.scanSectorOpportunities();
+  async getTopSector(@Query('force') force?: string) {
+    const result = await this.gemScreener.scanSectorOpportunities(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 }

@@ -82,6 +82,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     checkOpportunity(s: StockCandidate): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null>;
     private fetchGEMCandidates;
+    private parseSinaBatch;
     private fetchMainBoardCandidates;
     scanMainBoardStocks(): Promise<OpportunityStock[]>;
     getMainBoardOpportunities(): Promise<{

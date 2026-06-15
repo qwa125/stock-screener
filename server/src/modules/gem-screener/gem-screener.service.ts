@@ -297,7 +297,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.mainBoardCache = { data: parsed.data, timestamp: parsed.timestamp };
       this.logger.log(`📦 主板机会区: 从磁盘恢复缓存, ${this.mainBoardCache.data.length} 只`);
     } catch { /* 首次部署, 无磁盘缓存 */ }
-    if (!this.mainBoardCache) {
+    if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
       this.logger.log('📦 主板机会区: 无缓存, 启动后台扫描...');
       // 后台扫描，不阻塞启动
       this.mainBoardRefreshPromise = this.scanMainBoardStocks().then(data => {
@@ -922,7 +922,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const lines = raw.split('\n').filter(l => l.trim());
         for (const line of lines) {
           // 格式: v_sz300001="51~name~code~price~yclose~...~";
-          const match = line.match(/v_sz\d+="(.+?)";?\s*$/);
+          const match = line.match(/v_sz\d+="(.+?)";?\s*/);
           if (!match) continue;
           const fields = match[1].split('~');
           const code = fields[2] || '';
@@ -957,6 +957,43 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
   // ==================== 主板机会区 ====================
 
+  /** 解析批次中的新浪行情数据 */
+  private parseSinaBatch(lines: string[]): StockCandidate[] {
+    const result: StockCandidate[] = [];
+    for (const line of lines) {
+      // var hq_str_sh600000="浦发银行,20.10,19.90,20.05,...";
+      const match = line.match(/var hq_str_(sh|sz)(\d+)="(.+)";?\s*/);
+      if (!match) continue;
+      const prefix = match[1];
+      const codeStr = match[2];
+      const rawFields = match[3];
+      const fields = rawFields.split(',');
+      const code = `${prefix.toUpperCase()}${codeStr}`;
+      if (code.startsWith('SH300') || code.startsWith('SZ300') || code.startsWith('SZ301')) continue;
+      if (code.startsWith('SH688') || code.startsWith('SZ688')) continue;
+      if (!fields[2] || fields[2] === '0.00') continue; // 无数据
+      const name = fields[0]?.trim() || '';
+      if (name.includes('ST') || name.includes('*ST') || name.includes('退')) continue;
+      const yestClose = parseFloat(fields[2]);
+      const curPrice = parseFloat(fields[3]);
+      const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
+      if (changePct < this.MIN_GAIN_PCT) continue;
+      const volumeShares = parseFloat(fields[8]) || 0;
+      // 新浪格式没有总市值字段, 跳过市值过滤
+      const amount = volumeShares * curPrice;
+      result.push({
+        code: code.replace(/^(SH|SZ)/, ''),
+        name,
+        inflow: Math.round(amount),
+        changePercent: Math.round(changePct * 100) / 100,
+        currentPrice: curPrice,
+        marketCap: 0,
+      });
+    }
+    return result;
+  }
+
+  /** 批量获取股票实时行情: 先用腾讯, 失败则降级到新浪 */
   private async fetchMainBoardCandidates(): Promise<StockCandidate[]> {
     const candidates: StockCandidate[] = [];
 
@@ -973,49 +1010,84 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     const allCodes = [...shCodes, ...szCodes]; // ~9000 只
 
+    let tencentFailures = 0;
+
     // 分批查询
     for (let b = 0; b < allCodes.length; b += this.TENANT_BATCH) {
       const batch = allCodes.slice(b, b + this.TENANT_BATCH);
-      const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
+      const batchIdx = b / this.TENANT_BATCH + 1;
+      let batchSuccess = false;
+
+      // 1) 尝试腾讯行情
       try {
+        const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
         const buf = await res.arrayBuffer();
         const raw = iconv.decode(Buffer.from(buf), 'gbk');
         const lines = raw.split('\n').filter(l => l.trim());
         for (const line of lines) {
-          const match = line.match(/v_(?:sh|sz)\d+="(.+?)";?\s*$/);
+          const match = line.match(/v_(?:sh|sz)\d+="(.+?)";?\s*/);
           if (!match) continue;
           const fields = match[1].split('~');
           const code = fields[2] || '';
-          if (code.startsWith('300') || code.startsWith('301')) continue; // 排除创业板
-          if (code.startsWith('688') || code.startsWith('689')) continue; // 排除科创板
+          if (code.startsWith('300') || code.startsWith('301')) continue;
+          if (code.startsWith('688') || code.startsWith('689')) continue;
           const curPrice = parseFloat(fields[3]);
           const yestClose = parseFloat(fields[4]);
           const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
           if (changePct < this.MIN_GAIN_PCT) continue;
           const name = fields[1] || '';
-          if (name.includes('ST') || name.includes('*ST') || name.includes('退')) continue; // 排除ST/退市/爆雷股
-          const marketCap = parseFloat(fields[37]) || 0;
-          if (marketCap > 0 && marketCap > this.MAX_MARKET_CAP) continue; // 排除超大市值
-          if (marketCap > 0 && marketCap < this.MIN_MARKET_CAP) continue;  // 排除小盘庄股
+          if (name.includes('ST') || name.includes('*ST') || name.includes('退')) continue;
+          const marketCap = parseInt(fields[45]) || 0;
+          const marketCapInYuan = marketCap * 100_000_000;
+          if (marketCapInYuan > 0 && marketCapInYuan > this.MAX_MARKET_CAP) continue;
+          if (marketCapInYuan > 0 && marketCapInYuan < this.MIN_MARKET_CAP) continue;
           const volumeShares = parseFloat(fields[6]) || 0;
           const amount = volumeShares * curPrice;
           candidates.push({
-            code,
-            name,
+            code, name,
             inflow: Math.round(amount),
             changePercent: Math.round(changePct * 100) / 100,
             currentPrice: curPrice,
             marketCap,
           });
         }
+        batchSuccess = true;
       } catch (err) {
-        this.logger.warn(`⚠️ 主板行情批 ${b / this.TENANT_BATCH + 1} 失败: ${err instanceof Error ? err.message : String(err)}`);
+        tencentFailures++;
+        this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 腾讯失败, 切换新浪: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // 2) 腾讯失败则降级到新浪行情
+      if (!batchSuccess) {
+        try {
+          // 新浪使用 hq.sinajs.cn, 代码格式相同 sh600000 / sz000001
+          const sinaBatch = batch.map(c => c.toLowerCase());
+          const sinaUrl = `https://hq.sinajs.cn/list=${sinaBatch.join(',')}`;
+          const sinaRes = await fetch(sinaUrl, {
+            signal: AbortSignal.timeout(15000),
+            headers: { 'Referer': 'https://finance.sina.com.cn' },
+          });
+          const sinaText = await sinaRes.text();
+          const sinaLines = sinaText.split('\n').filter(l => l.trim());
+          const sinaCandidates = this.parseSinaBatch(sinaLines);
+          candidates.push(...sinaCandidates);
+          if (sinaCandidates.length > 0) {
+            this.logger.log(`  新浪降级批 ${batchIdx}: 解析到 ${sinaCandidates.length} 只上涨`);
+          }
+        } catch (sinaErr) {
+          this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 新浪也失败: ${sinaErr instanceof Error ? sinaErr.message : String(sinaErr)}`);
+        }
+      }
+
+      // 小延迟避免封 IP
+      if (batchIdx % 5 === 0) {
+        await new Promise(r => setTimeout(r, 200));
       }
     }
 
     candidates.sort((a, b) => b.changePercent - a.changePercent);
-    this.logger.log(`📡 主板: 获取 ${candidates.length} 只上涨, 全量扫描`);
+    this.logger.log(`📡 主板: 获取 ${candidates.length} 只上涨 (腾讯失败 ${tencentFailures} 批, 新浪降级)`);
     return candidates;
   }
 
@@ -1291,7 +1363,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async scanTopGem(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
     const ttl = getOpportunityTTL();
     // 缓存过期 或 缓存数据没有 suggestion（旧格式迁移）→ 触发重新扫描
-    const cacheStale = this.cache?.data?.length && this.cache.data.every(s => !s.suggestion);
+    const cacheStale = !this.cache?.data?.length || this.cache.data.every(s => !s.suggestion);
     if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl) && !cacheStale) {
       this.triggerAnalysisPreCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
@@ -1308,7 +1380,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async scanTopMainBoard(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
     const ttl = getOpportunityTTL();
     // 缓存过期 或 缓存数据没有 suggestion（旧格式迁移）→ 触发重新扫描
-    const cacheStale = this.mainBoardCache?.data?.length && this.mainBoardCache.data.every(s => !s.suggestion);
+    const cacheStale = !this.mainBoardCache?.data?.length || this.mainBoardCache.data.every(s => !s.suggestion);
     if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl) && !cacheStale) {
       this.triggerAnalysisPreCache(this.mainBoardCache.data);
       return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };

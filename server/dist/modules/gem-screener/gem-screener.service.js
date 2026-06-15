@@ -239,7 +239,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log(`📦 主板机会区: 从磁盘恢复缓存, ${this.mainBoardCache.data.length} 只`);
         }
         catch { }
-        if (!this.mainBoardCache) {
+        if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
             this.logger.log('📦 主板机会区: 无缓存, 启动后台扫描...');
             this.mainBoardRefreshPromise = this.scanMainBoardStocks().then(data => {
                 this.mainBoardCache = { data, timestamp: Date.now() };
@@ -784,7 +784,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const raw = iconv.decode(Buffer.from(buf), 'gbk');
                 const lines = raw.split('\n').filter(l => l.trim());
                 for (const line of lines) {
-                    const match = line.match(/v_sz\d+="(.+?)";?\s*$/);
+                    const match = line.match(/v_sz\d+="(.+?)";?\s*/);
                     if (!match)
                         continue;
                     const fields = match[1].split('~');
@@ -815,6 +815,44 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`📡 腾讯行情: 获取 ${candidates.length} 只上涨GEM, 全量扫描`);
         return candidates;
     }
+    parseSinaBatch(lines) {
+        const result = [];
+        for (const line of lines) {
+            const match = line.match(/var hq_str_(sh|sz)(\d+)="(.+)";?\s*/);
+            if (!match)
+                continue;
+            const prefix = match[1];
+            const codeStr = match[2];
+            const rawFields = match[3];
+            const fields = rawFields.split(',');
+            const code = `${prefix.toUpperCase()}${codeStr}`;
+            if (code.startsWith('SH300') || code.startsWith('SZ300') || code.startsWith('SZ301'))
+                continue;
+            if (code.startsWith('SH688') || code.startsWith('SZ688'))
+                continue;
+            if (!fields[2] || fields[2] === '0.00')
+                continue;
+            const name = fields[0]?.trim() || '';
+            if (name.includes('ST') || name.includes('*ST') || name.includes('退'))
+                continue;
+            const yestClose = parseFloat(fields[2]);
+            const curPrice = parseFloat(fields[3]);
+            const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
+            if (changePct < this.MIN_GAIN_PCT)
+                continue;
+            const volumeShares = parseFloat(fields[8]) || 0;
+            const amount = volumeShares * curPrice;
+            result.push({
+                code: code.replace(/^(SH|SZ)/, ''),
+                name,
+                inflow: Math.round(amount),
+                changePercent: Math.round(changePct * 100) / 100,
+                currentPrice: curPrice,
+                marketCap: 0,
+            });
+        }
+        return result;
+    }
     async fetchMainBoardCandidates() {
         const candidates = [];
         const shCodes = [];
@@ -828,16 +866,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         const allCodes = [...shCodes, ...szCodes];
+        let tencentFailures = 0;
         for (let b = 0; b < allCodes.length; b += this.TENANT_BATCH) {
             const batch = allCodes.slice(b, b + this.TENANT_BATCH);
-            const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
+            const batchIdx = b / this.TENANT_BATCH + 1;
+            let batchSuccess = false;
             try {
+                const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
                 const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
                 const buf = await res.arrayBuffer();
                 const raw = iconv.decode(Buffer.from(buf), 'gbk');
                 const lines = raw.split('\n').filter(l => l.trim());
                 for (const line of lines) {
-                    const match = line.match(/v_(?:sh|sz)\d+="(.+?)";?\s*$/);
+                    const match = line.match(/v_(?:sh|sz)\d+="(.+?)";?\s*/);
                     if (!match)
                         continue;
                     const fields = match[1].split('~');
@@ -854,29 +895,54 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     const name = fields[1] || '';
                     if (name.includes('ST') || name.includes('*ST') || name.includes('退'))
                         continue;
-                    const marketCap = parseFloat(fields[37]) || 0;
-                    if (marketCap > 0 && marketCap > this.MAX_MARKET_CAP)
+                    const marketCap = parseInt(fields[45]) || 0;
+                    const marketCapInYuan = marketCap * 100_000_000;
+                    if (marketCapInYuan > 0 && marketCapInYuan > this.MAX_MARKET_CAP)
                         continue;
-                    if (marketCap > 0 && marketCap < this.MIN_MARKET_CAP)
+                    if (marketCapInYuan > 0 && marketCapInYuan < this.MIN_MARKET_CAP)
                         continue;
                     const volumeShares = parseFloat(fields[6]) || 0;
                     const amount = volumeShares * curPrice;
                     candidates.push({
-                        code,
-                        name,
+                        code, name,
                         inflow: Math.round(amount),
                         changePercent: Math.round(changePct * 100) / 100,
                         currentPrice: curPrice,
                         marketCap,
                     });
                 }
+                batchSuccess = true;
             }
             catch (err) {
-                this.logger.warn(`⚠️ 主板行情批 ${b / this.TENANT_BATCH + 1} 失败: ${err instanceof Error ? err.message : String(err)}`);
+                tencentFailures++;
+                this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 腾讯失败, 切换新浪: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            if (!batchSuccess) {
+                try {
+                    const sinaBatch = batch.map(c => c.toLowerCase());
+                    const sinaUrl = `https://hq.sinajs.cn/list=${sinaBatch.join(',')}`;
+                    const sinaRes = await fetch(sinaUrl, {
+                        signal: AbortSignal.timeout(15000),
+                        headers: { 'Referer': 'https://finance.sina.com.cn' },
+                    });
+                    const sinaText = await sinaRes.text();
+                    const sinaLines = sinaText.split('\n').filter(l => l.trim());
+                    const sinaCandidates = this.parseSinaBatch(sinaLines);
+                    candidates.push(...sinaCandidates);
+                    if (sinaCandidates.length > 0) {
+                        this.logger.log(`  新浪降级批 ${batchIdx}: 解析到 ${sinaCandidates.length} 只上涨`);
+                    }
+                }
+                catch (sinaErr) {
+                    this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 新浪也失败: ${sinaErr instanceof Error ? sinaErr.message : String(sinaErr)}`);
+                }
+            }
+            if (batchIdx % 5 === 0) {
+                await new Promise(r => setTimeout(r, 200));
             }
         }
         candidates.sort((a, b) => b.changePercent - a.changePercent);
-        this.logger.log(`📡 主板: 获取 ${candidates.length} 只上涨, 全量扫描`);
+        this.logger.log(`📡 主板: 获取 ${candidates.length} 只上涨 (腾讯失败 ${tencentFailures} 批, 新浪降级)`);
         return candidates;
     }
     async scanMainBoardStocks() {
@@ -1121,7 +1187,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopGem(force = false) {
         const ttl = getOpportunityTTL();
-        const cacheStale = this.cache?.data?.length && this.cache.data.every(s => !s.suggestion);
+        const cacheStale = !this.cache?.data?.length || this.cache.data.every(s => !s.suggestion);
         if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl) && !cacheStale) {
             this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
@@ -1134,7 +1200,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopMainBoard(force = false) {
         const ttl = getOpportunityTTL();
-        const cacheStale = this.mainBoardCache?.data?.length && this.mainBoardCache.data.every(s => !s.suggestion);
+        const cacheStale = !this.mainBoardCache?.data?.length || this.mainBoardCache.data.every(s => !s.suggestion);
         if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl) && !cacheStale) {
             this.triggerAnalysisPreCache(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };

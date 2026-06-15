@@ -18,7 +18,7 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
-    getTopGem(): Promise<{
+    getTopGem(force?: string): Promise<{
         code: number;
         msg: string;
         data: {
@@ -26,7 +26,7 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
-    getTopMainBoard(): Promise<{
+    getTopMainBoard(force?: string): Promise<{
         code: number;
         msg: string;
         data: {
@@ -34,7 +34,7 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
-    getTopOpportunities(): Promise<{
+    getTopOpportunities(force?: string): Promise<{
         code: number;
         msg: string;
         data: {
@@ -42,7 +42,7 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
-    getTopSector(): Promise<{
+    getTopSector(force?: string): Promise<{
         code: number;
         msg: string;
         data: {
