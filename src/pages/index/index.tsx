@@ -584,6 +584,7 @@ const IndexPage = () => {
 
   // 热点板块机会区（板块数据）
   const [sectorData, setSectorData] = useState<any[] | null>(null);
+  const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
   const [sectorLoading, setSectorLoading] = useState(true);
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
@@ -642,6 +643,8 @@ const IndexPage = () => {
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
         setSectorData(apiData.data.opportunities);
+        if (apiData.data.timestamp) setSectorTimestamp(apiData.data.timestamp);
+        else setSectorTimestamp(Date.now());
         setSectorLoading(false);
       } else {
         setSectorLoading(false);
@@ -1149,12 +1152,6 @@ const IndexPage = () => {
                 <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
                 </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">介入</Text>
-                </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">安全</Text>
-                </View>
                 <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
                 </View>
@@ -1258,12 +1255,6 @@ const IndexPage = () => {
                 <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
                 </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">介入</Text>
-                </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">安全</Text>
-                </View>
                 <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
                 </View>
@@ -1293,16 +1284,6 @@ const IndexPage = () => {
                       </View>
                       <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
-                      </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (item.entryTiming ?? 50) >= 75 ? '#16a34a' : (item.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(item.entryTiming ?? 50).toFixed(0)}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (item.safetyScore ?? 50) >= 75 ? '#16a34a' : (item.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(item.safetyScore ?? 50).toFixed(0)}
-                        </Text>
                       </View>
                       <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
@@ -1339,6 +1320,13 @@ const IndexPage = () => {
           <View className="flex flex-row items-center gap-2 mb-2">
             <Text className="block text-sm font-semibold">🔥 热点板块机会区</Text>
             <View className="flex-1" />
+            {sectorTimestamp > 0 && !sectorLoading && (() => {
+              const diff = Math.floor((Date.now() - sectorTimestamp) / 1000);
+              if (diff < 60) return <Text className="block text-xs text-green-500">自动刷新中 · 刚刚</Text>;
+              const min = Math.floor(diff / 60);
+              return <Text className="block text-xs text-green-500">自动刷新中 · {min} 分钟前</Text>;
+            })()}
+            {sectorLoading && <Text className="block text-xs text-gray-400">加载中...</Text>}
           </View>
 
           {sectorLoading && sectorData === null ? (
@@ -1368,12 +1356,6 @@ const IndexPage = () => {
                 </View>
                 <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
-                </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">介入</Text>
-                </View>
-                <View style={{ flex: 0.55 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">安全</Text>
                 </View>
                 <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
@@ -1405,16 +1387,6 @@ const IndexPage = () => {
                       </View>
                       <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
-                      </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (item.entryTiming ?? 50) >= 75 ? '#16a34a' : (item.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(item.entryTiming ?? 50).toFixed(0)}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 0.55 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (item.safetyScore ?? 50) >= 75 ? '#16a34a' : (item.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
-                          {(item.safetyScore ?? 50).toFixed(0)}
-                        </Text>
                       </View>
                       <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
@@ -1448,6 +1420,20 @@ const IndexPage = () => {
         {/* 底部信息 */}
           <View className="mt-6 pt-4 border-t border-gray-100">
             <Text className="block text-xs text-gray-400 text-center">
+              北京时间 {(() => {
+                const now = new Date();
+                const cn = new Intl.DateTimeFormat('zh-CN', {
+                  timeZone: 'Asia/Shanghai',
+                  year: 'numeric', month: '2-digit', day: '2-digit',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit',
+                  hour12: false
+                }).formatToParts(now);
+                const map: Record<string, string> = {};
+                cn.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
+                return `${map.year}年${map.month}月${map.day}日 ${map.hour}:${map.minute}:${map.second}`;
+              })()}
+            </Text>
+            <Text className="block text-xs text-gray-400 text-center mt-1">
               开发者：呱呱小白狗
             </Text>
             <Text className="block text-xs text-gray-300 text-center mt-1">

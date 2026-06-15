@@ -107,6 +107,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.loadCacheFromDisk();
     this.loadMainBoardCacheFromDisk();
     this.loadSectorCacheFromDisk();
+  }
 
   // ---------------------------------------------------------------------------
   // 扫描排班: 判断当前处于"冻结时段"还是"盘中时段"
