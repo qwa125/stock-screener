@@ -17,9 +17,11 @@ export declare class DeviceRegistryService {
     get registeredCount(): number;
     get maxAllowed(): number;
     setMaxSlots(value: number): void;
+    private extractDisplayName;
     getDevices(): Array<{
         index: number;
         fingerprint: string;
+        displayName: string;
         firstSeen: number;
         lastSeen: number;
     }>;

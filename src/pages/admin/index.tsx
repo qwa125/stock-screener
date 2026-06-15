@@ -256,7 +256,7 @@ const AdminPage = () => {
                   >
                     <Text className="block text-xs text-gray-500 w-8 text-center">{device.index + 1}</Text>
                     <View className="flex-1 min-w-0">
-                      <Text className="block text-xs font-medium text-gray-700 truncate">{device.displayName}</Text>
+                      <Text className="block text-xs font-medium text-gray-700 truncate">{device.displayName || device.fingerprint?.slice(0, 40) || '未知设备'}</Text>
                     </View>
                     <Text className="block text-xs text-gray-400 w-16 text-right">{formatTime(device.firstSeen)}</Text>
                     <Text className="block text-xs text-gray-400 w-16 text-right mr-2">{formatTime(device.lastSeen)}</Text>

@@ -62,8 +62,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         catch { }
     }
-    createFingerprint(ip, ua) {
-        return `${ip}|${ua}`;
+    createFingerprint(_ip, ua) {
+        return `${ua}`;
     }
     reloadRuntimeSlots() {
         try {
@@ -99,7 +99,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             lastSeen: Date.now(),
         });
         this.saveRegistry();
-        this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ${ip}`);
+        this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ${ua.substring(0, 40)}`);
         return { allowed: true };
     }
     get registeredCount() {
@@ -120,10 +120,43 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         catch { }
         this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
     }
+    extractDisplayName(ua) {
+        let name = '未知设备';
+        const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
+        if (/iPhone/.test(ua))
+            name = 'iPhone';
+        else if (/iPad/.test(ua))
+            name = 'iPad';
+        else if (/Android/.test(ua)) {
+            const m = ua.match(/Android\s+[\d.]+/);
+            name = m ? `Android ${m[0].replace('Android ', '')}` : 'Android';
+        }
+        else if (/Windows/.test(ua)) {
+            const m = ua.match(/Windows NT [\d.]+/);
+            name = m ? m[0] : 'Windows';
+        }
+        else if (/Mac OS X/.test(ua)) {
+            name = 'macOS';
+        }
+        else if (/Linux/.test(ua))
+            name = 'Linux';
+        if (/Edg\//.test(ua))
+            name += ' · Edge';
+        else if (/Chrome\//.test(ua) && !/Edg\//.test(ua))
+            name += ' · Chrome';
+        else if (/Firefox\//.test(ua))
+            name += ' · Firefox';
+        else if (/Safari\//.test(ua) && !/Chrome\//.test(ua))
+            name += ' · Safari';
+        if (isMobile)
+            name += ' 📱';
+        return name;
+    }
     getDevices() {
         return this.registry.map((d, i) => ({
             index: i,
             fingerprint: d.fingerprint,
+            displayName: this.extractDisplayName(d.fingerprint),
             firstSeen: d.firstSeen,
             lastSeen: d.lastSeen,
         }));
