@@ -733,11 +733,23 @@ const IndexPage = () => {
 
       const apiData = res.data as ApiResponse;
       if (apiData.code === 200 && apiData.data) {
-        // 优先使用机会区已知的建议（确保与列表显示一致）
-        const resultData = knownSuggestion
-          ? { ...apiData.data as any, suggestion: knownSuggestion }
-          : apiData.data;
-        setResult(resultData);
+        // 保级策略：机会区已知建议可以更高级但不能更低级
+        let finalData = apiData.data as any;
+        if (knownSuggestion) {
+          const serverAction = finalData.suggestion || '';
+          const ACTION_LEVEL: Record<string, number> = {
+            '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+            '持有': 5, '观望': 6, '减仓': 7, '卖出': 8, '清仓': 9,
+            '不要介入': 10,
+          };
+          const serverLevel = ACTION_LEVEL[serverAction] ?? 99;
+          const knownLevel = ACTION_LEVEL[knownSuggestion] ?? 99;
+          // 如果服务器算出的建议更低级（level更大），则保底使用机会区的建议
+          if (serverLevel > knownLevel) {
+            finalData = { ...finalData, suggestion: knownSuggestion };
+          }
+        }
+        setResult(finalData);
       } else {
         setError(apiData.msg || '查询失败');
       }
