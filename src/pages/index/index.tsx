@@ -384,10 +384,39 @@ const ACTION_BADGE_COLOR: Record<string, string> = {
 
 /** 根据机会区股票数据生成操作建议（简化版，使用可用的数据字段） */
 function getOpportunitySuggestion(stock: OpportunityStock): string {
-  // 只认后端 computed suggestion
+  // 优先使用后端 computed suggestion
   if (stock.suggestion) return stock.suggestion;
-  // 没有 suggestion 时默认空（不展示）
-  return '';
+  // 后端没有 suggestion 时，用 pricePosition + 信号字段计算简化建议
+  const pos = stock.pricePosition ?? 50;
+  const bxd = stock.baiXiaoDays ?? 0;
+  const golden = stock.isGoldenCross ?? false;
+  const hasBuySignal = !!(stock.buySignal || bxd >= 1 || golden);
+  
+  // 低位区
+  if (pos < 25) {
+    if (golden && hasBuySignal) return '买入';
+    if (hasBuySignal) return '轻仓买入';
+    return '观望';
+  }
+  // 中低位区
+  if (pos < 45) {
+    if (golden && hasBuySignal) return '轻仓买入';
+    if (hasBuySignal) return '准备买入';
+    return '持有';
+  }
+  // 中位区
+  if (pos < 65) {
+    if (hasBuySignal) return '轻仓买入';
+    return '持有';
+  }
+  // 中高位区
+  if (pos < 80) {
+    if (hasBuySignal) return '持有';
+    return '持有';
+  }
+  // 高位区
+  if (hasBuySignal) return '持有';
+  return '减仓';
 }
 
 // ===== 组件 =====
@@ -1291,7 +1320,7 @@ const IndexPage = () => {
                 </View>
               </View>
               {sectorData.map((item: any, idx: number) => {
-                const action = item.suggestion || '';
+                const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (
                 <Card key={`sector-${item.code}-${idx}`}>

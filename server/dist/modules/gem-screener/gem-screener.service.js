@@ -1115,20 +1115,26 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopGem(force = false) {
         const ttl = getOpportunityTTL();
-        if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl)) {
+        const cacheStale = this.cache?.data?.length && this.cache.data.every(s => !s.suggestion);
+        if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl) && !cacheStale) {
             this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
+        if (cacheStale)
+            this.logger.log('🔄 缓存数据缺少 suggestion 字段, 强制重新扫描');
         const data = await this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
         this.cache = { data, timestamp: Date.now() };
         return { opportunities: data, timestamp: this.cache.timestamp };
     }
     async scanTopMainBoard(force = false) {
         const ttl = getOpportunityTTL();
-        if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl)) {
+        const cacheStale = this.mainBoardCache?.data?.length && this.mainBoardCache.data.every(s => !s.suggestion);
+        if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl) && !cacheStale) {
             this.triggerAnalysisPreCache(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
         }
+        if (cacheStale)
+            this.logger.log('🔄 主板缓存缺少 suggestion 字段, 强制重新扫描');
         const data = await this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
         this.mainBoardCache = { data, timestamp: Date.now() };
         return { opportunities: data, timestamp: this.mainBoardCache.timestamp };
