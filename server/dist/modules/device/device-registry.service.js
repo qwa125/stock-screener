@@ -64,8 +64,11 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     createFingerprint(_ip, ua) {
         const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-        if (androidMatch)
-            return `ANDROID-${androidMatch[1].trim()}`;
+        if (androidMatch) {
+            let model = androidMatch[1].trim();
+            model = model.replace(/\s*Build\/.*/i, '').trim();
+            return `ANDROID-${model}`;
+        }
         const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
         if (iphoneMatch)
             return `IPHONE-${iphoneMatch[0]}`;

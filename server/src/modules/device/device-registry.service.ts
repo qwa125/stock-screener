@@ -74,9 +74,14 @@ export class DeviceRegistryService {
 
   /** 生成设备指纹（基于手机型号，同一手机不同浏览器计1个名额） */
   private createFingerprint(_ip: string, ua: string): string {
-    // Android 设备：提取 "Android X; 手机型号" → 不管什么浏览器都生成相同指纹
+    // Android 设备：提取 "Android X; 手机型号（去掉Build/...）" → 不同浏览器生成相同指纹
     const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
-    if (androidMatch) return `ANDROID-${androidMatch[1].trim()}`;
+    if (androidMatch) {
+      let model = androidMatch[1].trim();
+      // 去掉 Build/... 后缀，只保留手机型号
+      model = model.replace(/\s*Build\/.*/i, '').trim();
+      return `ANDROID-${model}`;
+    }
 
     // iPhone/iPad：提取型号标识
     const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
