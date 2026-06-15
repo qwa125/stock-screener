@@ -430,6 +430,7 @@ const formatMainForce = (value: number | undefined | null): string => {
   if (value === undefined || value === null || Number.isNaN(Number(value))) return '-';
   const v = Number(value);
   const abs = Math.abs(v);
+  if (abs === 0) return '-';
   const sign = v >= 0 ? '+' : '-';
   if (abs >= 100000000) {
     return `${sign}${(abs / 100000000).toFixed(2)}亿`;

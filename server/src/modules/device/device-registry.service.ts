@@ -72,9 +72,20 @@ export class DeviceRegistryService {
     } catch { /* ignore */ }
   }
 
-  /** 生成设备指纹（仅基于浏览器指纹，手机IP变化不影响） */
+  /** 生成设备指纹（基于手机型号，同一手机不同浏览器计1个名额） */
   private createFingerprint(_ip: string, ua: string): string {
-    return `${ua}`;
+    // Android 设备：提取 "Android X; 手机型号" → 不管什么浏览器都生成相同指纹
+    const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
+    if (androidMatch) return `ANDROID-${androidMatch[1].trim()}`;
+
+    // iPhone/iPad：提取型号标识
+    const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
+    if (iphoneMatch) return `IPHONE-${iphoneMatch[0]}`;
+    const ipadMatch = ua.match(/iPad\s*\d+[,\d]*/i);
+    if (ipadMatch) return `IPAD-${ipadMatch[0]}`;
+
+    // 桌面端：保留 UA 前 80 字符作为区分
+    return ua.substring(0, 80);
   }
 
   /** 从文件重新加载运行时名额（由后台 API set-slots 动态写入） */
@@ -150,22 +161,32 @@ export class DeviceRegistryService {
     this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
   }
 
-  /** 从 UA 提取可读设备名 */
+  /** 从 UA/指纹 提取可读设备名 */
   private extractDisplayName(ua: string): string {
+    // 新指纹格式: ANDROID-手机型号 / IPHONE-型号 / IPAD-型号
+    if (ua.startsWith('ANDROID-')) return `${ua.replace('ANDROID-', '')} 📱`;
+    if (ua.startsWith('IPHONE-')) return `${ua.replace('IPHONE-', '')} 📱`;
+    if (ua.startsWith('IPAD-')) return `${ua.replace('IPAD-', '')} 📱`;
+
+    // 旧格式兼容：从完整 UA 解析（已存储的老数据）
     let name = '未知设备';
     const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
-    if (/iPhone/.test(ua)) name = 'iPhone';
-    else if (/iPad/.test(ua)) name = 'iPad';
-    else if (/Android/.test(ua)) {
-      const m = ua.match(/Android\s+[\d.]+/);
-      name = m ? `Android ${m[0].replace('Android ', '')}` : 'Android';
+    if (/iPhone/.test(ua)) {
+      const m = ua.match(/iPhone\s*\d+[,\d]*/i);
+      name = m ? m[0] : 'iPhone';
+    } else if (/iPad/.test(ua)) {
+      const m = ua.match(/iPad\s*\d+[,\d]*/i);
+      name = m ? m[0] : 'iPad';
+    } else if (/Android/.test(ua)) {
+      const m = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
+      name = m ? m[1].trim() : 'Android';
     } else if (/Windows/.test(ua)) {
       const m = ua.match(/Windows NT [\d.]+/);
       name = m ? m[0] : 'Windows';
     } else if (/Mac OS X/.test(ua)) {
       name = 'macOS';
     } else if (/Linux/.test(ua)) name = 'Linux';
-    // 浏览器
+    // 浏览器名
     if (/Edg\//.test(ua)) name += ' · Edge';
     else if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) name += ' · Chrome';
     else if (/Firefox\//.test(ua)) name += ' · Firefox';

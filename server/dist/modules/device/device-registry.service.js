@@ -63,7 +63,16 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         catch { }
     }
     createFingerprint(_ip, ua) {
-        return `${ua}`;
+        const androidMatch = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
+        if (androidMatch)
+            return `ANDROID-${androidMatch[1].trim()}`;
+        const iphoneMatch = ua.match(/iPhone\s*\d+[,\d]*/i);
+        if (iphoneMatch)
+            return `IPHONE-${iphoneMatch[0]}`;
+        const ipadMatch = ua.match(/iPad\s*\d+[,\d]*/i);
+        if (ipadMatch)
+            return `IPAD-${ipadMatch[0]}`;
+        return ua.substring(0, 80);
     }
     reloadRuntimeSlots() {
         try {
@@ -121,15 +130,25 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
     }
     extractDisplayName(ua) {
+        if (ua.startsWith('ANDROID-'))
+            return `${ua.replace('ANDROID-', '')} 📱`;
+        if (ua.startsWith('IPHONE-'))
+            return `${ua.replace('IPHONE-', '')} 📱`;
+        if (ua.startsWith('IPAD-'))
+            return `${ua.replace('IPAD-', '')} 📱`;
         let name = '未知设备';
         const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
-        if (/iPhone/.test(ua))
-            name = 'iPhone';
-        else if (/iPad/.test(ua))
-            name = 'iPad';
+        if (/iPhone/.test(ua)) {
+            const m = ua.match(/iPhone\s*\d+[,\d]*/i);
+            name = m ? m[0] : 'iPhone';
+        }
+        else if (/iPad/.test(ua)) {
+            const m = ua.match(/iPad\s*\d+[,\d]*/i);
+            name = m ? m[0] : 'iPad';
+        }
         else if (/Android/.test(ua)) {
-            const m = ua.match(/Android\s+[\d.]+/);
-            name = m ? `Android ${m[0].replace('Android ', '')}` : 'Android';
+            const m = ua.match(/Android\s+\d+[.\d]*\s*;\s*([^;)]+)/i);
+            name = m ? m[1].trim() : 'Android';
         }
         else if (/Windows/.test(ua)) {
             const m = ua.match(/Windows NT [\d.]+/);
