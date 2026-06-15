@@ -72,6 +72,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly MIN_GAIN_PCT = 0.3;
   private readonly MAX_MARKET_CAP = 500_0000_0000; // 500亿, 排除超大市值
   private readonly MIN_MARKET_CAP = 20_0000_0000;  // 20亿, 排除小盘庄股
+  /** 建议优先级: 越小越优先 */
+  private readonly SUGGESTION_PRIORITY: Record<string, number> = {
+    '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+    '持有': 5, '减仓': 6, '观望': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
+  };
 
   private cache: CacheEntry | null = null;
   private refreshPromise: Promise<void> | null = null;
@@ -501,7 +506,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
-    results.sort((a, b) => b.score - a.score);
+    results.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb : b.score - a.score;
+    });
     const finalResults = results.slice(0, 10);
     // 后台预缓存分析结果（不阻塞）
     this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => {});
@@ -1132,7 +1141,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
-    results.sort((a, b) => b.score - a.score);
+    results.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb : b.score - a.score;
+    });
     this.logger.log(`✅ 主板扫描完成, 共 ${results.length} 只机会股`);
     const finalResults = results.slice(0, 10);
     // 后台预缓存分析结果（不阻塞）

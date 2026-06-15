@@ -43,6 +43,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly MIN_GAIN_PCT;
     private readonly MAX_MARKET_CAP;
     private readonly MIN_MARKET_CAP;
+    private readonly SUGGESTION_PRIORITY;
     private cache;
     private refreshPromise;
     private mainBoardCache;
