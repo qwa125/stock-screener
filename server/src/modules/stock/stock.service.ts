@@ -10,6 +10,8 @@ import { StockInfo, BacktestStats, SignalEntry } from './types';
 import { promises as fs, existsSync, readFileSync } from 'fs';
 import { join } from 'node:path';
 
+import { getTradingSuggestion } from '../../utils/trading-suggestion';
+
 /** 简便MA计算 */
 function calculateMA(data: number[], period: number): number[] {
   const result: number[] = [];
@@ -311,7 +313,7 @@ export class StockService {
     else if (ma5 > ma10 && ma5Up) trendState = 2;
     else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
 
-    // 简化MACD计算（使用公式引擎数据或直接计算）
+    // 计算MACD
     let macdDiff = 0, macdDea = 0, isGoldenCross = false;
     try {
       const ema12 = closeArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
@@ -323,56 +325,29 @@ export class StockService {
         return arr;
       }, []);
       macdDea = deaArr[deaArr.length - 1] || 0;
-      if (closeArr.length > 2) {
-        const prevDiff = closeArr.slice(-3).reduce((s, v, i, a) => {
-          if (i === a.length - 1) return s;
-          return s + v;
-        }, 0);
-        isGoldenCross = macdDiff > macdDea;
-      }
+      isGoldenCross = macdDiff > macdDea;
     } catch {}
 
-    const hasBuy = !!(isGoldenCross || formulaResult.shortBuy || formulaResult.jiaCang || (macdDiff > macdDea && formulaResult.baiXiao));
-    const hasDanger = !!(formulaResult.shortSell || formulaResult.strongSell);
-
-    let volUp = false;
-    if (volumeArr.length >= 13) {
-      const v10 = volumeArr.slice(-13, -3).reduce((a, b) => a + b, 0) / 10;
-      const v3 = volumeArr.slice(-3).reduce((a, b) => a + b, 0) / 3;
-      volUp = v3 > v10 * 1.3;
-    }
-
-    const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
-    const isUp = trendState >= 2;
-    const isSide = trendState === 1;
-
-    let suggestion = '持有';
-    if (zone === '低位') {
-      if (isUp && hasBuy) suggestion = '重仓买入';
-      else if (isUp && volUp) suggestion = '买入';
-      else if (isUp) suggestion = '轻仓买入';
-      else if (isSide && hasBuy) suggestion = '准备买入';
-      else if (hasDanger) suggestion = '持有';
-      else suggestion = '轻仓买入';
-    } else if (zone === '中位') {
-      if (isUp && hasBuy) suggestion = '买入';
-      else if (isUp && volUp) suggestion = '轻仓买入';
-      else if (isUp) suggestion = '轻仓买入';
-      else if (isSide && hasBuy) suggestion = '准备买入';
-      else suggestion = '持有';
-    } else if (zone === '中高位') {
-      if (isUp && hasBuy) suggestion = '持有';
-      else if (isUp) suggestion = '持有';
-      else if (isSide && hasBuy) suggestion = '持有';
-      else if (isSide) suggestion = '观望';
-      else if (hasDanger) suggestion = '减仓';
-      else suggestion = '减仓';
-    } else {
-      if (isUp && hasBuy) suggestion = '持有';
-      else if (isUp) suggestion = '持有';
-      else if (hasDanger) suggestion = '卖出';
-      else suggestion = '减仓';
-    }
+    // 使用共享的 getTradingSuggestion 算法（与前端和机会区一致）
+    const stockInput: any = {
+      pricePosition: pricePos,
+      trendState,
+      trendStrength: (formulaResult as any)?.trendStrength ?? 0,
+      diff: macdDiff,
+      dea: macdDea,
+      shortBuy: (formulaResult as any)?.shortBuy ?? false,
+      strictBuy: (formulaResult as any)?.strictBuy ?? false,
+      jiaCang: (formulaResult as any)?.jiaCang ?? false,
+      shortSell: (formulaResult as any)?.shortSell ?? false,
+      strongSell: (formulaResult as any)?.strongSell ?? false,
+      safe: (formulaResult as any)?.safe ?? false,
+      macdGoldenCross: isGoldenCross,
+      macdDeathCross: false,
+      baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
+      volumeStructure: (formulaResult as any)?.volumeStructure ?? 0,
+    };
+    const stockSuggestion = getTradingSuggestion(stockInput);
+    const suggestion = stockSuggestion.action;
 
     // 14. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
     if (usesRealKline) {

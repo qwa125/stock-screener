@@ -11,6 +11,7 @@ import { DataFetcherService } from '../stock/data-fetcher.service';
 import { StockService } from '../stock/stock.service';
 import { KLine } from '../stock/types';
 import { isMarketOpen, isTradingDay } from '../../utils/market-time';
+import { getTradingSuggestion } from '../../utils/trading-suggestion';
 
 interface CacheEntry {
   data: OpportunityStock[];
@@ -312,11 +313,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
     currentDea: number;
     isGoldenCross: boolean;
     goldenCrossDays: number;
+    isDeathCross: boolean;
   } {
     const closes = kline.map(k => k.close);
     const len = closes.length;
     if (len < 35) {
-      return { diff: [], dea: [], currentDiff: 0, currentDea: 0, isGoldenCross: false, goldenCrossDays: 0 };
+      return { diff: [], dea: [], currentDiff: 0, currentDea: 0, isGoldenCross: false, goldenCrossDays: 0, isDeathCross: false };
     }
 
     // ---------- 均线 = (MA(C,3) + MA(C,5) + MA(C,8) + MA(C,13) + MA(C,21) + MA(C,34)*0.5) / 5.5 ----------
@@ -368,7 +370,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
-    return { diff, dea, currentDiff, currentDea, isGoldenCross, goldenCrossDays };
+    let isDeathCross = false;
+    for (let i = diff.length - 1; i >= 1; i--) {
+      if (diff[i] < dea[i]) {
+        if (diff[i - 1] >= dea[i - 1]) {
+          isDeathCross = true;
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+
+    return { diff, dea, currentDiff, currentDea, isGoldenCross, goldenCrossDays, isDeathCross };
   }
 
   /**
@@ -1149,47 +1163,24 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const xingX: any = calcXingXing(engine);
 
       const isGoldenCross = macdR?.isGoldenCross ?? false;
-      const hasBuy = !!(isGoldenCross || lingXing?.shortBuy || sanJiao?.jiaCang || (diff > dea && baiXing?.baiXiao));
-      const hasDanger = !!(xingX?.shortSell || xingX?.strongSell);
-
-      let volUp = false;
-      if (volumeArr.length >= 13) {
-        const v10 = volumeArr.slice(-13, -3).reduce((a: number, b: number) => a + b, 0) / 10;
-        const v3 = volumeArr.slice(-3).reduce((a: number, b: number) => a + b, 0) / 3;
-        volUp = v3 > v10 * 1.3;
-      }
-
-      const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
-      const isUp = trendState >= 2;
-      const isSide = trendState === 1;
-
-      let suggestion = '持有';
-      if (zone === '低位') {
-        if (isUp && hasBuy) suggestion = '重仓买入';
-        else if (isUp && volUp) suggestion = '买入';
-        else if (isUp) suggestion = '轻仓买入';
-        else if (isSide && hasBuy) suggestion = '准备买入';
-        else if (hasDanger) suggestion = '持有';
-        else suggestion = '轻仓买入';
-      } else if (zone === '中位') {
-        if (isUp && hasBuy) suggestion = '买入';
-        else if (isUp && volUp) suggestion = '轻仓买入';
-        else if (isUp) suggestion = '轻仓买入';
-        else if (isSide && hasBuy) suggestion = '准备买入';
-        else suggestion = '持有';
-      } else if (zone === '中高位') {
-        if (isUp && hasBuy) suggestion = '持有';
-        else if (isUp) suggestion = '持有';
-        else if (isSide && hasBuy) suggestion = '持有';
-        else if (isSide) suggestion = '观望';
-        else if (hasDanger) suggestion = '减仓';
-        else suggestion = '减仓';
-      } else {
-        if (isUp && hasBuy) suggestion = '持有';
-        else if (isUp) suggestion = '持有';
-        else if (hasDanger) suggestion = '卖出';
-        else suggestion = '减仓';
-      }
+      const cfsInput: any = {
+        pricePosition: pricePos,
+        trendState,
+        trendStrength: (baiXing as any)?.trendStrength ?? sanJiao?.trendStrength ?? 0,
+        diff, dea,
+        shortBuy: (lingXing as any)?.shortBuy ?? false,
+        strictBuy: (sanJiao as any)?.strictBuy ?? false,
+        jiaCang: (sanJiao as any)?.jiaCang ?? false,
+        shortSell: (xingX as any)?.shortSell ?? false,
+        strongSell: (xingX as any)?.strongSell ?? false,
+        safe: (baiXing as any)?.safe ?? false,
+        macdGoldenCross: isGoldenCross,
+        macdDeathCross: false,
+        baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
+        volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
+      };
+      const cfsResult = getTradingSuggestion(cfsInput);
+      const suggestion = cfsResult.action;
 
       const BASE: Record<string, number> = {
         '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
@@ -1314,48 +1305,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const lingXing: any = calcBaiLingXing(engine);
     const xingX: any = calcXingXing(engine);
 
+    const formulaInput: any = {
+      pricePosition: pricePos,
+      trendState,
+      trendStrength: (baiXing as any)?.trendStrength ?? sanJiao?.trendStrength ?? 0,
+      diff,
+      dea,
+      shortBuy: (lingXing as any)?.shortBuy ?? false,
+      strictBuy: (sanJiao as any)?.strictBuy ?? false,
+      jiaCang: (sanJiao as any)?.jiaCang ?? false,
+      shortSell: (xingX as any)?.shortSell ?? false,
+      strongSell: (xingX as any)?.strongSell ?? false,
+      safe: (baiXing as any)?.safe ?? false,
+      macdGoldenCross: macdR?.isGoldenCross ?? false,
+      macdDeathCross: false,
+      baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
+      volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
+    };
+
     const isGoldenCross = macdR?.isGoldenCross ?? false;
-    const hasBuy = !!(isGoldenCross || lingXing?.shortBuy || sanJiao?.jiaCang || (diff > dea && baiXing?.baiXiao));
-    const hasDanger = !!(xingX?.shortSell || xingX?.strongSell);
-
-    let volUp = false;
-    if (volumeArr.length >= 13) {
-      const v10 = volumeArr.slice(-13, -3).reduce((a: number, b: number) => a + b, 0) / 10;
-      const v3 = volumeArr.slice(-3).reduce((a: number, b: number) => a + b, 0) / 3;
-      volUp = v3 > v10 * 1.3;
-    }
-
-    const zone = pricePos <= 30 ? '低位' : pricePos <= 55 ? '中位' : pricePos <= 75 ? '中高位' : '高位';
-    const isUp = trendState >= 2;
-    const isSide = trendState === 1;
-
-    let suggestion = '持有';
-    if (zone === '低位') {
-      if (isUp && hasBuy) suggestion = '重仓买入';
-      else if (isUp && volUp) suggestion = '买入';
-      else if (isUp) suggestion = '轻仓买入';
-      else if (isSide && hasBuy) suggestion = '准备买入';
-      else if (hasDanger) suggestion = '持有';
-      else suggestion = '轻仓买入';
-    } else if (zone === '中位') {
-      if (isUp && hasBuy) suggestion = '买入';
-      else if (isUp && volUp) suggestion = '轻仓买入';
-      else if (isUp) suggestion = '轻仓买入';
-      else if (isSide && hasBuy) suggestion = '准备买入';
-      else suggestion = '持有';
-    } else if (zone === '中高位') {
-      if (isUp && hasBuy) suggestion = '持有';
-      else if (isUp) suggestion = '持有';
-      else if (isSide && hasBuy) suggestion = '持有';
-      else if (isSide) suggestion = '观望';
-      else if (hasDanger) suggestion = '减仓';
-      else suggestion = '减仓';
-    } else {
-      if (isUp && hasBuy) suggestion = '持有';
-      else if (isUp) suggestion = '持有';
-      else if (hasDanger) suggestion = '卖出';
-      else suggestion = '减仓';
-    }
+    const result = getTradingSuggestion(formulaInput);
+    const suggestion = result.action;
 
     const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
     if (NEGATIVE.includes(suggestion)) return null;
