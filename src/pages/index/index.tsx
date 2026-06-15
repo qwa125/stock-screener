@@ -90,6 +90,8 @@ interface StockResult {
   formula: FormulaResult;
   signals?: SignalEntry[];
   suggestion?: string;
+  prediction?: string;
+  reason?: string;
 }
 
 interface ApiResponse {
@@ -881,9 +883,13 @@ const IndexPage = () => {
             {(() => {
               // 优先使用服务端统一计算的建议（与机会区一致），兜底用前端算法
               const serverAction = result?.suggestion;
+              const serverPrediction = result?.prediction;
+              const serverReason = result?.reason;
               const clientSuggestion = getTradingSuggestion(f);
               const effectiveAction = serverAction || clientSuggestion.action;
-              const suggestion = { ...clientSuggestion, action: effectiveAction };
+              const suggestion = serverAction
+                ? { ...clientSuggestion, action: effectiveAction, prediction: serverPrediction || clientSuggestion.prediction, reason: serverReason || clientSuggestion.reason }
+                : { ...clientSuggestion, action: effectiveAction };
 
               const actionColors: Record<string, string> = {
                 '重仓买入': 'bg-red-600', '买入': 'bg-green-600', '轻仓买入': 'bg-green-500',

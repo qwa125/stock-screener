@@ -348,6 +348,8 @@ export class StockService {
     };
     const stockSuggestion = getTradingSuggestion(stockInput);
     const suggestion = stockSuggestion.action;
+    const prediction = stockSuggestion.prediction || '';
+    const reason = stockSuggestion.reason || '';
 
     // 14. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
     if (usesRealKline) {
@@ -358,6 +360,8 @@ export class StockService {
         signals,
         backtestStats,
         suggestion,
+        prediction,
+        reason,
       };
       this.analysisCache.set(stock.code, cacheEntry);
       this.saveAnalysisCache();
@@ -375,6 +379,8 @@ export class StockService {
       signals,
       backtestStats,
       suggestion,
+      prediction,
+      reason,
     };
   }
 }

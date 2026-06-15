@@ -1422,9 +1422,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const isGoldenCross = macdR?.isGoldenCross ?? false;
     const result = getTradingSuggestion(formulaInput);
     const suggestion = result.action;
+    const predictionText = result.prediction || '';
+    const reasonText = result.reason || '';
 
     const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
     if (NEGATIVE.includes(suggestion)) return null;
+
+    // 排除预测文本包含负面关键词的（即使 action 为正，但预测偏弱就不应入选）
+    const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '回落', '震荡', '注意风险'];
+    if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw))) return null;
 
     const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
     const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;

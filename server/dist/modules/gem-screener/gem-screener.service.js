@@ -1248,8 +1248,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
         const suggestion = result.action;
+        const predictionText = result.prediction || '';
+        const reasonText = result.reason || '';
         const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
         if (NEGATIVE.includes(suggestion))
+            return null;
+        const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '回落', '震荡', '注意风险'];
+        if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
             return null;
         const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
         const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
