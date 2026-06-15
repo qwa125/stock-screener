@@ -1349,56 +1349,75 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
-      const results: OpportunityStock[] = [];
-
       // 并行对最多30只股票进行 quickAnalyze，但整体超时20秒
-      const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s) => {
+      const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s): Promise<OpportunityStock | null> => {
         try {
           const stock = await this.quickAnalyze(s.code, s.name);
           if (stock) {
             (stock as any).sectorName = s.sectorName;
-            results.push(stock);
-          } else {
-            // quickAnalyze 失败（如API超时），使用缓存基础数据兜底
-            const fallback: any = {
-              code: s.code, name: s.name, sectorName: s.sectorName,
-              price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-              pricePosition: 50, mainForceInflow: 0,
-              score: 50, suggestion: '持有',
-              trendState: 1,
-            };
-            results.push(fallback);
+            return stock;
           }
         } catch {
-          // 异常兜底：同上
-          const fallback: any = {
-            code: s.code, name: s.name, sectorName: s.sectorName,
-            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-            pricePosition: 50, mainForceInflow: 0,
-            score: 50, suggestion: '持有',
-            trendState: 1,
-          };
-          results.push(fallback);
+          /* quickAnalyze 异常，fall through */
         }
+        // quickAnalyze 失败 → 返回 null（后续统一用 fallback）
+        return null;
       }));
 
-      // 给整个分析过程设置 20 秒硬超时，超时后使用 sector 原始数据兜底
-      const timeoutPromise = new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 20000);
+      // 给整个分析过程设置 20 秒硬超时
+      const TIMEOUT = Symbol('TIMEOUT');
+      const timeoutPromise = new Promise<symbol>((resolve) => {
+        setTimeout(() => resolve(TIMEOUT), 20000);
       });
-      await Promise.race([analyzePromise, timeoutPromise]);
 
-      // 如果超时或结果为空，使用 sector 中的原始股票数据兜底
-      if (results.length === 0) {
-        for (const s of oppStocks.slice(0, 30)) {
-          const fallback: any = {
-            code: s.code, name: s.name, sectorName: s.sectorName,
-            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-            pricePosition: 50, mainForceInflow: 0,
-            score: 50, suggestion: '持有',
+      const raceResult = await Promise.race([analyzePromise, timeoutPromise]);
+
+      let results: OpportunityStock[];
+      if (raceResult === TIMEOUT) {
+        // 超时兜底：使用 sector 原始股票数据
+        const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => ({
+          code: s.code,
+          name: s.name ?? '',
+          sectorName: s.sectorName,
+          currentPrice: s.price ?? 0,
+          changePercent: s.changePercent ?? 0,
+          pricePosition: 50,
+          mainForceInflow: 0,
+          score: 50,
+          suggestion: '持有',
+          trendState: 1,
+          capitalRank: 0,
+          baiXiaoDays: 0,
+          priceIncrease: 0,
+        }));
+        results = fallbackStocks as any;
+      } else {
+        // 分析正常完成，过滤掉失败的（null）
+        results = (raceResult as (OpportunityStock | null)[])
+          .filter((r): r is OpportunityStock => r !== null)
+          .map(r => {
+            const sr = r as any;
+            sr.sectorName = sr.sectorName || '';
+            return sr;
+          });
+        // 如果全部失败，也兜底
+        if (results.length === 0) {
+          const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => ({
+            code: s.code,
+            name: s.name ?? '',
+            sectorName: s.sectorName,
+            currentPrice: s.price ?? 0,
+            changePercent: s.changePercent ?? 0,
+            pricePosition: 50,
+            mainForceInflow: 0,
+            score: 50,
+            suggestion: '持有',
             trendState: 1,
-          };
-          results.push(fallback);
+            capitalRank: 0,
+            baiXiaoDays: 0,
+            priceIncrease: 0,
+          }));
+          results = fallbackStocks as any;
         }
       }
 

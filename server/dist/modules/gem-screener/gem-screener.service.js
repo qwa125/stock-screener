@@ -1173,50 +1173,67 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     });
                 }
             }
-            const results = [];
             const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s) => {
                 try {
                     const stock = await this.quickAnalyze(s.code, s.name);
                     if (stock) {
                         stock.sectorName = s.sectorName;
-                        results.push(stock);
-                    }
-                    else {
-                        const fallback = {
-                            code: s.code, name: s.name, sectorName: s.sectorName,
-                            price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-                            pricePosition: 50, mainForceInflow: 0,
-                            score: 50, suggestion: '持有',
-                            trendState: 1,
-                        };
-                        results.push(fallback);
+                        return stock;
                     }
                 }
                 catch {
-                    const fallback = {
-                        code: s.code, name: s.name, sectorName: s.sectorName,
-                        price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-                        pricePosition: 50, mainForceInflow: 0,
-                        score: 50, suggestion: '持有',
-                        trendState: 1,
-                    };
-                    results.push(fallback);
                 }
+                return null;
             }));
+            const TIMEOUT = Symbol('TIMEOUT');
             const timeoutPromise = new Promise((resolve) => {
-                setTimeout(() => resolve(), 20000);
+                setTimeout(() => resolve(TIMEOUT), 20000);
             });
-            await Promise.race([analyzePromise, timeoutPromise]);
-            if (results.length === 0) {
-                for (const s of oppStocks.slice(0, 30)) {
-                    const fallback = {
-                        code: s.code, name: s.name, sectorName: s.sectorName,
-                        price: s.price ?? 0, changePercent: s.changePercent ?? 0,
-                        pricePosition: 50, mainForceInflow: 0,
-                        score: 50, suggestion: '持有',
+            const raceResult = await Promise.race([analyzePromise, timeoutPromise]);
+            let results;
+            if (raceResult === TIMEOUT) {
+                const fallbackStocks = oppStocks.slice(0, 30).map((s) => ({
+                    code: s.code,
+                    name: s.name ?? '',
+                    sectorName: s.sectorName,
+                    currentPrice: s.price ?? 0,
+                    changePercent: s.changePercent ?? 0,
+                    pricePosition: 50,
+                    mainForceInflow: 0,
+                    score: 50,
+                    suggestion: '持有',
+                    trendState: 1,
+                    capitalRank: 0,
+                    baiXiaoDays: 0,
+                    priceIncrease: 0,
+                }));
+                results = fallbackStocks;
+            }
+            else {
+                results = raceResult
+                    .filter((r) => r !== null)
+                    .map(r => {
+                    const sr = r;
+                    sr.sectorName = sr.sectorName || '';
+                    return sr;
+                });
+                if (results.length === 0) {
+                    const fallbackStocks = oppStocks.slice(0, 30).map((s) => ({
+                        code: s.code,
+                        name: s.name ?? '',
+                        sectorName: s.sectorName,
+                        currentPrice: s.price ?? 0,
+                        changePercent: s.changePercent ?? 0,
+                        pricePosition: 50,
+                        mainForceInflow: 0,
+                        score: 50,
+                        suggestion: '持有',
                         trendState: 1,
-                    };
-                    results.push(fallback);
+                        capitalRank: 0,
+                        baiXiaoDays: 0,
+                        priceIncrease: 0,
+                    }));
+                    results = fallbackStocks;
                 }
             }
             const ORDER = {
