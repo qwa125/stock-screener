@@ -1180,7 +1180,17 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 try {
                     const stock = await this.quickAnalyze(s.code, s.name);
                     if (stock) {
-                        stock.sectorName = s.sectorName;
+                        const sr = stock;
+                        sr.sectorName = s.sectorName;
+                        if (!sr.mainForceInflow && s.mainForceInflow) {
+                            sr.mainForceInflow = s.mainForceInflow;
+                        }
+                        if (!sr.baiXiaoDays && s.baiXiaoDays)
+                            sr.baiXiaoDays = s.baiXiaoDays;
+                        if (!sr.pricePosition && s.pricePosition)
+                            sr.pricePosition = s.pricePosition;
+                        if (!sr.priceIncrease && s.priceIncrease)
+                            sr.priceIncrease = s.priceIncrease;
                         return stock;
                     }
                 }

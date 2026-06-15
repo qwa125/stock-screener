@@ -1357,7 +1357,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
         try {
           const stock = await this.quickAnalyze(s.code, s.name);
           if (stock) {
-            (stock as any).sectorName = s.sectorName;
+            const sr = stock as any;
+            sr.sectorName = s.sectorName;
+            // 如果 quickAnalyze 没有获取到主力资金，从 sector 数据透传
+            if (!sr.mainForceInflow && s.mainForceInflow) {
+              sr.mainForceInflow = s.mainForceInflow;
+            }
+            if (!sr.baiXiaoDays && s.baiXiaoDays) sr.baiXiaoDays = s.baiXiaoDays;
+            if (!sr.pricePosition && s.pricePosition) sr.pricePosition = s.pricePosition;
+            if (!sr.priceIncrease && s.priceIncrease) sr.priceIncrease = s.priceIncrease;
             return stock;
           }
         } catch {
