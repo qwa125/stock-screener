@@ -7,6 +7,19 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Settings, Users, Trash2 } from 'lucide-react-taro';
 import Taro from '@tarojs/taro';
 
+const API_TIMEOUT = 15000; // 15s 超时，避免网络挂起
+
+/** 带超时的 Network.request 封装 */
+const timeoutFetch = async (url: string, options?: any) => {
+  const res = await Promise.race([
+    Network.request({ url, ...options }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('请求超时，请检查网络连接')), API_TIMEOUT)
+    ),
+  ]);
+  return res;
+};
+
 interface DeviceInfo {
   index: number;
   fingerprint: string;
@@ -32,8 +45,8 @@ const AdminPage = () => {
     try {
       setLoading(true);
       const [configRes, devicesRes] = await Promise.all([
-        Network.request({ url: '/api/auth/max-slots' }),
-        Network.request({ url: '/api/auth/devices' }),
+        timeoutFetch('/api/auth/max-slots'),
+        timeoutFetch('/api/auth/devices'),
       ]);
 
       // 解析配置
