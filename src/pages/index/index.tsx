@@ -424,6 +424,24 @@ function getOpportunitySuggestion(stock: OpportunityStock): string {
   return '减仓';
 }
 
+/** 格式化主力资金：带 ± 符号和万/亿单位 */
+const formatMainForce = (value: number | undefined | null): string => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) return '-';
+  const v = Number(value);
+  const abs = Math.abs(v);
+  const sign = v >= 0 ? '+' : '-';
+  if (abs >= 100000000) {
+    return `${sign}${(abs / 100000000).toFixed(2)}亿`;
+  }
+  return `${sign}${(abs / 10000).toFixed(0)}万`;
+};
+
+/** 主力资金颜色 */
+const mainForceColor = (value: number | undefined | null): string => {
+  if (value === undefined || value === null) return '#999';
+  return (value ?? 0) >= 0 ? '#ef4444' : '#22c55e';
+};
+
 // ===== 组件 =====
 /** 信息行 */
 const InfoItem = ({ label, value }: { label: string; value: string }) => (
@@ -1156,7 +1174,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">累计涨幅</Text>
                 </View>
                 <View style={{ flex: 1 }} className="text-right">
-                  <Text className="block text-xs text-gray-400">主力资金</Text>
+                  <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
               {gemData.map((stock, idx) => {
@@ -1191,15 +1209,9 @@ const IndexPage = () => {
                         </Text>
                       </View>
                       <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: (stock.mainForceInflow ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {!stock.mainForceInflow && stock.mainForceInflow !== 0 ? '-' : 
-                           stock.mainForceInflow === 0 ? '0' : 
-                           `${stock.mainForceInflow >= 0 ? '+' : '-'}${
-                             Math.abs(stock.mainForceInflow) >= 100000000 
-                               ? `${(Math.abs(stock.mainForceInflow) / 100000000).toFixed(2)}亿` 
-                               : `${(Math.abs(stock.mainForceInflow) / 10000).toFixed(0)}万`
-                           }`}
+                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: mainForceColor(stock.mainForceInflow) }}>
+                          {formatMainForce(stock.mainForceInflow)}
                         </Text>
                       </View>
                     </View>
@@ -1255,7 +1267,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">累计涨幅</Text>
                 </View>
                 <View style={{ flex: 1 }} className="text-right">
-                  <Text className="block text-xs text-gray-400">主力资金</Text>
+                  <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
               {mainData.map((stock, idx) => {
@@ -1290,15 +1302,9 @@ const IndexPage = () => {
                         </Text>
                       </View>
                       <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: (stock.mainForceInflow ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {!stock.mainForceInflow && stock.mainForceInflow !== 0 ? '-' : 
-                           stock.mainForceInflow === 0 ? '0' : 
-                           `${stock.mainForceInflow >= 0 ? '+' : '-'}${
-                             Math.abs(stock.mainForceInflow) >= 100000000 
-                               ? `${(Math.abs(stock.mainForceInflow) / 100000000).toFixed(2)}亿` 
-                               : `${(Math.abs(stock.mainForceInflow) / 10000).toFixed(0)}万`
-                           }`}
+                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: mainForceColor(stock.mainForceInflow) }}>
+                          {formatMainForce(stock.mainForceInflow)}
                         </Text>
                       </View>
                     </View>
@@ -1356,7 +1362,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">累计涨幅</Text>
                 </View>
                 <View style={{ flex: 1 }} className="text-right">
-                  <Text className="block text-xs text-gray-400">主力资金</Text>
+                  <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
               {sectorData.map((item: any, idx: number) => {
@@ -1392,14 +1398,9 @@ const IndexPage = () => {
                         </Text>
                       </View>
                       <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>{(item.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: (item.mainForceInflow ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {item.mainForceInflow === 0 || item.mainForceInflow === undefined || item.mainForceInflow === null ? '0' :
-                           `${item.mainForceInflow >= 0 ? '+' : '-'}${
-                             Math.abs(item.mainForceInflow) >= 100000000
-                               ? `${(Math.abs(item.mainForceInflow) / 100000000).toFixed(2)}亿`
-                               : `${(Math.abs(item.mainForceInflow) / 10000).toFixed(0)}万`
-                           }`}
+                        <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(item.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: mainForceColor(item.mainForceInflow) }}>
+                          {formatMainForce(item.mainForceInflow)}
                         </Text>
                       </View>
                     </View>
