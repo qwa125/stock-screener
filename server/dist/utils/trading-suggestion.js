@@ -66,7 +66,9 @@ function getTradingSuggestion(f) {
         if (trend >= 2) {
             if (strongBuy)
                 return { action: '买入', color: 'bg-green-600', reason: '中位区上升+买入信号，看好', prediction: '未来1-2日有望延续上涨' };
-            return { action: '轻仓买入', color: 'bg-green-500', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入' };
+            if (hasBuySignal)
+                return { action: '轻仓买入', color: 'bg-green-500', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入' };
+            return { action: '持有', color: 'bg-yellow-500', reason: '中位区上升但无买入信号，暂持观察', prediction: '未来1-2日方向待确认，建议持有' };
         }
         if (trend === 0) {
             if (strongBuy)
@@ -98,7 +100,9 @@ function getTradingSuggestion(f) {
     if (trend >= 2) {
         if (trend >= 3 && hasBuySignal)
             return { action: '重仓买入', color: 'bg-red-600', reason: '低位强上升+买入信号共振', prediction: '未来1-2日预计继续上攻' };
-        return { action: '买入', color: 'bg-green-600', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，建议买入' };
+        if (hasBuySignal)
+            return { action: '买入', color: 'bg-green-600', reason: '低位上升趋势+买入信号', prediction: '未来1-2日延续反弹，建议买入' };
+        return { action: '持有', color: 'bg-yellow-500', reason: '低位上升但无买入信号，等待确认', prediction: '未来1-2日可能震荡，等待放量确认' };
     }
     if (safe)
         return { action: '持有', color: 'bg-yellow-500', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有' };

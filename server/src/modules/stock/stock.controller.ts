@@ -7,6 +7,7 @@ import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { StockService } from './stock.service';
+import { SkipAccessLimit } from '@/guards/access-limit.guard';
 
 @Controller('stock')
 export class StockController {
@@ -48,6 +49,7 @@ export class StockController {
     }
   }
 
+  @SkipAccessLimit()
   @Get('analyze')
   async analyze(@Query('q') query: string) {
     if (!query || query.trim().length === 0) {

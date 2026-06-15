@@ -282,7 +282,8 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
     if (trend >= 2) {
       if (strongBuy) return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '中位区上升+买入信号，看好', prediction: '未来1-2日有望延续上涨', predictionColor: '#16a34a' };
-      return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入', predictionColor: '#16a34a' };
+      if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', iconColor: '#22c55e', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入', predictionColor: '#16a34a' };
+      return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区上升但无买入信号，暂持观察', prediction: '未来1-2日方向待确认，建议持有', predictionColor: '#eab308' };
     }
     if (trend === 0) {
       if (strongBuy) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '中位区下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有', predictionColor: '#eab308' };
@@ -316,7 +317,8 @@ function getTradingSuggestion(f: FormulaResult): TradingSuggestion {
   // 低位+上升趋势
   if (trend >= 2) {
     if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', iconColor: '#dc2626', reason: '低位强上升+买入信号共振', prediction: '未来1-2日预计继续上攻', predictionColor: '#16a34a' };
-    return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势，反弹开启', prediction: '未来1-2日延续反弹，建议买入', predictionColor: '#16a34a' };
+    if (hasBuySignal) return { action: '买入', color: 'bg-green-600', iconColor: '#16a34a', reason: '低位上升趋势+买入信号', prediction: '未来1-2日延续反弹，建议买入', predictionColor: '#16a34a' };
+    return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '低位上升但无买入信号，等待确认', prediction: '未来1-2日可能震荡，等待放量确认', predictionColor: '#eab308' };
   }
   // 低位横盘（默认）
   if (safe) return { action: '持有', color: 'bg-yellow-500', iconColor: '#eab308', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有', predictionColor: '#3b82f6' };

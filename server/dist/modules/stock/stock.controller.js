@@ -17,6 +17,7 @@ exports.StockController = void 0;
 const common_1 = require("@nestjs/common");
 const fs = require("fs");
 const stock_service_1 = require("./stock.service");
+const access_limit_guard_1 = require("../../guards/access-limit.guard");
 let StockController = StockController_1 = class StockController {
     constructor(stockService) {
         this.stockService = stockService;
@@ -116,6 +117,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], StockController.prototype, "search", null);
 __decorate([
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.Get)('analyze'),
     __param(0, (0, common_1.Query)('q')),
     __metadata("design:type", Function),
