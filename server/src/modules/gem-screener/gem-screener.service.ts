@@ -89,6 +89,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private sectorCache: CacheEntry | null = null;
   private readonly MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
   private readonly BUNDLED_MAIN_BOARD_CACHE = join(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
+  private readonly SECTOR_CACHE = '/tmp/sector-opportunities-cache.json';
+  private readonly BUNDLED_SECTOR_CACHE = join(__dirname, '..', '..', '..', 'assets', 'sector-cache.json');
 
   // 扫描排班 / 交叠保留
   private prevGEMResults: OpportunityStock[] = [];       // 上一次GEM扫描结果 (用于5分钟交叠)
@@ -104,7 +106,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.updateMarketHoursBeganAt();
     this.loadCacheFromDisk();
     this.loadMainBoardCacheFromDisk();
-  }
+    this.loadSectorCacheFromDisk();
 
   // ---------------------------------------------------------------------------
   // 扫描排班: 判断当前处于"冻结时段"还是"盘中时段"
@@ -188,6 +190,35 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     } catch (err) {
       this.logger.warn(`⚠️ 主板部署包缓存加载失败: ${err.message}`);
+    }
+  }
+
+  private async loadSectorCacheFromDisk() {
+    try {
+      const raw = await fs.readFile(this.SECTOR_CACHE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data && Array.isArray(parsed.data)) {
+        const limitedData = parsed.data.slice(0, 10);
+        this.sectorCache = { ...parsed, data: limitedData };
+        this.logger.log(`📦 板块加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
+        return;
+      }
+    } catch {
+      this.logger.log('📦 无板块本地缓存');
+    }
+    // 回退：从部署包内置 assets/sector-cache.json 恢复
+    try {
+      if (existsSync(this.BUNDLED_SECTOR_CACHE)) {
+        const raw = readFileSync(this.BUNDLED_SECTOR_CACHE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.data && Array.isArray(parsed.data)) {
+          const limitedData = parsed.data.slice(0, 10);
+          this.sectorCache = { ...parsed, data: limitedData };
+          this.logger.log(`📦 从部署包恢复板块缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`⚠️ 板块部署包缓存加载失败: ${err.message}`);
     }
   }
 
@@ -1645,6 +1676,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       });
       const top = results.slice(0, 10);
       this.sectorCache = { data: top, timestamp: Date.now() };
+      try { fs.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache)); } catch {}
       return { opportunities: top, timestamp: this.sectorCache.timestamp };
     } catch (e) {
       return { opportunities: [], timestamp: Date.now() };

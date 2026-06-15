@@ -57,6 +57,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.sectorCache = null;
         this.MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
         this.BUNDLED_MAIN_BOARD_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
+        this.SECTOR_CACHE = '/tmp/sector-opportunities-cache.json';
+        this.BUNDLED_SECTOR_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'sector-cache.json');
         this.prevGEMResults = [];
         this.prevMainBoardResults = [];
         this.lastScanAt = 0;
@@ -65,6 +67,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
+        this.loadSectorCacheFromDisk();
     }
     isFrozenSchedule() {
         const now = new Date();
@@ -140,6 +143,35 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         catch (err) {
             this.logger.warn(`⚠️ 主板部署包缓存加载失败: ${err.message}`);
+        }
+    }
+    async loadSectorCacheFromDisk() {
+        try {
+            const raw = await fs_1.promises.readFile(this.SECTOR_CACHE, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.data && Array.isArray(parsed.data)) {
+                const limitedData = parsed.data.slice(0, 10);
+                this.sectorCache = { ...parsed, data: limitedData };
+                this.logger.log(`📦 板块加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
+                return;
+            }
+        }
+        catch {
+            this.logger.log('📦 无板块本地缓存');
+        }
+        try {
+            if ((0, fs_1.existsSync)(this.BUNDLED_SECTOR_CACHE)) {
+                const raw = (0, fs_1.readFileSync)(this.BUNDLED_SECTOR_CACHE, 'utf-8');
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.data && Array.isArray(parsed.data)) {
+                    const limitedData = parsed.data.slice(0, 10);
+                    this.sectorCache = { ...parsed, data: limitedData };
+                    this.logger.log(`📦 从部署包恢复板块缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
+                }
+            }
+        }
+        catch (err) {
+            this.logger.warn(`⚠️ 板块部署包缓存加载失败: ${err.message}`);
         }
     }
     async saveCacheToDisk() {
@@ -1418,6 +1450,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             });
             const top = results.slice(0, 10);
             this.sectorCache = { data: top, timestamp: Date.now() };
+            try {
+                fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
+            }
+            catch { }
             return { opportunities: top, timestamp: this.sectorCache.timestamp };
         }
         catch (e) {
