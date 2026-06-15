@@ -1205,21 +1205,32 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const raceResult = await Promise.race([analyzePromise, timeoutPromise]);
             let results;
             if (raceResult === TIMEOUT) {
-                const fallbackStocks = oppStocks.slice(0, 30).map((s) => ({
-                    code: s.code,
-                    name: s.name ?? '',
-                    sectorName: s.sectorName,
-                    currentPrice: s.price ?? 0,
-                    changePercent: s.changePercent ?? 0,
-                    pricePosition: s.pricePosition ?? 50,
-                    mainForceInflow: s.mainForceInflow ?? 0,
-                    score: s.score ?? 50,
-                    suggestion: '持有',
-                    trendState: 1,
-                    capitalRank: 0,
-                    baiXiaoDays: s.baiXiaoDays ?? 0,
-                    priceIncrease: s.priceIncrease ?? 0,
-                }));
+                const fallbackStocks = oppStocks.slice(0, 30).map((s) => {
+                    const sc = s.score ?? 50;
+                    const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
+                    let suggestion = '持有';
+                    if (effectiveScore >= 80)
+                        suggestion = '重仓买入';
+                    else if (effectiveScore >= 60)
+                        suggestion = '买入';
+                    else if (effectiveScore >= 40 || s.buySignal)
+                        suggestion = '轻仓买入';
+                    return {
+                        code: s.code,
+                        name: s.name ?? '',
+                        sectorName: s.sectorName,
+                        currentPrice: s.price ?? 0,
+                        changePercent: s.changePercent ?? 0,
+                        pricePosition: s.pricePosition ?? 50,
+                        mainForceInflow: s.mainForceInflow ?? 0,
+                        score: effectiveScore,
+                        suggestion,
+                        trendState: 1,
+                        capitalRank: 0,
+                        baiXiaoDays: s.baiXiaoDays ?? 0,
+                        priceIncrease: s.priceIncrease ?? 0,
+                    };
+                });
                 results = fallbackStocks;
             }
             else {
@@ -1231,21 +1242,32 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     return sr;
                 });
                 if (results.length === 0) {
-                    const fallbackStocks = oppStocks.slice(0, 30).map((s) => ({
-                        code: s.code,
-                        name: s.name ?? '',
-                        sectorName: s.sectorName,
-                        currentPrice: s.price ?? 0,
-                        changePercent: s.changePercent ?? 0,
-                        pricePosition: s.pricePosition ?? 50,
-                        mainForceInflow: s.mainForceInflow ?? 0,
-                        score: s.score ?? 50,
-                        suggestion: '持有',
-                        trendState: 1,
-                        capitalRank: 0,
-                        baiXiaoDays: s.baiXiaoDays ?? 0,
-                        priceIncrease: s.priceIncrease ?? 0,
-                    }));
+                    const fallbackStocks = oppStocks.slice(0, 30).map((s) => {
+                        const sc = s.score ?? 50;
+                        const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
+                        let suggestion = '持有';
+                        if (effectiveScore >= 80)
+                            suggestion = '重仓买入';
+                        else if (effectiveScore >= 60)
+                            suggestion = '买入';
+                        else if (effectiveScore >= 40 || s.buySignal)
+                            suggestion = '轻仓买入';
+                        return {
+                            code: s.code,
+                            name: s.name ?? '',
+                            sectorName: s.sectorName,
+                            currentPrice: s.price ?? 0,
+                            changePercent: s.changePercent ?? 0,
+                            pricePosition: s.pricePosition ?? 50,
+                            mainForceInflow: s.mainForceInflow ?? 0,
+                            score: effectiveScore,
+                            suggestion,
+                            trendState: 1,
+                            capitalRank: 0,
+                            baiXiaoDays: s.baiXiaoDays ?? 0,
+                            priceIncrease: s.priceIncrease ?? 0,
+                        };
+                    });
                     results = fallbackStocks;
                 }
             }

@@ -1385,22 +1385,30 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
       let results: OpportunityStock[];
       if (raceResult === TIMEOUT) {
-        // 超时兜底：使用 sector 原始股票数据
-        const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => ({
-          code: s.code,
-          name: s.name ?? '',
-          sectorName: s.sectorName,
-          currentPrice: s.price ?? 0,
-          changePercent: s.changePercent ?? 0,
-          pricePosition: s.pricePosition ?? 50,
-          mainForceInflow: s.mainForceInflow ?? 0,
-          score: s.score ?? 50,
-          suggestion: '持有',
-          trendState: 1,
-          capitalRank: 0,
-          baiXiaoDays: s.baiXiaoDays ?? 0,
-          priceIncrease: s.priceIncrease ?? 0,
-        }));
+        // 超时兜底：使用 sector 原始股票数据，根据 score 推导建议
+        const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => {
+          const sc = s.score ?? 50;
+          const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
+          let suggestion = '持有';
+          if (effectiveScore >= 80) suggestion = '重仓买入';
+          else if (effectiveScore >= 60) suggestion = '买入';
+          else if (effectiveScore >= 40 || s.buySignal) suggestion = '轻仓买入';
+          return {
+            code: s.code,
+            name: s.name ?? '',
+            sectorName: s.sectorName,
+            currentPrice: s.price ?? 0,
+            changePercent: s.changePercent ?? 0,
+            pricePosition: s.pricePosition ?? 50,
+            mainForceInflow: s.mainForceInflow ?? 0,
+            score: effectiveScore,
+            suggestion,
+            trendState: 1,
+            capitalRank: 0,
+            baiXiaoDays: s.baiXiaoDays ?? 0,
+            priceIncrease: s.priceIncrease ?? 0,
+          };
+        });
         results = fallbackStocks as any;
       } else {
         // 分析正常完成，过滤掉失败的（null）
@@ -1413,21 +1421,29 @@ export class GemScreenerService implements OnApplicationBootstrap {
           });
         // 如果全部失败，也兜底
         if (results.length === 0) {
-          const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => ({
-            code: s.code,
-            name: s.name ?? '',
-            sectorName: s.sectorName,
-            currentPrice: s.price ?? 0,
-            changePercent: s.changePercent ?? 0,
-            pricePosition: s.pricePosition ?? 50,
-            mainForceInflow: s.mainForceInflow ?? 0,
-            score: s.score ?? 50,
-            suggestion: '持有',
-            trendState: 1,
-            capitalRank: 0,
-            baiXiaoDays: s.baiXiaoDays ?? 0,
-            priceIncrease: s.priceIncrease ?? 0,
-          }));
+          const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => {
+            const sc = s.score ?? 50;
+            const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
+            let suggestion = '持有';
+            if (effectiveScore >= 80) suggestion = '重仓买入';
+            else if (effectiveScore >= 60) suggestion = '买入';
+            else if (effectiveScore >= 40 || s.buySignal) suggestion = '轻仓买入';
+            return {
+              code: s.code,
+              name: s.name ?? '',
+              sectorName: s.sectorName,
+              currentPrice: s.price ?? 0,
+              changePercent: s.changePercent ?? 0,
+              pricePosition: s.pricePosition ?? 50,
+              mainForceInflow: s.mainForceInflow ?? 0,
+              score: effectiveScore,
+              suggestion,
+              trendState: 1,
+              capitalRank: 0,
+              baiXiaoDays: s.baiXiaoDays ?? 0,
+              priceIncrease: s.priceIncrease ?? 0,
+            };
+          });
           results = fallbackStocks as any;
         }
       }
