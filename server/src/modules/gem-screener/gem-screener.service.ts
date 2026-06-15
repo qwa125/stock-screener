@@ -65,8 +65,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly CACHE_FILE = '/tmp/gem-opportunities-cache.json';
   private readonly BUNDLED_GEM_CACHE = join(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
   private readonly BATCH_SIZE = 20;
-  private readonly POSITION_THRESHOLD = 75;
-  private readonly RELAXED_POSITION = 82;
+  private readonly POSITION_THRESHOLD = 85;
+  private readonly RELAXED_POSITION = 90;
   // Tencent API 批量查询 GEM 股票 (替代被屏蔽的 EastMoney push2)
   private readonly TENANT_BATCH = 500;       // 每批查询数
   private readonly MIN_GAIN_PCT = 0.3;
@@ -559,7 +559,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ② MA5 斜率向上
     if (len >= 8) {
       const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-      if (ma5 <= ma5_3d) return null;
+      if (ma5 < ma5_3d) return null;
     }
 
     // ③ MA10 斜率向上或走平（中短线趋势确认）
@@ -761,7 +761,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     if (len >= 8) {
       const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-      if (ma5 <= ma5_3d) return null;
+      if (ma5 < ma5_3d) return null;
     }
 
     // MA10 斜率向上或走平

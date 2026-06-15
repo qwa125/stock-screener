@@ -40,8 +40,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
-        this.POSITION_THRESHOLD = 75;
-        this.RELAXED_POSITION = 82;
+        this.POSITION_THRESHOLD = 85;
+        this.RELAXED_POSITION = 90;
         this.TENANT_BATCH = 500;
         this.MIN_GAIN_PCT = 0.3;
         this.MAX_MARKET_CAP = 500_0000_0000;
@@ -424,7 +424,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         if (len >= 8) {
             const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-            if (ma5 <= ma5_3d)
+            if (ma5 < ma5_3d)
                 return null;
         }
         if (len >= 15) {
@@ -625,7 +625,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         if (len >= 8) {
             const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-            if (ma5 <= ma5_3d)
+            if (ma5 < ma5_3d)
                 return null;
         }
         if (len >= 15) {
