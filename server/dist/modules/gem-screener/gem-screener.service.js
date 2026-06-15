@@ -389,7 +389,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         const finalResults = results.slice(0, 10);
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
@@ -578,8 +581,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
         if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
             return null;
+        const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
+        const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
         return {
             capitalRank: 0,
+            entryTiming: Math.round(entryTiming * 100) / 100,
+            safetyScore: Math.round(safetyScore * 100) / 100,
             code: s.code,
             name: s.name,
             mainForceInflow: s.inflow,
@@ -756,8 +763,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
         if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
             return null;
+        const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
+        const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
         return {
             capitalRank: 0,
+            entryTiming: Math.round(entryTiming * 100) / 100,
+            safetyScore: Math.round(safetyScore * 100) / 100,
             code: s.code,
             name: s.name,
             mainForceInflow: s.inflow,
@@ -773,6 +784,112 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             isGoldenCross,
             suggestion: suggestionR,
         };
+    }
+    calcEntryTiming(pricePosition, trendState, closeArr, highArr, lowArr, volumeArr, macdGoldenCross) {
+        const len = closeArr.length;
+        if (len < 10)
+            return 50;
+        let timing = 50;
+        const currentPrice = closeArr[len - 1];
+        if (pricePosition >= 28 && pricePosition <= 55) {
+            const periodHigh60 = Math.max(...closeArr.slice(-60));
+            const periodLow60 = Math.min(...closeArr.slice(-60));
+            const prevDistanceFromHigh = (periodHigh60 - currentPrice) / (periodHigh60 - periodLow60 || 1);
+            if (prevDistanceFromHigh > 0.3) {
+                const recent10 = closeArr.slice(-10);
+                const mean = recent10.reduce((a, b) => a + b, 0) / 10;
+                const variance = recent10.reduce((sum, v) => sum + (v - mean) ** 2, 0) / 10;
+                const std = Math.sqrt(variance);
+                const volatility = std / mean;
+                if (volatility < 0.025) {
+                    timing += 25;
+                }
+                if (trendState >= 2)
+                    timing += 15;
+                if (macdGoldenCross)
+                    timing += 10;
+                if (volatility < 0.025 && trendState >= 2)
+                    timing += 5;
+            }
+        }
+        if (pricePosition >= 75 && trendState >= 2) {
+            timing += 20;
+            const recentHigh20 = Math.max(...closeArr.slice(-20, -1));
+            if (currentPrice >= recentHigh20 * 0.98) {
+                timing += 15;
+            }
+            if (macdGoldenCross)
+                timing += 10;
+            if (trendState >= 3)
+                timing += 5;
+        }
+        if (pricePosition >= 15 && pricePosition < 28 && trendState >= 2) {
+            timing += 15;
+            if (macdGoldenCross)
+                timing += 10;
+            const avgVol30 = volumeArr.slice(-30).reduce((a, b) => a + b, 0) / 30;
+            const recentVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            if (recentVol5 > avgVol30 * 1.3)
+                timing += 10;
+        }
+        return Math.min(Math.max(timing, 0), 100);
+    }
+    calcSafetyScore(closeArr, highArr, lowArr, volumeArr, pricePosition, trendState) {
+        const len = closeArr.length;
+        if (len < 20)
+            return 50;
+        let safety = 55;
+        const recent20 = closeArr.slice(-20);
+        const dailyReturns = [];
+        for (let i = 1; i < recent20.length; i++) {
+            dailyReturns.push((recent20[i] - recent20[i - 1]) / recent20[i - 1]);
+        }
+        const meanRet = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+        const varRet = dailyReturns.reduce((sum, v) => sum + (v - meanRet) ** 2, 0) / dailyReturns.length;
+        const volStd = Math.sqrt(varRet);
+        const annualizedVol = volStd * Math.sqrt(252);
+        if (annualizedVol < 0.35) {
+            safety += 20;
+        }
+        else if (annualizedVol < 0.50) {
+            safety += 10;
+        }
+        else if (annualizedVol > 0.70) {
+            safety -= 15;
+        }
+        const lastReturn = Math.abs(dailyReturns[dailyReturns.length - 1] || 0);
+        if (lastReturn > 0.12) {
+            safety -= 20;
+        }
+        else if (lastReturn > 0.08) {
+            safety -= 10;
+        }
+        let consecutiveBigUp = 0;
+        for (let i = dailyReturns.length - 1; i >= 0; i--) {
+            if (dailyReturns[i] > 0.05)
+                consecutiveBigUp++;
+            else
+                break;
+        }
+        if (consecutiveBigUp >= 3)
+            safety -= 15;
+        else if (consecutiveBigUp >= 2)
+            safety -= 5;
+        if (pricePosition > 92)
+            safety -= 10;
+        else if (pricePosition > 80)
+            safety -= 5;
+        else if (pricePosition < 15)
+            safety -= 5;
+        if (trendState >= 2 && pricePosition < 70) {
+            safety += 10;
+        }
+        const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const lastVol = volumeArr[volumeArr.length - 1] || 0;
+        if (lastVol > avgVol20 * 2 && dailyReturns[dailyReturns.length - 1] < 0) {
+            safety -= 10;
+        }
+        return Math.min(Math.max(safety, 0), 100);
     }
     async fetchGEMCandidates() {
         const candidates = [];
@@ -988,7 +1105,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         this.logger.log(`✅ 主板扫描完成, 共 ${results.length} 只机会股`);
         const finalResults = results.slice(0, 10);
@@ -1215,16 +1335,24 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         suggestion = '买入';
                     else if (effectiveScore >= 40 || s.buySignal)
                         suggestion = '轻仓买入';
+                    const pp = s.pricePosition ?? 50;
+                    const estEntryTiming = (pp >= 25 && pp <= 55) ? 65
+                        : (pp >= 72 && suggestion !== '持有') ? 60
+                            : 45;
+                    const cp = Math.abs(s.changePercent ?? 0);
+                    const estSafety = cp < 3 ? 65 : cp < 7 ? 55 : cp < 10 ? 40 : 25;
                     return {
                         code: s.code,
                         name: s.name ?? '',
                         sectorName: s.sectorName,
                         currentPrice: s.price ?? 0,
                         changePercent: s.changePercent ?? 0,
-                        pricePosition: s.pricePosition ?? 50,
+                        pricePosition: pp,
                         mainForceInflow: s.mainForceInflow ?? 0,
                         score: effectiveScore,
                         suggestion,
+                        entryTiming: estEntryTiming,
+                        safetyScore: estSafety,
                         trendState: 1,
                         capitalRank: 0,
                         baiXiaoDays: s.baiXiaoDays ?? 0,
@@ -1262,6 +1390,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             mainForceInflow: s.mainForceInflow ?? 0,
                             score: effectiveScore,
                             suggestion,
+                            entryTiming: (s.pricePosition >= 25 && s.pricePosition <= 55) ? 65
+                                : (s.pricePosition >= 72 && suggestion !== '持有') ? 60 : 45,
+                            safetyScore: Math.abs(s.changePercent ?? 0) < 3 ? 65
+                                : Math.abs(s.changePercent ?? 0) < 7 ? 55
+                                    : Math.abs(s.changePercent ?? 0) < 10 ? 40 : 25,
                             trendState: 1,
                             capitalRank: 0,
                             baiXiaoDays: s.baiXiaoDays ?? 0,
@@ -1278,7 +1411,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             results.sort((a, b) => {
                 const pa = ORDER[a.suggestion ?? ''] ?? 99;
                 const pb = ORDER[b.suggestion ?? ''] ?? 99;
-                return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+                return pa !== pb ? pa - pb
+                    : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                            : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
             });
             const top = results.slice(0, 10);
             this.sectorCache = { data: top, timestamp: Date.now() };
@@ -1325,7 +1461,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         combined.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
             const pb = ORDER[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
     }
@@ -1362,9 +1501,114 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         results.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
             const pb = ORDER[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         return results.slice(0, topN);
+    }
+    static calcEntryTiming(pricePos, trendState, closeArr, macdGoldenCross, volumeArr) {
+        let score = 45;
+        if (pricePos >= 25 && pricePos <= 55) {
+            const periodHigh = Math.max(...closeArr);
+            const currentPrice = closeArr[closeArr.length - 1];
+            const pulledBack = currentPrice <= periodHigh * 0.88;
+            if (pulledBack) {
+                const recentCloses = closeArr.slice(-10);
+                const mean = recentCloses.reduce((a, b) => a + b, 0) / recentCloses.length;
+                const variance = recentCloses.reduce((s, v) => s + (v - mean) ** 2, 0) / recentCloses.length;
+                const std = Math.sqrt(variance);
+                const volatility = std / mean;
+                if (volatility < 0.035 && trendState >= 1) {
+                    score += 28;
+                }
+                if (trendState >= 2)
+                    score += 12;
+                if (macdGoldenCross)
+                    score += 10;
+                const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+                const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+                if (avgVol5 > avgVol20 * 1.1)
+                    score += 8;
+            }
+        }
+        if (pricePos >= 72) {
+            const currentPrice = closeArr[closeArr.length - 1];
+            const periodHigh = Math.max(...closeArr.slice(-60));
+            const nearHigh = currentPrice >= periodHigh * 0.97;
+            if (trendState >= 2 && (macdGoldenCross || nearHigh)) {
+                score += 25;
+            }
+            if (trendState === 3)
+                score += 10;
+            if (nearHigh) {
+                const prevHigh = Math.max(...closeArr.slice(-60, -1));
+                if (currentPrice > prevHigh)
+                    score += 15;
+            }
+            const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+            if (avgVol5 > avgVol20 * 1.15)
+                score += 8;
+        }
+        if (pricePos > 55 && pricePos < 72 && trendState >= 2 && macdGoldenCross) {
+            score += 10;
+        }
+        return Math.min(Math.max(Math.round(score), 0), 100);
+    }
+    static calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePercent) {
+        let score = 55;
+        const returns = [];
+        const lookback = Math.min(closeArr.length, 20);
+        for (let i = 1; i < lookback; i++) {
+            returns.push((closeArr[i] - closeArr[i - 1]) / closeArr[i - 1]);
+        }
+        const retMean = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const retVariance = returns.reduce((s, v) => s + (v - retMean) ** 2, 0) / returns.length;
+        const vol = Math.sqrt(retVariance);
+        if (vol < 0.025)
+            score += 18;
+        else if (vol < 0.035)
+            score += 10;
+        else if (vol < 0.05)
+            score += 3;
+        else if (vol < 0.07)
+            score -= 8;
+        else
+            score -= 20;
+        const absChange = Math.abs(changePercent);
+        if (absChange > 15)
+            score -= 20;
+        else if (absChange > 10)
+            score -= 12;
+        else if (absChange > 7)
+            score -= 5;
+        else if (absChange < 3)
+            score += 5;
+        if (pricePos > 92)
+            score -= 10;
+        else if (pricePos > 85)
+            score -= 5;
+        else if (pricePos < 12)
+            score -= 8;
+        else if (pricePos < 20)
+            score -= 3;
+        const recentHigh = Math.max(...closeArr.slice(-10));
+        const currentPrice = closeArr[closeArr.length - 1];
+        const drawdown = (recentHigh - currentPrice) / recentHigh;
+        if (drawdown > 0.08)
+            score -= 8;
+        else if (drawdown > 0.05)
+            score -= 3;
+        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        if (ma5 > ma10 && ma10 > ma20)
+            score += 8;
+        if (closeArr[closeArr.length - 1] > ma5)
+            score += 5;
+        return Math.min(Math.max(Math.round(score), 0), 100);
     }
     async quickAnalyze(code, name) {
         const raw = await this.dataFetcher.getKLineData(code);
@@ -1492,6 +1736,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             score += 5;
         else
             score -= 5;
+        const entryTiming = GemScreenerService_1.calcEntryTiming(pricePos, trendState, closeArr, isGoldenCross, volumeArr);
+        const safetyScore = GemScreenerService_1.calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePct);
         return {
             code, name: name ?? '',
             currentPrice: price,
@@ -1503,6 +1749,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiXiaoDays: 0,
             score,
             suggestion,
+            entryTiming,
+            safetyScore,
             isGoldenCross,
             diff,
             dea,

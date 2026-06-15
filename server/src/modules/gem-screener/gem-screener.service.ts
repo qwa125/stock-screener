@@ -54,6 +54,10 @@ export interface OpportunityStock {
   isGoldenCross?: boolean;
   /** 服务端计算的交易建议，与详情页完全一致 */
   suggestion?: string;
+  /** 最佳介入时机评分 (0-100)，越高越好 */
+  entryTiming: number;
+  /** 安全系数评分 (0-100)，越高越安全 */
+  safetyScore: number;
 }
 
 @Injectable()
@@ -509,7 +513,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
     results.sort((a, b) => {
       const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
       const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-      return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+      return pa !== pb ? pa - pb
+          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
     const finalResults = results.slice(0, 10);
     // 后台预缓存分析结果（不阻塞）
@@ -707,8 +714,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
     if (NEGATIVE_SUGGESTIONS.includes(suggestionR)) return null;
 
+    // ---------- 最佳介入时机评分 (entryTiming) ----------
+    const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
+    // ---------- 安全系数评分 (safetyScore) ----------
+    const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
+
     return {
       capitalRank: 0,
+      entryTiming: Math.round(entryTiming * 100) / 100,
+      safetyScore: Math.round(safetyScore * 100) / 100,
       code: s.code,
       name: s.name,
       mainForceInflow: s.inflow,
@@ -885,8 +899,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
     if (NEGATIVE_SUGGESTIONS.includes(suggestionR)) return null;
 
+    // ---------- 最佳介入时机 + 安全系数 ----------
+    const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
+    const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
+
     return {
       capitalRank: 0,
+      entryTiming: Math.round(entryTiming * 100) / 100,
+      safetyScore: Math.round(safetyScore * 100) / 100,
       code: s.code,
       name: s.name,
       mainForceInflow: s.inflow,
@@ -903,6 +923,151 @@ export class GemScreenerService implements OnApplicationBootstrap {
       suggestion: suggestionR,
     };
 
+  }
+
+  // ===========================================================================
+  // 最佳介入时机评分（Level 2 排序）
+  // 核心逻辑:
+  //   1. 回调后横盘蓄力→准备二波 (30-55%位置, 缩量横盘, MACD金叉) → 高分
+  //   2. 高位强势→即将突破前高 (75%+位置, 趋势强劲, 即将创新高) → 高分
+  //   3. 低位刚启动→趋势明确 (15-30%位置, 趋势初成) → 中高分
+  // ===========================================================================
+  private calcEntryTiming(
+    pricePosition: number,
+    trendState: number,
+    closeArr: number[],
+    highArr: number[],
+    lowArr: number[],
+    volumeArr: number[],
+    macdGoldenCross: boolean,
+  ): number {
+    const len = closeArr.length;
+    if (len < 10) return 50;
+
+    let timing = 50;
+    const currentPrice = closeArr[len - 1];
+
+    // --- 场景1: 回调后横盘→准备第二波 (最有价值的买点) ---
+    if (pricePosition >= 28 && pricePosition <= 55) {
+      // 确认之前曾经有过一波上涨 (近60天有较高位置)
+      const periodHigh60 = Math.max(...closeArr.slice(-60));
+      const periodLow60 = Math.min(...closeArr.slice(-60));
+      const prevDistanceFromHigh = (periodHigh60 - currentPrice) / (periodHigh60 - periodLow60 || 1);
+      if (prevDistanceFromHigh > 0.3) {
+        // 检测横盘(近10天波动率低)
+        const recent10 = closeArr.slice(-10);
+        const mean = recent10.reduce((a, b) => a + b, 0) / 10;
+        const variance = recent10.reduce((sum, v) => sum + (v - mean) ** 2, 0) / 10;
+        const std = Math.sqrt(variance);
+        const volatility = std / mean;
+        if (volatility < 0.025) {
+          timing += 25; // 横盘确认
+        }
+        // 趋势转好
+        if (trendState >= 2) timing += 15;
+        if (macdGoldenCross) timing += 10;
+        if (volatility < 0.025 && trendState >= 2) timing += 5; // 横盘+趋势=最佳
+      }
+    }
+
+    // --- 场景2: 高位强势→即将突破前高 ---
+    if (pricePosition >= 75 && trendState >= 2) {
+      timing += 20;
+      // 接近前高(近20天最高价的98%以上)
+      const recentHigh20 = Math.max(...closeArr.slice(-20, -1));
+      if (currentPrice >= recentHigh20 * 0.98) {
+        timing += 15; // 即将突破
+      }
+      if (macdGoldenCross) timing += 10;
+      if (trendState >= 3) timing += 5; // 强劲趋势
+    }
+
+    // --- 场景3: 中低位刚启动 ---
+    if (pricePosition >= 15 && pricePosition < 28 && trendState >= 2) {
+      timing += 15;
+      if (macdGoldenCross) timing += 10;
+      // 底部放量启动
+      const avgVol30 = volumeArr.slice(-30).reduce((a, b) => a + b, 0) / 30;
+      const recentVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+      if (recentVol5 > avgVol30 * 1.3) timing += 10;
+    }
+
+    return Math.min(Math.max(timing, 0), 100);
+  }
+
+  // ===========================================================================
+  // 安全系数评分（Level 3 排序）
+  // 核心逻辑:
+  //   低波动(ATR小) + 近期无急涨(避免20cm冲高回落) + 趋势稳定 = 安全
+  //   高波动(涨停板急拉) + 位置过高 + 急涨后放量滞涨 = 危险
+  // ===========================================================================
+  private calcSafetyScore(
+    closeArr: number[],
+    highArr: number[],
+    lowArr: number[],
+    volumeArr: number[],
+    pricePosition: number,
+    trendState: number,
+  ): number {
+    const len = closeArr.length;
+    if (len < 20) return 50;
+
+    let safety = 55; // 基准分
+
+    // --- 1. 波动率检测 (核心安全指标) ---
+    const recent20 = closeArr.slice(-20);
+    const dailyReturns: number[] = [];
+    for (let i = 1; i < recent20.length; i++) {
+      dailyReturns.push((recent20[i] - recent20[i - 1]) / recent20[i - 1]);
+    }
+    const meanRet = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+    const varRet = dailyReturns.reduce((sum, v) => sum + (v - meanRet) ** 2, 0) / dailyReturns.length;
+    const volStd = Math.sqrt(varRet);
+    const annualizedVol = volStd * Math.sqrt(252);
+
+    if (annualizedVol < 0.35) {
+      safety += 20; // 低波动=非常安全
+    } else if (annualizedVol < 0.50) {
+      safety += 10; // 中等波动
+    } else if (annualizedVol > 0.70) {
+      safety -= 15; // 高波动=危险（容易暴涨暴跌）
+    }
+
+    // --- 2. 最近涨停/大阳线检测 (20cm风险) ---
+    const lastReturn = Math.abs(dailyReturns[dailyReturns.length - 1] || 0);
+    if (lastReturn > 0.12) {
+      safety -= 20; // 单日涨超12%=很危险(容易次日低开)
+    } else if (lastReturn > 0.08) {
+      safety -= 10; // 单日8-12%=有风险
+    }
+
+    // 连续大涨检测
+    let consecutiveBigUp = 0;
+    for (let i = dailyReturns.length - 1; i >= 0; i--) {
+      if (dailyReturns[i] > 0.05) consecutiveBigUp++;
+      else break;
+    }
+    if (consecutiveBigUp >= 3) safety -= 15;
+    else if (consecutiveBigUp >= 2) safety -= 5;
+
+    // --- 3. 价格位置风险评估 ---
+    if (pricePosition > 92) safety -= 10; // 太高位=追高风险
+    else if (pricePosition > 80) safety -= 5;
+    else if (pricePosition < 15) safety -= 5; // 弱势低位=继续跌风险
+
+    // --- 4. 趋势稳定性加分 ---
+    if (trendState >= 2 && pricePosition < 70) {
+      safety += 10; // 趋势良好但不在极端高位=安全
+    }
+
+    // --- 5. 量价关系 ---
+    const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    const lastVol = volumeArr[volumeArr.length - 1] || 0;
+    if (lastVol > avgVol20 * 2 && dailyReturns[dailyReturns.length - 1] < 0) {
+      safety -= 10; // 放量下跌=危险信号
+    }
+
+    return Math.min(Math.max(safety, 0), 100);
   }
 
   // ---------------------------------------------------------------------------
@@ -1144,7 +1309,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
     results.sort((a, b) => {
       const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
       const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-      return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+      return pa !== pb ? pa - pb
+          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
     this.logger.log(`✅ 主板扫描完成, 共 ${results.length} 只机会股`);
     const finalResults = results.slice(0, 10);
@@ -1393,16 +1561,26 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (effectiveScore >= 80) suggestion = '重仓买入';
           else if (effectiveScore >= 60) suggestion = '买入';
           else if (effectiveScore >= 40 || s.buySignal) suggestion = '轻仓买入';
+          // fallback: 从 pricePosition 估算介入时机
+          const pp = s.pricePosition ?? 50;
+          const estEntryTiming = (pp >= 25 && pp <= 55) ? 65
+            : (pp >= 72 && suggestion !== '持有') ? 60
+            : 45;
+          // fallback: 从 changePercent 和 position 估算安全系数
+          const cp = Math.abs(s.changePercent ?? 0);
+          const estSafety = cp < 3 ? 65 : cp < 7 ? 55 : cp < 10 ? 40 : 25;
           return {
             code: s.code,
             name: s.name ?? '',
             sectorName: s.sectorName,
             currentPrice: s.price ?? 0,
             changePercent: s.changePercent ?? 0,
-            pricePosition: s.pricePosition ?? 50,
+            pricePosition: pp,
             mainForceInflow: s.mainForceInflow ?? 0,
             score: effectiveScore,
             suggestion,
+            entryTiming: estEntryTiming,
+            safetyScore: estSafety,
             trendState: 1,
             capitalRank: 0,
             baiXiaoDays: s.baiXiaoDays ?? 0,
@@ -1438,6 +1616,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
               mainForceInflow: s.mainForceInflow ?? 0,
               score: effectiveScore,
               suggestion,
+              entryTiming: (s.pricePosition >= 25 && s.pricePosition <= 55) ? 65
+                : (s.pricePosition >= 72 && suggestion !== '持有') ? 60 : 45,
+              safetyScore: Math.abs(s.changePercent ?? 0) < 3 ? 65
+                : Math.abs(s.changePercent ?? 0) < 7 ? 55
+                : Math.abs(s.changePercent ?? 0) < 10 ? 40 : 25,
               trendState: 1,
               capitalRank: 0,
               baiXiaoDays: s.baiXiaoDays ?? 0,
@@ -1455,7 +1638,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
       results.sort((a, b) => {
         const pa = ORDER[a.suggestion ?? ''] ?? 99;
         const pb = ORDER[b.suggestion ?? ''] ?? 99;
-        return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        return pa !== pb ? pa - pb
+          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
       });
       const top = results.slice(0, 10);
       this.sectorCache = { data: top, timestamp: Date.now() };
@@ -1510,7 +1696,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
     combined.sort((a, b) => {
       const pa = ORDER[a.suggestion ?? ''] ?? 99;
       const pb = ORDER[b.suggestion ?? ''] ?? 99;
-      return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
     return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
   }
@@ -1544,9 +1733,145 @@ export class GemScreenerService implements OnApplicationBootstrap {
     results.sort((a, b) => {
       const pa = ORDER[a.suggestion ?? ''] ?? 99;
       const pb = ORDER[b.suggestion ?? ''] ?? 99;
-      return pa !== pb ? pa - pb : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+      return pa !== pb ? pa - pb
+          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
     return results.slice(0, topN);
+  }
+
+  /**
+   * 计算最佳介入时机评分 (0-100)
+   * 场景A: 从高位跌下来横盘调整后准备第二波 → 25-55% 位置 + 趋势转好 + MACD金叉
+   * 场景B: 在98%高位, 涨势很好趋势很强要突破前高 → 75%+ 位置 + 强趋势 + 突破形态
+   */
+  private static calcEntryTiming(
+    pricePos: number,
+    trendState: number,
+    closeArr: number[],
+    macdGoldenCross: boolean,
+    volumeArr: number[],
+  ): number {
+    let score = 45; // baseline (中性偏保守)
+
+    // === 场景A: 回调后的第二波启动 (黄金介入点) ===
+    // 特征: 股价从高位回调到 25-55% 区间, 横盘整理完毕, 趋势开始转好
+    if (pricePos >= 25 && pricePos <= 55) {
+      // 检查近期是否从高位回调
+      const periodHigh = Math.max(...closeArr);
+      const currentPrice = closeArr[closeArr.length - 1];
+      const pulledBack = currentPrice <= periodHigh * 0.88;
+
+      if (pulledBack) {
+        // 横盘整理特征: 近10日价格波动小 (低标准差)
+        const recentCloses = closeArr.slice(-10);
+        const mean = recentCloses.reduce((a, b) => a + b, 0) / recentCloses.length;
+        const variance = recentCloses.reduce((s, v) => s + (v - mean) ** 2, 0) / recentCloses.length;
+        const std = Math.sqrt(variance);
+        const volatility = std / mean;
+
+        if (volatility < 0.035 && trendState >= 1) {
+          score += 28; // 横盘缩量整理完毕
+        }
+        if (trendState >= 2) score += 12; // 趋势开始转好
+        if (macdGoldenCross) score += 10; // MACD金叉确认
+        // 量能确认: 近期成交量温和放大
+        const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        if (avgVol5 > avgVol20 * 1.1) score += 8; // 放量
+      }
+    }
+
+    // === 场景B: 高位强势突破 (强者恒强) ===
+    // 特征: 股价在高位 75%+, 趋势强劲, MACD金叉, 即将突破前高
+    if (pricePos >= 72) {
+      const currentPrice = closeArr[closeArr.length - 1];
+      const periodHigh = Math.max(...closeArr.slice(-60));
+      const nearHigh = currentPrice >= periodHigh * 0.97;
+
+      if (trendState >= 2 && (macdGoldenCross || nearHigh)) {
+        score += 25; // 强趋势+突破形态
+      }
+      if (trendState === 3) score += 10; // 主升浪
+      if (nearHigh) {
+        // 检查是否有效突破(收盘价站上前高)
+        const prevHigh = Math.max(...closeArr.slice(-60, -1));
+        if (currentPrice > prevHigh) score += 15; // 有效突破
+      }
+      // 量能确认
+      const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+      const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+      if (avgVol5 > avgVol20 * 1.15) score += 8; // 放量突破
+    }
+
+    // === 中位区偏多: 有买入信号但位置中等 ===
+    if (pricePos > 55 && pricePos < 72 && trendState >= 2 && macdGoldenCross) {
+      score += 10;
+    }
+
+    return Math.min(Math.max(Math.round(score), 0), 100);
+  }
+
+  /**
+   * 计算安全系数评分 (0-100)
+   * 高安全 = 低波动 + 稳定上涨 + 非极端位置
+   * 低安全 = 高波动(20cm大起大落) + 位置极端 + 刚大涨过
+   */
+  private static calcSafetyScore(
+    closeArr: number[],
+    highArr: number[],
+    lowArr: number[],
+    pricePos: number,
+    changePercent: number,
+  ): number {
+    let score = 55; // baseline 略偏安全
+
+    // 1) 波动率评估: 近20日收益率标准差
+    const returns: number[] = [];
+    const lookback = Math.min(closeArr.length, 20);
+    for (let i = 1; i < lookback; i++) {
+      returns.push((closeArr[i] - closeArr[i - 1]) / closeArr[i - 1]);
+    }
+    const retMean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const retVariance = returns.reduce((s, v) => s + (v - retMean) ** 2, 0) / returns.length;
+    const vol = Math.sqrt(retVariance);
+
+    // 低波动=安全, 高波动=风险
+    if (vol < 0.025) score += 18;      // 非常稳定
+    else if (vol < 0.035) score += 10; // 较稳定
+    else if (vol < 0.05) score += 3;   // 一般
+    else if (vol < 0.07) score -= 8;   // 波动偏大
+    else score -= 20;                   // 高波动(20cm大起大落型)
+
+    // 2) 最近一日涨跌幅评估: 刚大涨20cm = 高风险(次日容易回调)
+    const absChange = Math.abs(changePercent);
+    if (absChange > 15) score -= 20;       // 15%+ 极大概率回调
+    else if (absChange > 10) score -= 12;  // 10%+ 高风险
+    else if (absChange > 7) score -= 5;    // 7%+ 偏风险
+    else if (absChange < 3) score += 5;    // 3%以内小涨 = 安全
+
+    // 3) 位置评估: 极端位置风险更大
+    if (pricePos > 92) score -= 10;      // 高位极端, 回调风险
+    else if (pricePos > 85) score -= 5;
+    else if (pricePos < 12) score -= 8;  // 低位极端, 可能继续跌
+    else if (pricePos < 20) score -= 3;
+
+    // 4) 近期回撤检查: 近10日最大回撤
+    const recentHigh = Math.max(...closeArr.slice(-10));
+    const currentPrice = closeArr[closeArr.length - 1];
+    const drawdown = (recentHigh - currentPrice) / recentHigh;
+    if (drawdown > 0.08) score -= 8;     // 大幅回撤
+    else if (drawdown > 0.05) score -= 3;
+
+    // 5) 趋势保护: 上升趋势中的股票更安全
+    const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    if (ma5 > ma10 && ma10 > ma20) score += 8; // 多头排列 = 安全
+    if (closeArr[closeArr.length - 1] > ma5) score += 5; // 站稳5日线
+
+    return Math.min(Math.max(Math.round(score), 0), 100);
   }
 
   private async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
@@ -1688,6 +2013,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5]) score += 5;
     else score -= 5;
 
+    // === 计算最佳介入时机和安全系数 ===
+    const entryTiming = GemScreenerService.calcEntryTiming(
+      pricePos, trendState, closeArr, isGoldenCross, volumeArr,
+    );
+    const safetyScore = GemScreenerService.calcSafetyScore(
+      closeArr, highArr, lowArr, pricePos, changePct,
+    );
+
     return {
       code, name: name ?? '',
       currentPrice: price,
@@ -1699,6 +2032,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       baiXiaoDays: 0,
       score,
       suggestion,
+      entryTiming,
+      safetyScore,
       isGoldenCross,
       diff,
       dea,

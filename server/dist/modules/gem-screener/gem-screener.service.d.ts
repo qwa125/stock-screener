@@ -26,6 +26,8 @@ export interface OpportunityStock {
     dea?: number;
     isGoldenCross?: boolean;
     suggestion?: string;
+    entryTiming: number;
+    safetyScore: number;
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
@@ -82,6 +84,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private scanAllStocks;
     checkOpportunity(s: StockCandidate): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null>;
+    private calcEntryTiming;
+    private calcSafetyScore;
     private fetchGEMCandidates;
     private parseSinaBatch;
     private fetchMainBoardCandidates;
@@ -114,6 +118,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         timestamp: number;
     }>;
     private scanTopFromCandidates;
+    private static calcEntryTiming;
+    private static calcSafetyScore;
     private quickAnalyze;
     triggerAnalysisPreCacheFromCache(): void;
     private triggerAnalysisPreCache;

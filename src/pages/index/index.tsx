@@ -119,6 +119,8 @@ interface OpportunityStock {
   amount?: number;
   buySignal?: string;
   suggestion?: string;
+  entryTiming?: number;
+  safetyScore?: number;
 }
 const trendText = (state: number): string => {
   switch (state) {
@@ -1141,19 +1143,25 @@ const IndexPage = () => {
           ) : gemData && gemData.length > 0 ? (
             <View className="flex flex-col gap-2">
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
-                <View style={{ flex: 1.2 }}>
+                <View style={{ flex: 1.1 }}>
                   <Text className="block text-xs text-gray-400">名称</Text>
                 </View>
-                <View style={{ flex: 0.7 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">介入</Text>
+                </View>
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">安全</Text>
+                </View>
+                <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">累计涨幅</Text>
+                <View style={{ flex: 0.8 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">涨幅</Text>
                 </View>
-                <View style={{ flex: 1 }} className="text-right">
+                <View style={{ flex: 0.9 }} className="text-right">
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
@@ -1163,7 +1171,7 @@ const IndexPage = () => {
                 <Card key={stock.code}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code, stock.suggestion)}>
-                      <View style={{ flex: 1.2 }}>
+                      <View style={{ flex: 1.1 }}>
                         <View className="flex flex-row items-center gap-1">
                           <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
@@ -1174,21 +1182,31 @@ const IndexPage = () => {
                           </View>
                         </View>
                       </View>
-                      <View style={{ flex: 0.7 }} className="text-center">
+                      <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (stock.entryTiming ?? 50) >= 75 ? '#16a34a' : (stock.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(stock.entryTiming ?? 50).toFixed(0)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (stock.safetyScore ?? 50) >= 75 ? '#16a34a' : (stock.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(stock.safetyScore ?? 50).toFixed(0)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
                         <Text className="block text-xs" style={{ color: (stock.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
                           {(stock.changePercent ?? 0) >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
                         </Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
+                      <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs" style={{ color: (stock.priceIncrease ?? 0) <= 10 ? '#22c55e' : (stock.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
                           {(stock.priceIncrease ?? 0) > 0 ? '+' : ''}{(stock.priceIncrease ?? 0).toFixed(1)}%
                         </Text>
                       </View>
-                      <View style={{ flex: 1 }} className="text-right">
+                      <View style={{ flex: 0.9 }} className="text-right">
                         <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
                         <Text className="block text-xs" style={{ color: mainForceColor(stock.mainForceInflow) }}>
                           {formatMainForce(stock.mainForceInflow)}
@@ -1234,57 +1252,73 @@ const IndexPage = () => {
           ) : mainData && mainData.length > 0 ? (
             <View className="flex flex-col gap-2">
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
-                <View style={{ flex: 1.2 }}>
+                <View style={{ flex: 1.1 }}>
                   <Text className="block text-xs text-gray-400">名称</Text>
                 </View>
-                <View style={{ flex: 0.7 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">介入</Text>
+                </View>
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">安全</Text>
+                </View>
+                <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">累计涨幅</Text>
+                <View style={{ flex: 0.8 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">涨幅</Text>
                 </View>
-                <View style={{ flex: 1 }} className="text-right">
+                <View style={{ flex: 0.9 }} className="text-right">
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {mainData.map((stock, idx) => {
-                const action = stock.suggestion || getOpportunitySuggestion(stock);
+              {mainData.map((item: any, idx: number) => {
+                const action = item.suggestion || getOpportunitySuggestion(item);
                 return (
-                <Card key={stock.code}>
+                <Card key={`main-${item.code}-${idx}`}>
                   <CardContent className="p-3">
-                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(stock.code, stock.suggestion)}>
-                      <View style={{ flex: 1.2 }}>
+                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code, item.suggestion)}>
+                      <View style={{ flex: 1.1 }}>
                         <View className="flex flex-row items-center gap-1">
                           <Badge className="px-1 bg-blue-50 text-blue-700 border-blue-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
                           </Badge>
                           <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{stock.name || stock.code}</Text>
-                            <Text className="block text-xs text-gray-400">{stock.code}</Text>
+                            <Text className="block text-xs font-medium truncate">{item.name || item.code}</Text>
+                            <Text className="block text-xs text-gray-400">{item.code}</Text>
                           </View>
                         </View>
                       </View>
-                      <View style={{ flex: 0.7 }} className="text-center">
+                      <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
-                        <Text className="block text-xs" style={{ color: (stock.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
-                          {(stock.changePercent ?? 0) >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (item.entryTiming ?? 50) >= 75 ? '#16a34a' : (item.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(item.entryTiming ?? 50).toFixed(0)}
                         </Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
-                        <Text className="block text-xs" style={{ color: (stock.priceIncrease ?? 0) <= 10 ? '#22c55e' : (stock.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
-                          {(stock.priceIncrease ?? 0) > 0 ? '+' : ''}{(stock.priceIncrease ?? 0).toFixed(1)}%
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (item.safetyScore ?? 50) >= 75 ? '#16a34a' : (item.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(item.safetyScore ?? 50).toFixed(0)}
                         </Text>
                       </View>
-                      <View style={{ flex: 1 }} className="text-right">
-                        <Text className="block text-xs font-medium" style={{ color: (stock.pricePosition ?? 0) < 50 ? '#22c55e' : (stock.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(stock.pricePosition ?? 0).toFixed(0)}%</Text>
-                        <Text className="block text-xs" style={{ color: mainForceColor(stock.mainForceInflow) }}>
-                          {formatMainForce(stock.mainForceInflow)}
+                      <View style={{ flex: 0.8 }} className="text-center">
+                        <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
+                        <Text className="block text-xs" style={{ color: (item.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
+                          {(item.changePercent ?? 0) >= 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.8 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (item.priceIncrease ?? 0) <= 10 ? '#22c55e' : (item.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
+                          {(item.priceIncrease ?? 0) > 0 ? '+' : ''}{(item.priceIncrease ?? 0).toFixed(1)}%
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.9 }} className="text-right">
+                        <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(item.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: mainForceColor(item.mainForceInflow) }}>
+                          {formatMainForce(item.mainForceInflow)}
                         </Text>
                       </View>
                     </View>
@@ -1329,19 +1363,25 @@ const IndexPage = () => {
                 ))}
               </View>
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
-                <View style={{ flex: 1.2 }}>
+                <View style={{ flex: 1.1 }}>
                   <Text className="block text-xs text-gray-400">名称 · 板块</Text>
                 </View>
-                <View style={{ flex: 0.7 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
                   <Text className="block text-xs text-gray-400">操作</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">介入</Text>
+                </View>
+                <View style={{ flex: 0.55 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">安全</Text>
+                </View>
+                <View style={{ flex: 0.8 }} className="text-center">
                   <Text className="block text-xs text-gray-400">价格</Text>
                 </View>
-                <View style={{ flex: 0.9 }} className="text-center">
-                  <Text className="block text-xs text-gray-400">累计涨幅</Text>
+                <View style={{ flex: 0.8 }} className="text-center">
+                  <Text className="block text-xs text-gray-400">涨幅</Text>
                 </View>
-                <View style={{ flex: 1 }} className="text-right">
+                <View style={{ flex: 0.9 }} className="text-right">
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
@@ -1352,7 +1392,7 @@ const IndexPage = () => {
                 <Card key={`sector-${item.code}-${idx}`}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code, item.suggestion)}>
-                      <View style={{ flex: 1.2 }}>
+                      <View style={{ flex: 1.1 }}>
                         <View className="flex flex-row items-center gap-1">
                           <Badge className="px-1 bg-orange-50 text-orange-700 border-orange-200 flex-shrink-0 py-0">
                             <Text className="block text-xs">#{idx + 1}</Text>
@@ -1363,21 +1403,31 @@ const IndexPage = () => {
                           </View>
                         </View>
                       </View>
-                      <View style={{ flex: 0.7 }} className="text-center">
+                      <View style={{ flex: 0.55 }} className="text-center">
                         <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (item.entryTiming ?? 50) >= 75 ? '#16a34a' : (item.entryTiming ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(item.entryTiming ?? 50).toFixed(0)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs" style={{ color: (item.safetyScore ?? 50) >= 75 ? '#16a34a' : (item.safetyScore ?? 50) >= 50 ? '#eab308' : '#9ca3af' }}>
+                          {(item.safetyScore ?? 50).toFixed(0)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs font-medium">{item.currentPrice?.toFixed(2)}</Text>
                         <Text className="block text-xs" style={{ color: (item.changePercent ?? 0) >= 0 ? '#ef4444' : '#22c55e' }}>
                           {(item.changePercent ?? 0) >= 0 ? '+' : ''}{item.changePercent?.toFixed(2)}%
                         </Text>
                       </View>
-                      <View style={{ flex: 0.9 }} className="text-center">
+                      <View style={{ flex: 0.8 }} className="text-center">
                         <Text className="block text-xs" style={{ color: (item.priceIncrease ?? 0) <= 10 ? '#22c55e' : (item.priceIncrease ?? 0) <= 20 ? '#eab308' : '#ef4444' }}>
                           {(item.priceIncrease ?? 0) > 0 ? '+' : ''}{(item.priceIncrease ?? 0).toFixed(1)}%
                         </Text>
                       </View>
-                      <View style={{ flex: 1 }} className="text-right">
+                      <View style={{ flex: 0.9 }} className="text-right">
                         <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(item.pricePosition ?? 0).toFixed(0)}%</Text>
                         <Text className="block text-xs" style={{ color: mainForceColor(item.mainForceInflow) }}>
                           {formatMainForce(item.mainForceInflow)}
