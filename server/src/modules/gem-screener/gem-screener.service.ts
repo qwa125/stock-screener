@@ -542,11 +542,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
-    // 补充拉取东方财富真实主力资金净流入
-    await this.enrichWithMainForceFlow(results);
-
-    // 补充拉取东方财富真实主力资金净流入
-    await this.enrichWithMainForceFlow(results);
+    // 主力资金由前端浏览器直连东方财富拉取（从海外服务器不稳）
+    // this.enrichWithMainForceFlow(results);
 
     results.sort((a, b) => {
       const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
