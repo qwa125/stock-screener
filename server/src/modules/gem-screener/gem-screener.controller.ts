@@ -88,4 +88,15 @@ export class GemScreenerController {
     const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
     return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
   }
+
+  /**
+   * 动态行业板块热度排行Top10（基于实时成分股涨跌幅均值）
+   * GET /api/gem/industry-sectors/top10
+   */
+  @Get('industry-sectors/top10')
+  @HttpCode(200)
+  async getIndustrySectorsTop10() {
+    const result = await this.gemScreener.getIndustrySectorTop10();
+    return { code: 200, msg: 'success', data: result };
+  }
 }

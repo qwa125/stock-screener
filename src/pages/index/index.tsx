@@ -617,19 +617,6 @@ const BacktestStatsCard = ({ stats }: { stats: BacktestStats }) => (
 );
 
 // 热门细分板块成分股（硬编码，包含最活跃的A股板块）
-const HOT_SECTORS: { name: string; codes: string[] }[] = [
-  { name: '人工智能', codes: ['688256','002230','603019','688111','300308','300502','000977','688041','688188','300624'] },
-  { name: '半导体', codes: ['688981','603501','002371','002049','600584','688012','603986','300661','300782','688536'] },
-  { name: '新能源车', codes: ['002594','300750','002460','002466','600516','300014','002812','300450','603659','300037'] },
-  { name: '光伏', codes: ['601012','600438','300274','002459','688599','300763','603806','300724','300751','688390'] },
-  { name: '军工', codes: ['600893','600760','600879','600118','002179','000733','600862','600685','600391','600990'] },
-  { name: '医药生物', codes: ['600276','603259','300760','300122','000661','600436','000538','600196','600085','300015'] },
-  { name: '消费电子', codes: ['002475','002241','000725','300433','002273','002456','300136','002600','688036','002920'] },
-  { name: '机器人', codes: ['300124','002747','300024','300201','002527','688218','300278','002009','002031','688160'] },
-  { name: '算力', codes: ['300308','300502','000977','603019','688041','688256','002230','688111','300624','300418'] },
-  { name: '低空经济', codes: ['002023','600038','600862','002389','300447','300424','600990','600501','000901','688568'] },
-];
-
 const IndexPage = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -660,7 +647,21 @@ const IndexPage = () => {
   const [heavyBuyScanStatus, setHeavyBuyScanStatus] = useState<string>('');
   const gemCachedStocks = useRef<any[]>([]);
   const mainCachedStocks = useRef<any[]>([]);
-  const sectorTags = () => [...new Set((sectorData || []).map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10);
+  // 动态行业板块排行（Top10 热点行业板块）
+  const [dynamicSectors, setDynamicSectors] = useState<any[] | null>(null);
+  const sectorTags = () => {
+    // 优先从 dynamicSectors 取（有排行数据时）
+    if (dynamicSectors && dynamicSectors.length > 0) {
+      return dynamicSectors.map((s: any) => ({
+        name: s.name,
+        change: s.avgChangePercent,
+        upStocks: s.upStocks,
+        totalStocks: s.totalStocks,
+      }));
+    }
+    // 降级：从 sectorData 中提取
+    return [...new Set((sectorData || []).map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10).map((name: string) => ({ name, change: null }));
+  };
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
   const fetchGemTop = useCallback(async () => {
@@ -1021,18 +1022,46 @@ const IndexPage = () => {
       }
       setSectorScanStatus('📋 已缓存 ' + cachedMap.size + '只(K线就绪)');
 
-      // 第二步：拉取热点板块实时行情（获取板块归属）
+      // 第二步：从后端获取动态行业板块排行榜 TOP10
+      setSectorScanStatus('📡 获取热点行业板块排行...');
+      let topSectors: { name: string; codes: string[] }[] = [];
+      try {
+        const res = await Network.request({ url: '/api/gem/industry-sectors/top10' });
+        const apiData = res.data as any;
+        const sectorList = apiData?.data?.sectors || [];
+        if (sectorList.length > 0) {
+          topSectors = sectorList.map((s: any) => ({
+            name: s.name,
+            codes: (s.stocks || []).map((stk: any) => stk.code),
+          }));
+          setDynamicSectors(sectorList);
+        }
+      } catch(e3) {
+        console.warn('获取行业板块排行失败:', e3);
+      }
+
+      // 若后端排行失败，仍使用历史数据中的板块分类
       const stockToSector = new Map<string, string>();
       const hotOnlyCodes: string[] = [];
-      for (const sec of HOT_SECTORS) {
-        for (const code of sec.codes) {
-          if (!stockToSector.has(code)) {
-            stockToSector.set(code, sec.name);
-            if (!cachedMap.has(code)) hotOnlyCodes.push(code);
+      if (topSectors.length > 0) {
+        for (const sec of topSectors) {
+          for (const code of sec.codes) {
+            if (!stockToSector.has(code)) {
+              stockToSector.set(code, sec.name);
+              if (!cachedMap.has(code)) hotOnlyCodes.push(code);
+            }
           }
         }
+        setSectorScanStatus('📋 热点行业板块 ' + topSectors.length + '个, 需要额外拉取 ' + hotOnlyCodes.length + '只');
+      } else {
+        // 降级：用已有 sectorData 中的板块归属
+        for (const s of cachedMap.values()) {
+          if (s.sectorName && !stockToSector.has(s.code)) {
+            stockToSector.set(s.code, s.sectorName);
+          }
+        }
+        setSectorScanStatus('📋 使用历史板块分类, 共 ' + stockToSector.size + '只');
       }
-      setSectorScanStatus('📋 热点板块 ' + HOT_SECTORS.length + '个, 需要额外拉取 ' + hotOnlyCodes.length + '只');
 
       // 第三步：查询热点板块中未缓存的股票行情
       const freshStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
@@ -1826,9 +1855,9 @@ const IndexPage = () => {
 
           {/* 热点细分板块标签 — 始终显示 */}
           <View className="flex flex-row flex-wrap gap-2 mb-2">
-            {sectorTags().slice(0, 10).map((sname: string, i: number) => (
+            {sectorTags().slice(0, 10).map((tag: any, i: number) => (
               <Badge key={i} className="px-3 py-1 bg-orange-50 text-orange-700 border-orange-200 rounded-full">
-                <Text className="block text-xs">{sname}</Text>
+                <Text className="block text-xs">{tag.name}{tag.change != null ? ` ${tag.change > 0 ? '+' : ''}${tag.change}%` : ''}</Text>
               </Badge>
             ))}
             {sectorTags().length === 0 && (

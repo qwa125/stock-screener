@@ -70,6 +70,10 @@ let GemScreenerController = class GemScreenerController {
         const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
         return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
     }
+    async getIndustrySectorsTop10() {
+        const result = await this.gemScreener.getIndustrySectorTop10();
+        return { code: 200, msg: 'success', data: result };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -150,6 +154,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getHeavyBuy", null);
+__decorate([
+    (0, common_1.Get)('industry-sectors/top10'),
+    (0, common_1.HttpCode)(200),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getIndustrySectorsTop10", null);
 exports.GemScreenerController = GemScreenerController = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])

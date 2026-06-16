@@ -24,6 +24,7 @@ const data_fetcher_service_1 = require("../stock/data-fetcher.service");
 const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
+const data_1 = require("../../industry-sectors/data");
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
 function getOpportunityTTL() {
@@ -1864,6 +1865,86 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (stocks.length > 0) {
             this.stockService.preCacheAnalysisBatch(stocks.map(s => s.code)).catch(() => { });
         }
+    }
+    async getIndustrySectorTop10() {
+        const allCodes = [];
+        const codeToSector = new Map();
+        for (const sec of data_1.default) {
+            for (const code of sec.codes) {
+                codeToSector.set(code, sec.name);
+                if (!allCodes.includes(code))
+                    allCodes.push(code);
+            }
+        }
+        this.logger.log(`📊 获取行业板块实时热度: ${data_1.default.length}个板块, ${allCodes.length}只成分股`);
+        const quoteMap = new Map();
+        const BATCH = 80;
+        for (let i = 0; i < allCodes.length; i += BATCH) {
+            const batch = allCodes.slice(i, i + BATCH);
+            const qstr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+            try {
+                const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(qstr);
+                const res = await fetch(url);
+                const buf = Buffer.from(await res.arrayBuffer());
+                const txt = iconv.decode(buf, 'gbk');
+                const lines = txt.trim().split(';');
+                for (const line of lines) {
+                    const cm = line.match(/v_(sh\d+|sz\d+)="(.*)"/);
+                    if (!cm || !cm[2])
+                        continue;
+                    const parts = cm[2].split('~');
+                    const code = cm[1].replace(/^(sh|sz)/, '');
+                    const name = parts[1] || '';
+                    if (!code || !name || /^\d+$/.test(name))
+                        continue;
+                    const price = parseFloat(parts[3]) || 0;
+                    const changePercent = parseFloat(parts[32]) || 0;
+                    quoteMap.set(code, { name, price, changePercent });
+                }
+            }
+            catch (e) {
+                this.logger.warn(`腾讯行情批次失败: ${e.message}`);
+            }
+        }
+        this.logger.log(`📊 获取到 ${quoteMap.size}/${allCodes.length} 只行情数据`);
+        const sectorMap = new Map();
+        for (const sec of data_1.default) {
+            let totalChange = 0;
+            let count = 0;
+            let upCount = 0;
+            const stocks = [];
+            for (const code of sec.codes) {
+                const q = quoteMap.get(code);
+                if (q && q.price > 0) {
+                    totalChange += q.changePercent;
+                    count++;
+                    if (q.changePercent > 0)
+                        upCount++;
+                    stocks.push({ code, name: q.name, price: q.price, changePercent: q.changePercent });
+                }
+            }
+            if (count > 0) {
+                sectorMap.set(sec.name, {
+                    totalChange,
+                    upCount,
+                    count,
+                    stocks: stocks.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, 5),
+                });
+            }
+        }
+        const sorted = Array.from(sectorMap.entries())
+            .map(([name, data]) => ({
+            name,
+            avgChangePercent: Math.round((data.totalChange / data.count) * 100) / 100,
+            totalStocks: data.count,
+            upStocks: data.upCount,
+            stocks: data.stocks,
+        }))
+            .sort((a, b) => b.avgChangePercent - a.avgChangePercent)
+            .slice(0, 10)
+            .map((s, i) => ({ rank: i + 1, ...s }));
+        this.logger.log(`📊 行业板块Top10: ${sorted.map(s => `${s.rank}.${s.name}(${s.avgChangePercent}%)`).join(', ')}`);
+        return { sectors: sorted, timestamp: Date.now() };
     }
 };
 exports.GemScreenerService = GemScreenerService;
