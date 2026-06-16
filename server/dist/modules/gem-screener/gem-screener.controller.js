@@ -19,6 +19,10 @@ let GemScreenerController = class GemScreenerController {
     constructor(gemScreener) {
         this.gemScreener = gemScreener;
     }
+    async refreshWithData(body) {
+        const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
+        return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+    }
     async getOpportunities() {
         const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
@@ -45,6 +49,14 @@ let GemScreenerController = class GemScreenerController {
     }
 };
 exports.GemScreenerController = GemScreenerController;
+__decorate([
+    (0, common_1.Post)('refresh'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "refreshWithData", null);
 __decorate([
     (0, common_1.Get)('opportunities'),
     __metadata("design:type", Function),

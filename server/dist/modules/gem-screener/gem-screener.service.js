@@ -427,6 +427,60 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
         return finalResults;
     }
+    async scanWithFrontendData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 60) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code,
+                    name: s.name,
+                    inflow: s.inflow,
+                    changePercent: s.changePercent,
+                    currentPrice: s.price,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result)
+                    results.push(result);
+            }
+            catch { }
+        }
+        if (results.length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code,
+                        name: s.name,
+                        inflow: s.inflow,
+                        changePercent: s.changePercent,
+                        currentPrice: s.price,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find(ex => ex.code === result.code)) {
+                        results.push(result);
+                    }
+                }
+                catch { }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const finalResults = results.slice(0, 15);
+        this.cache = { data: finalResults, timestamp: Date.now() };
+        this.saveCacheToDisk();
+        this.logger.log(`✅ 前端数据扫描完成, 最终 ${finalResults.length} 只`);
+        return finalResults;
+    }
     async enrichWithMainForceFlow(results) {
         if (results.length === 0)
             return;

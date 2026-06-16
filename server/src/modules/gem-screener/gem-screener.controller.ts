@@ -1,9 +1,16 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode } from '@nestjs/common';
 import { GemScreenerService } from './gem-screener.service';
 
 @Controller('gem')
 export class GemScreenerController {
   constructor(private readonly gemScreener: GemScreenerService) {}
+
+  @Post('refresh')
+  @HttpCode(200)
+  async refreshWithData(@Body() body: { stocks: any[] }) {
+    const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
+    return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+  }
 
   @Get('opportunities')
   async getOpportunities() {

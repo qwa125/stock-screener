@@ -481,6 +481,124 @@ const mainForceColor = (value: number | undefined | null): string => {
   return (value ?? 0) >= 0 ? '#ef4444' : '#22c55e';
 };
 
+/**
+ * 前端直连腾讯行情API获取GEM上涨股票 + K线数据
+ * 用于从中国浏览器向Render美国服务器注入真实数据
+ */
+async function fetchAndPushTencentGemData(): Promise<void> {
+  try {
+    console.log('[前端扫描] 开始从腾讯拉取GEM上涨股票...');
+    // Step 1: 获取实时上涨GEM股票列表
+    const codes: string[] = [];
+    for (let start = 0; start < 1500; start += 100) {
+      const url = `https://qt.gtimg.cn/q=sz30${String(start + 1).padStart(3, '0')}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      const lines = text.split(';').filter(l => l.trim());
+      for (const line of lines) {
+        const parts = line.split('~');
+        if (parts.length >= 32) {
+          const code = parts[2] || '';
+          const changePct = parseFloat(parts[32]) || 0;
+          if (code.startsWith('30') && changePct > 0.3) {
+            codes.push(code);
+          }
+        }
+      }
+    }
+    if (codes.length === 0) {
+      // 尝试备选接口: 东方财富批量拉取
+      console.log('[前端扫描] 腾讯无数据, 尝试东方财富...');
+      try {
+        const ecoRes = await fetch(
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=200&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6+f:!2,m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62',
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              Referer: 'https://quote.eastmoney.com/',
+            },
+          }
+        );
+        if (ecoRes.ok) {
+          const ecoData = await ecoRes.json();
+          if (ecoData?.data?.diff) {
+            for (const item of ecoData.data.diff) {
+              const code = String(item.f12);
+              const chg = parseFloat(item.f3) || 0;
+              if (code.startsWith('30') && chg > 0.3) {
+                codes.push(code);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+    console.log(`[前端扫描] 获取到 ${codes.length} 只上涨GEM`);
+    if (codes.length === 0) return;
+
+    // Step 2: 获取每只股票的K线数据
+    const stocks: any[] = [];
+    const BATCH = 10;
+    for (let i = 0; i < Math.min(codes.length, 50); i += BATCH) {
+      const batch = codes.slice(i, i + BATCH);
+      await Promise.all(batch.map(async (code) => {
+        try {
+          const prefix = code.startsWith('6') ? 'sh' : 'sz';
+          const kUrl = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,500,qfq`;
+          const kRes = await fetch(kUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!kRes.ok) return;
+          const kData = await kRes.json();
+          const data = kData?.data?.[prefix + code];
+          if (!data) return;
+          const allKlines = [
+            ...(data?.qfqday || []),
+            ...(data?.day || []),
+          ].slice(-120);
+          if (allKlines.length < 60) return;
+
+          const klines = allKlines.map((k: any) => ({
+            date: k[0] || '',
+            open: parseFloat(k[1]) || 0,
+            close: parseFloat(k[2]) || 0,
+            high: parseFloat(k[3]) || 0,
+            low: parseFloat(k[4]) || 0,
+            volume: parseFloat(k[5]) || 0,
+            amount: parseFloat(k[6]) || 0,
+          }));
+
+          // 获取当前价格（从K线最新）
+          const price = klines[klines.length - 1].close;
+          const yesterdayClose = klines.length >= 2 ? klines[klines.length - 2].close : price;
+          const changePercent = price > 0 ? ((price - yesterdayClose) / yesterdayClose) * 100 : 0;
+          const inflow = Math.round(price * (klines[klines.length - 1].volume || 0) * 0.01);
+
+          stocks.push({ code, name: kData?.data?.[prefix + code]?.qt?.name || code, price, changePercent, inflow, klines });
+        } catch {}
+      }));
+    }
+
+    console.log(`[前端扫描] 成功获取K线数据: ${stocks.length} 只`);
+    if (stocks.length === 0) return;
+
+    // Step 3: POST到后端进行规则引擎分析
+    console.log('[前端扫描] 推送数据到后端...');
+    await Network.request({
+      url: '/api/gem/refresh',
+      method: 'POST',
+      data: { stocks },
+    });
+    console.log('[前端扫描] ✅ 数据推送成功, 等待缓存刷新...');
+  } catch (e) {
+    console.warn('[前端扫描] 失败:', e);
+  }
+}
+
 // ===== 组件 =====
 /** 信息行 */
 const InfoItem = ({ label, value }: { label: string; value: string }) => (
@@ -705,6 +823,14 @@ const IndexPage = () => {
     const timer = setInterval(fetchSectorHot, 30000);
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
+
+  // 前端扫描推送：浏览器在中国可直接拉腾讯数据，推送后端让规则引擎执行
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAndPushTencentGemData();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // 搜索建议状态
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);

@@ -12,6 +12,11 @@ export class DataFetcherService {
   // 股票K线缓存，避免板块扫描时重复拉取
   private klineCache = new Map<string, { data: KLine[]; timestamp: number }>();
   private readonly KLINE_CACHE_TTL = 10 * 60 * 1000; // 10分钟缓存
+
+  /** 接受前端预加载的K线数据（Render美国服务器无法直接调通中国API时使用） */
+  preloadKline(code: string, klines: KLine[]): void {
+    this.klineCache.set(code, { data: klines, timestamp: Date.now() });
+  }
   private stockListCache: StockInfo[] | null = null;
 
   /** 获取全部A股列表（带缓存） */
