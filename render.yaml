@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: stock-screener
+    runtime: docker
+    repo: https://github.com/qwa125/stock-screener
+    branch: main
+    plan: free
+    region: singapore
+    dockerCmd: node dist/main.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: PORT
+        value: "3000"
+      - key: TZ
+        value: "Asia/Shanghai"
