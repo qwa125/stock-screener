@@ -136,9 +136,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // 启动时从磁盘加载上次缓存, 确保首页秒开
   // ---------------------------------------------------------------------------
-  private async loadCacheFromDisk() {
+  private loadCacheFromDisk() {
     try {
-      const raw = await fs.readFile(this.CACHE_FILE, 'utf-8');
+      const raw = readFileSync(this.CACHE_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
         const limitedData = parsed.data.slice(0, 10);
@@ -165,9 +165,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
-  private async loadMainBoardCacheFromDisk() {
+  private loadMainBoardCacheFromDisk() {
     try {
-      const raw = await fs.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
+      const raw = readFileSync(this.MAIN_BOARD_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
         const limitedData = parsed.data.slice(0, 10);
@@ -194,9 +194,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
-  private async loadSectorCacheFromDisk() {
+  private loadSectorCacheFromDisk() {
     try {
-      const raw = await fs.readFile(this.SECTOR_CACHE, 'utf-8');
+      const raw = readFileSync(this.SECTOR_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
         const limitedData = parsed.data.slice(0, 10);

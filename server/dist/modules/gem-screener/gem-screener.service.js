@@ -87,9 +87,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.marketHoursBeganAt = 0;
         }
     }
-    async loadCacheFromDisk() {
+    loadCacheFromDisk() {
         try {
-            const raw = await fs_1.promises.readFile(this.CACHE_FILE, 'utf-8');
+            const raw = (0, fs_1.readFileSync)(this.CACHE_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data.slice(0, 10);
@@ -116,9 +116,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ 创业板部署包缓存加载失败: ${err.message}`);
         }
     }
-    async loadMainBoardCacheFromDisk() {
+    loadMainBoardCacheFromDisk() {
         try {
-            const raw = await fs_1.promises.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
+            const raw = (0, fs_1.readFileSync)(this.MAIN_BOARD_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data.slice(0, 10);
@@ -145,9 +145,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ 主板部署包缓存加载失败: ${err.message}`);
         }
     }
-    async loadSectorCacheFromDisk() {
+    loadSectorCacheFromDisk() {
         try {
-            const raw = await fs_1.promises.readFile(this.SECTOR_CACHE, 'utf-8');
+            const raw = (0, fs_1.readFileSync)(this.SECTOR_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data.slice(0, 10);
