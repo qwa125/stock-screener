@@ -727,6 +727,7 @@ const IndexPage = () => {
       const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       const metaJson = JSON.parse(await metaRes.text());
       const total = metaJson?.data?.total || 0;
+      if (total < 1100) throw new Error('东方财富返回创业板总数=' + total + ' 过少，改用腾讯');
       const totalPages = Math.ceil(total / PAGE_SIZE);
       for (let pn = 1; pn <= totalPages; pn++) {
         const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
@@ -737,29 +738,40 @@ const IndexPage = () => {
         for (const item of items) {
           gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
         }
-        setGemScanStatus('📥 创业板 ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
+        setGemScanStatus('📥 东方财富 创业板 ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
       }
-      setGemScanStatus('✅ 创业板: ' + gemCodes.length + '只');
+      setGemScanStatus('✅ 东方财富创业板: ' + gemCodes.length + '只');
     } catch (e) {
-      setGemScanStatus('⚠️ 东方财富接口失败');
-      // 降级: 腾讯接口
-      const batchCodes: string[] = [];
-      for (let i = 300000; i <= 301999; i++) batchCodes.push('sz' + i);
-      for (let j = 0; j < batchCodes.length; j += 80) {
-        const b = batchCodes.slice(j, j + 80);
+      setGemScanStatus('🔄 东方财富不可用，改用腾讯接口获取全量创业板...');
+      // 方案二：腾讯接口 — 生成所有sz300000-sz301999代码批量查询
+      gemCodes = [];
+      const allCodes: string[] = [];
+      for (let i = 300000; i <= 301999; i++) allCodes.push('sz' + i);
+      for (let j = 0; j < allCodes.length; j += 80) {
+        const batch = allCodes.slice(j, j + 80);
         try {
-          const url2 = 'https://qt.gtimg.cn/q=' + b.join(',');
+          const url2 = 'https://qt.gtimg.cn/q=' + batch.join(',');
           const res2 = await fetch(url2);
           const txt2 = await res2.text();
           const lines = txt2.split('\n');
           for (const line of lines) {
-            const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
-            if (m) {
-              const change = parseFloat(m[3]);
-              gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
-            }
+            if (!line || line.length < 20) continue;
+            const codeMatch = line.match(/v_(\w+)="/);
+            if (!codeMatch) continue;
+            const code = codeMatch[1];
+            const parts = line.split('~');
+            if (parts.length < 6) continue;
+            const name = parts[2] || '';
+            if (!name) continue;
+            const price = parseFloat(parts[3]) || 0;
+            const prevClose = parseFloat(parts[4]) || price;
+            const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
+            gemCodes.push({ code, name, price, changePercent, inflow: 0 });
           }
         } catch(e2) {}
+        if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
+          setGemScanStatus('📥 腾讯 创业板 ' + Math.min(j + 80, allCodes.length) + '/' + allCodes.length + '只');
+        }
       }
       setGemScanStatus('✅ 腾讯创业板: ' + gemCodes.length + '只');
     }
@@ -800,17 +812,19 @@ const IndexPage = () => {
 
   // ========== 扫描函数：只扫描主板 ==========
   const scanMainOnly = useCallback(async () => {
-    setMainScanStatus('🔄 正在获取主板股票列表...');
+    setMainScanStatus('🔄 正在获取主板股票列表(东方财富)...');
     let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
       const PAGE_SIZE = 500;
       const mainFsList = ['m:1+t:2+f:!2', 'm:0+t:1+f:!2'];
       const mainLabels = ['沪主板', '深主板'];
+      const minExpect = [2000, 1000];
       for (let mi = 0; mi < mainFsList.length; mi++) {
         const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12';
         const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const metaJson = JSON.parse(await metaRes.text());
         const total = metaJson?.data?.total || 0;
+        if (total < minExpect[mi]) throw new Error(mainLabels[mi] + '总数=' + total + ' 过少');
         const totalPages = Math.ceil(total / PAGE_SIZE);
         for (let pn = 1; pn <= totalPages; pn++) {
           const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12,f14,f2,f3,f62';
@@ -822,13 +836,54 @@ const IndexPage = () => {
             const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
             mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
           }
-          setMainScanStatus('📥 ' + mainLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
+          setMainScanStatus('📥 东方财富 ' + mainLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
         }
       }
-      setMainScanStatus('✅ 主板: ' + mainCodes.length + '只');
+      setMainScanStatus('✅ 东方财富主板: ' + mainCodes.length + '只');
     } catch (e) {
-      setMainScanStatus('⚠️ 主板数据拉取失败');
-      return;
+      setMainScanStatus('🔄 东方财富不可用，改用腾讯接口获取全量主板...');
+      // 方案二：腾讯接口 — 生成代码范围批量查询
+      mainCodes = [];
+      // 沪主板: sh600000-sh605999, 深主板: sz000000-sz003999
+      const mainRanges: { prefix: string; label: string; start: number; end: number }[] = [
+        { prefix: 'sh', label: '沪主板', start: 600000, end: 605999 },
+        { prefix: 'sz', label: '深主板', start: 0, end: 3999 },
+      ];
+      for (const rng of mainRanges) {
+        const allCodes: string[] = [];
+        if (rng.prefix === 'sh') {
+          for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + i);
+        } else {
+          for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + String(i).padStart(6, '0'));
+        }
+        for (let j = 0; j < allCodes.length; j += 80) {
+          const batch = allCodes.slice(j, j + 80);
+          try {
+            const url2 = 'https://qt.gtimg.cn/q=' + batch.join(',');
+            const res2 = await fetch(url2);
+            const txt2 = await res2.text();
+            const lines = txt2.split('\n');
+            for (const line of lines) {
+              if (!line || line.length < 20) continue;
+              const codeMatch = line.match(/v_(\w+)="/);
+              if (!codeMatch) continue;
+              const code = codeMatch[1];
+              const parts = line.split('~');
+              if (parts.length < 6) continue;
+              const name = parts[2] || '';
+              if (!name) continue;
+              const price = parseFloat(parts[3]) || 0;
+              const prevClose = parseFloat(parts[4]) || price;
+              const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
+              mainCodes.push({ code, name, price, changePercent, inflow: 0 });
+            }
+          } catch(e2) {}
+          if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
+            setMainScanStatus('📥 腾讯 ' + rng.label + ' ' + Math.min(j + 80, allCodes.length) + '/' + allCodes.length + '只');
+          }
+        }
+      }
+      setMainScanStatus('✅ 腾讯主板: ' + mainCodes.length + '只');
     }
 
     // 拉取K线
