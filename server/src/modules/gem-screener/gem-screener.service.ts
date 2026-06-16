@@ -327,7 +327,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap() {
-    this.triggerRefresh();
+    // 不自动触发扫描——Render美国服务器调不通腾讯/东方财富API
+    // 启动时仅加载磁盘缓存供前端展示，由前端浏览器从中国拉数据POST到refresh端点
+    this.logger.log('📦 创业板: 启动跳过自动扫描, 等待前端推送数据触发引擎分析');
     // 主板机会区 - 尝试从磁盘恢复缓存，无缓存则触发扫描
     try {
       const raw = await fs.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
@@ -336,15 +338,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.logger.log(`📦 主板机会区: 从磁盘恢复缓存, ${this.mainBoardCache.data.length} 只`);
     } catch { /* 首次部署, 无磁盘缓存 */ }
     if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
-      this.logger.log('📦 主板机会区: 无缓存, 启动后台扫描...');
-      // 后台扫描，不阻塞启动
-      this.mainBoardRefreshPromise = this.scanMainBoardStocks().then(data => {
-        this.mainBoardCache = { data, timestamp: Date.now() };
-        this.saveMainBoardCacheToDisk();
-        this.logger.log(`✅ 主板机会区: 扫描完成, ${data.length} 只`);
-      }).catch(err => {
-        this.logger.error(`❌ 主板机会区: 扫描失败: ${err}`);
-      });
+      this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
     }
     // 启动后预缓存分析结果
     this.triggerAnalysisPreCacheFromCache();

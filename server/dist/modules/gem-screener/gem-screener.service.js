@@ -264,7 +264,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
     }
     async onApplicationBootstrap() {
-        this.triggerRefresh();
+        this.logger.log('📦 创业板: 启动跳过自动扫描, 等待前端推送数据触发引擎分析');
         try {
             const raw = await fs_1.promises.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
@@ -273,14 +273,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         catch { }
         if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
-            this.logger.log('📦 主板机会区: 无缓存, 启动后台扫描...');
-            this.mainBoardRefreshPromise = this.scanMainBoardStocks().then(data => {
-                this.mainBoardCache = { data, timestamp: Date.now() };
-                this.saveMainBoardCacheToDisk();
-                this.logger.log(`✅ 主板机会区: 扫描完成, ${data.length} 只`);
-            }).catch(err => {
-                this.logger.error(`❌ 主板机会区: 扫描失败: ${err}`);
-            });
+            this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
         this.triggerAnalysisPreCacheFromCache();
         setInterval(() => {
