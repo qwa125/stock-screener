@@ -436,7 +436,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = results.slice(0, 15);
+        const finalResults = results.slice(0, 10);
         this.cache = { data: finalResults, timestamp: Date.now() };
         this.saveCacheToDisk();
         this.logger.log(`✅ 前端数据扫描完成, 最终 ${finalResults.length} 只`);
@@ -534,7 +534,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = results.slice(0, 15);
+        const finalResults = results.slice(0, 10);
         this.sectorCache = { data: finalResults, timestamp: Date.now() };
         try {
             await fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));

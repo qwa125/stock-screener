@@ -866,7 +866,7 @@ const IndexPage = () => {
         for (const sec of sectors) {
           const bkCode = sec.f12;
           const sectorName = sec.f14;
-          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
+          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
           try {
             const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             const leadingTxt = await leadingRes.text();
