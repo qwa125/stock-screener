@@ -620,7 +620,7 @@ const IndexPage = () => {
   const [gemData, setGemData] = useState<OpportunityStock[] | null>(null);
   const [gemTimestamp, setGemTimestamp] = useState<number>(0);
   const [gemLoading, setGemLoading] = useState<boolean>(true);
-  const [scanStatus, setScanStatus] = useState<string>('');
+  const [gemScanStatus, setGemScanStatus] = useState<string>('');
 
   // 主板机会区状态
   const [mainData, setMainData] = useState<OpportunityStock[] | null>(null);
@@ -716,211 +716,207 @@ const IndexPage = () => {
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
 
-  // 前端数据扫描推送到服务器引擎
-  const triggerGemScan = useCallback(async () => {
-    setScanStatus('🔄 正在扫描创业板...');
+  // ========== 扫描函数：只扫描创业板 ==========
+  const scanGemOnly = useCallback(async () => {
+    setGemScanStatus('🔄 正在获取创业板股票列表...');
+    let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
-      // ===== 1. 创业板数据 =====
-      let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
-      try {
-        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
-        const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const txt1 = await res1.text();
-        const j1 = JSON.parse(txt1);
-        const items = j1?.data?.diff || [];
-        for (const item of items) {
-          gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
-        }
-        setScanStatus('✅ 东方财富创业板: ' + gemCodes.length + '只上涨');
-      } catch (e) {
-        setScanStatus('⚠️ 东方财富失败, 改用腾讯创业板...');
+      const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+      const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const txt1 = await res1.text();
+      const j1 = JSON.parse(txt1);
+      const items = j1?.data?.diff || [];
+      for (const item of items) {
+        gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
       }
-      if (gemCodes.length === 0) {
-        const batchCodes: string[] = [];
-        for (let i = 300000; i <= 301999; i++) batchCodes.push('sz' + i);
-        for (let j = 0; j < batchCodes.length; j += 80) {
-          const b = batchCodes.slice(j, j + 80);
-          try {
-            const url2 = 'https://qt.gtimg.cn/q=' + b.join(',');
-            const res2 = await fetch(url2);
-            const txt2 = await res2.text();
-            const lines = txt2.split('\n');
-            for (const line of lines) {
-              const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
-              if (m) {
-                const change = parseFloat(m[3]);
-                gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
-              }
+      setGemScanStatus('✅ 创业板: ' + gemCodes.length + '只');
+    } catch (e) {
+      setGemScanStatus('⚠️ 东方财富接口失败');
+      // 降级: 腾讯接口
+      const batchCodes: string[] = [];
+      for (let i = 300000; i <= 301999; i++) batchCodes.push('sz' + i);
+      for (let j = 0; j < batchCodes.length; j += 80) {
+        const b = batchCodes.slice(j, j + 80);
+        try {
+          const url2 = 'https://qt.gtimg.cn/q=' + b.join(',');
+          const res2 = await fetch(url2);
+          const txt2 = await res2.text();
+          const lines = txt2.split('\n');
+          for (const line of lines) {
+            const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
+            if (m) {
+              const change = parseFloat(m[3]);
+              gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
             }
-          } catch(e) {}
-        }
-        setScanStatus('✅ 腾讯创业板: ' + gemCodes.length + '只上涨');
-      }
-
-      // ===== 2. 主板数据（从东方财富拉取）=====
-      let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
-      try {
-        // 上海主板 m:1+t:2 + 深圳主板 m:0+t:1（排除创业板）
-        const mainUrls = [
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
-        ];
-        for (const url of mainUrls) {
-          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const txt = await res.text();
-          const j = JSON.parse(txt);
-          const items = j?.data?.diff || [];
-          for (const item of items) {
-            const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
-            mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
           }
-        }
-        setScanStatus(prev => prev + ' | 主板: ' + mainCodes.length + '只上涨');
-      } catch (e) {
-        console.warn('主板数据拉取失败:', e);
+        } catch(e2) {}
       }
-
-      // ===== 3. 拉取创业板K线并推送 =====
-      const gemStocks: any[] = [];
-      for (let i = 0; i < gemCodes.length; i += 20) {
-        const batch = gemCodes.slice(i, i + 20);
-        const batchPromises = batch.map(async (s) => {
-          try {
-            const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
-            const res3 = await fetch(url3);
-            const txt3 = await res3.text();
-            const j3 = JSON.parse(txt3.replace(/\.\.\./, '\"'));
-            const klines = (j3?.data?.[s.code]?.qfqday || j3?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
-            if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
-          } catch(e) {}
-        });
-        await Promise.all(batchPromises);
-        if ((i + 20) % 40 === 0 || i + 20 >= gemCodes.length) {
-          setScanStatus('📥 创业板K线 ' + Math.min(i + 20, gemCodes.length) + '/' + gemCodes.length);
-        }
-      }
-      setScanStatus('📤 推送创业板 ' + gemStocks.length + '只到引擎...');
-      // 推送创业板
-      if (gemStocks.length > 0) {
-        const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks: gemStocks } });
-        const pushData = pushRes.data as any;
-        if (pushData?.code === 200) {
-          setScanStatus('✅ 创业板完成! ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
-          await fetchGemTop();
-        }
-      }
-
-      // ===== 4. 拉取主板K线并推送 =====
-      if (mainCodes.length > 0) {
-        setMainScanStatus('📥 正在拉取主板K线...');
-        setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
-        const mainStocks: any[] = [];
-        for (let i = 0; i < mainCodes.length; i += 20) {
-          const batch = mainCodes.slice(i, i + 20);
-          const batchPromises = batch.map(async (s) => {
-            try {
-              const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
-              const res = await fetch(url);
-              const txt = await res.text();
-              const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
-              const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
-              if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
-            } catch(e) {}
-          });
-          await Promise.all(batchPromises);
-          if ((i + 20) % 40 === 0 || i + 20 >= mainCodes.length) {
-            setMainScanStatus('📥 主板K线 ' + Math.min(i + 20, mainCodes.length) + '/' + mainCodes.length);
-          }
-        }
-        setMainScanStatus('📤 推送主板 ' + mainStocks.length + '只...');
-        setScanStatus(prev => prev + ' | 📤 推送主板 ' + mainStocks.length + '只...');
-        if (mainStocks.length > 0) {
-          const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: mainStocks } });
-          const pushData = pushRes.data as any;
-          if (pushData?.code === 200) {
-            const mainCount = pushData?.data?.opportunities?.length || 0;
-            setMainScanStatus('✅ 主板完成! ' + mainCount + '只机会');
-            setScanStatus('✅ 推送完成! 创业板:' + (gemStocks.length || 0) + '只 主板:' + mainStocks.length + '只 | 发现 ' + mainCount + '只主板机会');
-            await fetchMainTop();
-          } else {
-            setMainScanStatus('❌ 主板推送失败');
-          }
-        } else {
-          setMainScanStatus('⚠️ 主板无足够K线数据');
-        }
-      }
-      // ===== 5. 拉取板块数据并推送 =====
-      setSectorScanStatus('🔄 正在拉取热点板块数据...');
-      setScanStatus(prev => prev + ' | 🔥 拉取板块数据...');
-      try {
-        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f12,f14,f3,f62';
-        const sectorRes = await fetch(sectorUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const sectorTxt = await sectorRes.text();
-        const sectorJson = JSON.parse(sectorTxt);
-        const sectors = sectorJson?.data?.diff || [];
-        let sectorStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
-        for (const sec of sectors) {
-          const bkCode = sec.f12;
-          const sectorName = sec.f14;
-          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
-          try {
-            const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const leadingTxt = await leadingRes.text();
-            const leadingJson = JSON.parse(leadingTxt);
-            const leadingItems = leadingJson?.data?.diff || [];
-            for (const it of leadingItems) {
-              const prefix = (it.f12 || '').startsWith('6') ? 'sh' : 'sz';
-                sectorStocks.push({ code: prefix + it.f12, name: it.f14 || it.f12, sectorName, price: it.f2 || 0, changePercent: it.f3 || 0, inflow: parseFloat(it.f62) || 0 });
-            }
-          } catch(e) {}
-        }
-        const seenCodes = new Set();
-        sectorStocks = sectorStocks.filter(s => { if (seenCodes.has(s.code)) return false; seenCodes.add(s.code); return true; });
-        setScanStatus(prev => prev + ' | 板块领涨: ' + sectorStocks.length + '只');
-        const sectorStockWithKlines: any[] = [];
-        for (let si = 0; si < sectorStocks.length; si += 20) {
-          const sbatch = sectorStocks.slice(si, si + 20);
-          const batchPromises = sbatch.map(async (s) => {
-            try {
-              const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
-              const r = await fetch(url);
-              const txt = await r.text();
-              const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
-              const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
-              if (klines.length >= 20) sectorStockWithKlines.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
-            } catch(e) {}
-          });
-          await Promise.all(batchPromises);
-        }
-        setScanStatus(prev => prev + ' | 📤 推送板块 ' + sectorStockWithKlines.length + '只...');
-        if (sectorStockWithKlines.length > 0) {
-          setSectorScanStatus('📤 推送 ' + sectorStockWithKlines.length + ' 只板块机会...');
-          const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: sectorStockWithKlines } });
-          const pushData = pushRes.data as any;
-          if (pushData?.code === 200) {
-            setSectorScanStatus('✅ 板块数据已更新!');
-            setScanStatus('✅ 全部完成! 创业板:' + (gemStocks.length || 0) + '只 板块:' + (pushData?.data?.opportunities?.length || 0) + '只');
-            await fetchSectorHot();
-          }
-        } else {
-          setScanStatus('✅ 全部完成 (板块暂无)');
-        }
-      } catch (e) {
-        console.warn('板块数据拉取失败:', e);
-        setSectorScanStatus('❌ 板块拉取失败');
-        setScanStatus('✅ 扫描完成 (板块不可用)');
-      }
-    } catch (err: any) {
-      setScanStatus('❌ 错误: ' + (err?.message || err));
+      setGemScanStatus('✅ 腾讯创业板: ' + gemCodes.length + '只');
     }
 
-  }, [fetchGemTop, fetchMainTop, fetchSectorHot]);
+    // 拉取K线
+    const gemStocks: any[] = [];
+    for (let i = 0; i < gemCodes.length; i += 20) {
+      const batch = gemCodes.slice(i, i + 20);
+      const batchPromises = batch.map(async (s) => {
+        try {
+          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+          const res3 = await fetch(url3);
+          const txt3 = await res3.text();
+          const j3 = JSON.parse(txt3.replace(/\.\.\./, '\"'));
+          const klines = (j3?.data?.[s.code]?.qfqday || j3?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+          if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+        } catch(e2) {}
+      });
+      await Promise.all(batchPromises);
+      if ((i + 20) % 40 === 0 || i + 20 >= gemCodes.length) {
+        setGemScanStatus('📥 K线 ' + Math.min(i + 20, gemCodes.length) + '/' + gemCodes.length);
+      }
+    }
+    setGemScanStatus('📤 推送 ' + gemStocks.length + '只到引擎...');
+    if (gemStocks.length > 0) {
+      const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks: gemStocks } });
+      const pushData = pushRes.data as any;
+      if (pushData?.code === 200) {
+        setGemScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
+        await fetchGemTop();
+      } else {
+        setGemScanStatus('❌ 推送失败');
+      }
+    } else {
+      setGemScanStatus('⚠️ 无足够K线数据');
+    }
+  }, [fetchGemTop]);
 
-  // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染)
+  // ========== 扫描函数：只扫描主板 ==========
+  const scanMainOnly = useCallback(async () => {
+    setMainScanStatus('🔄 正在获取主板股票列表...');
+    let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+    try {
+      const mainUrls = [
+        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
+        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
+      ];
+      for (const url of mainUrls) {
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const txt = await res.text();
+        const j = JSON.parse(txt);
+        const items = j?.data?.diff || [];
+        for (const item of items) {
+          const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
+          mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+        }
+      }
+      setMainScanStatus('✅ 主板: ' + mainCodes.length + '只');
+    } catch (e) {
+      setMainScanStatus('⚠️ 主板数据拉取失败');
+      return;
+    }
+
+    // 拉取K线
+    const mainStocks: any[] = [];
+    for (let i = 0; i < mainCodes.length; i += 20) {
+      const batch = mainCodes.slice(i, i + 20);
+      const batchPromises = batch.map(async (s) => {
+        try {
+          const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+          const res = await fetch(url);
+          const txt = await res.text();
+          const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
+          const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+          if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+        } catch(e2) {}
+      });
+      await Promise.all(batchPromises);
+      if ((i + 20) % 40 === 0 || i + 20 >= mainCodes.length) {
+        setMainScanStatus('📥 K线 ' + Math.min(i + 20, mainCodes.length) + '/' + mainCodes.length);
+      }
+    }
+    setMainScanStatus('📤 推送 ' + mainStocks.length + '只...');
+    if (mainStocks.length > 0) {
+      const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: mainStocks } });
+      const pushData = pushRes.data as any;
+      if (pushData?.code === 200) {
+        setMainScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
+        await fetchMainTop();
+      } else {
+        setMainScanStatus('❌ 推送失败');
+      }
+    } else {
+      setMainScanStatus('⚠️ 无足够K线数据');
+    }
+  }, [fetchMainTop]);
+
+  // ========== 扫描函数：只扫描热点板块 ==========
+  const scanSectorOnly = useCallback(async () => {
+    setSectorScanStatus('🔄 正在获取热点板块数据...');
+    try {
+      const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f12,f14,f3,f62';
+      const sectorRes = await fetch(sectorUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const sectorTxt = await sectorRes.text();
+      const sectorJson = JSON.parse(sectorTxt);
+      const sectors = sectorJson?.data?.diff || [];
+      let sectorStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
+      for (const sec of sectors) {
+        const bkCode = sec.f12;
+        const sectorName = sec.f14;
+        const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
+        try {
+          const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const leadingTxt = await leadingRes.text();
+          const leadingJson = JSON.parse(leadingTxt);
+          const leadingItems = leadingJson?.data?.diff || [];
+          for (const it of leadingItems) {
+            const prefix = (it.f12 || '').startsWith('6') ? 'sh' : 'sz';
+              sectorStocks.push({ code: prefix + it.f12, name: it.f14 || it.f12, sectorName, price: it.f2 || 0, changePercent: it.f3 || 0, inflow: parseFloat(it.f62) || 0 });
+          }
+        } catch(e2) {}
+      }
+      const seenCodes = new Set();
+      sectorStocks = sectorStocks.filter(s => { if (seenCodes.has(s.code)) return false; seenCodes.add(s.code); return true; });
+      setSectorScanStatus('✅ 板块成分股: ' + sectorStocks.length + '只（去重）');
+      const sectorStockWithKlines: any[] = [];
+      for (let si = 0; si < sectorStocks.length; si += 20) {
+        const sbatch = sectorStocks.slice(si, si + 20);
+        const batchPromises = sbatch.map(async (s) => {
+          try {
+            const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+            const r = await fetch(url);
+            const txt = await r.text();
+            const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
+            const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+            if (klines.length >= 20) sectorStockWithKlines.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          } catch(e2) {}
+        });
+        await Promise.all(batchPromises);
+        if ((si + 20) % 40 === 0 || si + 20 >= sectorStocks.length) {
+          setSectorScanStatus('📥 K线 ' + Math.min(si + 20, sectorStocks.length) + '/' + sectorStocks.length);
+        }
+      }
+      setSectorScanStatus('📤 推送 ' + sectorStockWithKlines.length + '只...');
+      if (sectorStockWithKlines.length > 0) {
+        const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: sectorStockWithKlines } });
+        const pushData = pushRes.data as any;
+        if (pushData?.code === 200) {
+          setSectorScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
+          await fetchSectorHot();
+        } else {
+          setSectorScanStatus('❌ 推送失败');
+        }
+      } else {
+        setSectorScanStatus('⚠️ 无足够K线数据');
+      }
+    } catch (e) {
+      console.warn('板块数据拉取失败:', e);
+      setSectorScanStatus('❌ 板块拉取失败');
+    }
+  }, [fetchSectorHot]);
+
+  // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染) — 只扫描创业板
   useEffect(() => {
-    const t = setTimeout(() => triggerGemScan(), 3000);
+    const t = setTimeout(() => scanGemOnly(), 3000);
     return () => clearTimeout(t);
-  }, [triggerGemScan]);
+  }, [scanGemOnly]);
 
 
   // 搜索建议状态
@@ -1393,10 +1389,13 @@ const IndexPage = () => {
                 return `${diff} 分钟前更新`;
               })() : '自动刷新中'}
             </Text>
+            <Button size="sm" variant="outline" onClick={() => scanGemOnly()}>
+              <Text className="block text-xs">扫描</Text>
+            </Button>
           </View>
-          {scanStatus && (
+          {gemScanStatus && (
             <View className="mt-1">
-              <Text className="block text-xs text-gray-400">{scanStatus}</Text>
+              <Text className="block text-xs text-gray-400">{gemScanStatus}</Text>
             </View>
           )}
           {gemLoading && gemData === null ? (
@@ -1491,6 +1490,9 @@ const IndexPage = () => {
                 return `${diff} 分钟前更新`;
               })() : '自动刷新中'}
             </Text>
+            <Button size="sm" variant="outline" onClick={() => scanMainOnly()}>
+              <Text className="block text-xs">扫描</Text>
+            </Button>
           </View>
           {mainScanStatus && (
             <View className="mt-1 mb-1">
@@ -1588,6 +1590,9 @@ const IndexPage = () => {
               return <Text className="block text-xs text-green-500">{diff} 分钟前更新</Text>;
             })()}
             {sectorLoading && <Text className="block text-xs text-gray-400">加载中...</Text>}
+            <Button size="sm" variant="outline" onClick={() => scanSectorOnly()}>
+              <Text className="block text-xs">扫描</Text>
+            </Button>
           </View>
           {sectorScanStatus && (
             <View className="mt-1 mb-1">
