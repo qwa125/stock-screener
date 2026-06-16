@@ -69,7 +69,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly CACHE_FILE = '/tmp/gem-opportunities-cache.json';
   private readonly BUNDLED_GEM_CACHE = join(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
   private readonly BATCH_SIZE = 20;
-  private readonly POSITION_THRESHOLD = 85;
+  private readonly POSITION_THRESHOLD = 92;
   private readonly RELAXED_POSITION = 90;
   // Tencent API 批量查询 GEM 股票 (替代被屏蔽的 EastMoney push2)
   private readonly TENANT_BATCH = 500;       // 每批查询数

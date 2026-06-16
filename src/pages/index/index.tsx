@@ -723,7 +723,7 @@ const IndexPage = () => {
       // ===== 1. 创业板数据 =====
       let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
       try {
-        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
         const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const txt1 = await res1.text();
         const j1 = JSON.parse(txt1);
@@ -764,8 +764,8 @@ const IndexPage = () => {
       try {
         // 上海主板 m:1+t:2 + 深圳主板 m:0+t:1（排除创业板）
         const mainUrls = [
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
         ];
         for (const url of mainUrls) {
           const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -785,7 +785,7 @@ const IndexPage = () => {
       }
 
       // ===== 3. 拉取创业板K线并推送 =====
-      const gemTopN = gemCodes.slice(0, 30);
+      const gemTopN = gemCodes.slice(0, 50);
       const gemStocks: any[] = [];
       for (let i = 0; i < gemTopN.length; i += 5) {
         const batch = gemTopN.slice(i, i + 5);
@@ -816,7 +816,7 @@ const IndexPage = () => {
       if (mainCodes.length > 0) {
         setMainScanStatus('📥 正在拉取主板K线...');
         setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
-        const mainTopN = mainCodes.slice(0, 30);
+        const mainTopN = mainCodes.slice(0, 50);
         const mainStocks: any[] = [];
         for (let i = 0; i < mainTopN.length; i += 5) {
           const batch = mainTopN.slice(i, i + 5);
@@ -853,7 +853,7 @@ const IndexPage = () => {
       setSectorScanStatus('🔄 正在拉取热点板块数据...');
       setScanStatus(prev => prev + ' | 🔥 拉取板块数据...');
       try {
-        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f12,f14,f3,f62';
+        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f12,f14,f3,f62';
         const sectorRes = await fetch(sectorUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const sectorTxt = await sectorRes.text();
         const sectorJson = JSON.parse(sectorTxt);

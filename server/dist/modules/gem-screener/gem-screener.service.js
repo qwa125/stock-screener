@@ -40,7 +40,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
-        this.POSITION_THRESHOLD = 85;
+        this.POSITION_THRESHOLD = 92;
         this.RELAXED_POSITION = 90;
         this.TENANT_BATCH = 500;
         this.MIN_GAIN_PCT = 0.3;
