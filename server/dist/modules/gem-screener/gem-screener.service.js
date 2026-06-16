@@ -184,11 +184,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async getOpportunities() {
         const marketOpen = (0, market_time_1.isMarketOpen)();
-        if (!marketOpen && this.cache) {
-            this.triggerAnalysisPreCache(this.cache.data);
-            return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-        }
-        if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL) {
+        if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL && marketOpen) {
             this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
@@ -198,9 +194,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         if (this.cache) {
-            this.triggerAnalysisPreCache(this.cache.data);
-            this.triggerRefresh();
-            return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+            this.logger.warn('⚠️ 缓存过期, 同步刷新...');
+            try {
+                const opportunities = await this.scanAllStocks();
+                this.cache = { data: opportunities, timestamp: Date.now() };
+                this.saveCacheToDisk();
+                this.triggerAnalysisPreCache(opportunities);
+                return { opportunities, timestamp: this.cache.timestamp };
+            }
+            catch (err) {
+                this.logger.error(`❌ 同步刷新失败: ${err.message}`);
+                this.triggerAnalysisPreCache(this.cache.data);
+                this.triggerRefresh();
+                return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+            }
         }
         this.logger.log('📦 首次加载或缓存已清空, 尝试获取数据...');
         if (!marketOpen) {

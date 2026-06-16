@@ -237,26 +237,32 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async getOpportunities(): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
     const marketOpen = isMarketOpen();
 
-    // 盘后/周末: 缓存永不过期, 直接返回缓存 (如有)
-    if (!marketOpen && this.cache) {
+    // 缓存新鲜 → 直接返回
+    if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL && marketOpen) {
       this.triggerAnalysisPreCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
-
-    // 盘中: 正常 stale-while-revalidate
-    if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL) {
-      this.triggerAnalysisPreCache(this.cache.data);
-      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-    }
+    // 缓存还可用 → 返回旧 + 后台刷新
     if (this.cache && Date.now() - this.cache.timestamp < this.STALE_TTL) {
       this.triggerAnalysisPreCache(this.cache.data);
       this.triggerRefresh();
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
+    // 缓存非常旧 → 同步强制刷新（不管盘前盘后，避免部署后永远没数据）
     if (this.cache) {
-      this.triggerAnalysisPreCache(this.cache.data);
-      this.triggerRefresh();
-      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+      this.logger.warn('⚠️ 缓存过期, 同步刷新...');
+      try {
+        const opportunities = await this.scanAllStocks();
+        this.cache = { data: opportunities, timestamp: Date.now() };
+        this.saveCacheToDisk();
+        this.triggerAnalysisPreCache(opportunities);
+        return { opportunities, timestamp: this.cache.timestamp };
+      } catch (err) {
+        this.logger.error(`❌ 同步刷新失败: ${err.message}`);
+        this.triggerAnalysisPreCache(this.cache.data);
+        this.triggerRefresh();
+        return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+      }
     }
 
     // 无任何缓存 → 即使盘后也尝试首次加载（避免首次部署永远没数据）
