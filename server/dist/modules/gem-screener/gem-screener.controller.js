@@ -23,6 +23,14 @@ let GemScreenerController = class GemScreenerController {
         const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
     }
+    async refreshMainBoard(body) {
+        const opportunities = await this.gemScreener.scanWithFrontendMainBoardData(body.stocks);
+        return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+    }
+    async refreshSector(body) {
+        const opportunities = await this.gemScreener.scanWithFrontendSectorData(body.stocks);
+        return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+    }
     async getOpportunities() {
         const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
         return { code: 200, msg: 'success', data: { opportunities, timestamp } };
@@ -57,6 +65,22 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "refreshWithData", null);
+__decorate([
+    (0, common_1.Post)('refresh-main-board'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "refreshMainBoard", null);
+__decorate([
+    (0, common_1.Post)('refresh-sector'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "refreshSector", null);
 __decorate([
     (0, common_1.Get)('opportunities'),
     __metadata("design:type", Function),

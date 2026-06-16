@@ -715,10 +715,10 @@ const IndexPage = () => {
 
   // 前端数据扫描推送到服务器引擎
   const triggerGemScan = useCallback(async () => {
-    setScanStatus('🔄 正在扫描...');
+    setScanStatus('🔄 正在扫描创业板...');
     try {
-      // 1. 从东方财富拉取上涨创业板
-      let codes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+      // ===== 1. 创业板数据 =====
+      let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
       try {
         const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
         const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -727,15 +727,14 @@ const IndexPage = () => {
         const items = j1?.data?.diff || [];
         for (const item of items) {
           if (item.f3 > 0) {
-            codes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+            gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
           }
         }
-        setScanStatus('✅ 东方财富: ' + codes.length + '只上涨');
+        setScanStatus('✅ 东方财富创业板: ' + gemCodes.length + '只上涨');
       } catch (e) {
-        setScanStatus('⚠️ 东方财富失败, 改用腾讯...');
+        setScanStatus('⚠️ 东方财富失败, 改用腾讯创业板...');
       }
-      // 2. 如果东方财富没数据, 用腾讯备源
-      if (codes.length === 0) {
+      if (gemCodes.length === 0) {
         const batchCodes: string[] = [];
         for (let i = 300000; i <= 301999; i++) batchCodes.push('sz' + i);
         for (let j = 0; j < batchCodes.length; j += 80) {
@@ -749,18 +748,44 @@ const IndexPage = () => {
               const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
               if (m) {
                 const change = parseFloat(m[3]);
-                if (change > 0) codes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
+                if (change > 0) gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
               }
             }
           } catch(e) {}
         }
-        setScanStatus('✅ 腾讯: ' + codes.length + '只上涨');
+        setScanStatus('✅ 腾讯创业板: ' + gemCodes.length + '只上涨');
       }
-      // 3. 取前30只拉K线, 推送到后端
-      const topN = codes.slice(0, 30);
-      const stocks: any[] = [];
-      for (let i = 0; i < topN.length; i += 5) {
-        const batch = topN.slice(i, i + 5);
+
+      // ===== 2. 主板数据（从东方财富拉取）=====
+      let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+      try {
+        // 上海主板 m:1+t:2 + 深圳主板 m:0+t:1（排除创业板）
+        const mainUrls = [
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
+        ];
+        for (const url of mainUrls) {
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const txt = await res.text();
+          const j = JSON.parse(txt);
+          const items = j?.data?.diff || [];
+          for (const item of items) {
+            if (item.f3 > 0) {
+              const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
+              mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+            }
+          }
+        }
+        setScanStatus(prev => prev + ' | 主板: ' + mainCodes.length + '只上涨');
+      } catch (e) {
+        console.warn('主板数据拉取失败:', e);
+      }
+
+      // ===== 3. 拉取创业板K线并推送 =====
+      const gemTopN = gemCodes.slice(0, 30);
+      const gemStocks: any[] = [];
+      for (let i = 0; i < gemTopN.length; i += 5) {
+        const batch = gemTopN.slice(i, i + 5);
         const batchPromises = batch.map(async (s) => {
           try {
             const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
@@ -768,27 +793,56 @@ const IndexPage = () => {
             const txt3 = await res3.text();
             const j3 = JSON.parse(txt3.replace(/\.\.\./, '\"'));
             const klines = (j3?.data?.[s.code]?.qfqday || j3?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
-            if (klines.length >= 20) stocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
           } catch(e) {}
         });
         await Promise.all(batchPromises);
       }
-      setScanStatus('📤 推送 ' + stocks.length + '只到引擎...');
-      // 4. 推送到后端引擎
-      const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks } });
-      const pushData = pushRes.data as any;
-      if (pushData?.code === 200) {
-        setScanStatus('✅ 扫描完成! 规则引擎发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
-        // 立即刷新UI
-        await fetchGemTop();
-      } else {
-        setScanStatus('❌ 推送失败: ' + JSON.stringify(pushData));
+      setScanStatus('📤 推送创业板 ' + gemStocks.length + '只到引擎...');
+      // 推送创业板
+      if (gemStocks.length > 0) {
+        const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks: gemStocks } });
+        const pushData = pushRes.data as any;
+        if (pushData?.code === 200) {
+          setScanStatus('✅ 创业板完成! ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
+          await fetchGemTop();
+        }
+      }
+
+      // ===== 4. 拉取主板K线并推送 =====
+      if (mainCodes.length > 0) {
+        setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
+        const mainTopN = mainCodes.slice(0, 30);
+        const mainStocks: any[] = [];
+        for (let i = 0; i < mainTopN.length; i += 5) {
+          const batch = mainTopN.slice(i, i + 5);
+          const batchPromises = batch.map(async (s) => {
+            try {
+              const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+              const res = await fetch(url);
+              const txt = await res.text();
+              const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
+              const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+              if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            } catch(e) {}
+          });
+          await Promise.all(batchPromises);
+        }
+        setScanStatus(prev => prev + ' | 📤 推送主板 ' + mainStocks.length + '只...');
+        if (mainStocks.length > 0) {
+          const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: mainStocks } });
+          const pushData = pushRes.data as any;
+          if (pushData?.code === 200) {
+            setScanStatus('✅ 推送完成! 创业板:' + (gemStocks.length || 0) + '只 主板:' + mainStocks.length + '只 | 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只主板机会');
+            await fetchMainTop();
+          }
+        }
       }
     } catch (err: any) {
       setScanStatus('❌ 错误: ' + (err?.message || err));
     }
 
-  }, [fetchGemTop]);
+  }, [fetchGemTop, fetchMainTop]);
 
   // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染)
   useEffect(() => {

@@ -574,6 +574,110 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return finalResults;
   }
 
+  /**
+   * 前端推送主板数据
+   */
+  async scanWithFrontendMainBoardData(
+    stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: KLine[] }[]
+  ): Promise<OpportunityStock[]> {
+    const results: OpportunityStock[] = [];
+    for (const s of stocks) {
+      if (s.klines && s.klines.length >= 60) {
+        this.dataFetcher.preloadKline(s.code, s.klines);
+      }
+    }
+    for (const s of stocks) {
+      try {
+        const candidate: StockCandidate = {
+          code: s.code, name: s.name, inflow: s.inflow,
+          changePercent: s.changePercent, currentPrice: s.price,
+        };
+        const result = await this.checkOpportunity(candidate);
+        if (result) results.push(result);
+      } catch {}
+    }
+    if (results.length <= 3) {
+      for (const s of stocks) {
+        try {
+          const candidate: StockCandidate = {
+            code: s.code, name: s.name, inflow: s.inflow,
+            changePercent: s.changePercent, currentPrice: s.price,
+          };
+          const result = await this.checkOpportunityRelaxed(candidate);
+          if (result && !results.find(ex => ex.code === result.code)) results.push(result);
+        } catch {}
+      }
+    }
+    results.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = results.slice(0, 10);
+    this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
+    this.saveMainBoardCacheToDisk();
+    this.logger.log(`✅ 前端主板数据推送完成, 最终 ${finalResults.length} 只`);
+    return finalResults;
+  }
+
+  /**
+   * 前端推送板块机会股数据
+   */
+  async scanWithFrontendSectorData(
+    stocks: { code: string; name: string; sectorName: string; price?: number; changePercent?: number; inflow?: number; klines: KLine[] }[]
+  ): Promise<OpportunityStock[]> {
+    const results: OpportunityStock[] = [];
+    for (const s of stocks) {
+      if (s.klines && s.klines.length >= 60) {
+        this.dataFetcher.preloadKline(s.code, s.klines);
+      }
+    }
+    for (const s of stocks) {
+      try {
+        const candidate: StockCandidate = {
+          code: s.code, name: s.name, inflow: s.inflow ?? 0,
+          changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+        };
+        const result = await this.checkOpportunity(candidate);
+        if (result) {
+          (result as any).sectorName = s.sectorName;
+          results.push(result);
+        }
+      } catch {}
+    }
+    if (results.length <= 3) {
+      for (const s of stocks) {
+        try {
+          const candidate: StockCandidate = {
+            code: s.code, name: s.name, inflow: s.inflow ?? 0,
+            changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+          };
+          const result = await this.checkOpportunityRelaxed(candidate);
+          if (result && !results.find(ex => ex.code === result.code)) {
+            (result as any).sectorName = s.sectorName;
+            results.push(result);
+          }
+        } catch {}
+      }
+    }
+    results.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = results.slice(0, 15);
+    this.sectorCache = { data: finalResults, timestamp: Date.now() };
+    try { await fs.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache)); } catch {}
+    this.logger.log(`✅ 前端板块数据推送完成, 最终 ${finalResults.length} 只`);
+    return finalResults;
+  }
+
   // ---------------------------------------------------------------------------
   // 东方财富主力资金净流入 (f62)
   // ---------------------------------------------------------------------------
@@ -1587,174 +1691,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
    * 扫描热点板块中的机会股，取Top10（调用本地sector API获取板块数据）
    */
   async scanSectorOpportunities(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    const ttl = getOpportunityTTL();
-    if (!force && this.sectorCache && (Date.now() - this.sectorCache.timestamp < ttl)) {
+    // Render美国服务器无法访问中国股票API，始终返回缓存数据
+    // 前端浏览器（在中国）通过 POST /api/gem/refresh-sector 推送实时数据更新缓存
+    if (this.sectorCache && this.sectorCache.data?.length) {
+      this.triggerAnalysisPreCache(this.sectorCache.data);
       return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
     }
-    try {
-      const http = require('http');
-      const serverPort = process.env.SERVER_PORT || process.env.PORT || 3000;
-      const sectorData = await new Promise<any>((resolve, reject) => {
-        http.get(`http://localhost:${serverPort}/api/sector/hot`, (res: any) => {
-          let body = '';
-          res.on('data', (chunk: string) => body += chunk);
-          res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('parse fail')); } });
-        }).on('error', reject);
-      });
-      const sectors: any[] = sectorData?.data?.month1 ?? sectorData?.month1 ?? [];
-      if (!sectors.length) {
-        return { opportunities: [], timestamp: Date.now() };
-      }
-      // 取涨幅前10的板块
-      const topSectors = sectors
-        .filter((s: any) => s.changePercent !== undefined)
-        .sort((a: any, b: any) => b.changePercent - a.changePercent)
-        .slice(0, 10);
-
-      const oppStocks: Array<{ code: string; name: string; sectorName: string; price?: number; changePercent?: number; mainForceInflow?: number; baiXiaoDays?: number; pricePosition?: number; score?: number; priceIncrease?: number }> = [];
-      for (const sector of topSectors) {
-        const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
-        for (const s of stocks) {
-          oppStocks.push({
-            code: s.code, name: s.name, sectorName: sector.name,
-            price: s.price, changePercent: s.changePercent,
-            mainForceInflow: s.mainForceInflow,
-            baiXiaoDays: s.baiXiaoDays, pricePosition: s.pricePosition,
-            score: s.score, priceIncrease: s.priceIncrease,
-          });
-        }
-      }
-
-      // 并行对最多30只股票进行 quickAnalyze，但整体超时20秒
-      const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s): Promise<OpportunityStock | null> => {
-        try {
-          const stock = await this.quickAnalyze(s.code, s.name);
-          if (stock) {
-            const sr = stock as any;
-            sr.sectorName = s.sectorName;
-            // 如果 quickAnalyze 没有获取到主力资金，从 sector 数据透传
-            if (!sr.mainForceInflow && s.mainForceInflow) {
-              sr.mainForceInflow = s.mainForceInflow;
-            }
-            if (!sr.baiXiaoDays && s.baiXiaoDays) sr.baiXiaoDays = s.baiXiaoDays;
-            if (!sr.pricePosition && s.pricePosition) sr.pricePosition = s.pricePosition;
-            if (!sr.priceIncrease && s.priceIncrease) sr.priceIncrease = s.priceIncrease;
-            return stock;
-          }
-        } catch {
-          /* quickAnalyze 异常，fall through */
-        }
-        // quickAnalyze 失败 → 返回 null（后续统一用 fallback）
-        return null;
-      }));
-
-      // 给整个分析过程设置 20 秒硬超时
-      const TIMEOUT = Symbol('TIMEOUT');
-      const timeoutPromise = new Promise<symbol>((resolve) => {
-        setTimeout(() => resolve(TIMEOUT), 20000);
-      });
-
-      const raceResult = await Promise.race([analyzePromise, timeoutPromise]);
-
-      let results: OpportunityStock[];
-      if (raceResult === TIMEOUT) {
-        // 超时兜底：使用 sector 原始股票数据，根据 score 推导建议
-        const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => {
-          const sc = s.score ?? 50;
-          const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
-          let suggestion = '持有';
-          if (effectiveScore >= 80) suggestion = '重仓买入';
-          else if (effectiveScore >= 60) suggestion = '买入';
-          else if (effectiveScore >= 40 || s.buySignal) suggestion = '轻仓买入';
-          // fallback: 从 pricePosition 估算介入时机
-          const pp = s.pricePosition ?? 50;
-          const estEntryTiming = (pp >= 25 && pp <= 55) ? 65
-            : (pp >= 72 && suggestion !== '持有') ? 60
-            : 45;
-          // fallback: 从 changePercent 和 position 估算安全系数
-          const cp = Math.abs(s.changePercent ?? 0);
-          const estSafety = cp < 3 ? 65 : cp < 7 ? 55 : cp < 10 ? 40 : 25;
-          return {
-            code: s.code,
-            name: s.name ?? '',
-            sectorName: s.sectorName,
-            currentPrice: s.price ?? 0,
-            changePercent: s.changePercent ?? 0,
-            pricePosition: pp,
-            mainForceInflow: s.mainForceInflow ?? 0,
-            score: effectiveScore,
-            suggestion,
-            entryTiming: estEntryTiming,
-            safetyScore: estSafety,
-            trendState: 1,
-            capitalRank: 0,
-            baiXiaoDays: s.baiXiaoDays ?? 0,
-            priceIncrease: s.priceIncrease ?? 0,
-          };
-        });
-        results = fallbackStocks as any;
-      } else {
-        // 分析正常完成，过滤掉失败的（null）
-        results = (raceResult as (OpportunityStock | null)[])
-          .filter((r): r is OpportunityStock => r !== null)
-          .map(r => {
-            const sr = r as any;
-            sr.sectorName = sr.sectorName || '';
-            return sr;
-          });
-        // 如果全部失败，也兜底
-        if (results.length === 0) {
-          const fallbackStocks = oppStocks.slice(0, 30).map((s: any) => {
-            const sc = s.score ?? 50;
-            const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
-            let suggestion = '持有';
-            if (effectiveScore >= 80) suggestion = '重仓买入';
-            else if (effectiveScore >= 60) suggestion = '买入';
-            else if (effectiveScore >= 40 || s.buySignal) suggestion = '轻仓买入';
-            return {
-              code: s.code,
-              name: s.name ?? '',
-              sectorName: s.sectorName,
-              currentPrice: s.price ?? 0,
-              changePercent: s.changePercent ?? 0,
-              pricePosition: s.pricePosition ?? 50,
-              mainForceInflow: s.mainForceInflow ?? 0,
-              score: effectiveScore,
-              suggestion,
-              entryTiming: (s.pricePosition >= 25 && s.pricePosition <= 55) ? 65
-                : (s.pricePosition >= 72 && suggestion !== '持有') ? 60 : 45,
-              safetyScore: Math.abs(s.changePercent ?? 0) < 3 ? 65
-                : Math.abs(s.changePercent ?? 0) < 7 ? 55
-                : Math.abs(s.changePercent ?? 0) < 10 ? 40 : 25,
-              trendState: 1,
-              capitalRank: 0,
-              baiXiaoDays: s.baiXiaoDays ?? 0,
-              priceIncrease: s.priceIncrease ?? 0,
-            };
-          });
-          results = fallbackStocks as any;
-        }
-      }
-
-      const ORDER: Record<string, number> = {
-        '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-        '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
-      };
-      results.sort((a, b) => {
-        const pa = ORDER[a.suggestion ?? ''] ?? 99;
-        const pb = ORDER[b.suggestion ?? ''] ?? 99;
-        return pa !== pb ? pa - pb
-          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
-          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
-          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
-      });
-      const top = results.slice(0, 10);
-      this.sectorCache = { data: top, timestamp: Date.now() };
-      try { fs.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache)); } catch {}
-      return { opportunities: top, timestamp: this.sectorCache.timestamp };
-    } catch (e) {
-      return { opportunities: [], timestamp: Date.now() };
-    }
+    // 完全没有缓存 → 返回空
+    this.logger.log('📦 板块无缓存数据，返回空');
+    return { opportunities: [], timestamp: Date.now() };
   }
 
   async scanTopGem(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
@@ -1779,17 +1724,21 @@ export class GemScreenerService implements OnApplicationBootstrap {
    * 扫描主板Top10机会股
    */
   async scanTopMainBoard(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    const ttl = getOpportunityTTL();
-    // 缓存过期 或 缓存数据没有 suggestion（旧格式迁移）→ 触发重新扫描
-    const cacheStale = !this.mainBoardCache?.data?.length || this.mainBoardCache.data.every(s => !s.suggestion);
-    if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl) && !cacheStale) {
+    // Render美国服务器无法访问中国股票API，始终返回缓存数据
+    // 前端浏览器（在中国）通过 POST /api/gem/refresh-main-board 推送实时数据更新缓存
+    if (this.mainBoardCache && this.mainBoardCache.data?.length) {
+      const cacheStale = this.mainBoardCache.data.every(s => !s.suggestion);
+      if (cacheStale) {
+        this.logger.log('🔄 主板缓存缺少 suggestion 字段, 触发异步刷新');
+        this.triggerAnalysisPreCache(this.mainBoardCache.data);
+      }
       this.triggerAnalysisPreCache(this.mainBoardCache.data);
       return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
     }
-    if (cacheStale) this.logger.log('🔄 主板缓存缺少 suggestion 字段, 强制重新扫描');
-    const data = await this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
-    this.mainBoardCache = { data, timestamp: Date.now() };
-    return { opportunities: data, timestamp: this.mainBoardCache.timestamp };
+    // 完全没有缓存 → 尝试异步扫描，立即返回空
+    this.logger.log('📦 主板无缓存数据，触发异步扫描...');
+    this.triggerRefresh();
+    return { opportunities: [], timestamp: Date.now() };
   }
 
   /**

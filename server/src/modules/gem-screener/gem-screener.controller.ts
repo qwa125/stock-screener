@@ -12,6 +12,20 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
   }
 
+  @Post('refresh-main-board')
+  @HttpCode(200)
+  async refreshMainBoard(@Body() body: { stocks: any[] }) {
+    const opportunities = await this.gemScreener.scanWithFrontendMainBoardData(body.stocks);
+    return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+  }
+
+  @Post('refresh-sector')
+  @HttpCode(200)
+  async refreshSector(@Body() body: { stocks: any[] }) {
+    const opportunities = await this.gemScreener.scanWithFrontendSectorData(body.stocks);
+    return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+  }
+
   @Get('opportunities')
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();

@@ -442,6 +442,107 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`✅ 前端数据扫描完成, 最终 ${finalResults.length} 只`);
         return finalResults;
     }
+    async scanWithFrontendMainBoardData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 60) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code, name: s.name, inflow: s.inflow,
+                    changePercent: s.changePercent, currentPrice: s.price,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result)
+                    results.push(result);
+            }
+            catch { }
+        }
+        if (results.length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code, name: s.name, inflow: s.inflow,
+                        changePercent: s.changePercent, currentPrice: s.price,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find(ex => ex.code === result.code))
+                        results.push(result);
+                }
+                catch { }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const finalResults = results.slice(0, 10);
+        this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
+        this.saveMainBoardCacheToDisk();
+        this.logger.log(`✅ 前端主板数据推送完成, 最终 ${finalResults.length} 只`);
+        return finalResults;
+    }
+    async scanWithFrontendSectorData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 60) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code, name: s.name, inflow: s.inflow ?? 0,
+                    changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result) {
+                    result.sectorName = s.sectorName;
+                    results.push(result);
+                }
+            }
+            catch { }
+        }
+        if (results.length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code, name: s.name, inflow: s.inflow ?? 0,
+                        changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find(ex => ex.code === result.code)) {
+                        result.sectorName = s.sectorName;
+                        results.push(result);
+                    }
+                }
+                catch { }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const finalResults = results.slice(0, 15);
+        this.sectorCache = { data: finalResults, timestamp: Date.now() };
+        try {
+            await fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
+        }
+        catch { }
+        this.logger.log(`✅ 前端板块数据推送完成, 最终 ${finalResults.length} 只`);
+        return finalResults;
+    }
     async enrichWithMainForceFlow(results) {
         if (results.length === 0)
             return;
@@ -1342,177 +1443,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
     }
     async scanSectorOpportunities(force = false) {
-        const ttl = getOpportunityTTL();
-        if (!force && this.sectorCache && (Date.now() - this.sectorCache.timestamp < ttl)) {
+        if (this.sectorCache && this.sectorCache.data?.length) {
+            this.triggerAnalysisPreCache(this.sectorCache.data);
             return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
         }
-        try {
-            const http = require('http');
-            const serverPort = process.env.SERVER_PORT || process.env.PORT || 3000;
-            const sectorData = await new Promise((resolve, reject) => {
-                http.get(`http://localhost:${serverPort}/api/sector/hot`, (res) => {
-                    let body = '';
-                    res.on('data', (chunk) => body += chunk);
-                    res.on('end', () => { try {
-                        resolve(JSON.parse(body));
-                    }
-                    catch {
-                        reject(new Error('parse fail'));
-                    } });
-                }).on('error', reject);
-            });
-            const sectors = sectorData?.data?.month1 ?? sectorData?.month1 ?? [];
-            if (!sectors.length) {
-                return { opportunities: [], timestamp: Date.now() };
-            }
-            const topSectors = sectors
-                .filter((s) => s.changePercent !== undefined)
-                .sort((a, b) => b.changePercent - a.changePercent)
-                .slice(0, 10);
-            const oppStocks = [];
-            for (const sector of topSectors) {
-                const stocks = sector.opportunityStocks ?? sector.leadingStocks ?? [];
-                for (const s of stocks) {
-                    oppStocks.push({
-                        code: s.code, name: s.name, sectorName: sector.name,
-                        price: s.price, changePercent: s.changePercent,
-                        mainForceInflow: s.mainForceInflow,
-                        baiXiaoDays: s.baiXiaoDays, pricePosition: s.pricePosition,
-                        score: s.score, priceIncrease: s.priceIncrease,
-                    });
-                }
-            }
-            const analyzePromise = Promise.all(oppStocks.slice(0, 30).map(async (s) => {
-                try {
-                    const stock = await this.quickAnalyze(s.code, s.name);
-                    if (stock) {
-                        const sr = stock;
-                        sr.sectorName = s.sectorName;
-                        if (!sr.mainForceInflow && s.mainForceInflow) {
-                            sr.mainForceInflow = s.mainForceInflow;
-                        }
-                        if (!sr.baiXiaoDays && s.baiXiaoDays)
-                            sr.baiXiaoDays = s.baiXiaoDays;
-                        if (!sr.pricePosition && s.pricePosition)
-                            sr.pricePosition = s.pricePosition;
-                        if (!sr.priceIncrease && s.priceIncrease)
-                            sr.priceIncrease = s.priceIncrease;
-                        return stock;
-                    }
-                }
-                catch {
-                }
-                return null;
-            }));
-            const TIMEOUT = Symbol('TIMEOUT');
-            const timeoutPromise = new Promise((resolve) => {
-                setTimeout(() => resolve(TIMEOUT), 20000);
-            });
-            const raceResult = await Promise.race([analyzePromise, timeoutPromise]);
-            let results;
-            if (raceResult === TIMEOUT) {
-                const fallbackStocks = oppStocks.slice(0, 30).map((s) => {
-                    const sc = s.score ?? 50;
-                    const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
-                    let suggestion = '持有';
-                    if (effectiveScore >= 80)
-                        suggestion = '重仓买入';
-                    else if (effectiveScore >= 60)
-                        suggestion = '买入';
-                    else if (effectiveScore >= 40 || s.buySignal)
-                        suggestion = '轻仓买入';
-                    const pp = s.pricePosition ?? 50;
-                    const estEntryTiming = (pp >= 25 && pp <= 55) ? 65
-                        : (pp >= 72 && suggestion !== '持有') ? 60
-                            : 45;
-                    const cp = Math.abs(s.changePercent ?? 0);
-                    const estSafety = cp < 3 ? 65 : cp < 7 ? 55 : cp < 10 ? 40 : 25;
-                    return {
-                        code: s.code,
-                        name: s.name ?? '',
-                        sectorName: s.sectorName,
-                        currentPrice: s.price ?? 0,
-                        changePercent: s.changePercent ?? 0,
-                        pricePosition: pp,
-                        mainForceInflow: s.mainForceInflow ?? 0,
-                        score: effectiveScore,
-                        suggestion,
-                        entryTiming: estEntryTiming,
-                        safetyScore: estSafety,
-                        trendState: 1,
-                        capitalRank: 0,
-                        baiXiaoDays: s.baiXiaoDays ?? 0,
-                        priceIncrease: s.priceIncrease ?? 0,
-                    };
-                });
-                results = fallbackStocks;
-            }
-            else {
-                results = raceResult
-                    .filter((r) => r !== null)
-                    .map(r => {
-                    const sr = r;
-                    sr.sectorName = sr.sectorName || '';
-                    return sr;
-                });
-                if (results.length === 0) {
-                    const fallbackStocks = oppStocks.slice(0, 30).map((s) => {
-                        const sc = s.score ?? 50;
-                        const effectiveScore = sc <= 1 ? Math.round(sc * 100) : sc;
-                        let suggestion = '持有';
-                        if (effectiveScore >= 80)
-                            suggestion = '重仓买入';
-                        else if (effectiveScore >= 60)
-                            suggestion = '买入';
-                        else if (effectiveScore >= 40 || s.buySignal)
-                            suggestion = '轻仓买入';
-                        return {
-                            code: s.code,
-                            name: s.name ?? '',
-                            sectorName: s.sectorName,
-                            currentPrice: s.price ?? 0,
-                            changePercent: s.changePercent ?? 0,
-                            pricePosition: s.pricePosition ?? 50,
-                            mainForceInflow: s.mainForceInflow ?? 0,
-                            score: effectiveScore,
-                            suggestion,
-                            entryTiming: (s.pricePosition >= 25 && s.pricePosition <= 55) ? 65
-                                : (s.pricePosition >= 72 && suggestion !== '持有') ? 60 : 45,
-                            safetyScore: Math.abs(s.changePercent ?? 0) < 3 ? 65
-                                : Math.abs(s.changePercent ?? 0) < 7 ? 55
-                                    : Math.abs(s.changePercent ?? 0) < 10 ? 40 : 25,
-                            trendState: 1,
-                            capitalRank: 0,
-                            baiXiaoDays: s.baiXiaoDays ?? 0,
-                            priceIncrease: s.priceIncrease ?? 0,
-                        };
-                    });
-                    results = fallbackStocks;
-                }
-            }
-            const ORDER = {
-                '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-                '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
-            };
-            results.sort((a, b) => {
-                const pa = ORDER[a.suggestion ?? ''] ?? 99;
-                const pb = ORDER[b.suggestion ?? ''] ?? 99;
-                return pa !== pb ? pa - pb
-                    : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
-                        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
-                            : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
-            });
-            const top = results.slice(0, 10);
-            this.sectorCache = { data: top, timestamp: Date.now() };
-            try {
-                fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
-            }
-            catch { }
-            return { opportunities: top, timestamp: this.sectorCache.timestamp };
-        }
-        catch (e) {
-            return { opportunities: [], timestamp: Date.now() };
-        }
+        this.logger.log('📦 板块无缓存数据，返回空');
+        return { opportunities: [], timestamp: Date.now() };
     }
     async scanTopGem(force = false) {
         if (this.cache && this.cache.data?.length) {
@@ -1529,17 +1465,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         return { opportunities: [], timestamp: Date.now() };
     }
     async scanTopMainBoard(force = false) {
-        const ttl = getOpportunityTTL();
-        const cacheStale = !this.mainBoardCache?.data?.length || this.mainBoardCache.data.every(s => !s.suggestion);
-        if (!force && this.mainBoardCache && (Date.now() - this.mainBoardCache.timestamp < ttl) && !cacheStale) {
+        if (this.mainBoardCache && this.mainBoardCache.data?.length) {
+            const cacheStale = this.mainBoardCache.data.every(s => !s.suggestion);
+            if (cacheStale) {
+                this.logger.log('🔄 主板缓存缺少 suggestion 字段, 触发异步刷新');
+                this.triggerAnalysisPreCache(this.mainBoardCache.data);
+            }
             this.triggerAnalysisPreCache(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
         }
-        if (cacheStale)
-            this.logger.log('🔄 主板缓存缺少 suggestion 字段, 强制重新扫描');
-        const data = await this.scanTopFromCandidates(async () => this.fetchMainBoardCandidates(), 10);
-        this.mainBoardCache = { data, timestamp: Date.now() };
-        return { opportunities: data, timestamp: this.mainBoardCache.timestamp };
+        this.logger.log('📦 主板无缓存数据，触发异步扫描...');
+        this.triggerRefresh();
+        return { opportunities: [], timestamp: Date.now() };
     }
     async scanTopOpportunities(force = false) {
         const gem = await this.scanTopGem(force);
