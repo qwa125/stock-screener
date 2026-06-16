@@ -788,12 +788,14 @@ const IndexPage = () => {
       setScanStatus('❌ 错误: ' + (err?.message || err));
     }
 
+  }, [fetchGemTop]);
+
   // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染)
   useEffect(() => {
     const t = setTimeout(() => triggerGemScan(), 3000);
     return () => clearTimeout(t);
   }, [triggerGemScan]);
-  }, [fetchGemTop]);
+
 
   // 搜索建议状态
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
