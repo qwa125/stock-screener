@@ -9,6 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Info, AArrowUp, AArrowDown, TriangleAlert, Minus } from 'lucide-react-taro';
 import { Separator } from '@/components/ui/separator';
 
+// 通过后端代理获取腾讯行情（后端用 iconv-lite 正确解码 GBK）
+async function fetchTencentViaProxy(qstr: string): Promise<string> {
+  const res = await Network.request({ url: '/api/gem/tencent-proxy', method: 'POST', data: { q: qstr } });
+  const apiData = res.data as any;
+  return apiData?.data?.text || '';
+}
 
 interface StockInfo {
   code: string;
@@ -746,10 +752,7 @@ const IndexPage = () => {
         for (let j = 0; j < allCodes.length; j += 80) {
           const batch = allCodes.slice(j, j + 80);
           try {
-            const url = 'https://qt.gtimg.cn/q=' + batch.join(',');
-            const res = await fetch(url);
-            const buf = await res.arrayBuffer();
-            const txt = new TextDecoder('gbk').decode(buf);
+            const txt = await fetchTencentViaProxy(batch.join(','));
             const lines = txt.split('\n');
             for (const line of lines) {
               if (!line || line.length < 20) continue;
@@ -873,10 +876,7 @@ const IndexPage = () => {
         for (let j = 0; j < allCodes.length; j += 80) {
           const batch = allCodes.slice(j, j + 80);
           try {
-            const url2 = 'https://qt.gtimg.cn/q=' + batch.join(',');
-            const res2 = await fetch(url2);
-            const buf2 = await res2.arrayBuffer();
-            const txt2 = new TextDecoder('gbk').decode(buf2);
+            const txt2 = await fetchTencentViaProxy(batch.join(','));
             const lines = txt2.split('\n');
             for (const line of lines) {
               if (!line || line.length < 20) continue;
@@ -996,9 +996,7 @@ const IndexPage = () => {
         const batch = uniqueCodes.slice(i, i + 80);
         const qstr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
         try {
-          const res = await fetch('https://qt.gtimg.cn/q=' + qstr);
-          const buf = await res.arrayBuffer();
-          const txt = new TextDecoder('gbk').decode(buf);
+          const txt = await fetchTencentViaProxy(qstr);
           const lines = txt.trim().split(';');
           for (const line of lines) {
             const cm = line.match(/v_(sh\d+|sz\d+)="(.*)"/);

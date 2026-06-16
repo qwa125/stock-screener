@@ -2,6 +2,19 @@ import { GemScreenerService } from './gem-screener.service';
 export declare class GemScreenerController {
     private readonly gemScreener;
     constructor(gemScreener: GemScreenerService);
+    tencentProxy(body: {
+        q: string;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            text: string;
+        };
+    }>;
     refreshWithData(body: {
         stocks: any[];
     }): Promise<{

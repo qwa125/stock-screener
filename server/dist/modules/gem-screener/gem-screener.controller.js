@@ -15,9 +15,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
 const gem_screener_service_1 = require("./gem-screener.service");
+const iconv = require("iconv-lite");
 let GemScreenerController = class GemScreenerController {
     constructor(gemScreener) {
         this.gemScreener = gemScreener;
+    }
+    async tencentProxy(body) {
+        if (!body.q)
+            return { code: 400, msg: 'missing q parameter' };
+        const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(body.q);
+        const res = await fetch(url);
+        const buf = Buffer.from(await res.arrayBuffer());
+        const txt = iconv.decode(buf, 'gbk');
+        return { code: 200, msg: 'success', data: { text: txt } };
     }
     async refreshWithData(body) {
         const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
@@ -57,6 +67,14 @@ let GemScreenerController = class GemScreenerController {
     }
 };
 exports.GemScreenerController = GemScreenerController;
+__decorate([
+    (0, common_1.Post)('tencent-proxy'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "tencentProxy", null);
 __decorate([
     (0, common_1.Post)('refresh'),
     (0, common_1.HttpCode)(200),

@@ -1,9 +1,25 @@
 import { Controller, Get, Post, Body, Query, HttpCode } from '@nestjs/common';
 import { GemScreenerService } from './gem-screener.service';
+import * as iconv from 'iconv-lite';
 
 @Controller('gem')
 export class GemScreenerController {
   constructor(private readonly gemScreener: GemScreenerService) {}
+
+  /**
+   * 代理腾讯股票行情API（前端无法正确处理GBK编码，后端用iconv-lite解码）
+   * POST /api/gem/tencent-proxy body: { q: "sz300001,sh600001" }
+   */
+  @Post('tencent-proxy')
+  @HttpCode(200)
+  async tencentProxy(@Body() body: { q: string }) {
+    if (!body.q) return { code: 400, msg: 'missing q parameter' };
+    const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(body.q);
+    const res = await fetch(url);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const txt = iconv.decode(buf, 'gbk');
+    return { code: 200, msg: 'success', data: { text: txt } };
+  }
 
   @Post('refresh')
   @HttpCode(200)
