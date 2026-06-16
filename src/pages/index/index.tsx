@@ -758,9 +758,10 @@ const IndexPage = () => {
             if (!line || line.length < 20) continue;
             const codeMatch = line.match(/v_(\w+)="/);
             if (!codeMatch) continue;
-            const code = codeMatch[1];
             const parts = line.split('~');
             if (parts.length < 6) continue;
+            const code = parts[1] || '';
+            if (!code) continue;
             const name = parts[2] || '';
             if (!name) continue;
             const price = parseFloat(parts[3]) || 0;
@@ -874,11 +875,10 @@ const IndexPage = () => {
             const lines = txt2.split('\n');
             for (const line of lines) {
               if (!line || line.length < 20) continue;
-              const codeMatch = line.match(/v_(\w+)="/);
-              if (!codeMatch) continue;
-              const code = codeMatch[1];
               const parts = line.split('~');
               if (parts.length < 6) continue;
+              const code = parts[1] || '';
+              if (!code) continue;
               const name = parts[2] || '';
               if (!name) continue;
               const price = parseFloat(parts[3]) || 0;
