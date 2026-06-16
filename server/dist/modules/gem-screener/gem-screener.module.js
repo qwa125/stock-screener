@@ -10,6 +10,7 @@ exports.GemScreenerModule = void 0;
 const common_1 = require("@nestjs/common");
 const gem_screener_controller_1 = require("./gem-screener.controller");
 const gem_screener_service_1 = require("./gem-screener.service");
+const gem_screener_scheduler_1 = require("./gem-screener.scheduler");
 const stock_module_1 = require("../stock/stock.module");
 let GemScreenerModule = class GemScreenerModule {
 };
@@ -18,7 +19,7 @@ exports.GemScreenerModule = GemScreenerModule = __decorate([
     (0, common_1.Module)({
         imports: [stock_module_1.StockModule],
         controllers: [gem_screener_controller_1.GemScreenerController],
-        providers: [gem_screener_service_1.GemScreenerService],
+        providers: [gem_screener_service_1.GemScreenerService, gem_screener_scheduler_1.GemScreenerScheduler],
         exports: [gem_screener_service_1.GemScreenerService],
     })
 ], GemScreenerModule);

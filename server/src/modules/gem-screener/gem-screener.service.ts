@@ -880,7 +880,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // 增强买入信号（与 getTradingSuggestion 的 strongBuy 保持一致）
     const strongBuyR = (isGoldenCross && volumeBullishR) || (bxDays >= 3) || (bx.baiXiaoBuy1 && volumeBullishR);
-    const strongSellR = !!bx.strongSell;
+    const strongSellR = !!(bx as any).strongSell;
 
     const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
 

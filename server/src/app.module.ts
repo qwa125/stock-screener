@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from '@/app.controller';
 import { AppService } from '@/app.service';
 import { StockModule } from '@/modules/stock/stock.module';
@@ -11,7 +12,7 @@ import { AccessLimitGuard } from '@/guards/access-limit.guard';
 import { AuthModule } from '@/modules/auth/auth.module';
 
 @Module({
-  imports: [AuthModule, StockModule, SectorModule, GemScreenerModule, AccessControlModule, DeviceModule],
+  imports: [AuthModule, StockModule, SectorModule, GemScreenerModule, AccessControlModule, DeviceModule, ScheduleModule.forRoot()],
   controllers: [AppController],
   providers: [
     AppService,

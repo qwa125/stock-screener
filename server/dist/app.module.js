@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
+const schedule_1 = require("@nestjs/schedule");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const stock_module_1 = require("./modules/stock/stock.module");
@@ -23,7 +24,7 @@ let AppModule = class AppModule {
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [auth_module_1.AuthModule, stock_module_1.StockModule, sector_module_1.SectorModule, gem_screener_module_1.GemScreenerModule, access_control_module_1.AccessControlModule, device_module_1.DeviceModule],
+        imports: [auth_module_1.AuthModule, stock_module_1.StockModule, sector_module_1.SectorModule, gem_screener_module_1.GemScreenerModule, access_control_module_1.AccessControlModule, device_module_1.DeviceModule, schedule_1.ScheduleModule.forRoot()],
         controllers: [app_controller_1.AppController],
         providers: [
             app_service_1.AppService,
