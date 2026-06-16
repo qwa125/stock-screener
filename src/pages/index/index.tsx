@@ -844,6 +844,8 @@ const IndexPage = () => {
       const mainRanges: { prefix: string; label: string; start: number; end: number }[] = [
         { prefix: 'sh', label: '沪主板', start: 600000, end: 609999 },
         { prefix: 'sz', label: '深主板', start: 0, end: 3999 },
+        { prefix: 'sz', label: '深主板001', start: 1000, end: 1999 },
+        { prefix: 'sz', label: '深主板002', start: 2000, end: 2999 },
       ];
       for (const rng of mainRanges) {
         const allCodes: string[] = [];
@@ -958,20 +960,20 @@ const IndexPage = () => {
   const scanSectorOnly = useCallback(async () => {
     setSectorScanStatus('🔄 正在扫描整个A股市场...');
     try {
-      // 生成全市场代码范围：创业板+主板+科创板+北交所
-      const codeRanges: { prefix: string; start: number; end: number; label: string; digitLen: number }[] = [
-        { prefix: 'sz3', start: 0, end: 1999, label: '创业板', digitLen: 3 },
-        { prefix: 'sh6', start: 0, end: 9999, label: '沪主板', digitLen: 4 },
-        { prefix: 'sz0', start: 0, end: 3999, label: '深主板', digitLen: 4 },
-        { prefix: 'sh68', start: 8001, end: 8999, label: '科创板', digitLen: 1 },
-        { prefix: 'sz4', start: 0, end: 9999, label: '北交所', digitLen: 4 },
-        { prefix: 'sz8', start: 0, end: 9999, label: '北交所', digitLen: 4 },
+      // 生成全市场代码范围：创业板+主板+科创板
+      const codeRanges: { prefix: string; start: number; end: number; label: string }[] = [
+        { prefix: 'sh', start: 600000, end: 609999, label: '沪主板' },
+        { prefix: 'sh', start: 688001, end: 688999, label: '科创板' },
+        { prefix: 'sz', start: 0, end: 3999, label: '深主板' },
+        { prefix: 'sz', start: 1000, end: 1999, label: '深主板001' },
+        { prefix: 'sz', start: 2000, end: 2999, label: '深主板002' },
+        { prefix: 'sz', start: 300000, end: 302999, label: '创业板' },
       ];
       let allStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
       for (const range of codeRanges) {
         const codes: string[] = [];
         for (let i = range.start; i <= range.end; i++) {
-          codes.push(range.prefix + String(i).padStart(range.digitLen, '0'));
+          codes.push(range.prefix + String(i).padStart(6, '0'));
         }
         const rangeStocks: typeof allStocks = [];
         for (let i = 0; i < codes.length; i += 80) {
