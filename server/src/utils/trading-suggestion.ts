@@ -1,6 +1,12 @@
 /**
- * 交易建议共享算法
+ * 交易建议共享算法 v2
  * 与前端 src/pages/index/index.tsx 的 getTradingSuggestion 保持完全一致
+ *
+ * 设计原则：
+ * 1. 低位区：趋势刚拐头+强信号=重仓买入（用户核心需求）
+ * 2. 信号等级：strongBuy > hasBuySignal > hasSellSignal > strongSell
+ * 3. 趋势权重：ma5/ma10/ma20 三线关系
+ * 4. 位置越低买入条件越宽松，位置越高买入条件越严格
  */
 
 export interface SuggestionResult {
@@ -10,10 +16,9 @@ export interface SuggestionResult {
   prediction: string;
 }
 
-/** 与前端 getPositionLabel 保持一致 */
 function getPositionLabel(position: number): string {
-  if (position < 15) return '低位区';
-  if (position < 35) return '中低位区';
+  if (position < 25) return '低位区';
+  if (position < 45) return '中低位区';
   if (position < 55) return '中位区';
   if (position < 75) return '中高位区';
   return '高位区';
@@ -37,9 +42,6 @@ export interface SuggestionInput {
   volumeStructure?: number;
 }
 
-/**
- * 与前端 getTradingSuggestion 完全一致的交易建议算法
- */
 export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
   const pos = f.pricePosition ?? 50;
   const trend = f.trendState ?? 1;
@@ -53,80 +55,287 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
   const hasSellSignal = !!(f.shortSell || f.strongSell);
   const longDecline = pos < 20 && (f.trendStrength ?? 0) < -3;
 
-  const strongBuy = (!!f.macdGoldenCross && volumeBullish)
-    || (f.baiXiaoDays ?? 0) >= 3
-    || (!!f.shortBuy && volumeBullish);
+  const strongBuy =
+    (!!f.macdGoldenCross && volumeBullish) ||
+    (f.baiXiaoDays ?? 0) >= 3 ||
+    (!!f.shortBuy && volumeBullish);
 
   const strongSell = !!f.macdDeathCross || !!f.strongSell;
 
-  // 1) 高位区
-  if (zone.includes('高位')) {
-    if (trend === 0) {
-      if (hasSellSignal || strongSell) return { action: '清仓', color: 'bg-red-600', reason: '高位下降趋势，风险较大', prediction: '未来1-2日预计继续回落，建议卖出' };
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '高位但有买入信号，暂持观察', prediction: '未来1-2日信号待验证，建议持有' };
-      return { action: '卖出', color: 'bg-red-500', reason: '高位区域，注意风险', prediction: '未来1-2日预计偏弱，建议卖出' };
+  // ─── 1) 低位区 (<25%) ───
+  // 用户核心需求：ma5刚拐头(trend>=1) + 强信号 = 重仓买入
+  if (zone.includes('低位')) {
+    if (longDecline && trend <= 1 && !macdBullish && !volumeBullish) {
+      return {
+        action: '不要介入',
+        color: 'bg-gray-500',
+        reason: '长期下跌+无量能支撑，回避',
+        prediction: '未来1-2日无量能支撑，建议回避',
+      };
+    }
+    if (trend >= 1 && strongBuy) {
+      return {
+        action: '重仓买入',
+        color: 'bg-red-600',
+        reason: '低位+趋势拐头+强信号共振',
+        prediction: '未来1-2日有望放量启动，建议重仓买入',
+      };
+    }
+    if (trend >= 1 && hasBuySignal) {
+      return {
+        action: '买入',
+        color: 'bg-green-600',
+        reason: '低位+趋势拐头+买入信号',
+        prediction: '未来1-2日有望延续反弹，建议买入',
+      };
+    }
+    if (trend >= 1) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '低位+趋势拐头，等待信号确认',
+        prediction: '未来1-2日方向待确认，建议持有',
+      };
+    }
+    // trend === 0
+    if (strongBuy) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '低位末端+强买入信号',
+        prediction: '未来1-2日有望止跌反弹，建议轻仓买入',
+      };
+    }
+    if (hasBuySignal) {
+      return {
+        action: '观望',
+        color: 'bg-gray-400',
+        reason: '低位下降趋势，有买入信号但未企稳',
+        prediction: '未来1-2日预计继续探底，建议观望',
+      };
+    }
+    return {
+      action: '观望',
+      color: 'bg-gray-400',
+      reason: '低位下降趋势，尚未企稳',
+      prediction: '未来1-2日预计继续探底，建议观望',
+    };
+  }
+
+  // ─── 2) 中低位区 (25-45%) ───
+  if (zone.includes('中低位')) {
+    if (trend >= 2 && strongBuy) {
+      return {
+        action: '买入',
+        color: 'bg-green-600',
+        reason: '中低位+上升趋势+强信号',
+        prediction: '未来1-2日有望延续上涨，建议买入',
+      };
+    }
+    if (trend >= 2 && hasBuySignal) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '中低位+上升趋势+买入信号',
+        prediction: '未来1-2日有望继续上行，建议买入',
+      };
+    }
+    if (trend >= 1 && strongBuy) {
+      return {
+        action: '买入',
+        color: 'bg-green-600',
+        reason: '中低位+拐头+强信号',
+        prediction: '未来1-2日有望启动，建议买入',
+      };
+    }
+    if (trend >= 1 && hasBuySignal) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '中低位+拐头+买入信号',
+        prediction: '未来1-2日有望回暖，建议买入',
+      };
+    }
+    if (trend >= 2) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中低位+上升趋势，等待信号',
+        prediction: '未来1-2日方向待确认，建议持有',
+      };
+    }
+    return {
+      action: '持有',
+      color: 'bg-yellow-500',
+      reason: '中低位+横盘，等待方向',
+      prediction: '未来1-2日可能震荡，建议持有',
+    };
+  }
+
+  // ─── 3) 中位区 (45-55%) ───
+  if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
+    if (trend >= 2 && strongBuy) {
+      return {
+        action: '买入',
+        color: 'bg-green-600',
+        reason: '中位区+上升+强信号共振',
+        prediction: '未来1-2日有望延续上涨，建议买入',
+      };
+    }
+    if (trend >= 2 && hasBuySignal) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '中位区+上升+买入信号',
+        prediction: '未来1-2日有望上涨，建议买入',
+      };
+    }
+    if (trend >= 2) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中位区+上升趋势，暂持',
+        prediction: '未来1-2日继续持有观察',
+      };
+    }
+    if (trend === 1 && strongBuy) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中位区+横盘+强信号，关注突破',
+        prediction: '未来1-2日有望启动，建议介入',
+      };
     }
     if (trend === 1) {
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '高位横盘+买入信号，暂持观察', prediction: '未来1-2日有望突破，建议买入' };
-      if (hasSellSignal) return { action: '卖出', color: 'bg-red-500', reason: '高位横盘+卖出信号', prediction: '未来1-2日预计回落' };
-      return { action: '减仓', color: 'bg-orange-500', reason: '高位横盘，控制仓位', prediction: '未来1-2日预计震荡调整，建议减仓' };
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中位区横盘，方向不明',
+        prediction: '未来1-2日方向待定，建议持有',
+      };
     }
-    if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', reason: '高位上升+买入信号，强势延续', prediction: '未来1-2日有望上攻，建议买入' };
-    return { action: '持有', color: 'bg-yellow-500', reason: '高位但仍有上升动能', prediction: '未来1-2日继续持有' };
+    // trend === 0
+    if (strongBuy) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中位区下降+强信号，暂持',
+        prediction: '未来1-2日信号验证中，建议持有',
+      };
+    }
+    return {
+      action: '减仓',
+      color: 'bg-orange-500',
+      reason: '中位区+下降趋势，控制风险',
+      prediction: '未来1-2日预计偏弱，建议减仓',
+    };
   }
 
-  // 2) 中高位区
+  // ─── 4) 中高位区 (55-75%) ───
   if (zone.includes('中高位')) {
-    if (trend === 0) {
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '中高位下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有' };
-      return { action: '减仓', color: 'bg-orange-500', reason: '中高位+下降趋势', prediction: '未来1-2日预计偏弱，建议减仓' };
+    if (trend >= 2 && strongBuy) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '中高位+上升+强信号，注意风险',
+        prediction: '未来1-2日有望突破，建议轻仓买入',
+      };
     }
     if (trend >= 2) {
-      if (strongBuy) return { action: '轻仓买入', color: 'bg-green-500', reason: '中高位上升+买入信号，趋势偏强', prediction: '未来1-2日有望突破，建议买入' };
-      return { action: '持有', color: 'bg-yellow-500', reason: '中高位偏强，暂持', prediction: '未来1-2日建议继续持有看突破' };
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '中高位+上升趋势，暂持',
+        prediction: '未来1-2日建议继续持有看突破',
+      };
     }
-    if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '中高位横盘+买入信号，关注突破', prediction: '未来1-2日有望启动，建议买入' };
-    return { action: '持有', color: 'bg-yellow-500', reason: '中高位横盘震荡', prediction: '未来1-2日方向不明，建议持有' };
+    if (trend === 1) {
+      if (strongBuy) {
+        return {
+          action: '持有',
+          color: 'bg-yellow-500',
+          reason: '中高位+横盘+强信号，关注',
+          prediction: '未来1-2日有望突破，建议介入',
+        };
+      }
+      return {
+        action: '减仓',
+        color: 'bg-orange-500',
+        reason: '中高位横盘，控制仓位',
+        prediction: '未来1-2日预计震荡调整，建议减仓',
+      };
+    }
+    // trend === 0
+    if (strongSell) {
+      return {
+        action: '卖出',
+        color: 'bg-red-500',
+        reason: '中高位下降+卖出信号',
+        prediction: '未来1-2日预计继续回落，建议卖出',
+      };
+    }
+    return {
+      action: '减仓',
+      color: 'bg-orange-500',
+      reason: '中高位+下降趋势',
+      prediction: '未来1-2日预计偏弱，建议减仓',
+    };
   }
 
-  // 3) 中位区（纯中位，不含中低/中高）
-  if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
-    if (trend >= 2) {
-      if (strongBuy) return { action: '买入', color: 'bg-green-600', reason: '中位区上升+买入信号，看好', prediction: '未来1-2日有望延续上涨' };
-      if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', reason: '中位区+趋势偏多', prediction: '未来1-2日有望延续上涨，建议买入' };
-      return { action: '持有', color: 'bg-yellow-500', reason: '中位区上升但无买入信号，暂持观察', prediction: '未来1-2日方向待确认，建议持有' };
-    }
-    if (trend === 0) {
-      if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '中位区下降但有买入信号，暂持', prediction: '未来1-2日信号验证中，建议持有' };
-      return { action: '减仓', color: 'bg-orange-500', reason: '中位区+下降趋势', prediction: '未来1-2日预计偏弱' };
-    }
-    if (strongBuy) return { action: '持有', color: 'bg-yellow-500', reason: '中位区横盘+买入信号，关注', prediction: '未来1-2日有望启动，建议买入' };
-    return { action: '持有', color: 'bg-yellow-500', reason: '中位区横盘，方向不明', prediction: '未来1-2日方向待定，建议持有' };
-  }
-
-  // 4) 中低位区
-  if (zone.includes('中低位')) {
-    if (trend >= 2 && hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', reason: '中低位+趋势转好', prediction: '未来1-2日有反弹预期，建议买入' };
-    if (trend === 0) return { action: '持有', color: 'bg-yellow-500', reason: '中低位下降，等待企稳', prediction: '未来1-2日可能继续探底' };
-    return { action: '持有', color: 'bg-yellow-500', reason: '中低位横盘，等待信号', prediction: '未来1-2日需等待放量确认，建议持有' };
-  }
-
-  // 5) 低位区
-  if (longDecline && trend === 1 && !macdBullish && !volumeBullish) {
-    return { action: '不要介入', color: 'bg-gray-500', reason: '长期下跌后横盘，无量能支撑', prediction: '未来1-2日无量能支撑，建议回避' };
-  }
-  if (trend === 1 && macdBullish && volumeBullish) {
-    return { action: '买入', color: 'bg-green-600', reason: '低位横盘+MACD金叉+放量', prediction: '未来1-2日有望放量启动，建议买入' };
-  }
+  // ─── 5) 高位区 (>=75%) ───
   if (trend === 0) {
-    if (hasBuySignal) return { action: '轻仓买入', color: 'bg-green-500', reason: '低位+下降末端，有买入信号', prediction: '未来1-2日止跌反弹，建议买入' };
-    return { action: '观望', color: 'bg-gray-400', reason: '低位下降趋势，尚未企稳', prediction: '未来1-2日预计继续探底，建议卖出' };
+    if (strongSell) {
+      return {
+        action: '清仓',
+        color: 'bg-red-600',
+        reason: '高位下降+卖出信号，清仓离场',
+        prediction: '未来1-2日预计继续回落，建议清仓',
+      };
+    }
+    return {
+      action: '卖出',
+      color: 'bg-red-500',
+      reason: '高位下降趋势，注意风险',
+      prediction: '未来1-2日预计偏弱，建议卖出',
+    };
   }
-  if (trend >= 2) {
-    if (trend >= 3 && hasBuySignal) return { action: '重仓买入', color: 'bg-red-600', reason: '低位强上升+买入信号共振', prediction: '未来1-2日预计继续上攻' };
-    if (hasBuySignal) return { action: '买入', color: 'bg-green-600', reason: '低位上升趋势+买入信号', prediction: '未来1-2日延续反弹，建议买入' };
-    return { action: '持有', color: 'bg-yellow-500', reason: '低位上升但无买入信号，等待确认', prediction: '未来1-2日可能震荡，等待放量确认' };
+  if (trend === 1) {
+    if (strongBuy) {
+      return {
+        action: '持有',
+        color: 'bg-yellow-500',
+        reason: '高位横盘+强信号，关注突破',
+        prediction: '未来1-2日有望突破，建议介入',
+      };
+    }
+    if (strongSell) {
+      return {
+        action: '卖出',
+        color: 'bg-red-500',
+        reason: '高位横盘+卖出信号',
+        prediction: '未来1-2日预计回落，建议卖出',
+      };
+    }
+    return {
+      action: '减仓',
+      color: 'bg-orange-500',
+      reason: '高位横盘，控制仓位',
+      prediction: '未来1-2日预计震荡调整，建议减仓',
+    };
   }
-  if (safe) return { action: '持有', color: 'bg-yellow-500', reason: '低位横盘+安全信号', prediction: '未来1-2日方向待定，建议持有' };
-  return { action: '观望', color: 'bg-gray-400', reason: '低位横盘，方向不明', prediction: '未来1-2日方向未明，建议持有' };
+  // trend >= 2
+  if (strongBuy) {
+    return {
+      action: '轻仓买入',
+      color: 'bg-green-500',
+      reason: '高位上升+强信号，强趋势延续',
+      prediction: '未来1-2日有望继续上攻，建议轻仓买入',
+    };
+  }
+  return {
+    action: '持有',
+    color: 'bg-yellow-500',
+    reason: '高位但仍有上升动能，暂持',
+    prediction: '未来1-2日继续持有观察',
+  };
 }

@@ -709,60 +709,120 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else if (ma5 > ma10 && ma10 > ma20) {
             trendStateR = 2;
         }
+        else if (ma5 <= ma10) {
+            trendStateR = 0;
+        }
         const trendStrengthR = ((ma5 / ma10 - 1) * 100);
         const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
         const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
         const volumeBullishR = recentVolR > avgVolR * 1.1;
         const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai;
         const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
+        const strongBuyR = (isGoldenCross && volumeBullishR) || (bxDays >= 3) || (bx.baiXiaoBuy1 && volumeBullishR);
+        const strongSellR = !!bx.strongSell;
         const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
         let suggestionR = '观望';
-        if (zoneR.includes('高位')) {
-            if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '清仓';
-            else if (trendStateR === 1)
-                suggestionR = hasBuySignalR && macdBullishR ? '持有' : (!macdBullishR ? '卖出' : '减仓');
-            else
-                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
-        }
-        else if (zoneR.includes('中高位')) {
-            if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '减仓';
-            else if (trendStateR >= 2)
-                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
-            else
-                suggestionR = hasBuySignalR ? '持有' : '持有';
-        }
-        else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
-            if (trendStateR >= 2)
-                suggestionR = hasBuySignalR ? '买入' : '轻仓买入';
-            else if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '减仓';
-            else
-                suggestionR = hasBuySignalR ? '持有' : '持有';
-        }
-        else if (zoneR.includes('中低位')) {
-            if (trendStateR >= 2 && hasBuySignalR)
-                suggestionR = '买入';
-            else if (trendStateR >= 1 && hasBuySignalR)
-                suggestionR = '轻仓买入';
-            else if (trendStateR === 0 && hasBuySignalR)
-                suggestionR = '持有';
-            else
-                suggestionR = '持有';
-        }
-        else {
-            if (trendStateR >= 1 && hasBuySignalR) {
+        if (zoneR.includes('低位')) {
+            if (longDeclineR && trendStateR <= 1 && !macdBullishR && !volumeBullishR) {
+                suggestionR = '不要介入';
+            }
+            else if (trendStateR >= 1 && strongBuyR) {
                 suggestionR = '重仓买入';
             }
-            else if (trendStateR === 0 && hasBuySignalR) {
+            else if (trendStateR >= 1 && hasBuySignalR) {
+                suggestionR = '买入';
+            }
+            else if (trendStateR === 0 && strongBuyR) {
                 suggestionR = '轻仓买入';
             }
-            else if (trendStateR >= 1 && !hasBuySignalR) {
-                suggestionR = '买入';
+            else if (trendStateR >= 1) {
+                suggestionR = '持有';
             }
             else {
                 suggestionR = '观望';
+            }
+        }
+        else if (zoneR.includes('中低位')) {
+            if (trendStateR >= 2 && strongBuyR) {
+                suggestionR = '买入';
+            }
+            else if (trendStateR >= 1 && strongBuyR) {
+                suggestionR = '买入';
+            }
+            else if (trendStateR >= 2 && hasBuySignalR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 1 && hasBuySignalR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 2) {
+                suggestionR = '持有';
+            }
+            else {
+                suggestionR = '持有';
+            }
+        }
+        else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
+            if (trendStateR >= 2 && strongBuyR) {
+                suggestionR = '买入';
+            }
+            else if (trendStateR >= 2 && hasBuySignalR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 2) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 1) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 0 && strongBuyR) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 0) {
+                suggestionR = '减仓';
+            }
+        }
+        else if (zoneR.includes('中高位')) {
+            if (trendStateR >= 2 && strongBuyR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 2) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 1 && strongBuyR) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 1) {
+                suggestionR = '减仓';
+            }
+            else if (trendStateR === 0 && strongSellR) {
+                suggestionR = '卖出';
+            }
+            else if (trendStateR === 0) {
+                suggestionR = '减仓';
+            }
+        }
+        else {
+            if (trendStateR === 0 && strongSellR) {
+                suggestionR = '清仓';
+            }
+            else if (trendStateR === 0) {
+                suggestionR = '卖出';
+            }
+            else if (trendStateR === 1 && strongBuyR) {
+                suggestionR = '持有';
+            }
+            else if (trendStateR === 1 && strongSellR) {
+                suggestionR = '卖出';
+            }
+            else if (trendStateR === 1) {
+                suggestionR = '减仓';
+            }
+            else if (trendStateR >= 2 && strongBuyR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 2) {
+                suggestionR = '持有';
             }
         }
         const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
