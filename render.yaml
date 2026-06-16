@@ -1,9 +1,12 @@
 services:
   - type: web
     name: stock-screener
-    runtime: docker
+    runtime: node
     plan: free
     region: singapore
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node dist/main.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
