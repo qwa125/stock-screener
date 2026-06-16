@@ -720,58 +720,66 @@ const IndexPage = () => {
   const scanGemOnly = useCallback(async () => {
     setGemScanStatus('🔄 正在获取创业板股票列表...');
     let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+    const PAGE_SIZE = 500;
     try {
-      // 分页拉取：先获取总数，再逐页请求
-      const PAGE_SIZE = 500;
-      const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12';
-      const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const metaJson = JSON.parse(await metaRes.text());
-      const total = metaJson?.data?.total || 0;
-      if (total < 1100) throw new Error('东方财富返回创业板总数=' + total + ' 过少，改用腾讯');
-      const totalPages = Math.ceil(total / PAGE_SIZE);
-      for (let pn = 1; pn <= totalPages; pn++) {
-        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const txt = await res.text();
-        const j = JSON.parse(txt);
-        const items = j?.data?.diff || [];
-        for (const item of items) {
-          gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+      // 同主板模式的东方财富分页拉取
+      const gemFsList = ['m:0+t:80+f:!2'];
+      const gemLabels = ['创业板'];
+      const gemMinExpect = [1100];
+      for (let mi = 0; mi < gemFsList.length; mi++) {
+        const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + gemFsList[mi] + '&fields=f12';
+        const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const metaJson = JSON.parse(await metaRes.text());
+        const total = metaJson?.data?.total || 0;
+        if (total < gemMinExpect[mi]) throw new Error(gemLabels[mi] + '总数=' + total + ' 过少');
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        for (let pn = 1; pn <= totalPages; pn++) {
+          const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + gemFsList[mi] + '&fields=f12,f14,f2,f3,f62';
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const txt = await res.text();
+          const j = JSON.parse(txt);
+          const items = j?.data?.diff || [];
+          for (const item of items) {
+            if (!item.f12 || !item.f14) continue;
+            gemCodes.push({ code: item.f12, name: item.f14, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+          }
+          setGemScanStatus('📥 东方财富 ' + gemLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
         }
-        setGemScanStatus('📥 东方财富 创业板 ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
       }
       setGemScanStatus('✅ 东方财富创业板: ' + gemCodes.length + '只');
     } catch (e) {
       setGemScanStatus('🔄 东方财富不可用，改用腾讯接口获取全量创业板...');
-      // 方案二：腾讯接口 — 生成所有sz300000-sz301999代码批量查询
       gemCodes = [];
-      const allCodes: string[] = [];
-      for (let i = 300000; i <= 301999; i++) allCodes.push('sz' + i);
-      for (let j = 0; j < allCodes.length; j += 80) {
-        const batch = allCodes.slice(j, j + 80);
-        try {
-          const url2 = 'https://qt.gtimg.cn/q=' + batch.join(',');
-          const res2 = await fetch(url2);
-          const txt2 = await res2.text();
-          const lines = txt2.split('\n');
-          for (const line of lines) {
-            if (!line || line.length < 20) continue;
-            const codeMatch = line.match(/v_(\w+)="/);
-            if (!codeMatch) continue;
-            const parts = line.split('~');
-            if (parts.length < 6) continue;
-            const code = parts[1] || '';
-            if (!code) continue;
-            const name = parts[2] || '';
-            if (!name) continue;
-            const price = parseFloat(parts[3]) || 0;
-            const prevClose = parseFloat(parts[4]) || price;
-            const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
-            gemCodes.push({ code, name, price, changePercent, inflow: 0 });
+      const gemRanges: { prefix: string; label: string; start: number; end: number }[] = [
+        { prefix: 'sz', label: '创业板', start: 300000, end: 301999 },
+      ];
+      for (const rng of gemRanges) {
+        const allCodes: string[] = [];
+        for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + i);
+        for (let j = 0; j < allCodes.length; j += 80) {
+          const batch = allCodes.slice(j, j + 80);
+          try {
+            const url2 = 'https://qt.gtimg.cn/q=' + batch.join(',');
+            const res2 = await fetch(url2);
+            const txt2 = await res2.text();
+            const lines = txt2.split('\n');
+            for (const line of lines) {
+              if (!line || line.length < 20) continue;
+              const parts = line.split('~');
+              if (parts.length < 6) continue;
+              const code = parts[1] || '';
+              if (!code) continue;
+              const name = parts[2] || '';
+              if (!name) continue;
+              const price = parseFloat(parts[3]) || 0;
+              const prevClose = parseFloat(parts[4]) || price;
+              const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
+              gemCodes.push({ code, name, price, changePercent, inflow: 0 });
+            }
+          } catch(e2) {}
+          if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
+            setGemScanStatus('📥 腾讯 ' + rng.label + ' ' + Math.min(j + 80, allCodes.length) + '/' + allCodes.length + '只');
           }
-        } catch(e2) {}
-        if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
-          setGemScanStatus('📥 腾讯 创业板 ' + Math.min(j + 80, allCodes.length) + '/' + allCodes.length + '只');
         }
       }
       setGemScanStatus('✅ 腾讯创业板: ' + gemCodes.length + '只');
