@@ -791,7 +791,7 @@ const IndexPage = () => {
       const batch = gemCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + (s.code.startsWith('6') ? 'sh' : 'sz') + s.code + ',day,,,100,qfq';
           const res3 = await fetch(url3);
           const txt3 = await res3.text();
           const j3 = JSON.parse(txt3.replace(/\.\.\./, '\"'));
@@ -909,11 +909,11 @@ const IndexPage = () => {
       const batch = mainCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+          const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + (s.code.startsWith('6') ? 'sh' : 'sz') + s.code + ',day,,,100,qfq';
           const res = await fetch(url);
           const txt = await res.text();
           const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
-          const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+          const klines = (j?.data?.['sz' + s.code]?.qfqday || j?.data?.['sh' + s.code]?.qfqday || j?.data?.[s.code]?.qfqday || j?.data?.['sz' + s.code]?.day || j?.data?.['sh' + s.code]?.day || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
           if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
         } catch(e2) {}
       });
@@ -979,7 +979,7 @@ const IndexPage = () => {
         const sbatch = sectorStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
-            const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+            const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + (s.code.startsWith('6') ? 'sh' : 'sz') + s.code + ',day,,,100,qfq';
             const r = await fetch(url);
             const txt = await r.text();
             const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
