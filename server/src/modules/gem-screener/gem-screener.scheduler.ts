@@ -1,14 +1,51 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { GemScreenerService } from './gem-screener.service';
 
 @Injectable()
-export class GemScreenerScheduler {
+export class GemScreenerScheduler implements OnModuleInit {
   private readonly logger = new Logger(GemScreenerScheduler.name);
   private lastAutoScanDate = '';
   private isScanning = false;
+  private isFirstBoot = true;
 
   constructor(private readonly gemService: GemScreenerService) {}
+
+  /**
+   * 启动时立即检查是否需要扫描（处理Render冷启动唤醒）
+   * 用于：Render休眠后被请求唤醒 → 判断如果在交易时间内 → 立即扫描
+   */
+  async onModuleInit() {
+    this.logger.log('🚀 服务启动，检查是否需要立即触发定时扫描...');
+    
+    // 延迟3秒等所有模块就绪
+    await new Promise(r => setTimeout(r, 3000));
+    
+    if (this._isTradingHours()) {
+      this.logger.log('⏰ 当前为交易时间，立即执行首次扫描');
+      await this.autoScan();
+    } else {
+      this.logger.log('⏰ 当前非交易时间，等待定时任务触发');
+    }
+  }
+
+  /**
+   * 判断当前是否为北京时间交易时段 (周一至周五 9:00-15:00)
+   */
+  private _isTradingHours(): boolean {
+    const now = new Date();
+    const beijingOffset = 8 * 60;
+    const utcMs = now.getTime();
+    const beijingMs = utcMs + beijingOffset * 60 * 1000;
+    const bj = new Date(beijingMs);
+    const dayOfWeek = bj.getUTCDay();
+    const hour = bj.getUTCHours();
+    const minute = bj.getUTCMinutes();
+    
+    if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+    const totalMinutes = hour * 60 + minute;
+    return totalMinutes >= 540 && totalMinutes < 900;
+  }
 
   /**
    * 北京时间 9:00-15:00，每10分钟自动扫描一次
@@ -23,31 +60,20 @@ export class GemScreenerScheduler {
     }
 
     // ─── 判断当前是否为可扫描时间 ───
-    const now = new Date();
-    const beijingOffset = 8 * 60; // UTC+8
-    const utcMs = now.getTime();
-    const beijingMs = utcMs + beijingOffset * 60 * 1000;
-    const bj = new Date(beijingMs);
-    const dayOfWeek = bj.getUTCDay(); // 0=周日, 6=周六
-    const hour = bj.getUTCHours();
-    const minute = bj.getUTCMinutes();
-
-    // 周末不扫描
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      this.logger.log('📅 周末，跳过定时扫描');
+    if (!this._isTradingHours()) {
+      const now = new Date();
+      const bjHour = (now.getUTCHours() + 8) % 24;
+      const bjMin = now.getUTCMinutes();
+      this.logger.log(`⏰ 非交易时间 (${bjHour}:${String(bjMin).padStart(2,'0')})，跳过扫描`);
       return;
     }
 
-    // 非交易时间不扫描 (9:00-15:00)
-    const totalMinutes = hour * 60 + minute;
-    if (totalMinutes < 540 || totalMinutes >= 900) { // 9:00=540min, 15:00=900min
-      this.logger.log(`⏰ 非交易时间 (${hour}:${String(minute).padStart(2,'0')})，跳过扫描`);
-      return;
-    }
+    // 首次启动标记清除
+    this.isFirstBoot = false;
 
     // ─── 执行全市场自动扫描 ───
     this.isScanning = true;
-    this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${hour}:${String(minute).padStart(2,'0')}`);
+    this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${new Date().toISOString()}`);
 
     try {
       // 步骤1: 扫描创业板

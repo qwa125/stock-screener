@@ -20,12 +20,20 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.logger = new common_1.Logger(GemScreenerScheduler_1.name);
         this.lastAutoScanDate = '';
         this.isScanning = false;
+        this.isFirstBoot = true;
     }
-    async autoScan() {
-        if (this.isScanning) {
-            this.logger.log('⏳ 上一轮扫描尚未完成，跳过本轮');
-            return;
+    async onModuleInit() {
+        this.logger.log('🚀 服务启动，检查是否需要立即触发定时扫描...');
+        await new Promise(r => setTimeout(r, 3000));
+        if (this._isTradingHours()) {
+            this.logger.log('⏰ 当前为交易时间，立即执行首次扫描');
+            await this.autoScan();
         }
+        else {
+            this.logger.log('⏰ 当前非交易时间，等待定时任务触发');
+        }
+    }
+    _isTradingHours() {
         const now = new Date();
         const beijingOffset = 8 * 60;
         const utcMs = now.getTime();
@@ -34,17 +42,26 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         const dayOfWeek = bj.getUTCDay();
         const hour = bj.getUTCHours();
         const minute = bj.getUTCMinutes();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-            this.logger.log('📅 周末，跳过定时扫描');
-            return;
-        }
+        if (dayOfWeek === 0 || dayOfWeek === 6)
+            return false;
         const totalMinutes = hour * 60 + minute;
-        if (totalMinutes < 540 || totalMinutes >= 900) {
-            this.logger.log(`⏰ 非交易时间 (${hour}:${String(minute).padStart(2, '0')})，跳过扫描`);
+        return totalMinutes >= 540 && totalMinutes < 900;
+    }
+    async autoScan() {
+        if (this.isScanning) {
+            this.logger.log('⏳ 上一轮扫描尚未完成，跳过本轮');
             return;
         }
+        if (!this._isTradingHours()) {
+            const now = new Date();
+            const bjHour = (now.getUTCHours() + 8) % 24;
+            const bjMin = now.getUTCMinutes();
+            this.logger.log(`⏰ 非交易时间 (${bjHour}:${String(bjMin).padStart(2, '0')})，跳过扫描`);
+            return;
+        }
+        this.isFirstBoot = false;
         this.isScanning = true;
-        this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${hour}:${String(minute).padStart(2, '0')}`);
+        this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${new Date().toISOString()}`);
         try {
             this.logger.log('  扫描创业板...');
             const gemResults = await this.gemService['scanAllStocks']();
