@@ -418,7 +418,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
-        await this.enrichWithMainForceFlow(results);
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
@@ -1177,7 +1176,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
-        await this.enrichWithMainForceFlow(results);
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
