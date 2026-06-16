@@ -633,6 +633,7 @@ const IndexPage = () => {
   const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
   const [sectorLoading, setSectorLoading] = useState(true);
   const [sectorScanStatus, setSectorScanStatus] = useState<string>('');
+  const sectorTags = () => [...new Set((sectorData || []).map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10);
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
   const fetchGemTop = useCallback(async () => {
@@ -641,12 +642,12 @@ const IndexPage = () => {
       const res = await Network.request({ url: '/api/gem/top/gem' });
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
-        // 前端补充拉取真实主力资金（浏览器在国内可访问东方财富）
         const stocks = apiData.data.opportunities;
-        await enrichMainForceFlow(stocks);
         setGemData(stocks);
         if (apiData.data.timestamp) setGemTimestamp(apiData.data.timestamp);
         else setGemTimestamp(Date.now());
+        // 后台异步补充主力资金（不阻塞显示）
+        enrichMainForceFlow(stocks).catch(() => {});
       }
     } catch (e) {
       console.error('获取创业板机会区失败:', e);
@@ -669,10 +670,11 @@ const IndexPage = () => {
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
         const stocks = apiData.data.opportunities;
-        await enrichMainForceFlow(stocks);
         setMainData(stocks);
         if (apiData.data.timestamp) setMainTimestamp(apiData.data.timestamp);
         else setMainTimestamp(Date.now());
+        // 后台异步补充主力资金（不阻塞显示）
+        enrichMainForceFlow(stocks).catch(() => {});
       }
     } catch (e) {
       console.error('获取主板机会区失败:', e);
@@ -695,16 +697,15 @@ const IndexPage = () => {
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
         const stocks = apiData.data.opportunities;
-        await enrichMainForceFlow(stocks);
         setSectorData(stocks);
         if (apiData.data.timestamp) setSectorTimestamp(apiData.data.timestamp);
         else setSectorTimestamp(Date.now());
-        setSectorLoading(false);
-      } else {
-        setSectorLoading(false);
+        // 后台异步补充主力资金（不阻塞显示）
+        enrichMainForceFlow(stocks).catch(() => {});
       }
     } catch (e) {
       console.error('[板块机会区] 加载失败:', e);
+    } finally {
       setSectorLoading(false);
     }
   }, []);
@@ -1597,6 +1598,20 @@ const IndexPage = () => {
             </View>
           )}
 
+          {/* 热点细分板块标签 — 始终显示 */}
+          <View className="flex flex-row flex-wrap gap-2 mb-2">
+            {sectorTags().slice(0, 10).map((sname: string, i: number) => (
+              <Badge key={i} className="px-3 py-1 bg-orange-50 text-orange-700 border-orange-200 rounded-full">
+                <Text className="block text-xs">{sname}</Text>
+              </Badge>
+            ))}
+            {sectorTags().length === 0 && (
+              <Badge className="px-3 py-1 bg-gray-50 text-gray-400 border-gray-200 rounded-full">
+                <Text className="block text-xs">暂无热点数据</Text>
+              </Badge>
+            )}
+          </View>
+
           {sectorLoading && sectorData === null ? (
             <View className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (
@@ -1610,14 +1625,6 @@ const IndexPage = () => {
             </View>
           ) : sectorData && sectorData.length > 0 ? (
             <View className="flex flex-col gap-2">
-              {/* 热点标签 */}
-              <View className="flex flex-row flex-wrap gap-1 mb-2">
-                {[...new Set(sectorData.map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10).map((sname: string, i: number) => (
-                  <Badge key={i} className="px-2 py-1 bg-orange-50 text-orange-700 border-orange-200 text-xs rounded-full">
-                    <Text className="block text-xs truncate max-w-20">{sname}</Text>
-                  </Badge>
-                ))}
-              </View>
               <View className="flex flex-row items-center px-2 py-1 bg-gray-50 rounded-lg">
                 <View style={{ flex: 1.1 }}>
                   <Text className="block text-xs text-gray-400">名称 · 板块</Text>
