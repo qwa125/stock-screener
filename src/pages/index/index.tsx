@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Info, AArrowUp, AArrowDown, TriangleAlert, Minus } from 'lucide-react-taro';
 import { Separator } from '@/components/ui/separator';
 
-// ===== 类型定义 =====
+
 interface StockInfo {
   code: string;
   name: string;
@@ -610,6 +610,20 @@ const BacktestStatsCard = ({ stats }: { stats: BacktestStats }) => (
   </View>
 );
 
+// 热门细分板块成分股（硬编码，包含最活跃的A股板块）
+const HOT_SECTORS: { name: string; codes: string[] }[] = [
+  { name: '人工智能', codes: ['688256','002230','603019','688111','300308','300502','000977','688041','688188','300624'] },
+  { name: '半导体', codes: ['688981','603501','002371','002049','600584','688012','603986','300661','300782','688536'] },
+  { name: '新能源车', codes: ['002594','300750','002460','002466','600516','300014','002812','300450','603659','300037'] },
+  { name: '光伏', codes: ['601012','600438','300274','002459','688599','300763','603806','300724','300751','688390'] },
+  { name: '军工', codes: ['600893','600760','600879','600118','002179','000733','600862','600685','600391','600990'] },
+  { name: '医药生物', codes: ['600276','603259','300760','300122','000661','600436','000538','600196','600085','300015'] },
+  { name: '消费电子', codes: ['002475','002241','000725','300433','002273','002456','300136','002600','688036','002920'] },
+  { name: '机器人', codes: ['300124','002747','300024','300201','002527','688218','300278','002009','002031','688160'] },
+  { name: '算力', codes: ['300308','300502','000977','603019','688041','688256','002230','688111','300624','300418'] },
+  { name: '低空经济', codes: ['002023','600038','600862','002389','300447','300424','600990','600501','000901','688568'] },
+];
+
 const IndexPage = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -803,7 +817,7 @@ const IndexPage = () => {
           const txt3 = await res3.text();
           const j3 = JSON.parse(txt3);
           const klines = (j3?.data?.[gemPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          if (klines.length >= 60) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -828,7 +842,7 @@ const IndexPage = () => {
           setGemScanStatus('📤 ' + Math.min(ci + CHUNK, gemStocks.length) + '/' + gemStocks.length + ' 已发现' + totalFound + '只');
         }
       }
-      setGemScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+      setGemScanStatus('✅ 完成! 已对比选出最优机会');
       await fetchGemTop();
     } else {
       setGemScanStatus('⚠️ 无足够K线数据');
@@ -926,7 +940,7 @@ const IndexPage = () => {
           const txt = await res.text();
           const j = JSON.parse(txt);
           const klines = (j?.data?.[mainPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          if (klines.length >= 60) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -951,109 +965,91 @@ const IndexPage = () => {
           setMainScanStatus('📤 ' + Math.min(ci + CHUNK, mainStocks.length) + '/' + mainStocks.length + ' 已发现' + totalFound + '只');
         }
       }
-      setMainScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+      setMainScanStatus('✅ 完成! 已对比选出最优机会');
       await fetchMainTop();
     } else {
       setMainScanStatus('⚠️ 无足够K线数据');
     }
   }, [fetchMainTop]);
 
-  // ========== 扫描函数：扫描整个A股市场 ==========
+  // ========== 扫描函数：热点板块机会区 ==========
   const scanSectorOnly = useCallback(async () => {
-    setSectorScanStatus('🔄 正在扫描整个A股市场...');
+    setSectorScanStatus('🔄 正在筛选前10热门细分板块成分股...');
     try {
-      // 生成全市场代码范围：创业板+主板+科创板
-      const codeRanges: { prefix: string; start: number; end: number; label: string }[] = [
-        { prefix: 'sh', start: 600000, end: 609999, label: '沪主板' },
-        { prefix: 'sh', start: 688001, end: 688999, label: '科创板' },
-        { prefix: 'sz', start: 0, end: 3999, label: '深主板' },
-        { prefix: 'sz', start: 1000, end: 1999, label: '深主板001' },
-        { prefix: 'sz', start: 2000, end: 2999, label: '深主板002' },
-        { prefix: 'sz', start: 300000, end: 302999, label: '创业板' },
-      ];
-      let allStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
-      for (const range of codeRanges) {
-        const codes: string[] = [];
-        for (let i = range.start; i <= range.end; i++) {
-          codes.push(range.prefix + String(i).padStart(6, '0'));
-        }
-        const rangeStocks: typeof allStocks = [];
-        for (let i = 0; i < codes.length; i += 80) {
-          const batch = codes.slice(i, i + 80);
-          const qstr = batch.join(',');
-          try {
-            const url = 'https://qt.gtimg.cn/q=' + qstr;
-            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const txt = await res.text();
-            const lines = txt.trim().split(';');
-            for (const line of lines) {
-              if (!line) continue;
-              const codeMatch = line.match(/v_(sh\d+|sz\d+)="(.*)"/);
-              if (!codeMatch || !codeMatch[2] || codeMatch[2] === '') continue;
-              const parts = codeMatch[2].split('~');
-              const code = codeMatch[1].replace(/^(sh|sz)/, '');
-              const name = parts[1];
-              if (!code || !name || name === '' || /^\d+$/.test(name)) continue;
-              const price = parseFloat(parts[3]) || 0;
-              const changePercent = parseFloat(parts[32]) || 0;
-              const inflow = parseFloat(parts[45]) || 0;
-              if (price <= 0) continue;
-              rangeStocks.push({ code, name, sectorName: range.label, price, changePercent, inflow });
-            }
-          } catch(e2) { console.warn('腾讯' + range.label + '批次失败', e2); }
-          if ((i + 80) % 160 === 0 || i + 80 >= codes.length) {
-            setSectorScanStatus('📥 ' + range.label + ' ' + Math.min(i + 80, codes.length) + '/' + codes.length + ' 已找到' + rangeStocks.length + '只');
+      // 收集所有热门板块成分股（去重）
+      const stockToSector = new Map<string, string>();
+      const uniqueCodes: string[] = [];
+      for (const sec of HOT_SECTORS) {
+        for (const code of sec.codes) {
+          if (!stockToSector.has(code)) {
+            stockToSector.set(code, sec.name);
+            uniqueCodes.push(code);
           }
         }
-        allStocks = allStocks.concat(rangeStocks);
-        setSectorScanStatus('✅ ' + range.label + ': ' + rangeStocks.length + '只（累计' + allStocks.length + '只）');
       }
-      setSectorScanStatus('✅ 全市场扫描完成: ' + allStocks.length + '只');
-      // 第二步：拉取K线
-      const sectorStockWithKlines: any[] = [];
-      for (let si = 0; si < allStocks.length; si += 20) {
-        const sbatch = allStocks.slice(si, si + 20);
+      setSectorScanStatus('📋 共' + HOT_SECTORS.length + '个热门板块, 合计' + uniqueCodes.length + '只成分股');
+      // 第一步：查询腾讯行情（80只/批）
+      const foundStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
+      for (let i = 0; i < uniqueCodes.length; i += 80) {
+        const batch = uniqueCodes.slice(i, i + 80);
+        const qstr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+        try {
+          const res = await fetch('https://qt.gtimg.cn/q=' + qstr);
+          const txt = await res.text();
+          const lines = txt.trim().split(';');
+          for (const line of lines) {
+            const cm = line.match(/v_(sh\d+|sz\d+)="(.*)"/);
+            if (!cm || !cm[2]) continue;
+            const parts = cm[2].split('~');
+            const code = cm[1].replace(/^(sh|sz)/, '');
+            const name = parts[1] || '';
+            if (!code || !name || /^\d+$/.test(name)) continue;
+            const price = parseFloat(parts[3]) || 0;
+            if (price <= 0) continue;
+            const changePercent = parseFloat(parts[32]) || 0;
+            const inflow = parseFloat(parts[45]) || 0;
+            foundStocks.push({ code, name, sectorName: stockToSector.get(code) || '热门板块', price, changePercent, inflow });
+          }
+        } catch(e2) { console.warn('腾讯行情批次失败', e2); }
+        setSectorScanStatus('📥 腾讯行情 ' + Math.min(i + 80, uniqueCodes.length) + '/' + uniqueCodes.length + ' 找到' + foundStocks.length + '只');
+      }
+      if (foundStocks.length === 0) { setSectorScanStatus('⚠️ 未找到有效成分股'); return; }
+      setSectorScanStatus('✅ 找到' + foundStocks.length + '只热门板块成分股');
+      // 第二步：拉取K线（腾讯K线API，20只并发）
+      const sectorStocks: any[] = [];
+      for (let si = 0; si < foundStocks.length; si += 20) {
+        const sbatch = foundStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
-            const prefixedKey = (s.code.startsWith('6') || s.code.startsWith('68') ? 'sh' : 'sz') + s.code;
-            const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
-            const r = await fetch(url);
-            const txt = await r.text();
+            const prefix = s.code.startsWith('6') ? 'sh' : 'sz';
+            const res = await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefix + s.code + ',day,,,100,qfq');
+            const txt = await res.text();
             const j = JSON.parse(txt);
-            const klines = (j?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-            if (klines.length >= 20) sectorStockWithKlines.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            const klines = (j?.data?.[prefix + s.code]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
+            if (klines.length >= 60) sectorStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
           } catch(e2) {}
         });
         await Promise.all(batchPromises);
-        if ((si + 20) % 40 === 0 || si + 20 >= allStocks.length) {
-          setSectorScanStatus('📥 K线 ' + Math.min(si + 20, allStocks.length) + '/' + allStocks.length);
-        }
+        setSectorScanStatus('📥 K线 ' + Math.min(si + 20, foundStocks.length) + '/' + foundStocks.length);
       }
-      setSectorScanStatus('📤 分批推送 ' + sectorStockWithKlines.length + '只(50只/批)...');
-      if (sectorStockWithKlines.length > 0) {
-        let totalFound = 0;
-        const CHUNK = 50;
-        for (let ci = 0; ci < sectorStockWithKlines.length; ci += CHUNK) {
-          const chunk = sectorStockWithKlines.slice(ci, ci + CHUNK);
+      // 第三步：分批推送分析
+      setSectorScanStatus('📤 分批推送 ' + sectorStocks.length + '只...');
+      if (sectorStocks.length > 0) {
+        for (let ci = 0; ci < sectorStocks.length; ci += 50) {
+          const chunk = sectorStocks.slice(ci, ci + 50);
           try {
-            const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: chunk } });
-            const pushData = pushRes.data as any;
-            if (pushData?.code === 200) {
-              totalFound += pushData?.data?.opportunities?.length || 0;
-            }
-          } catch(e2) { console.warn('全市场批次推送失败', e2); }
-          if ((ci + CHUNK) % 100 === 0 || ci + CHUNK >= sectorStockWithKlines.length) {
-            setSectorScanStatus('📤 ' + Math.min(ci + CHUNK, sectorStockWithKlines.length) + '/' + sectorStockWithKlines.length + ' 已发现' + totalFound + '只');
-          }
+            await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: chunk } });
+          } catch(e2) { console.warn('批次推送失败', e2); }
+          setSectorScanStatus('📤 ' + Math.min(ci + 50, sectorStocks.length) + '/' + sectorStocks.length + ' 对比中...');
         }
-        setSectorScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+        setSectorScanStatus('✅ 分析完成! 获取最优结果中');
         await fetchSectorHot();
       } else {
         setSectorScanStatus('⚠️ 无足够K线数据');
       }
     } catch (e) {
-      console.warn('全市场数据拉取失败:', e);
-      setSectorScanStatus('❌ 全市场拉取失败');
+      console.warn('热点板块扫描失败:', e);
+      setSectorScanStatus('❌ 板块扫描失败');
     }
   }, [fetchSectorHot]);
 
@@ -1738,10 +1734,10 @@ const IndexPage = () => {
           )}
         </View>
 
-        {/* 全A股机会区 */}
+        {/* 热点板块机会区 */}
         <View className="mt-4">
           <View className="flex flex-row items-center gap-2 mb-2">
-            <Text className="block text-sm font-semibold">🌐 全A股机会区</Text>
+            <Text className="block text-sm font-semibold">🔥 热点板块机会区</Text>
             <View className="flex-1" />
             {sectorTimestamp > 0 && !sectorLoading && (() => {
               const diff = Math.floor((Date.now() - sectorTimestamp) / 60000);
