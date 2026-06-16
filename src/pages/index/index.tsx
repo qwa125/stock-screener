@@ -724,7 +724,7 @@ const IndexPage = () => {
     setGemScanStatus('🔄 腾讯创业板 ' + 0 + '/' + 2000 + '只');
     {
       const gemRanges: { prefix: string; label: string; start: number; end: number }[] = [
-        { prefix: 'sz', label: '创业板', start: 300000, end: 301999 },
+        { prefix: 'sz', label: '创业板', start: 300000, end: 302999 },
       ];
       for (const rng of gemRanges) {
         const allCodes: string[] = [];
@@ -740,10 +740,11 @@ const IndexPage = () => {
               if (!line || line.length < 20) continue;
               const parts = line.split('~');
               if (parts.length < 6) continue;
-              const code = parts[1] || '';
-              if (!code) continue;
-              const name = parts[2] || '';
+              const rawCode = parts[2] || '';
+              if (!rawCode) continue;
+              const name = parts[1] || '';
               if (!name) continue;
+              const code = rawCode;
               const price = parseFloat(parts[3]) || 0;
               const prevClose = parseFloat(parts[4]) || price;
               const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
@@ -841,7 +842,7 @@ const IndexPage = () => {
       // 方案一：腾讯接口为主 — 生成代码范围批量查询
       mainCodes = [];
       const mainRanges: { prefix: string; label: string; start: number; end: number }[] = [
-        { prefix: 'sh', label: '沪主板', start: 600000, end: 605999 },
+        { prefix: 'sh', label: '沪主板', start: 600000, end: 609999 },
         { prefix: 'sz', label: '深主板', start: 0, end: 3999 },
       ];
       for (const rng of mainRanges) {
@@ -862,10 +863,11 @@ const IndexPage = () => {
               if (!line || line.length < 20) continue;
               const parts = line.split('~');
               if (parts.length < 6) continue;
-              const code = parts[1] || '';
-              if (!code) continue;
-              const name = parts[2] || '';
+              const rawCode = parts[2] || '';
+              if (!rawCode) continue;
+              const name = parts[1] || '';
               if (!name) continue;
+              const code = rawCode;
               const price = parseFloat(parts[3]) || 0;
               const prevClose = parseFloat(parts[4]) || price;
               const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
