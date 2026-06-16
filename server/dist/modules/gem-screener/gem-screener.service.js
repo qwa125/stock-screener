@@ -652,6 +652,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (s.name.includes(kw))
                 return null;
         }
+        if (/^(\*)?ST/.test(s.name))
+            return null;
         const goldenCrossDays = macdResult.goldenCrossDays || 15;
         const hasAnyBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai ||
             bx.diBuBuy || bx.gaoWeiHuiDiaoBuy || bx.zhuLiShiPan || bx.jiaCang);
@@ -879,6 +881,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (s.name.includes(kw))
                 return null;
         }
+        if (/^(\*)?ST/.test(s.name))
+            return null;
         const goldenCrossDays = isGoldenCross ? macdResult.goldenCrossDays : 1;
         const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
         const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;

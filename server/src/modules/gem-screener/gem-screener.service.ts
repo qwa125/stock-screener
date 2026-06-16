@@ -804,6 +804,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       if (s.name.includes(kw)) return null;
     }
 
+    // 排除ST股
+    if (/^(\*)?ST/.test(s.name)) return null;
+
     const goldenCrossDays = macdResult.goldenCrossDays || 15;
 
     // ---------- 白消买点信号筛选 ----------
@@ -1031,6 +1034,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     for (const kw of excludeKeywords) {
       if (s.name.includes(kw)) return null;
     }
+
+    // 排除ST股
+    if (/^(\*)?ST/.test(s.name)) return null;
 
     const goldenCrossDays = isGoldenCross ? macdResult.goldenCrossDays : 1;
 

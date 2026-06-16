@@ -1949,7 +1949,7 @@ const IndexPage = () => {
             </View>
           ) : heavyBuyData && heavyBuyData.length > 0 ? (
             <View>
-              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
+              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 3).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (
