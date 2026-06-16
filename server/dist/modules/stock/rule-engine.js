@@ -1,1 +1,146 @@
-'use strict';const _0x54a70d=_0x2de2;function _0x2de2(_0x13c42e,_0x676a7b){_0x13c42e=_0x13c42e-0xcc;const _0x4862b2=_0x4862();let _0x2de2db=_0x4862b2[_0x13c42e];return _0x2de2db;}function _0x4862(){const _0x95c594=['gaoWeiHuiDiaoBuy','xiPanQueRen','TrendState','add','机构活跃度低','UP_MILD','zhuLiShiPan','7490394EKtcSn','kaUvd','baiXiao','横盘震荡','DIFF>DEA红柱','goxIp','加仓信号','VQJoq','gaoKaiDiZouQingCang','jiGouHuoYueDu','push','trendStrength','企稳信号','defineProperty','vQzWO','393ESGCEX','gGPVD','大牛线P=6.0','5103gFsElE','14368618piEqzy','12714920DEWoni','1400qgthmg','baiBu','shortSell','机构活跃度中等','baiXiaoDays','安全信号','主升浪趋势','洗盘信号','下降趋势','toFixed','高开低走','qgnFA','突破大牛线','oyGGd','1182vJzrml','上升趋势','强势回踩','50TnJhAY','qiangShiHuiCai','主力试盘','MVGaH','12hOtoax','15443TcSTar','safe','SIDEWAYS','观望区','主力建仓','爆量覆盖','zkUXJ','洗盘豁免','positionZone','breakLifeLine','可介入区持续','洗盘确认','neutral','机构活跃度偏低','negative','zhuLiChuHuo','Pltez','DIFF=','生命线=','KXvqI','启动买点','yOard','positive','SPjHE','强化卖出','xiPanHuoMian','8812mZWRej','DIFF<DEA','跌破5日线','diBuBuy','\x20DEA=','价格位置','真实出货','__esModule','buySignalDiamond','mVJDN','趋势强度','15595ZbkKvT','cIRFn','generateSignals','has','diff','可介入区初期','concentration'];_0x4862=function(){return _0x95c594;};return _0x4862();}(function(_0x5b0ecd,_0x4c0455){const _0x2769d0=_0x2de2,_0x3a0cde=_0x5b0ecd();while(!![]){try{const _0x5e59d1=parseInt(_0x2769d0(0x11c))/0x1*(parseInt(_0x2769d0(0x117))/0x2)+parseInt(_0x2769d0(0x100))/0x3*(parseInt(_0x2769d0(0xd8))/0x4)+-parseInt(_0x2769d0(0xe3))/0x5*(parseInt(_0x2769d0(0x114))/0x6)+parseInt(_0x2769d0(0x103))/0x7*(-parseInt(_0x2769d0(0x106))/0x8)+parseInt(_0x2769d0(0xf1))/0x9+-parseInt(_0x2769d0(0x105))/0xa+parseInt(_0x2769d0(0x104))/0xb*(parseInt(_0x2769d0(0x11b))/0xc);if(_0x5e59d1===_0x4c0455)break;else _0x3a0cde['push'](_0x3a0cde['shift']());}catch(_0x37631a){_0x3a0cde['push'](_0x3a0cde['shift']());}}}(_0x4862,0xc33ae));Object[_0x54a70d(0xfe)](exports,_0x54a70d(0xdf),{'value':!![]}),exports[_0x54a70d(0xe5)]=generateSignals;const types_1=require('./types');function generateSignals(_0x31cad3){const _0x42da5f=_0x54a70d,_0xa42d16={'qgnFA':function(_0x3c44f1,_0x1bec39){return _0x3c44f1>_0x1bec39;},'oyGGd':function(_0x46c648,_0x54e2af){return _0x46c648===_0x54e2af;},'pwekE':_0x42da5f(0xf4),'MVGaH':_0x42da5f(0x128),'KXvqI':_0x42da5f(0xcc),'JYoQU':_0x42da5f(0xe8),'kaUvd':_0x42da5f(0xd4),'yCtHA':'可介入区延长','VQJoq':_0x42da5f(0x11f),'EgAVB':_0x42da5f(0xf5),'yOard':'DIFF<0','elgJr':'突破生命线','vQzWO':_0x42da5f(0x112),'goxIp':_0x42da5f(0x120),'mVJDN':'横盘突破','cIRFn':'短线触发','foJNk':'短线风险','zkUXJ':'主力出货','FGxVE':_0x42da5f(0xd6),'MYORN':'买入信号','gGPVD':_0x42da5f(0x127),'JoZWi':'机构活跃度高','umdwC':function(_0x2d8a50,_0x52bea5){return _0x2d8a50>=_0x52bea5;},'NIAnf':function(_0x2b340a,_0x570578){return _0x2b340a>=_0x570578;},'gVkNn':_0x42da5f(0xee),'SPjHE':_0x42da5f(0x121),'yuMLY':_0x42da5f(0x123),'Pltez':_0x42da5f(0x10b)},{formula:_0x3fbf14}=_0x31cad3,_0xcf633=_0x3fbf14,_0x2e4da5=[],_0x2922c9=_0xcf633[_0x42da5f(0xf3)]&&!_0xcf633[_0x42da5f(0x107)],_0x4e2e70=_0xcf633[_0x42da5f(0x107)],_0x586d53=_0xa42d16[_0x42da5f(0x111)](_0xcf633[_0x42da5f(0xe7)],_0xcf633['dea']);if(_0xcf633['trendState']===types_1[_0x42da5f(0xec)]['UP_STRONG'])_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x10c),'type':_0x42da5f(0xd4),'description':'趋势强度'+_0xcf633[_0x42da5f(0xfc)]['toFixed'](0x1)});else{if(_0xa42d16[_0x42da5f(0x113)](_0xcf633['trendState'],types_1[_0x42da5f(0xec)][_0x42da5f(0xef)]))_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x115),'type':'positive','description':'趋势强度'+_0xcf633[_0x42da5f(0xfc)][_0x42da5f(0x10f)](0x1)});else _0xa42d16[_0x42da5f(0x113)](_0xcf633['trendState'],types_1['TrendState'][_0x42da5f(0x11e)])?_0x2e4da5['push']({'name':_0xa42d16['pwekE'],'type':_0xa42d16[_0x42da5f(0x11a)]}):_0x2e4da5['push']({'name':_0x42da5f(0x10e),'type':_0xa42d16[_0x42da5f(0xd1)],'description':_0x42da5f(0xe2)+_0xcf633[_0x42da5f(0xfc)]['toFixed'](0x1)});}if(_0x2922c9){if(_0xcf633['baiXiaoDays']<=0x3)_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['JYoQU'],'type':_0xa42d16[_0x42da5f(0xf2)],'description':'第'+_0xcf633['baiXiaoDays']+'天'});else _0xcf633[_0x42da5f(0x10a)]<=0x6?_0x2e4da5['push']({'name':_0x42da5f(0x126),'type':'positive','description':'第'+_0xcf633['baiXiaoDays']+'天'}):_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['yCtHA'],'type':_0xa42d16[_0x42da5f(0x11a)],'description':'第'+_0xcf633[_0x42da5f(0x10a)]+'天'});}else _0x4e2e70&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xf8)],'type':_0xa42d16[_0x42da5f(0x11a)]});if(_0x586d53&&_0xcf633['diff']>0x0)_0x2e4da5['push']({'name':_0xa42d16['EgAVB'],'type':_0xa42d16['kaUvd'],'description':_0x42da5f(0xcf)+_0xcf633['diff'][_0x42da5f(0x10f)](0x2)+_0x42da5f(0xdc)+_0xcf633['dea'][_0x42da5f(0x10f)](0x2)});else!_0x586d53&&_0xcf633['diff']>0x0?_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xd9),'type':_0xa42d16[_0x42da5f(0xd1)],'description':'DIFF='+_0xcf633['diff'][_0x42da5f(0x10f)](0x2)+_0x42da5f(0xdc)+_0xcf633['dea']['toFixed'](0x2)}):_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xd3)],'type':'negative','description':'DIFF='+_0xcf633[_0x42da5f(0xe7)][_0x42da5f(0x10f)](0x2)});_0xcf633[_0x42da5f(0x125)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['elgJr'],'type':_0xa42d16['kaUvd'],'description':_0x42da5f(0xd0)+_0xcf633['lifeLine'][_0x42da5f(0x10f)](0x2)});_0xcf633['breakStrongLine']&&_0x2e4da5['push']({'name':'突破强势线','type':'positive','description':'强势线P=3.0'});_0xcf633['breakBigBullLine']&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xff)],'type':'positive','description':_0x42da5f(0x102)});_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xdd)+_0xcf633['pricePosition']['toFixed'](0x0)+'%','type':_0xa42d16['MVGaH'],'description':_0xcf633[_0x42da5f(0x124)]});_0xcf633[_0x42da5f(0xdb)]&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xf6)],'type':_0x42da5f(0xd4),'description':'集中度'+_0xcf633['concentration']['toFixed'](0x0)});_0xcf633[_0x42da5f(0xea)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xfd),'type':'positive'});_0xcf633[_0x42da5f(0xf0)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x119),'type':_0xa42d16['kaUvd']});_0xcf633['jiaCang']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xf7),'type':_0x42da5f(0xd4)});_0xcf633['baiXiaoBuy1']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xd2),'type':_0xa42d16['kaUvd']});_0xcf633['baiXiaoBuy2']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16[_0x42da5f(0xe1)],'type':'positive'});_0xcf633[_0x42da5f(0x118)]&&_0x2e4da5['push']({'name':_0x42da5f(0x116),'type':_0x42da5f(0xd4)});_0xcf633['shortBuy']&&!_0xcf633[_0x42da5f(0x108)]&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xe4)],'type':_0xa42d16['kaUvd']});_0xcf633['shortSell']&&!_0xcf633['shortBuy']&&_0x2e4da5['push']({'name':_0xa42d16['foJNk'],'type':_0xa42d16['KXvqI']});_0xcf633['zhuLiXiChou']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':'主力吸筹','type':_0xa42d16['kaUvd'],'description':'集中度'+_0xcf633[_0x42da5f(0xe9)]['toFixed'](0x0)});_0xcf633[_0x42da5f(0xcd)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16[_0x42da5f(0x122)],'type':_0xa42d16[_0x42da5f(0xd1)]});_0xcf633['strongSell']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['FGxVE'],'type':_0xa42d16[_0x42da5f(0xd1)]});_0xcf633[_0x42da5f(0xe0)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['MYORN'],'type':_0xa42d16['kaUvd']});_0xcf633['zhuShengZhongWeiChuHuo']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':'中位出货','type':_0x42da5f(0xcc)});_0xcf633['zhenShiChuHuo']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0xde),'type':_0xa42d16['KXvqI']});_0xcf633[_0x42da5f(0xeb)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16[_0x42da5f(0x101)],'type':'neutral'});if(_0xcf633['jiGouHuoYueDu']>=0xf)_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['JoZWi'],'type':_0x42da5f(0xd4),'description':''+_0xcf633['jiGouHuoYueDu']['toFixed'](0x1)});else{if(_0xa42d16['umdwC'](_0xcf633[_0x42da5f(0xfa)],0xc))_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x109),'type':_0xa42d16['MVGaH'],'description':''+_0xcf633['jiGouHuoYueDu']['toFixed'](0x1)});else _0xa42d16['NIAnf'](_0xcf633['jiGouHuoYueDu'],0x8)?_0x2e4da5['push']({'name':_0x42da5f(0x129),'type':_0xa42d16[_0x42da5f(0xd1)],'description':''+_0xcf633['jiGouHuoYueDu'][_0x42da5f(0x10f)](0x1)}):_0x2e4da5[_0x42da5f(0xfb)]({'name':_0xa42d16['gVkNn'],'type':_0xa42d16[_0x42da5f(0xd1)],'description':''+_0xcf633['jiGouHuoYueDu'][_0x42da5f(0x10f)](0x1)});}_0xcf633[_0x42da5f(0xf9)]&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x110),'type':_0x42da5f(0xcc)});_0xcf633['baoLiangFuGaiQingCang']&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xd5)],'type':'negative'});_0xcf633['po5RiXian']&&_0x2e4da5['push']({'name':_0x42da5f(0xda),'type':_0xa42d16['KXvqI']});_0xcf633['yinDiePoWei']&&_0x2e4da5['push']({'name':'阴跌破位','type':_0x42da5f(0xcc)});_0xcf633[_0x42da5f(0xd7)]&&_0x2e4da5['push']({'name':_0xa42d16['yuMLY'],'type':_0xa42d16['MVGaH']});_0xcf633[_0x42da5f(0x11d)]&&_0x2e4da5['push']({'name':_0xa42d16[_0x42da5f(0xce)],'type':_0xa42d16['kaUvd']});_0xcf633['xiPanSignal']&&_0x2e4da5[_0x42da5f(0xfb)]({'name':_0x42da5f(0x10d),'type':_0xa42d16[_0x42da5f(0x11a)]});const _0x45a361=new Set();return _0x2e4da5['filter'](_0x2c741a=>{const _0x3fb286=_0x42da5f,_0x2d2ddc=_0x2c741a['name'];if(_0x45a361[_0x3fb286(0xe6)](_0x2d2ddc))return![];return _0x45a361[_0x3fb286(0xed)](_0x2d2ddc),!![];});}
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateSignals = generateSignals;
+const types_1 = require("./types");
+function generateSignals(input) {
+    const { formula } = input;
+    const f = formula;
+    const signals = [];
+    const isBaiXiao = f.baiXiao && !f.baiBu;
+    const isBaiBu = f.baiBu;
+    const hongZhu = f.diff > f.dea;
+    if (f.trendState === types_1.TrendState.UP_STRONG) {
+        signals.push({ name: '主升浪趋势', type: 'positive', description: `趋势强度${f.trendStrength.toFixed(1)}` });
+    }
+    else if (f.trendState === types_1.TrendState.UP_MILD) {
+        signals.push({ name: '上升趋势', type: 'positive', description: `趋势强度${f.trendStrength.toFixed(1)}` });
+    }
+    else if (f.trendState === types_1.TrendState.SIDEWAYS) {
+        signals.push({ name: '横盘震荡', type: 'neutral' });
+    }
+    else {
+        signals.push({ name: '下降趋势', type: 'negative', description: `趋势强度${f.trendStrength.toFixed(1)}` });
+    }
+    if (isBaiXiao) {
+        if (f.baiXiaoDays <= 3) {
+            signals.push({ name: '可介入区初期', type: 'positive', description: `第${f.baiXiaoDays}天` });
+        }
+        else if (f.baiXiaoDays <= 6) {
+            signals.push({ name: '可介入区持续', type: 'positive', description: `第${f.baiXiaoDays}天` });
+        }
+        else {
+            signals.push({ name: '可介入区延长', type: 'neutral', description: `第${f.baiXiaoDays}天` });
+        }
+    }
+    else if (isBaiBu) {
+        signals.push({ name: '观望区', type: 'neutral' });
+    }
+    if (hongZhu && f.diff > 0) {
+        signals.push({ name: 'DIFF>DEA红柱', type: 'positive', description: `DIFF=${f.diff.toFixed(2)} DEA=${f.dea.toFixed(2)}` });
+    }
+    else if (!hongZhu && f.diff > 0) {
+        signals.push({ name: 'DIFF<DEA', type: 'negative', description: `DIFF=${f.diff.toFixed(2)} DEA=${f.dea.toFixed(2)}` });
+    }
+    else {
+        signals.push({ name: 'DIFF<0', type: 'negative', description: `DIFF=${f.diff.toFixed(2)}` });
+    }
+    if (f.breakLifeLine) {
+        signals.push({ name: '突破生命线', type: 'positive', description: `生命线=${f.lifeLine.toFixed(2)}` });
+    }
+    if (f.breakStrongLine) {
+        signals.push({ name: '突破强势线', type: 'positive', description: `强势线P=3.0` });
+    }
+    if (f.breakBigBullLine) {
+        signals.push({ name: '突破大牛线', type: 'positive', description: `大牛线P=6.0` });
+    }
+    signals.push({ name: `价格位置${f.pricePosition.toFixed(0)}%`, type: 'neutral', description: f.positionZone });
+    if (f.diBuBuy) {
+        signals.push({ name: '主力建仓', type: 'positive', description: `集中度${f.concentration.toFixed(0)}` });
+    }
+    if (f.gaoWeiHuiDiaoBuy) {
+        signals.push({ name: '企稳信号', type: 'positive' });
+    }
+    if (f.zhuLiShiPan) {
+        signals.push({ name: '主力试盘', type: 'positive' });
+    }
+    if (f.jiaCang) {
+        signals.push({ name: '加仓信号', type: 'positive' });
+    }
+    if (f.baiXiaoBuy1) {
+        signals.push({ name: '启动买点', type: 'positive' });
+    }
+    if (f.baiXiaoBuy2) {
+        signals.push({ name: '横盘突破', type: 'positive' });
+    }
+    if (f.qiangShiHuiCai) {
+        signals.push({ name: '强势回踩', type: 'positive' });
+    }
+    if (f.shortBuy && !f.shortSell) {
+        signals.push({ name: '短线触发', type: 'positive' });
+    }
+    if (f.shortSell && !f.shortBuy) {
+        signals.push({ name: '短线风险', type: 'negative' });
+    }
+    if (f.zhuLiXiChou) {
+        signals.push({ name: '主力吸筹', type: 'positive', description: `集中度${f.concentration.toFixed(0)}` });
+    }
+    if (f.zhuLiChuHuo) {
+        signals.push({ name: '主力出货', type: 'negative' });
+    }
+    if (f.strongSell) {
+        signals.push({ name: '强化卖出', type: 'negative' });
+    }
+    if (f.buySignalDiamond) {
+        signals.push({ name: '买入信号', type: 'positive' });
+    }
+    if (f.zhuShengZhongWeiChuHuo) {
+        signals.push({ name: '中位出货', type: 'negative' });
+    }
+    if (f.zhenShiChuHuo) {
+        signals.push({ name: '真实出货', type: 'negative' });
+    }
+    if (f.xiPanQueRen) {
+        signals.push({ name: '洗盘确认', type: 'neutral' });
+    }
+    if (f.jiGouHuoYueDu >= 15) {
+        signals.push({ name: '机构活跃度高', type: 'positive', description: `${f.jiGouHuoYueDu.toFixed(1)}` });
+    }
+    else if (f.jiGouHuoYueDu >= 12) {
+        signals.push({ name: '机构活跃度中等', type: 'neutral', description: `${f.jiGouHuoYueDu.toFixed(1)}` });
+    }
+    else if (f.jiGouHuoYueDu >= 8) {
+        signals.push({ name: '机构活跃度偏低', type: 'negative', description: `${f.jiGouHuoYueDu.toFixed(1)}` });
+    }
+    else {
+        signals.push({ name: '机构活跃度低', type: 'negative', description: `${f.jiGouHuoYueDu.toFixed(1)}` });
+    }
+    if (f.gaoKaiDiZouQingCang) {
+        signals.push({ name: '高开低走', type: 'negative' });
+    }
+    if (f.baoLiangFuGaiQingCang) {
+        signals.push({ name: '爆量覆盖', type: 'negative' });
+    }
+    if (f.po5RiXian) {
+        signals.push({ name: '跌破5日线', type: 'negative' });
+    }
+    if (f.yinDiePoWei) {
+        signals.push({ name: '阴跌破位', type: 'negative' });
+    }
+    if (f.xiPanHuoMian) {
+        signals.push({ name: '洗盘豁免', type: 'neutral' });
+    }
+    if (f.safe) {
+        signals.push({ name: '安全信号', type: 'positive' });
+    }
+    if (f.xiPanSignal) {
+        signals.push({ name: '洗盘信号', type: 'neutral' });
+    }
+    const seen = new Set();
+    return signals.filter(s => {
+        const key = s.name;
+        if (seen.has(key))
+            return false;
+        seen.add(key);
+        return true;
+    });
+}
