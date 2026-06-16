@@ -785,10 +785,10 @@ const IndexPage = () => {
       }
 
       // ===== 3. 拉取创业板K线并推送 =====
-      const gemTopN = gemCodes.slice(0, 50);
+      const gemTopN = gemCodes.slice(0, 200);
       const gemStocks: any[] = [];
-      for (let i = 0; i < gemTopN.length; i += 5) {
-        const batch = gemTopN.slice(i, i + 5);
+      for (let i = 0; i < gemTopN.length; i += 15) {
+        const batch = gemTopN.slice(i, i + 15);
         const batchPromises = batch.map(async (s) => {
           try {
             const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
@@ -800,6 +800,9 @@ const IndexPage = () => {
           } catch(e) {}
         });
         await Promise.all(batchPromises);
+        if ((i + 15) % 30 === 0 || i + 15 >= gemTopN.length) {
+          setScanStatus('📥 创业板K线 ' + Math.min(i + 15, gemTopN.length) + '/' + gemTopN.length);
+        }
       }
       setScanStatus('📤 推送创业板 ' + gemStocks.length + '只到引擎...');
       // 推送创业板
@@ -816,10 +819,10 @@ const IndexPage = () => {
       if (mainCodes.length > 0) {
         setMainScanStatus('📥 正在拉取主板K线...');
         setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
-        const mainTopN = mainCodes.slice(0, 50);
+        const mainTopN = mainCodes.slice(0, 200);
         const mainStocks: any[] = [];
-        for (let i = 0; i < mainTopN.length; i += 5) {
-          const batch = mainTopN.slice(i, i + 5);
+        for (let i = 0; i < mainTopN.length; i += 15) {
+          const batch = mainTopN.slice(i, i + 15);
           const batchPromises = batch.map(async (s) => {
             try {
               const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
@@ -831,6 +834,9 @@ const IndexPage = () => {
             } catch(e) {}
           });
           await Promise.all(batchPromises);
+          if ((i + 15) % 30 === 0 || i + 15 >= mainTopN.length) {
+            setMainScanStatus('📥 主板K线 ' + Math.min(i + 15, mainTopN.length) + '/' + mainTopN.length);
+          }
         }
         setMainScanStatus('📤 推送主板 ' + mainStocks.length + '只...');
         setScanStatus(prev => prev + ' | 📤 推送主板 ' + mainStocks.length + '只...');
@@ -853,7 +859,7 @@ const IndexPage = () => {
       setSectorScanStatus('🔄 正在拉取热点板块数据...');
       setScanStatus(prev => prev + ' | 🔥 拉取板块数据...');
       try {
-        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f12,f14,f3,f62';
+        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f12,f14,f3,f62';
         const sectorRes = await fetch(sectorUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const sectorTxt = await sectorRes.text();
         const sectorJson = JSON.parse(sectorTxt);
@@ -862,7 +868,7 @@ const IndexPage = () => {
         for (const sec of sectors) {
           const bkCode = sec.f12;
           const sectorName = sec.f14;
-          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
+          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
           try {
             const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             const leadingTxt = await leadingRes.text();
@@ -880,9 +886,9 @@ const IndexPage = () => {
         sectorStocks = sectorStocks.filter(s => { if (seenCodes.has(s.code)) return false; seenCodes.add(s.code); return true; });
         setScanStatus(prev => prev + ' | 板块领涨: ' + sectorStocks.length + '只');
         const sectorStockWithKlines: any[] = [];
-        const sectorTopN = sectorStocks.slice(0, 15);
-        for (let si = 0; si < sectorTopN.length; si += 5) {
-          const sbatch = sectorTopN.slice(si, si + 5);
+        const sectorTopN = sectorStocks.slice(0, 40);
+        for (let si = 0; si < sectorTopN.length; si += 15) {
+          const sbatch = sectorTopN.slice(si, si + 15);
           const batchPromises = sbatch.map(async (s) => {
             try {
               const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
