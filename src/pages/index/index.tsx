@@ -795,16 +795,25 @@ const IndexPage = () => {
         setGemScanStatus('📥 K线 ' + Math.min(i + 20, gemCodes.length) + '/' + gemCodes.length);
       }
     }
-    setGemScanStatus('📤 推送 ' + gemStocks.length + '只到引擎...');
+    setGemScanStatus('📤 分批推送 ' + gemStocks.length + '只(50只/批)...');
     if (gemStocks.length > 0) {
-      const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks: gemStocks } });
-      const pushData = pushRes.data as any;
-      if (pushData?.code === 200) {
-        setGemScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
-        await fetchGemTop();
-      } else {
-        setGemScanStatus('❌ 推送失败');
+      let totalFound = 0;
+      const CHUNK = 50;
+      for (let ci = 0; ci < gemStocks.length; ci += CHUNK) {
+        const chunk = gemStocks.slice(ci, ci + CHUNK);
+        try {
+          const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks: chunk } });
+          const pushData = pushRes.data as any;
+          if (pushData?.code === 200) {
+            totalFound += pushData?.data?.opportunities?.length || 0;
+          }
+        } catch(e2) { console.warn('批次推送失败', e2); }
+        if ((ci + CHUNK) % 100 === 0 || ci + CHUNK >= gemStocks.length) {
+          setGemScanStatus('📤 ' + Math.min(ci + CHUNK, gemStocks.length) + '/' + gemStocks.length + ' 已发现' + totalFound + '只');
+        }
       }
+      setGemScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+      await fetchGemTop();
     } else {
       setGemScanStatus('⚠️ 无足够K线数据');
     }
@@ -905,16 +914,25 @@ const IndexPage = () => {
         setMainScanStatus('📥 K线 ' + Math.min(i + 20, mainCodes.length) + '/' + mainCodes.length);
       }
     }
-    setMainScanStatus('📤 推送 ' + mainStocks.length + '只...');
+    setMainScanStatus('📤 分批推送 ' + mainStocks.length + '只(50只/批)...');
     if (mainStocks.length > 0) {
-      const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: mainStocks } });
-      const pushData = pushRes.data as any;
-      if (pushData?.code === 200) {
-        setMainScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
-        await fetchMainTop();
-      } else {
-        setMainScanStatus('❌ 推送失败');
+      let totalFound = 0;
+      const CHUNK = 50;
+      for (let ci = 0; ci < mainStocks.length; ci += CHUNK) {
+        const chunk = mainStocks.slice(ci, ci + CHUNK);
+        try {
+          const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: chunk } });
+          const pushData = pushRes.data as any;
+          if (pushData?.code === 200) {
+            totalFound += pushData?.data?.opportunities?.length || 0;
+          }
+        } catch(e2) { console.warn('批次推送失败', e2); }
+        if ((ci + CHUNK) % 100 === 0 || ci + CHUNK >= mainStocks.length) {
+          setMainScanStatus('📤 ' + Math.min(ci + CHUNK, mainStocks.length) + '/' + mainStocks.length + ' 已发现' + totalFound + '只');
+        }
       }
+      setMainScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+      await fetchMainTop();
     } else {
       setMainScanStatus('⚠️ 无足够K线数据');
     }
@@ -966,16 +984,25 @@ const IndexPage = () => {
           setSectorScanStatus('📥 K线 ' + Math.min(si + 20, sectorStocks.length) + '/' + sectorStocks.length);
         }
       }
-      setSectorScanStatus('📤 推送 ' + sectorStockWithKlines.length + '只...');
+      setSectorScanStatus('📤 分批推送 ' + sectorStockWithKlines.length + '只(50只/批)...');
       if (sectorStockWithKlines.length > 0) {
-        const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: sectorStockWithKlines } });
-        const pushData = pushRes.data as any;
-        if (pushData?.code === 200) {
-          setSectorScanStatus('✅ 完成! 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
-          await fetchSectorHot();
-        } else {
-          setSectorScanStatus('❌ 推送失败');
+        let totalFound = 0;
+        const CHUNK = 50;
+        for (let ci = 0; ci < sectorStockWithKlines.length; ci += CHUNK) {
+          const chunk = sectorStockWithKlines.slice(ci, ci + CHUNK);
+          try {
+            const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: chunk } });
+            const pushData = pushRes.data as any;
+            if (pushData?.code === 200) {
+              totalFound += pushData?.data?.opportunities?.length || 0;
+            }
+          } catch(e2) { console.warn('板块批次推送失败', e2); }
+          if ((ci + CHUNK) % 100 === 0 || ci + CHUNK >= sectorStockWithKlines.length) {
+            setSectorScanStatus('📤 ' + Math.min(ci + CHUNK, sectorStockWithKlines.length) + '/' + sectorStockWithKlines.length + ' 已发现' + totalFound + '只');
+          }
         }
+        setSectorScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
+        await fetchSectorHot();
       } else {
         setSectorScanStatus('⚠️ 无足够K线数据');
       }
@@ -985,11 +1012,25 @@ const IndexPage = () => {
     }
   }, [fetchSectorHot]);
 
-  // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染) — 只扫描创业板
+  // 自动触发前端推送扫描(3秒后运行，依次扫描创业板→主板→板块)
   useEffect(() => {
-    const t = setTimeout(() => scanGemOnly(), 3000);
-    return () => clearTimeout(t);
-  }, [scanGemOnly]);
+    const t1 = setTimeout(async () => {
+      await scanGemOnly();
+      // 创业板完成后，自动扫描主板
+      setMainScanStatus('🔄 创业板已完成，开始自动扫描主板...');
+      const t2 = setTimeout(async () => {
+        await scanMainOnly();
+        // 主板完成后，自动扫描板块
+        setSectorScanStatus('🔄 主板已完成，开始自动扫描热点板块...');
+        const t3 = setTimeout(() => {
+          scanSectorOnly();
+        }, 500);
+        return () => clearTimeout(t3);
+      }, 800);
+      return () => clearTimeout(t2);
+    }, 3000);
+    return () => clearTimeout(t1);
+  }, [scanGemOnly, scanMainOnly, scanSectorOnly]);
 
 
   // 搜索建议状态

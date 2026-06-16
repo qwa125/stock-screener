@@ -566,11 +566,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
           : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
           : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
-    const finalResults = results.slice(0, 10);
-    // 更新缓存
+    // 合并累加缓存(分批推送时逐批累加)
+    const existing = this.cache?.data || [];
+    const merged = [...existing, ...results];
+    const seen = new Set<string>();
+    const deduped = merged.filter(r => { if (seen.has(r.code)) return false; seen.add(r.code); return true; });
+    deduped.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+          : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+          : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+          : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = deduped.slice(0, 10);
     this.cache = { data: finalResults, timestamp: Date.now() };
     this.saveCacheToDisk();
-    this.logger.log(`✅ 前端数据扫描完成, 最终 ${finalResults.length} 只`);
+    this.logger.log(`✅ 前端数据扫描完成, 累加合并后 ${finalResults.length} 只`);
     return finalResults;
   }
 
@@ -616,10 +628,22 @@ export class GemScreenerService implements OnApplicationBootstrap {
         : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
-    const finalResults = results.slice(0, 10);
+    const existingMain = this.mainBoardCache?.data || [];
+    const mergedMain = [...existingMain, ...results];
+    const seenMain = new Set<string>();
+    const dedupedMain = mergedMain.filter(r => { if (seenMain.has(r.code)) return false; seenMain.add(r.code); return true; });
+    dedupedMain.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = dedupedMain.slice(0, 10);
     this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
     this.saveMainBoardCacheToDisk();
-    this.logger.log(`✅ 前端主板数据推送完成, 最终 ${finalResults.length} 只`);
+    this.logger.log(`✅ 前端主板数据推送完成, 累加合并后 ${finalResults.length} 只`);
     return finalResults;
   }
 
@@ -671,10 +695,22 @@ export class GemScreenerService implements OnApplicationBootstrap {
         : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
-    const finalResults = results.slice(0, 10);
+    const existingSector = this.sectorCache?.data || [];
+    const mergedSector = [...existingSector, ...results];
+    const seenSector = new Set<string>();
+    const dedupedSector = mergedSector.filter(r => { if (seenSector.has(r.code)) return false; seenSector.add(r.code); return true; });
+    dedupedSector.sort((a, b) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = dedupedSector.slice(0, 10);
     this.sectorCache = { data: finalResults, timestamp: Date.now() };
     try { await fs.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache)); } catch {}
-    this.logger.log(`✅ 前端板块数据推送完成, 最终 ${finalResults.length} 只`);
+    this.logger.log(`✅ 前端板块数据推送完成, 累加合并后 ${finalResults.length} 只`);
     return finalResults;
   }
 
