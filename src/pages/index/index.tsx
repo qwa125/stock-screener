@@ -729,9 +729,7 @@ const IndexPage = () => {
         const j1 = JSON.parse(txt1);
         const items = j1?.data?.diff || [];
         for (const item of items) {
-          if (item.f3 > 0) {
-            gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
-          }
+          gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
         }
         setScanStatus('✅ 东方财富创业板: ' + gemCodes.length + '只上涨');
       } catch (e) {
@@ -751,7 +749,7 @@ const IndexPage = () => {
               const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
               if (m) {
                 const change = parseFloat(m[3]);
-                if (change > 0) gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
+                gemCodes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
               }
             }
           } catch(e) {}
@@ -773,10 +771,8 @@ const IndexPage = () => {
           const j = JSON.parse(txt);
           const items = j?.data?.diff || [];
           for (const item of items) {
-            if (item.f3 > 0) {
-              const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
-              mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
-            }
+            const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
+            mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
           }
         }
         setScanStatus(prev => prev + ' | 主板: ' + mainCodes.length + '只上涨');
@@ -873,10 +869,8 @@ const IndexPage = () => {
             const leadingJson = JSON.parse(leadingTxt);
             const leadingItems = leadingJson?.data?.diff || [];
             for (const it of leadingItems) {
-              if (it.f3 > 0) {
-                const prefix = (it.f12 || '').startsWith('6') ? 'sh' : 'sz';
+              const prefix = (it.f12 || '').startsWith('6') ? 'sh' : 'sz';
                 sectorStocks.push({ code: prefix + it.f12, name: it.f14 || it.f12, sectorName, price: it.f2 || 0, changePercent: it.f3 || 0, inflow: parseFloat(it.f62) || 0 });
-              }
             }
           } catch(e) {}
         }
