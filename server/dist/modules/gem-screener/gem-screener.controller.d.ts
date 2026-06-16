@@ -93,4 +93,12 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    getHeavyBuy(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            opportunities: import("./gem-screener.service").OpportunityStock[];
+            timestamp: number;
+        };
+    }>;
 }

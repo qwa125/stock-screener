@@ -77,4 +77,15 @@ export class GemScreenerController {
     const result = await this.gemScreener.scanSectorOpportunities(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
+
+  /**
+   * 重仓买入专区: 从全市场(创业板+主板+热点板块)缓存中筛选出 "重仓买入" 级别的股票
+   * GET /api/gem/top/heavy-buy
+   */
+  @Get('top/heavy-buy')
+  async getHeavyBuy() {
+    const all = await this.gemScreener.getAllOpportunities();
+    const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
+    return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
+  }
 }

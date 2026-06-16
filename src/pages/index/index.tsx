@@ -653,6 +653,11 @@ const IndexPage = () => {
   const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
   const [sectorLoading, setSectorLoading] = useState(true);
   const [sectorScanStatus, setSectorScanStatus] = useState<string>('');
+  // 重仓买入专区状态
+  const [heavyBuyData, setHeavyBuyData] = useState<any[] | null>(null);
+  const [heavyBuyTimestamp, setHeavyBuyTimestamp] = useState<number>(0);
+  const [heavyBuyLoading, setHeavyBuyLoading] = useState(true);
+  const [heavyBuyScanStatus, setHeavyBuyScanStatus] = useState<string>('');
   const gemCachedStocks = useRef<any[]>([]);
   const mainCachedStocks = useRef<any[]>([]);
   const sectorTags = () => [...new Set((sectorData || []).map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10);
@@ -737,6 +742,31 @@ const IndexPage = () => {
     const timer = setInterval(fetchSectorHot, 30000);
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
+
+  // 获取重仓买入专区（从板块缓存中筛选"重仓买入"级别）
+  const fetchHeavyBuy = useCallback(async () => {
+    try {
+      const res = await Network.request({ url: '/api/gem/top/heavy-buy', method: 'GET' });
+      console.log('[重仓买入专区] 响应:', res.data);
+      const apiData = res.data as any;
+      if (apiData?.data?.opportunities) {
+        setHeavyBuyData(apiData.data.opportunities);
+        if (apiData.data.timestamp) setHeavyBuyTimestamp(apiData.data.timestamp);
+        else setHeavyBuyTimestamp(Date.now());
+        enrichMainForceFlow(apiData.data.opportunities).catch(() => {});
+      }
+    } catch (e) {
+      console.error('[重仓买入专区] 加载失败:', e);
+    } finally {
+      setHeavyBuyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHeavyBuy();
+    const timer = setInterval(fetchHeavyBuy, 30000);
+    return () => clearInterval(timer);
+  }, [fetchHeavyBuy]);
 
   // ========== 扫描函数：只扫描创业板 ==========
   const scanGemOnly = useCallback(async () => {
@@ -1077,6 +1107,20 @@ const IndexPage = () => {
       setSectorScanStatus('❌ 板块扫描失败');
     }
   }, [fetchSectorHot]);
+
+  // ========== 扫描函数：重仓买入专区（复用聚合缓存，筛选重仓买入级别） ==========
+  const scanHeavyBuy = useCallback(async () => {
+    // 先触发全市场扫描（聚合GEM+主板+热点板块）
+    setHeavyBuyScanStatus('🔄 触发聚合全市场扫描...');
+    await scanSectorOnly();
+    setHeavyBuyScanStatus('🔍 筛选"重仓买入"级别...');
+    try {
+      await fetchHeavyBuy();
+    } catch (e) {
+      console.warn('重仓买入扫描失败:', e);
+      setHeavyBuyScanStatus('❌ 重仓买入扫描失败');
+    }
+  }, [scanSectorOnly, fetchHeavyBuy]);
 
   // 自动触发前端推送扫描(3秒后运行，依次扫描创业板→主板→板块)
   useEffect(() => {
@@ -1874,6 +1918,82 @@ const IndexPage = () => {
             </View>
           )}
         </View>
+
+        {/* 🔥 重仓买入专区 */}
+        <View className="mb-4">
+          <View className="flex flex-row items-center justify-between mb-3">
+            <View className="flex flex-row items-center gap-2">
+              <Text className="block text-sm font-semibold">🔥 重仓买入专区</Text>
+              {heavyBuyTimestamp > 0 && (
+                <Text className="block text-xs text-gray-400">
+                  {(new Date(heavyBuyTimestamp)).toLocaleTimeString('zh-CN', { hour12: false })}
+                </Text>
+              )}
+            </View>
+            <View className="flex flex-row gap-1 items-center">
+              {heavyBuyScanStatus && (
+                <Text className="block text-xs text-gray-500 mr-1">{heavyBuyScanStatus}</Text>
+              )}
+              <Button size="sm" variant="outline" onClick={() => scanHeavyBuy()}>
+                <Text className="block text-xs">{heavyBuyLoading ? '扫描中...' : '扫描'}</Text>
+              </Button>
+            </View>
+          </View>
+
+          {heavyBuyLoading ? (
+            <View className="p-4 bg-gray-50 rounded-xl">
+              <View className="flex flex-col items-center gap-2">
+                <View className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                <Text className="block text-xs text-gray-400">正在加载重仓买入信号...</Text>
+              </View>
+            </View>
+          ) : heavyBuyData && heavyBuyData.length > 0 ? (
+            <View>
+              {heavyBuyData.map((item: any, idx: number) => {
+                const action = item.suggestion || getOpportunitySuggestion(item);
+                const sectorName = item.sectorName || '';
+                return (
+                <Card key={`heavy-${item.code}-${idx}`}>
+                  <CardContent className="p-3">
+                    <View className="flex flex-row items-center" onClick={() => handleSearchByCode(item.code, item.suggestion)}>
+                      <View style={{ flex: 1.1 }}>
+                        <View className="flex flex-row items-center gap-1">
+                          <Badge className="px-1 bg-red-100 text-red-700 border-red-200 flex-shrink-0 py-0">
+                            <Text className="block text-xs">#{idx + 1}</Text>
+                          </Badge>
+                          <View className="min-w-0 flex-1">
+                            <Text className="block text-xs font-medium truncate">{item.name}</Text>
+                            <Text className="block text-xs text-gray-400">{sectorName || item.code}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={{ flex: 0.55 }} className="text-center">
+                        <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{ backgroundColor: ACTION_BADGE_COLOR[action] ?? '#999' }}>{action || '-'}</Text>
+                      </View>
+                      <View style={{ flex: 0.9 }} className="text-right">
+                        <Text className="block text-xs font-medium" style={{ color: (item.pricePosition ?? 0) < 50 ? '#22c55e' : (item.pricePosition ?? 0) < 80 ? '#eab308' : '#ef4444' }}>位置{(item.pricePosition ?? 0).toFixed(0)}%</Text>
+                        <Text className="block text-xs" style={{ color: mainForceColor(item.mainForceInflow) }}>
+                          {formatMainForce(item.mainForceInflow)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View className="flex flex-row gap-1 mt-1 flex-wrap">
+                      {item.features?.slice(0, 2).map((feat: string, fi: number) => (
+                        <Badge key={fi} className="px-1 py-0 bg-gray-100 text-gray-500 text-xs">{feat}</Badge>
+                      ))}
+                    </View>
+                  </CardContent>
+                </Card>
+                );
+              })}
+            </View>
+          ) : (
+            <View className="p-4 bg-gray-50 rounded-xl">
+              <Text className="block text-xs text-gray-400 text-center">暂无符合条件的重仓买入信号</Text>
+            </View>
+          )}
+        </View>
+
         {/* 底部信息 */}
           <View className="mt-6 pt-4 border-t border-gray-100">
             <Text className="block text-xs text-gray-400 text-center">

@@ -743,27 +743,26 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         else if (zoneR.includes('中低位')) {
             if (trendStateR >= 2 && hasBuySignalR)
+                suggestionR = '买入';
+            else if (trendStateR >= 1 && hasBuySignalR)
                 suggestionR = '轻仓买入';
-            else if (trendStateR === 0)
+            else if (trendStateR === 0 && hasBuySignalR)
                 suggestionR = '持有';
             else
                 suggestionR = '持有';
         }
         else {
-            if (longDeclineR && trendStateR === 1 && !macdBullishR && !volumeBullishR) {
-                suggestionR = '不要介入';
+            if (trendStateR >= 1 && hasBuySignalR) {
+                suggestionR = '重仓买入';
             }
-            else if (trendStateR === 1 && macdBullishR && volumeBullishR) {
+            else if (trendStateR === 0 && hasBuySignalR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 1 && !hasBuySignalR) {
                 suggestionR = '买入';
             }
-            else if (trendStateR === 0) {
-                suggestionR = hasBuySignalR ? '轻仓买入' : '观望';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = hasBuySignalR ? '重仓买入' : '买入';
-            }
             else {
-                suggestionR = hasBuySignalR ? '持有' : '观望';
+                suggestionR = '观望';
             }
         }
         const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
@@ -925,27 +924,26 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         else if (zoneR.includes('中低位')) {
             if (trendStateR >= 2 && hasBuySignalR)
+                suggestionR = '买入';
+            else if (trendStateR >= 1 && hasBuySignalR)
                 suggestionR = '轻仓买入';
-            else if (trendStateR === 0)
+            else if (trendStateR === 0 && hasBuySignalR)
                 suggestionR = '持有';
             else
                 suggestionR = '持有';
         }
         else {
-            if (longDeclineR && trendStateR === 1 && !macdBullishR && !volumeBullishR) {
-                suggestionR = '不要介入';
+            if (trendStateR >= 1 && hasBuySignalR) {
+                suggestionR = '重仓买入';
             }
-            else if (trendStateR === 1 && macdBullishR && volumeBullishR) {
+            else if (trendStateR === 0 && hasBuySignalR) {
+                suggestionR = '轻仓买入';
+            }
+            else if (trendStateR >= 1 && !hasBuySignalR) {
                 suggestionR = '买入';
             }
-            else if (trendStateR === 0) {
-                suggestionR = hasBuySignalR ? '轻仓买入' : '观望';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = (trendStateR >= 3 && hasBuySignalR) ? '重仓买入' : '买入';
-            }
             else {
-                suggestionR = hasBuySignalR ? '持有' : '观望';
+                suggestionR = '观望';
             }
         }
         const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
@@ -1365,6 +1363,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             results.push(...this.cache.data);
         if (this.mainBoardCache?.data?.length)
             results.push(...this.mainBoardCache.data);
+        if (this.sectorCache?.data?.length)
+            results.push(...this.sectorCache.data);
         return results;
     }
     async computeFullSuggestion(code) {

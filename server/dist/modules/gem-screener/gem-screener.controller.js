@@ -65,6 +65,11 @@ let GemScreenerController = class GemScreenerController {
         const result = await this.gemScreener.scanSectorOpportunities(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
+    async getHeavyBuy() {
+        const all = await this.gemScreener.getAllOpportunities();
+        const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
+        return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -139,6 +144,12 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopSector", null);
+__decorate([
+    (0, common_1.Get)('top/heavy-buy'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getHeavyBuy", null);
 exports.GemScreenerController = GemScreenerController = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
