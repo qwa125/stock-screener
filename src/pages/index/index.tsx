@@ -152,7 +152,7 @@ async function enrichMainForceFlow(stocks: OpportunityStock[]): Promise<void> {
           const target = stocks.find(s => s.code === code);
           if (target) target.mainForceInflow = Math.round(flow);
         }
-      }
+        }
     } catch (e) {
       console.warn('[东方财富] 主力资金获取失败:', e);
     }
@@ -837,6 +837,66 @@ const IndexPage = () => {
             await fetchMainTop();
           }
         }
+      }
+      // ===== 5. 拉取板块数据并推送 =====
+      setScanStatus(prev => prev + ' | 🔥 拉取板块数据...');
+      try {
+        const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f12,f14,f3,f62';
+        const sectorRes = await fetch(sectorUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const sectorTxt = await sectorRes.text();
+        const sectorJson = JSON.parse(sectorTxt);
+        const sectors = sectorJson?.data?.diff || [];
+        let sectorStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
+        for (const sec of sectors) {
+          const bkCode = sec.f12;
+          const sectorName = sec.f14;
+          const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
+          try {
+            const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const leadingTxt = await leadingRes.text();
+            const leadingJson = JSON.parse(leadingTxt);
+            const leadingItems = leadingJson?.data?.diff || [];
+            for (const it of leadingItems) {
+              if (it.f3 > 0) {
+                const prefix = (it.f12 || '').startsWith('6') ? 'sh' : 'sz';
+                sectorStocks.push({ code: prefix + it.f12, name: it.f14 || it.f12, sectorName, price: it.f2 || 0, changePercent: it.f3 || 0, inflow: parseFloat(it.f62) || 0 });
+              }
+            }
+          } catch(e) {}
+        }
+        const seenCodes = new Set();
+        sectorStocks = sectorStocks.filter(s => { if (seenCodes.has(s.code)) return false; seenCodes.add(s.code); return true; });
+        setScanStatus(prev => prev + ' | 板块领涨: ' + sectorStocks.length + '只');
+        const sectorStockWithKlines: any[] = [];
+        const sectorTopN = sectorStocks.slice(0, 15);
+        for (let si = 0; si < sectorTopN.length; si += 5) {
+          const sbatch = sectorTopN.slice(si, si + 5);
+          const batchPromises = sbatch.map(async (s) => {
+            try {
+              const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+              const r = await fetch(url);
+              const txt = await r.text();
+              const j = JSON.parse(txt.replace(/\.\.\./, '\"'));
+              const klines = (j?.data?.[s.code]?.qfqday || j?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+              if (klines.length >= 20) sectorStockWithKlines.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            } catch(e) {}
+          });
+          await Promise.all(batchPromises);
+        }
+        setScanStatus(prev => prev + ' | 📤 推送板块 ' + sectorStockWithKlines.length + '只...');
+        if (sectorStockWithKlines.length > 0) {
+          const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: sectorStockWithKlines } });
+          const pushData = pushRes.data as any;
+          if (pushData?.code === 200) {
+            setScanStatus('✅ 全部完成! 创业板:' + (gemStocks.length || 0) + '只 板块:' + (pushData?.data?.opportunities?.length || 0) + '只');
+            await fetchSectorHot();
+          }
+        } else {
+          setScanStatus('✅ 全部完成 (板块暂无)');
+        }
+      } catch (e) {
+        console.warn('板块数据拉取失败:', e);
+        setScanStatus('✅ 扫描完成 (板块不可用)');
       }
     } catch (err: any) {
       setScanStatus('❌ 错误: ' + (err?.message || err));

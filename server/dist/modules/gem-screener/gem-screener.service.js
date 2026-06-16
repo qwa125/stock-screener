@@ -391,7 +391,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanWithFrontendData(stocks) {
         const results = [];
         for (const s of stocks) {
-            if (s.klines && s.klines.length >= 60) {
+            if (s.klines && s.klines.length >= 20) {
                 this.dataFetcher.preloadKline(s.code, s.klines);
             }
         }
@@ -445,7 +445,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanWithFrontendMainBoardData(stocks) {
         const results = [];
         for (const s of stocks) {
-            if (s.klines && s.klines.length >= 60) {
+            if (s.klines && s.klines.length >= 20) {
                 this.dataFetcher.preloadKline(s.code, s.klines);
             }
         }
@@ -492,7 +492,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanWithFrontendSectorData(stocks) {
         const results = [];
         for (const s of stocks) {
-            if (s.klines && s.klines.length >= 60) {
+            if (s.klines && s.klines.length >= 20) {
                 this.dataFetcher.preloadKline(s.code, s.klines);
             }
         }

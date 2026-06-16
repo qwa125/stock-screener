@@ -521,7 +521,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const results: OpportunityStock[] = [];
     // 预加载K线数据到缓存
     for (const s of stocks) {
-      if (s.klines && s.klines.length >= 60) {
+      if (s.klines && s.klines.length >= 20) {
         this.dataFetcher.preloadKline(s.code, s.klines);
       }
     }
@@ -582,7 +582,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   ): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
     for (const s of stocks) {
-      if (s.klines && s.klines.length >= 60) {
+      if (s.klines && s.klines.length >= 20) {
         this.dataFetcher.preloadKline(s.code, s.klines);
       }
     }
@@ -631,7 +631,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   ): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
     for (const s of stocks) {
-      if (s.klines && s.klines.length >= 60) {
+      if (s.klines && s.klines.length >= 20) {
         this.dataFetcher.preloadKline(s.code, s.klines);
       }
     }
