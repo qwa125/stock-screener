@@ -797,11 +797,12 @@ const IndexPage = () => {
       const batch = gemCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const url3 = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=' + (s.code.startsWith('6') ? 'sh' : 'sz') + s.code + '&scale=240&ma=5&datalen=100';
+          const gemPrefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
+          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + gemPrefixedKey + ',day,,,100,qfq';
           const res3 = await fetch(url3);
           const txt3 = await res3.text();
-          const sinaData3 = JSON.parse(txt3);
-          const klines = (Array.isArray(sinaData3) ? sinaData3 : []).map((k: any) => ({ date: k.day, open: parseFloat(k.open) || 0, close: parseFloat(k.close) || 0, high: parseFloat(k.high) || 0, low: parseFloat(k.low) || 0, volume: parseFloat(k.volume) || 0, amount: 0 }));
+          const j3 = JSON.parse(txt3);
+          const klines = (j3?.data?.[gemPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
           if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
         } catch(e2) {}
       });
@@ -919,11 +920,12 @@ const IndexPage = () => {
       const batch = mainCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=' + (s.code.startsWith('6') ? 'sh' : 'sz') + s.code + '&scale=240&ma=5&datalen=100';
+          const mainPrefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
+          const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + mainPrefixedKey + ',day,,,100,qfq';
           const res = await fetch(url);
           const txt = await res.text();
-          const sinaData = JSON.parse(txt);
-          const klines = (Array.isArray(sinaData) ? sinaData : []).map((k: any) => ({ date: k.day, open: parseFloat(k.open) || 0, close: parseFloat(k.close) || 0, high: parseFloat(k.high) || 0, low: parseFloat(k.low) || 0, volume: parseFloat(k.volume) || 0, amount: 0 }));
+          const j = JSON.parse(txt);
+          const klines = (j?.data?.[mainPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
           if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
         } catch(e2) {}
       });
@@ -1013,12 +1015,12 @@ const IndexPage = () => {
         const sbatch = allStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
-            const marketPrefix = s.code.startsWith('6') || s.code.startsWith('68') ? 'sh' : 'sz';
-            const url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=' + marketPrefix + s.code + '&scale=240&ma=5&datalen=100';
+            const prefixedKey = (s.code.startsWith('6') || s.code.startsWith('68') ? 'sh' : 'sz') + s.code;
+            const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
             const r = await fetch(url);
             const txt = await r.text();
-            const sinaData = JSON.parse(txt);
-            const klines = (Array.isArray(sinaData) ? sinaData : []).map((k: any) => ({ date: k.day, open: parseFloat(k.open) || 0, close: parseFloat(k.close) || 0, high: parseFloat(k.high) || 0, low: parseFloat(k.low) || 0, volume: parseFloat(k.volume) || 0, amount: 0 }));
+            const j = JSON.parse(txt);
+            const klines = (j?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
             if (klines.length >= 20) sectorStockWithKlines.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
           } catch(e2) {}
         });
