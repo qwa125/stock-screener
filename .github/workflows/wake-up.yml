@@ -28,7 +28,7 @@ jobs:
           echo "⏳ 正在唤醒 Render..."
           START_TIME=$(date +%s%N)
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            "https://stock-screener.onrender.com/api/health")
+            "https://stock-screener-54nd.onrender.com/api/health")
           END_TIME=$(date +%s%N)
           DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
           echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
