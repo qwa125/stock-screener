@@ -486,148 +486,6 @@ const mainForceColor = (value: number | undefined | null): string => {
  * 推送到Render服务器进行规则引擎分析
  * 使用东方财富+腾讯双API保障数据可达
  */
-async function fetchAndPushTencentGemData(): Promise<void> {
-  try {
-    console.log('[前端扫描] 开始获取GEM上涨股票...');
-
-    let risingList: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
-
-    // 主源: 东方财富批量接口（支持按涨幅排序）
-    try {
-      console.log('[前端扫描] 尝试东方财富API...');
-      const ecoRes = await fetch(
-        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62',
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            Referer: 'https://quote.eastmoney.com/',
-          },
-        }
-      );
-      if (ecoRes.ok) {
-        const ecoData = await ecoRes.json();
-        if (ecoData?.data?.diff?.length) {
-          risingList = ecoData.data.diff
-            .filter((item: any) => {
-              const chg = parseFloat(item.f3) || 0;
-              return item.f12?.startsWith('30') && chg > 0.3;
-            })
-            .map((item: any) => ({
-              code: String(item.f12),
-              name: item.f14 || item.f12,
-              price: parseFloat(item.f2) || 0,
-              changePercent: parseFloat(item.f3) || 0,
-              inflow: parseFloat(item.f62) || 0,
-            }));
-          console.log(`[前端扫描] 东方财富返回 ${ecoData.data.diff.length} 只GEM, 上涨>0.3%: ${risingList.length} 只`);
-        }
-      }
-    } catch (e) {
-      console.warn('[前端扫描] 东方财富API失败:', e);
-    }
-
-    // 备源：腾讯行情
-    if (risingList.length === 0) {
-      console.log('[前端扫描] 东方财富无数据, 尝试腾讯行情...');
-      try {
-        const allCodes: string[] = [];
-        for (let start = 300001; start <= 301499; start += 100) {
-          const batchCodes: string[] = [];
-          for (let j = 0; j < 100 && start + j <= 301499; j++) {
-            batchCodes.push(`sz${start + j}`);
-          }
-          const url = `https://qt.gtimg.cn/q=${batchCodes.join(',')}`;
-          const res = await fetch(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-          });
-          if (!res.ok) continue;
-          const text = await res.text();
-          const lines = text.split(';').filter(l => l.trim());
-          for (const line of lines) {
-            const parts = line.split('~');
-            if (parts.length >= 32) {
-              const code = parts[2] || '';
-              const name = parts[1] || code;
-              const price = parseFloat(parts[3]) || 0;
-              const changePct = parseFloat(parts[32]) || 0;
-              if (code.startsWith('30') && changePct > 0.3) {
-                allCodes.push(code);
-                risingList.push({ code, name, price, changePercent: changePct, inflow: Math.round(price * (parseFloat(parts[6])||0) * 0.01) });
-              }
-            }
-          }
-        }
-        console.log(`[前端扫描] 腾讯返回 ${risingList.length} 只上涨GEM`);
-      } catch (e) {
-        console.warn('[前端扫描] 腾讯行情失败:', e);
-      }
-    }
-
-    if (risingList.length === 0) {
-      console.log('[前端扫描] ⚠️ 无上涨股票数据, 跳过推送');
-      return;
-    }
-
-    // 获取每只股票的K线数据（最多前30只，加快速度）
-    const stocks: any[] = [];
-    const BATCH = 5;
-    const maxStocks = Math.min(risingList.length, 30);
-
-    for (let i = 0; i < maxStocks; i += BATCH) {
-      const batch = risingList.slice(i, i + BATCH);
-      await Promise.all(batch.map(async (item) => {
-        try {
-          const kUrl = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz${item.code},day,,,500,qfq`;
-          const kRes = await fetch(kUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(10000),
-          });
-          if (!kRes.ok) return;
-          const kData = await kRes.json();
-          const data = kData?.data?.['sz' + item.code];
-          if (!data) return;
-          const allKlines = [
-            ...(data?.qfqday || []),
-            ...(data?.day || []),
-          ].slice(-120);
-          if (allKlines.length < 30) return;
-
-          const klines = allKlines.map((k: any) => ({
-            date: String(k[0] || ''),
-            open: parseFloat(k[1]) || 0,
-            close: parseFloat(k[2]) || 0,
-            high: parseFloat(k[3]) || 0,
-            low: parseFloat(k[4]) || 0,
-            volume: parseFloat(k[5]) || 0,
-            amount: parseFloat(k[6]) || 0,
-          }));
-
-          stocks.push({
-            code: item.code,
-            name: item.name,
-            price: item.price,
-            changePercent: item.changePercent,
-            inflow: item.inflow,
-            klines,
-          });
-        } catch {}
-      }));
-    }
-
-    console.log(`[前端扫描] 获取到 ${stocks.length} 只股票K线数据, 推送到后端...`);
-    if (stocks.length === 0) return;
-
-    // POST到后端进行规则引擎分析
-    const res = await Network.request({
-      url: '/api/gem/refresh',
-      method: 'POST',
-      data: { stocks },
-    });
-    console.log('[前端扫描] ✅ 推送完成, 后端返回:', res.data?.data?.opportunities?.length || 0, '只机会');
-  } catch (e) {
-    console.warn('[前端扫描] 整体失败:', e);
-  }
-}
 
 // ===== 组件 =====
 /** 信息行 */
@@ -762,6 +620,7 @@ const IndexPage = () => {
   const [gemData, setGemData] = useState<OpportunityStock[] | null>(null);
   const [gemTimestamp, setGemTimestamp] = useState<number>(0);
   const [gemLoading, setGemLoading] = useState<boolean>(true);
+  const [scanStatus, setScanStatus] = useState<string>('');
 
   // 主板机会区状态
   const [mainData, setMainData] = useState<OpportunityStock[] | null>(null);
@@ -854,13 +713,87 @@ const IndexPage = () => {
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
 
-  // 前端扫描推送：浏览器在中国可直接拉腾讯数据，推送后端让规则引擎执行
+  // 前端数据扫描推送到服务器引擎
+  const triggerGemScan = useCallback(async () => {
+    setScanStatus('🔄 正在扫描...');
+    try {
+      // 1. 从东方财富拉取上涨创业板
+      let codes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+      try {
+        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+        const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const txt1 = await res1.text();
+        const j1 = JSON.parse(txt1);
+        const items = j1?.data?.diff || [];
+        for (const item of items) {
+          if (item.f3 > 0) {
+            codes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+          }
+        }
+        setScanStatus('✅ 东方财富: ' + codes.length + '只上涨');
+      } catch (e) {
+        setScanStatus('⚠️ 东方财富失败, 改用腾讯...');
+      }
+      // 2. 如果东方财富没数据, 用腾讯备源
+      if (codes.length === 0) {
+        const batchCodes: string[] = [];
+        for (let i = 300000; i <= 301999; i++) batchCodes.push('sz' + i);
+        for (let j = 0; j < batchCodes.length; j += 80) {
+          const b = batchCodes.slice(j, j + 80);
+          try {
+            const url2 = 'https://qt.gtimg.cn/q=' + b.join(',');
+            const res2 = await fetch(url2);
+            const txt2 = await res2.text();
+            const lines = txt2.split('\n');
+            for (const line of lines) {
+              const m = line.match(/~([^~]+)~([^~]+)~([^~]+)~([^~]+)~/);
+              if (m) {
+                const change = parseFloat(m[3]);
+                if (change > 0) codes.push({ code: m[0]?.split('_')[1] || 'sz'+b[j], name: m[1] || b[j], price: parseFloat(m[2]) || 0, changePercent: change, inflow: 0 });
+              }
+            }
+          } catch(e) {}
+        }
+        setScanStatus('✅ 腾讯: ' + codes.length + '只上涨');
+      }
+      // 3. 取前30只拉K线, 推送到后端
+      const topN = codes.slice(0, 30);
+      const stocks: any[] = [];
+      for (let i = 0; i < topN.length; i += 5) {
+        const batch = topN.slice(i, i + 5);
+        const batchPromises = batch.map(async (s) => {
+          try {
+            const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
+            const res3 = await fetch(url3);
+            const txt3 = await res3.text();
+            const j3 = JSON.parse(txt3.replace(/\.\.\./, '\"'));
+            const klines = (j3?.data?.[s.code]?.qfqday || j3?.data?.[s.code]?.day || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseInt(k[5]) || 0, amount: 0 }));
+            if (klines.length >= 20) stocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          } catch(e) {}
+        });
+        await Promise.all(batchPromises);
+      }
+      setScanStatus('📤 推送 ' + stocks.length + '只到引擎...');
+      // 4. 推送到后端引擎
+      const pushRes = await Network.request({ url: '/api/gem/refresh', method: 'POST', data: { stocks } });
+      const pushData = pushRes.data as any;
+      if (pushData?.code === 200) {
+        setScanStatus('✅ 扫描完成! 规则引擎发现 ' + (pushData?.data?.opportunities?.length || 0) + '只机会');
+        // 立即刷新UI
+        await fetchGemTop();
+      } else {
+        setScanStatus('❌ 推送失败: ' + JSON.stringify(pushData));
+      }
+    } catch (err: any) {
+      setScanStatus('❌ 错误: ' + (err?.message || err));
+    }
+
+  // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchAndPushTencentGemData();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+    const t = setTimeout(() => triggerGemScan(), 3000);
+    return () => clearTimeout(t);
+  }, [triggerGemScan]);
+  }, [fetchGemTop]);
 
   // 搜索建议状态
   const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
@@ -1333,6 +1266,11 @@ const IndexPage = () => {
               })() : '自动刷新中'}
             </Text>
           </View>
+          {scanStatus && (
+            <View className="mt-1">
+              <Text className="block text-xs text-gray-400">{scanStatus}</Text>
+            </View>
+          )}
           {gemLoading && gemData === null ? (
             <View className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (

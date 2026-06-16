@@ -1515,17 +1515,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
     }
     async scanTopGem(force = false) {
-        const ttl = getOpportunityTTL();
-        const cacheStale = !this.cache?.data?.length || this.cache.data.every(s => !s.suggestion);
-        if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl) && !cacheStale) {
+        if (this.cache && this.cache.data?.length) {
+            const cacheStale = this.cache.data.every(s => !s.suggestion);
+            if (cacheStale) {
+                this.logger.log('🔄 缓存数据缺少 suggestion 字段, 触发异步刷新');
+                this.triggerAnalysisPreCache(this.cache.data);
+            }
             this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
-        if (cacheStale)
-            this.logger.log('🔄 缓存数据缺少 suggestion 字段, 强制重新扫描');
-        const data = await this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
-        this.cache = { data, timestamp: Date.now() };
-        return { opportunities: data, timestamp: this.cache.timestamp };
+        this.logger.log('📦 无缓存数据，触发异步扫描...');
+        this.triggerRefresh();
+        return { opportunities: [], timestamp: Date.now() };
     }
     async scanTopMainBoard(force = false) {
         const ttl = getOpportunityTTL();

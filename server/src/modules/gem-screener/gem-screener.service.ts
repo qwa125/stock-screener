@@ -1758,17 +1758,21 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   async scanTopGem(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    const ttl = getOpportunityTTL();
-    // 缓存过期 或 缓存数据没有 suggestion（旧格式迁移）→ 触发重新扫描
-    const cacheStale = !this.cache?.data?.length || this.cache.data.every(s => !s.suggestion);
-    if (!force && this.cache && (Date.now() - this.cache.timestamp < ttl) && !cacheStale) {
+    // Render美国服务器无法访问中国股票API，始终返回缓存数据
+    // 前端浏览器（在中国）通过 POST /api/gem/refresh 推送实时数据更新缓存
+    if (this.cache && this.cache.data?.length) {
+      const cacheStale = this.cache.data.every(s => !s.suggestion);
+      if (cacheStale) {
+        this.logger.log('🔄 缓存数据缺少 suggestion 字段, 触发异步刷新');
+        this.triggerAnalysisPreCache(this.cache.data);
+      }
       this.triggerAnalysisPreCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
-    if (cacheStale) this.logger.log('🔄 缓存数据缺少 suggestion 字段, 强制重新扫描');
-    const data = await this.scanTopFromCandidates(async () => this.fetchGEMCandidates(), 10);
-    this.cache = { data, timestamp: Date.now() };
-    return { opportunities: data, timestamp: this.cache.timestamp };
+    // 完全没有缓存 → 尝试异步扫描，立即返回空
+    this.logger.log('📦 无缓存数据，触发异步扫描...');
+    this.triggerRefresh();
+    return { opportunities: [], timestamp: Date.now() };
   }
 
   /**
