@@ -1,15 +1,47 @@
-name: Wake Up Render
+name: 🔄 Wake Up Render
 
 on:
   schedule:
-    # 交易日 09:00 北京时 (01:00 UTC)，周一到周五
-    - cron: '0 1 * * 1-5'
+    # 每10分钟运行一次，确保Render服务不休眠
+    - cron: '*/10 * * * *'
   workflow_dispatch:  # 支持手动触发
 
 jobs:
   wake-up:
+    name: Ping Render Health Endpoint
     runs-on: ubuntu-latest
     steps:
-      - name: Wake Render service
+      - name: ⏰ 检查当前北京时间
+        id: beijing_time
         run: |
-          curl -s --max-time 30 https://stock-screener-ext7.onrender.com > /dev/null 2>&1 && echo "✅ 唤醒成功" || echo "⚠️ 唤醒请求已发送"
+          HOUR=$(TZ='Asia/Shanghai' date +%H)
+          MINUTE=$(TZ='Asia/Shanghai' date +%M)
+          DOW=$(TZ='Asia/Shanghai' date +%u)  # 1=周一, 7=周日
+          echo "hour=$HOUR" >> $GITHUB_OUTPUT
+          echo "minute=$MINUTE" >> $GITHUB_OUTPUT
+          echo "dow=$DOW" >> $GITHUB_OUTPUT
+          echo "🕐 北京时间: $HOUR:$MINUTE 星期$DOW"
+
+      - name: 🌐 Ping Render 服务
+        id: ping
+        run: |
+          echo "⏳ 正在唤醒 Render..."
+          START_TIME=$(date +%s%N)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            "https://stock-screener.onrender.com/api/health")
+          END_TIME=$(date +%s%N)
+          DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          echo "duration_ms=$DURATION_MS" >> $GITHUB_OUTPUT
+          echo "✅ HTTP $HTTP_CODE ($DURATION_MS ms)"
+
+      - name: 📊 是否在交易时段
+        if: steps.beijing_time.outputs.hour >= 9 && steps.beijing_time.outputs.hour < 15 && steps.beijing_time.outputs.dow < 6
+        run: |
+          echo "📈 当前在交易时段 (北上广深交易日 9:00-15:00)，服务正常"
+          echo "🌡️ 冷启动耗时: ${{ steps.ping.outputs.duration_ms }}ms"
+
+      - name: 📊 非交易时段
+        if: steps.beijing_time.outputs.hour < 9 || steps.beijing_time.outputs.hour >= 15 || steps.beijing_time.outputs.dow >= 6
+        run: |
+          echo "💤 当前非交易时段，唤醒保持服务在线即可"
