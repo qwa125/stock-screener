@@ -715,6 +715,45 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return finalResults;
   }
 
+  /**
+   * 生成初始缓存种子文件到 server/assets/，供Render首次部署使用
+   */
+  async generateSeedCache() {
+    const assetDir = join(__dirname, '..', '..', '..', 'assets');
+    this.logger.log(`📦 生成种子缓存到 ${assetDir}`);
+
+    try {
+      // 确保目录存在
+      await fs.mkdir(assetDir, { recursive: true });
+
+      // 写入GEM缓存
+      if (this.cache && this.cache.data?.length > 0) {
+        const gemPath = join(assetDir, 'gem-cache.json');
+        await fs.writeFile(gemPath, JSON.stringify(this.cache, null, 2));
+        this.logger.log(`  ✅ GEM缓存: ${this.cache.data.length} 只`);
+      }
+
+      // 写入主板缓存
+      if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
+        const mainPath = join(assetDir, 'main-board-cache.json');
+        await fs.writeFile(mainPath, JSON.stringify(this.mainBoardCache, null, 2));
+        this.logger.log(`  ✅ 主板缓存: ${this.mainBoardCache.data.length} 只`);
+      }
+
+      // 写入板块缓存
+      if (this.sectorCache && this.sectorCache.data?.length > 0) {
+        const sectorPath = join(assetDir, 'sector-cache.json');
+        await fs.writeFile(sectorPath, JSON.stringify(this.sectorCache, null, 2));
+        this.logger.log(`  ✅ 板块缓存: ${this.sectorCache.data.length} 只`);
+      }
+
+      return { success: true, files: ['gem-cache.json', 'main-board-cache.json', 'sector-cache.json'] };
+    } catch (err) {
+      this.logger.error(`❌ 种子缓存生成失败: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 东方财富主力资金净流入 (f62)
   // ---------------------------------------------------------------------------

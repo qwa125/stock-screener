@@ -81,6 +81,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const result = await this.gemScreener.getIndustrySectorTop10();
         return { code: 200, msg: 'success', data: result };
     }
+    async seedCache() {
+        const result = await this.gemScreener.generateSeedCache();
+        return { code: 200, msg: 'success', data: result };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -168,6 +172,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getIndustrySectorsTop10", null);
+__decorate([
+    (0, common_1.Post)('seed-cache'),
+    (0, common_1.HttpCode)(200),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "seedCache", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])

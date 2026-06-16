@@ -109,4 +109,15 @@ export class GemScreenerController {
     const result = await this.gemScreener.getIndustrySectorTop10();
     return { code: 200, msg: 'success', data: result };
   }
+
+  /**
+   * 强制全量扫描并生成初始缓存种子文件
+   * POST /api/gem/seed-cache
+   */
+  @Post('seed-cache')
+  @HttpCode(200)
+  async seedCache() {
+    const result = await this.gemScreener.generateSeedCache();
+    return { code: 200, msg: 'success', data: result };
+  }
 }

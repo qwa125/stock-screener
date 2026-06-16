@@ -583,6 +583,33 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`✅ 前端板块数据推送完成, 累加合并后 ${finalResults.length} 只`);
         return finalResults;
     }
+    async generateSeedCache() {
+        const assetDir = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets');
+        this.logger.log(`📦 生成种子缓存到 ${assetDir}`);
+        try {
+            await fs_1.promises.mkdir(assetDir, { recursive: true });
+            if (this.cache && this.cache.data?.length > 0) {
+                const gemPath = (0, node_path_1.join)(assetDir, 'gem-cache.json');
+                await fs_1.promises.writeFile(gemPath, JSON.stringify(this.cache, null, 2));
+                this.logger.log(`  ✅ GEM缓存: ${this.cache.data.length} 只`);
+            }
+            if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
+                const mainPath = (0, node_path_1.join)(assetDir, 'main-board-cache.json');
+                await fs_1.promises.writeFile(mainPath, JSON.stringify(this.mainBoardCache, null, 2));
+                this.logger.log(`  ✅ 主板缓存: ${this.mainBoardCache.data.length} 只`);
+            }
+            if (this.sectorCache && this.sectorCache.data?.length > 0) {
+                const sectorPath = (0, node_path_1.join)(assetDir, 'sector-cache.json');
+                await fs_1.promises.writeFile(sectorPath, JSON.stringify(this.sectorCache, null, 2));
+                this.logger.log(`  ✅ 板块缓存: ${this.sectorCache.data.length} 只`);
+            }
+            return { success: true, files: ['gem-cache.json', 'main-board-cache.json', 'sector-cache.json'] };
+        }
+        catch (err) {
+            this.logger.error(`❌ 种子缓存生成失败: ${err.message}`);
+            return { success: false, error: err.message };
+        }
+    }
     async enrichWithMainForceFlow(results) {
         if (results.length === 0)
             return;
