@@ -1,1 +1,319 @@
-'use strict';function _0xe2db(){const _0x773fc4=['1065432KZqFmd','gPHsn','BzYgR','14rUtjbl','VOL','4736800kSGwwF','354960RryEuq','FILTER','XeZEu','EMA','hTBRm','164740iKRjpR','LLV','HHV','BaUhh','uzOyt','_volume','_length','_open','MIN_V','VqjbJ','XwlyH','RONME','KZbwf','VbmBA','max','__esModule','keaUk','ZSxmN','KxWcY','LAST_N','297hKGdOA','1297470iXpNeM','MAX_V','min','ABS','AtXDq','gNNEo','HMJCP','15060331yDzQzt','bfQTx','open','3jiTTLn','Xthvy','STD','LOW','mEnRR','_close','dofWA','supgQ','sQOkk','HTZgo','1819516isOaCo','defineProperty','pIjMD','HIGH','dXQzV','BbfTp','_low','HHVBARS','BARSCOUNT','_amount','_high','length','OGWGe','volume','1Pqpswc','Ujdqf','map','ZzSGx','pjoeK','wLWLw','AjOas','OPEN','fill','FormulaEngine','NcYNC','close','eMEqn','SUM','HvzML','qLyHp'];_0xe2db=function(){return _0x773fc4;};return _0xe2db();}const _0x3bd29d=_0x3097;(function(_0x1956ba,_0x427c8e){const _0x49537f=_0x3097,_0xf5ed4f=_0x1956ba();while(!![]){try{const _0x1916d9=parseInt(_0x49537f(0xef))/0x1*(parseInt(_0x49537f(0xff))/0x2)+parseInt(_0x49537f(0x129))/0x3*(parseInt(_0x49537f(0x133))/0x4)+parseInt(_0x49537f(0x104))/0x5+parseInt(_0x49537f(0x11f))/0x6*(parseInt(_0x49537f(0x102))/0x7)+parseInt(_0x49537f(0x105))/0x8+parseInt(_0x49537f(0x11e))/0x9*(-parseInt(_0x49537f(0x10a))/0xa)+-parseInt(_0x49537f(0x126))/0xb;if(_0x1916d9===_0x427c8e)break;else _0xf5ed4f['push'](_0xf5ed4f['shift']());}catch(_0x5960fa){_0xf5ed4f['push'](_0xf5ed4f['shift']());}}}(_0xe2db,0x79d6c));function _0x3097(_0x461af2,_0x26edca){_0x461af2=_0x461af2-0xe4;const _0xe2dbb4=_0xe2db();let _0x3097e4=_0xe2dbb4[_0x461af2];return _0x3097e4;}Object[_0x3bd29d(0x134)](exports,_0x3bd29d(0x119),{'value':!![]}),exports[_0x3bd29d(0xf8)]=void 0x0;class FormulaEngine{constructor(_0x5d007d){const _0x532a3c=_0x3bd29d,_0x27ae96={'gPHsn':'0|6|9|11|1|5|7|2|10|13|12|8|3|4'},_0x242064=_0x27ae96[_0x532a3c(0x100)]['split']('|');let _0x3980b3=0x0;while(!![]){switch(_0x242064[_0x3980b3++]){case'0':this['_open']=[];continue;case'1':this[_0x532a3c(0x10f)]=[];continue;case'2':this[_0x532a3c(0x111)]=_0x5d007d[_0x532a3c(0x128)];continue;case'3':this['_amount']=_0x5d007d['amount'];continue;case'4':this[_0x532a3c(0x110)]=_0x5d007d[_0x532a3c(0xfa)][_0x532a3c(0xec)];continue;case'5':this['_amount']=[];continue;case'6':this['_close']=[];continue;case'7':this[_0x532a3c(0x110)]=0x0;continue;case'8':this[_0x532a3c(0x10f)]=_0x5d007d[_0x532a3c(0xee)];continue;case'9':this['_high']=[];continue;case'10':this[_0x532a3c(0x12e)]=_0x5d007d[_0x532a3c(0xfa)];continue;case'11':this[_0x532a3c(0xe7)]=[];continue;case'12':this['_low']=_0x5d007d['low'];continue;case'13':this['_high']=_0x5d007d['high'];continue;}break;}}get[_0x3bd29d(0xec)](){const _0x339d64=_0x3bd29d;return this[_0x339d64(0x110)];}get[_0x3bd29d(0xf6)](){const _0x13cb57=_0x3bd29d;return this[_0x13cb57(0x111)];}get['CLOSE'](){const _0x7d4700=_0x3bd29d;return this[_0x7d4700(0x12e)];}get[_0x3bd29d(0xe4)](){const _0x24be15=_0x3bd29d;return this[_0x24be15(0xeb)];}get[_0x3bd29d(0x12c)](){return this['_low'];}get[_0x3bd29d(0x103)](){const _0x2da7a0=_0x3bd29d;return this[_0x2da7a0(0x10f)];}get['AMOUNT'](){const _0x21474c=_0x3bd29d;return this[_0x21474c(0xea)];}['MA'](_0xef9631,_0x5070a4){const _0x1625cf=_0x3bd29d,_0x269041={'RONME':function(_0x499dd2,_0x1a344a){return _0x499dd2<_0x1a344a;},'XwlyH':function(_0x180c0f,_0x4775c5){return _0x180c0f/_0x4775c5;},'ZzSGx':function(_0x27dfc3,_0x594b1c){return _0x27dfc3-_0x594b1c;},'SWDUX':function(_0x14b9f7,_0x3b8fb2){return _0x14b9f7<=_0x3b8fb2;},'jiMvs':function(_0x290dfd,_0x210faa){return _0x290dfd/_0x210faa;}},_0x26e15d=new Array(this['_length'])[_0x1625cf(0xf7)](0x0);for(let _0x3292ef=0x0;_0x269041[_0x1625cf(0x115)](_0x3292ef,this[_0x1625cf(0x110)]);_0x3292ef++){if(_0x269041['RONME'](_0x3292ef,_0x5070a4-0x1)){let _0x195083=0x0,_0x31ea83=0x0;for(let _0x477da7=0x0;_0x477da7<=_0x3292ef;_0x477da7++){_0x195083+=_0xef9631[_0x477da7],_0x31ea83++;}_0x26e15d[_0x3292ef]=_0x269041[_0x1625cf(0x114)](_0x195083,_0x31ea83);}else{let _0x85ec31=0x0;for(let _0x27043d=_0x269041[_0x1625cf(0xf2)](_0x3292ef,_0x5070a4)+0x1;_0x269041['SWDUX'](_0x27043d,_0x3292ef);_0x27043d++){_0x85ec31+=_0xef9631[_0x27043d];}_0x26e15d[_0x3292ef]=_0x269041['jiMvs'](_0x85ec31,_0x5070a4);}}return _0x26e15d;}[_0x3bd29d(0x108)](_0x37be41,_0x2f76e4){const _0x2f497e=_0x3bd29d,_0x10a0b4={'yBYmo':function(_0x13092a,_0x131923){return _0x13092a===_0x131923;},'AjOas':function(_0x4f357a,_0x31b1a8){return _0x4f357a-_0x31b1a8;}},_0xf708f4=new Array(this['_length'])['fill'](0x0);if(_0x10a0b4['yBYmo'](this['_length'],0x0))return _0xf708f4;const _0x27273f=0x2/(_0x2f76e4+0x1);_0xf708f4[0x0]=_0x37be41[0x0];for(let _0x76f920=0x1;_0x76f920<this[_0x2f497e(0x110)];_0x76f920++){_0xf708f4[_0x76f920]=_0x27273f*_0x37be41[_0x76f920]+_0x10a0b4[_0x2f497e(0xf5)](0x1,_0x27273f)*_0xf708f4[_0x10a0b4[_0x2f497e(0xf5)](_0x76f920,0x1)];}return _0xf708f4;}[_0x3bd29d(0x10b)](_0x41de13,_0x1fe628){const _0x413166=_0x3bd29d,_0x1f42c9={'dSrgZ':function(_0x3df13b,_0x1d0fed){return _0x3df13b<_0x1d0fed;},'keaUk':function(_0x30c114,_0x47ef1e){return _0x30c114-_0x47ef1e;},'JwIpY':function(_0x4e5e0f,_0x5308db){return _0x4e5e0f-_0x5308db;},'dofWA':function(_0x3879a4,_0x3dedc9){return _0x3879a4<=_0x3dedc9;}},_0x46da55=new Array(this['_length'])['fill'](0x0);for(let _0x43c077=0x0;_0x1f42c9['dSrgZ'](_0x43c077,this[_0x413166(0x110)]);_0x43c077++){if(_0x43c077<_0x1f42c9[_0x413166(0x11a)](_0x1fe628,0x1)){let _0xe33c7=Infinity;for(let _0xcae808=0x0;_0xcae808<=_0x43c077;_0xcae808++){if(_0x1f42c9['dSrgZ'](_0x41de13[_0xcae808],_0xe33c7))_0xe33c7=_0x41de13[_0xcae808];}_0x46da55[_0x43c077]=_0xe33c7;}else{let _0x4c3af0=Infinity;for(let _0x5321e2=_0x1f42c9['JwIpY'](_0x43c077,_0x1fe628)+0x1;_0x1f42c9[_0x413166(0x12f)](_0x5321e2,_0x43c077);_0x5321e2++){if(_0x41de13[_0x5321e2]<_0x4c3af0)_0x4c3af0=_0x41de13[_0x5321e2];}_0x46da55[_0x43c077]=_0x4c3af0;}}return _0x46da55;}[_0x3bd29d(0x10c)](_0x50c080,_0x552dd1){const _0x94cb38=_0x3bd29d,_0x183db4={'pjoeK':function(_0x1c9d0c,_0x33e769){return _0x1c9d0c<_0x33e769;},'XxXib':function(_0x5ae7f8,_0x36e45e){return _0x5ae7f8-_0x36e45e;},'sQOkk':function(_0xef2664,_0x538a07){return _0xef2664>_0x538a07;},'EAgRb':function(_0x1e6df6,_0x21fd77){return _0x1e6df6+_0x21fd77;},'elPRz':function(_0x3a70aa,_0xa3abdf){return _0x3a70aa-_0xa3abdf;}},_0x17841f=new Array(this[_0x94cb38(0x110)])['fill'](0x0);for(let _0x76ca9=0x0;_0x183db4[_0x94cb38(0xf3)](_0x76ca9,this['_length']);_0x76ca9++){if(_0x76ca9<_0x183db4['XxXib'](_0x552dd1,0x1)){let _0x163843=-Infinity;for(let _0xc6566b=0x0;_0xc6566b<=_0x76ca9;_0xc6566b++){if(_0x183db4[_0x94cb38(0x131)](_0x50c080[_0xc6566b],_0x163843))_0x163843=_0x50c080[_0xc6566b];}_0x17841f[_0x76ca9]=_0x163843;}else{let _0x586f7a=-Infinity;for(let _0x40251d=_0x183db4['EAgRb'](_0x183db4['elPRz'](_0x76ca9,_0x552dd1),0x1);_0x40251d<=_0x76ca9;_0x40251d++){if(_0x183db4['sQOkk'](_0x50c080[_0x40251d],_0x586f7a))_0x586f7a=_0x50c080[_0x40251d];}_0x17841f[_0x76ca9]=_0x586f7a;}}return _0x17841f;}['REF'](_0x2d6460,_0x507691){const _0x614c2b=_0x3bd29d,_0x51b7af={'NVqJL':function(_0x11f397,_0x24553e){return _0x11f397<_0x24553e;},'VbmBA':function(_0x4003b9,_0x466c2f){return _0x4003b9-_0x466c2f;},'bfQTx':function(_0x3884c6,_0x2275c8){return _0x3884c6>=_0x2275c8;}},_0x3842ed=new Array(this['_length'])[_0x614c2b(0xf7)](0x0);for(let _0xf47415=0x0;_0x51b7af['NVqJL'](_0xf47415,this[_0x614c2b(0x110)]);_0xf47415++){const _0x1c4f84=_0x51b7af[_0x614c2b(0x117)](_0xf47415,_0x507691);_0x3842ed[_0xf47415]=_0x51b7af[_0x614c2b(0x127)](_0x1c4f84,0x0)?_0x2d6460[_0x1c4f84]:_0x2d6460[0x0];}return _0x3842ed;}['CROSS'](_0x1f1553,_0x41e7e5){const _0x10fe8b=_0x3bd29d,_0x58dacf={'qLyHp':function(_0x53a1bd,_0x2587b8){return _0x53a1bd<_0x2587b8;}},_0x36f6dd=new Array(this[_0x10fe8b(0x110)])['fill'](![]);for(let _0x350efb=0x1;_0x58dacf[_0x10fe8b(0xfe)](_0x350efb,this['_length']);_0x350efb++){_0x36f6dd[_0x350efb]=_0x1f1553[_0x350efb]>_0x41e7e5[_0x350efb]&&_0x1f1553[_0x350efb-0x1]<=_0x41e7e5[_0x350efb-0x1];}return _0x36f6dd;}['COUNT'](_0x1c2219,_0x3cf74c){const _0x4cfcb2=_0x3bd29d,_0x4134ad={'CeoJF':function(_0x5520b5,_0xbbc43a){return _0x5520b5<_0xbbc43a;},'fErRZ':function(_0x22e5a9,_0x2d1638){return _0x22e5a9+_0x2d1638;},'gNNEo':function(_0x1f41b3,_0x552cec){return _0x1f41b3-_0x552cec;}},_0x49a965=new Array(this['_length'])['fill'](0x0);for(let _0xa4e291=0x0;_0x4134ad['CeoJF'](_0xa4e291,this['_length']);_0xa4e291++){let _0x5a3bc4=0x0;const _0xfdd41f=Math[_0x4cfcb2(0x118)](0x0,_0x4134ad['fErRZ'](_0x4134ad[_0x4cfcb2(0x124)](_0xa4e291,_0x3cf74c),0x1));for(let _0xcce1d7=_0xfdd41f;_0xcce1d7<=_0xa4e291;_0xcce1d7++){if(_0x1c2219[_0xcce1d7])_0x5a3bc4++;}_0x49a965[_0xa4e291]=_0x5a3bc4;}return _0x49a965;}['BARSLAST'](_0x5089d7){const _0x2b427b=_0x3bd29d,_0x3e10fb={'BaUhh':function(_0x44234c,_0x59da03){return _0x44234c<_0x59da03;}},_0x1a5d74=new Array(this[_0x2b427b(0x110)])[_0x2b427b(0xf7)](0x0);let _0x2c101a=0x0;for(let _0x2d14c2=0x0;_0x3e10fb[_0x2b427b(0x10d)](_0x2d14c2,this['_length']);_0x2d14c2++){_0x5089d7[_0x2d14c2]?(_0x1a5d74[_0x2d14c2]=0x0,_0x2c101a=_0x2d14c2):_0x1a5d74[_0x2d14c2]=_0x2d14c2-_0x2c101a;}return _0x1a5d74;}[_0x3bd29d(0xe9)](){const _0x27ef6e=_0x3bd29d,_0x11edfb={'AtXDq':function(_0x3988bd,_0x191a04){return _0x3988bd+_0x191a04;}},_0xe64832=new Array(this['_length'])['fill'](0x0);for(let _0x2c1b4f=0x0;_0x2c1b4f<this['_length'];_0x2c1b4f++){_0xe64832[_0x2c1b4f]=_0x11edfb[_0x27ef6e(0x123)](_0x2c1b4f,0x1);}return _0xe64832;}[_0x3bd29d(0x12b)](_0x19ac8c,_0x1be00b){const _0xf0202=_0x3bd29d,_0x2fe36d={'dyODp':function(_0x3eab3b,_0x5bb3a6){return _0x3eab3b<_0x5bb3a6;},'Xthvy':function(_0x942e83,_0x2a7cb7){return _0x942e83-_0x2a7cb7;},'NcYNC':function(_0x4db1d1,_0x495920){return _0x4db1d1<=_0x495920;},'KxWcY':function(_0x41c441,_0x42762b){return _0x41c441/_0x42762b;},'pIjMD':function(_0x274a3,_0x3d04f1){return _0x274a3**_0x3d04f1;},'dXQzV':function(_0x1fd6fe,_0x19feb5){return _0x1fd6fe+_0x19feb5;},'WimmO':function(_0x1a81e9,_0x176042){return _0x1a81e9-_0x176042;},'dpYzv':function(_0x29fda5,_0x2675bb){return _0x29fda5<=_0x2675bb;},'HTZgo':function(_0x2f3095,_0x5b54b3){return _0x2f3095/_0x5b54b3;},'uFOMD':function(_0x12d7e0,_0x298e2e){return _0x12d7e0-_0x298e2e;},'HMJCP':function(_0x32f4b2,_0x734d43){return _0x32f4b2<=_0x734d43;},'KZbwf':function(_0x3afcef,_0x50f46b){return _0x3afcef-_0x50f46b;},'BzYgR':function(_0x70973c,_0x4272b7){return _0x70973c/_0x4272b7;}},_0x9363ea=new Array(this['_length'])['fill'](0x0);for(let _0x1ef422=0x0;_0x1ef422<this['_length'];_0x1ef422++){if(_0x2fe36d['dyODp'](_0x1ef422,_0x2fe36d['Xthvy'](_0x1be00b,0x1))){let _0x36c854=0x0,_0xa6c318=0x0;for(let _0x5c642b=0x0;_0x2fe36d[_0xf0202(0xf9)](_0x5c642b,_0x1ef422);_0x5c642b++){_0x36c854+=_0x19ac8c[_0x5c642b],_0xa6c318++;}const _0x5f1187=_0x2fe36d[_0xf0202(0x11c)](_0x36c854,_0xa6c318);let _0x1a37f6=0x0;for(let _0xb6a3ec=0x0;_0xb6a3ec<=_0x1ef422;_0xb6a3ec++){_0x1a37f6+=_0x2fe36d[_0xf0202(0x135)](_0x2fe36d[_0xf0202(0x12a)](_0x19ac8c[_0xb6a3ec],_0x5f1187),0x2);}_0x9363ea[_0x1ef422]=Math['sqrt'](_0x2fe36d[_0xf0202(0x11c)](_0x1a37f6,_0xa6c318));}else{let _0x22c3bb=0x0;for(let _0x321109=_0x2fe36d[_0xf0202(0xe5)](_0x2fe36d['WimmO'](_0x1ef422,_0x1be00b),0x1);_0x2fe36d['dpYzv'](_0x321109,_0x1ef422);_0x321109++){_0x22c3bb+=_0x19ac8c[_0x321109];}const _0x1df683=_0x2fe36d[_0xf0202(0x132)](_0x22c3bb,_0x1be00b);let _0x1719e4=0x0;for(let _0x58dd5a=_0x2fe36d['uFOMD'](_0x1ef422,_0x1be00b)+0x1;_0x2fe36d[_0xf0202(0x125)](_0x58dd5a,_0x1ef422);_0x58dd5a++){_0x1719e4+=_0x2fe36d[_0xf0202(0x116)](_0x19ac8c[_0x58dd5a],_0x1df683)**0x2;}_0x9363ea[_0x1ef422]=Math['sqrt'](_0x2fe36d[_0xf0202(0x101)](_0x1719e4,_0x1be00b));}}return _0x9363ea;}[_0x3bd29d(0xfc)](_0x24397c,_0x2b8c14){const _0xd2dcda=_0x3bd29d,_0x2a9a27={'RhMNJ':function(_0x7dfae,_0x2ae955){return _0x7dfae<_0x2ae955;},'ZSxmN':function(_0x45f378,_0x29d1d8){return _0x45f378+_0x29d1d8;},'eMEqn':function(_0x149aee,_0x2e506a){return _0x149aee-_0x2e506a;}},_0x75760a=new Array(this['_length'])['fill'](0x0);for(let _0x5ca11d=0x0;_0x2a9a27['RhMNJ'](_0x5ca11d,this['_length']);_0x5ca11d++){let _0x365ba1=0x0;const _0x16bdcb=Math[_0xd2dcda(0x118)](0x0,_0x2a9a27[_0xd2dcda(0x11b)](_0x2a9a27[_0xd2dcda(0xfb)](_0x5ca11d,_0x2b8c14),0x1));for(let _0x449507=_0x16bdcb;_0x449507<=_0x5ca11d;_0x449507++){_0x365ba1+=_0x24397c[_0x449507];}_0x75760a[_0x5ca11d]=_0x365ba1;}return _0x75760a;}['IF'](_0x1fad77,_0x2f54a0,_0x1c53de){const _0x2dc4d7=_0x3bd29d,_0x44fb3a=new Array(this[_0x2dc4d7(0x110)])[_0x2dc4d7(0xf7)](0x0);for(let _0x578aab=0x0;_0x578aab<this['_length'];_0x578aab++){_0x44fb3a[_0x578aab]=_0x1fad77[_0x578aab]?_0x2f54a0[_0x578aab]:_0x1c53de[_0x578aab];}return _0x44fb3a;}['MAX'](_0x52edd1,_0x126111){const _0x414522=_0x3bd29d,_0x44790e={'RWOAd':function(_0x60b16,_0x5a6cd8){return _0x60b16<_0x5a6cd8;}},_0x36919a=new Array(this[_0x414522(0x110)])['fill'](0x0);for(let _0xad0ba2=0x0;_0x44790e['RWOAd'](_0xad0ba2,this[_0x414522(0x110)]);_0xad0ba2++){_0x36919a[_0xad0ba2]=Math[_0x414522(0x118)](_0x52edd1[_0xad0ba2],_0x126111[_0xad0ba2]);}return _0x36919a;}[_0x3bd29d(0x120)](_0x82d5ec,_0x182886){const _0x5b4e95=_0x3bd29d;return Math[_0x5b4e95(0x118)](_0x82d5ec,_0x182886);}['MIN'](_0x5e959d,_0x3277c6){const _0x2d5d69=_0x3bd29d,_0x460ede=new Array(this['_length'])['fill'](0x0);for(let _0x1546ad=0x0;_0x1546ad<this[_0x2d5d69(0x110)];_0x1546ad++){_0x460ede[_0x1546ad]=Math[_0x2d5d69(0x121)](_0x5e959d[_0x1546ad],_0x3277c6[_0x1546ad]);}return _0x460ede;}[_0x3bd29d(0x112)](_0x421b17,_0x3c348b){return Math['min'](_0x421b17,_0x3c348b);}[_0x3bd29d(0x122)](_0x503664){const _0x13bf14=_0x3bd29d;return _0x503664[_0x13bf14(0xf1)](_0x5f0624=>Math['abs'](_0x5f0624));}['LAST'](_0x298dba){const _0x2262c4={'BHcUm':function(_0x35522c,_0x2df245){return _0x35522c-_0x2df245;}};return _0x298dba[_0x2262c4['BHcUm'](_0x298dba['length'],0x1)];}[_0x3bd29d(0x11d)](_0x4c0d25,_0x1d34ad){const _0x236091=_0x3bd29d,_0x5815e3={'MnQKz':function(_0x14e50a,_0x18c7e7){return _0x14e50a-_0x18c7e7;}},_0x176139=_0x5815e3['MnQKz'](_0x4c0d25[_0x236091(0xec)],0x1)-_0x1d34ad;return _0x176139>=0x0?_0x4c0d25[_0x176139]:_0x4c0d25[0x0];}[_0x3bd29d(0x106)](_0x19bd37,_0xa9da7e){const _0x3bbb82=_0x3bd29d,_0x26f8b3={'OGWGe':function(_0x347f7a,_0x29fca6){return _0x347f7a-_0x29fca6;},'HvzML':function(_0x4f8d1d,_0x4c891d){return _0x4f8d1d<_0x4c891d;},'Ujdqf':function(_0x13a418,_0x4e1a78){return _0x13a418>=_0x4e1a78;}},_0x2e0bd4=new Array(this[_0x3bbb82(0x110)])['fill'](![]);let _0x14a3fe=_0x26f8b3[_0x3bbb82(0xed)](-_0xa9da7e,0x1);for(let _0x4883bc=0x0;_0x26f8b3[_0x3bbb82(0xfd)](_0x4883bc,this[_0x3bbb82(0x110)]);_0x4883bc++){_0x19bd37[_0x4883bc]&&_0x26f8b3[_0x3bbb82(0xf0)](_0x4883bc-_0x14a3fe,_0xa9da7e)&&(_0x2e0bd4[_0x4883bc]=!![],_0x14a3fe=_0x4883bc);}return _0x2e0bd4;}[_0x3bd29d(0xe8)](_0x545258,_0x44e473){const _0x275f94=_0x3bd29d,_0x45383d={'supgQ':function(_0x46781a,_0x3c897a){return _0x46781a<_0x3c897a;},'VqjbJ':function(_0x3eaedd,_0x6e0ef){return _0x3eaedd-_0x6e0ef;}},_0x11d1ad=new Array(this['_length'])[_0x275f94(0xf7)](0x0);for(let _0x2a0ba6=0x0;_0x45383d[_0x275f94(0x130)](_0x2a0ba6,this['_length']);_0x2a0ba6++){const _0x3dd3e8=Math['max'](0x0,_0x2a0ba6-_0x44e473+0x1);let _0x3f8414=-Infinity,_0x4efb86=0x0;for(let _0x13e380=_0x3dd3e8;_0x13e380<=_0x2a0ba6;_0x13e380++){_0x545258[_0x13e380]>=_0x3f8414&&(_0x3f8414=_0x545258[_0x13e380],_0x4efb86=_0x13e380);}_0x11d1ad[_0x2a0ba6]=_0x45383d[_0x275f94(0x113)](_0x2a0ba6,_0x4efb86);}return _0x11d1ad;}['LLVBARS'](_0x347ff0,_0x492e1a){const _0x33d0b0=_0x3bd29d,_0x17ac1b={'uzOyt':function(_0x8efbf8,_0x379cea){return _0x8efbf8+_0x379cea;},'IDouh':function(_0x42ae76,_0x524676){return _0x42ae76<=_0x524676;}},_0x3c8c08=new Array(this['_length'])['fill'](0x0);for(let _0x4e26a7=0x0;_0x4e26a7<this[_0x33d0b0(0x110)];_0x4e26a7++){const _0x18b87c=Math[_0x33d0b0(0x118)](0x0,_0x17ac1b[_0x33d0b0(0x10e)](_0x4e26a7-_0x492e1a,0x1));let _0x49b3f7=Infinity,_0x5c6ff0=0x0;for(let _0x4be526=_0x18b87c;_0x17ac1b['IDouh'](_0x4be526,_0x4e26a7);_0x4be526++){_0x347ff0[_0x4be526]<=_0x49b3f7&&(_0x49b3f7=_0x347ff0[_0x4be526],_0x5c6ff0=_0x4be526);}_0x3c8c08[_0x4e26a7]=_0x4e26a7-_0x5c6ff0;}return _0x3c8c08;}['XMA'](_0x3cac9e,_0x1f23e1){const _0x1e94a3=_0x3bd29d,_0x224fed={'wLWLw':function(_0x47b295,_0x24ef73){return _0x47b295===_0x24ef73;},'XeZEu':function(_0xa48f9c,_0x9722f0){return _0xa48f9c<=_0x9722f0;},'noNgF':function(_0x3a2d18,_0x5d4ff2){return _0x3a2d18/_0x5d4ff2;},'GDoSQ':function(_0xc6c6d9,_0x54db1c){return _0xc6c6d9-_0x54db1c;},'hTBRm':function(_0x3bd287,_0x2fa279){return _0x3bd287+_0x2fa279;},'NZCBQ':function(_0x163fa8,_0x2fa3c7){return _0x163fa8-_0x2fa3c7;}},_0xbf755b=new Array(this['_length'])[_0x1e94a3(0xf7)](0x0);if(_0x224fed[_0x1e94a3(0xf4)](this['_length'],0x0)||_0x224fed[_0x1e94a3(0x107)](_0x1f23e1,0x1))return _0x3cac9e['slice']();const _0x10fce5=Math['floor'](_0x224fed['noNgF'](_0x1f23e1-0x1,0x2));for(let _0x4419b5=0x0;_0x4419b5<this[_0x1e94a3(0x110)];_0x4419b5++){const _0x596f98=Math['max'](0x0,_0x224fed['GDoSQ'](_0x4419b5,_0x10fce5)),_0x18420c=Math[_0x1e94a3(0x121)](this[_0x1e94a3(0x110)]-0x1,_0x224fed[_0x1e94a3(0x109)](_0x4419b5,_0x10fce5));let _0x41d7a7=0x0;for(let _0x4d0017=_0x596f98;_0x4d0017<=_0x18420c;_0x4d0017++){_0x41d7a7+=_0x3cac9e[_0x4d0017];}_0xbf755b[_0x4419b5]=_0x41d7a7/(_0x224fed['NZCBQ'](_0x18420c,_0x596f98)+0x1);}return _0xbf755b;}['SMA'](_0x28714c,_0x3de98b,_0x20144e){const _0x4a3203=_0x3bd29d,_0x50b865={'mEnRR':function(_0x493897,_0x5ed8b8){return _0x493897+_0x5ed8b8;},'wQbqL':function(_0x10b6e8,_0x3b5fd2){return _0x10b6e8*_0x3b5fd2;},'DcpfJ':function(_0x3b35ee,_0x3b0a76){return _0x3b35ee*_0x3b0a76;},'BbfTp':function(_0x369b1a,_0x5a2340){return _0x369b1a-_0x5a2340;}},_0x1cbeed=new Array(this['_length'])[_0x4a3203(0xf7)](0x0);if(this['_length']===0x0)return _0x1cbeed;_0x1cbeed[0x0]=_0x28714c[0x0];for(let _0x5ae63b=0x1;_0x5ae63b<this['_length'];_0x5ae63b++){_0x1cbeed[_0x5ae63b]=_0x50b865[_0x4a3203(0x12d)](_0x50b865['wQbqL'](_0x20144e,_0x28714c[_0x5ae63b]),_0x50b865['DcpfJ'](_0x50b865[_0x4a3203(0xe6)](_0x3de98b,_0x20144e),_0x1cbeed[_0x5ae63b-0x1]))/_0x3de98b;}return _0x1cbeed;}}exports[_0x3bd29d(0xf8)]=FormulaEngine;
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FormulaEngine = void 0;
+class FormulaEngine {
+    constructor(data) {
+        this._open = [];
+        this._close = [];
+        this._high = [];
+        this._low = [];
+        this._volume = [];
+        this._amount = [];
+        this._length = 0;
+        this._open = data.open;
+        this._close = data.close;
+        this._high = data.high;
+        this._low = data.low;
+        this._volume = data.volume;
+        this._amount = data.amount;
+        this._length = data.close.length;
+    }
+    get length() {
+        return this._length;
+    }
+    get OPEN() {
+        return this._open;
+    }
+    get CLOSE() {
+        return this._close;
+    }
+    get HIGH() {
+        return this._high;
+    }
+    get LOW() {
+        return this._low;
+    }
+    get VOL() {
+        return this._volume;
+    }
+    get AMOUNT() {
+        return this._amount;
+    }
+    MA(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            if (i < n - 1) {
+                let sum = 0;
+                let count = 0;
+                for (let j = 0; j <= i; j++) {
+                    sum += data[j];
+                    count++;
+                }
+                result[i] = sum / count;
+            }
+            else {
+                let sum = 0;
+                for (let j = i - n + 1; j <= i; j++) {
+                    sum += data[j];
+                }
+                result[i] = sum / n;
+            }
+        }
+        return result;
+    }
+    EMA(data, n) {
+        const result = new Array(this._length).fill(0);
+        if (this._length === 0)
+            return result;
+        const alpha = 2 / (n + 1);
+        result[0] = data[0];
+        for (let i = 1; i < this._length; i++) {
+            result[i] = alpha * data[i] + (1 - alpha) * result[i - 1];
+        }
+        return result;
+    }
+    LLV(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            if (i < n - 1) {
+                let minVal = Infinity;
+                for (let j = 0; j <= i; j++) {
+                    if (data[j] < minVal)
+                        minVal = data[j];
+                }
+                result[i] = minVal;
+            }
+            else {
+                let minVal = Infinity;
+                for (let j = i - n + 1; j <= i; j++) {
+                    if (data[j] < minVal)
+                        minVal = data[j];
+                }
+                result[i] = minVal;
+            }
+        }
+        return result;
+    }
+    HHV(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            if (i < n - 1) {
+                let maxVal = -Infinity;
+                for (let j = 0; j <= i; j++) {
+                    if (data[j] > maxVal)
+                        maxVal = data[j];
+                }
+                result[i] = maxVal;
+            }
+            else {
+                let maxVal = -Infinity;
+                for (let j = i - n + 1; j <= i; j++) {
+                    if (data[j] > maxVal)
+                        maxVal = data[j];
+                }
+                result[i] = maxVal;
+            }
+        }
+        return result;
+    }
+    REF(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            const idx = i - n;
+            result[i] = idx >= 0 ? data[idx] : data[0];
+        }
+        return result;
+    }
+    CROSS(a, b) {
+        const result = new Array(this._length).fill(false);
+        for (let i = 1; i < this._length; i++) {
+            result[i] = a[i] > b[i] && a[i - 1] <= b[i - 1];
+        }
+        return result;
+    }
+    COUNT(cond, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            let count = 0;
+            const start = Math.max(0, i - n + 1);
+            for (let j = start; j <= i; j++) {
+                if (cond[j])
+                    count++;
+            }
+            result[i] = count;
+        }
+        return result;
+    }
+    BARSLAST(cond) {
+        const result = new Array(this._length).fill(0);
+        let lastPos = 0;
+        for (let i = 0; i < this._length; i++) {
+            if (cond[i]) {
+                result[i] = 0;
+                lastPos = i;
+            }
+            else {
+                result[i] = i - lastPos;
+            }
+        }
+        return result;
+    }
+    BARSCOUNT() {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            result[i] = i + 1;
+        }
+        return result;
+    }
+    STD(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            if (i < n - 1) {
+                let sum = 0;
+                let count = 0;
+                for (let j = 0; j <= i; j++) {
+                    sum += data[j];
+                    count++;
+                }
+                const mean = sum / count;
+                let variance = 0;
+                for (let j = 0; j <= i; j++) {
+                    variance += (data[j] - mean) ** 2;
+                }
+                result[i] = Math.sqrt(variance / count);
+            }
+            else {
+                let sum = 0;
+                for (let j = i - n + 1; j <= i; j++) {
+                    sum += data[j];
+                }
+                const mean = sum / n;
+                let variance = 0;
+                for (let j = i - n + 1; j <= i; j++) {
+                    variance += (data[j] - mean) ** 2;
+                }
+                result[i] = Math.sqrt(variance / n);
+            }
+        }
+        return result;
+    }
+    SUM(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            let sum = 0;
+            const start = Math.max(0, i - n + 1);
+            for (let j = start; j <= i; j++) {
+                sum += data[j];
+            }
+            result[i] = sum;
+        }
+        return result;
+    }
+    IF(cond, a, b) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            result[i] = cond[i] ? a[i] : b[i];
+        }
+        return result;
+    }
+    MAX(a, b) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            result[i] = Math.max(a[i], b[i]);
+        }
+        return result;
+    }
+    MAX_V(a, b) {
+        return Math.max(a, b);
+    }
+    MIN(a, b) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            result[i] = Math.min(a[i], b[i]);
+        }
+        return result;
+    }
+    MIN_V(a, b) {
+        return Math.min(a, b);
+    }
+    ABS(data) {
+        return data.map((v) => Math.abs(v));
+    }
+    LAST(arr) {
+        return arr[arr.length - 1];
+    }
+    LAST_N(arr, n) {
+        const idx = arr.length - 1 - n;
+        return idx >= 0 ? arr[idx] : arr[0];
+    }
+    FILTER(cond, n) {
+        const result = new Array(this._length).fill(false);
+        let lastTruePos = -n - 1;
+        for (let i = 0; i < this._length; i++) {
+            if (cond[i] && i - lastTruePos >= n) {
+                result[i] = true;
+                lastTruePos = i;
+            }
+        }
+        return result;
+    }
+    HHVBARS(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            const start = Math.max(0, i - n + 1);
+            let maxVal = -Infinity;
+            let maxPos = 0;
+            for (let j = start; j <= i; j++) {
+                if (data[j] >= maxVal) {
+                    maxVal = data[j];
+                    maxPos = j;
+                }
+            }
+            result[i] = i - maxPos;
+        }
+        return result;
+    }
+    LLVBARS(data, n) {
+        const result = new Array(this._length).fill(0);
+        for (let i = 0; i < this._length; i++) {
+            const start = Math.max(0, i - n + 1);
+            let minVal = Infinity;
+            let minPos = 0;
+            for (let j = start; j <= i; j++) {
+                if (data[j] <= minVal) {
+                    minVal = data[j];
+                    minPos = j;
+                }
+            }
+            result[i] = i - minPos;
+        }
+        return result;
+    }
+    XMA(data, n) {
+        const result = new Array(this._length).fill(0);
+        if (this._length === 0 || n <= 1)
+            return data.slice();
+        const half = Math.floor((n - 1) / 2);
+        for (let i = 0; i < this._length; i++) {
+            const start = Math.max(0, i - half);
+            const end = Math.min(this._length - 1, i + half);
+            let sum = 0;
+            for (let j = start; j <= end; j++) {
+                sum += data[j];
+            }
+            result[i] = sum / (end - start + 1);
+        }
+        return result;
+    }
+    SMA(data, n, m) {
+        const result = new Array(this._length).fill(0);
+        if (this._length === 0)
+            return result;
+        result[0] = data[0];
+        for (let i = 1; i < this._length; i++) {
+            result[i] = (m * data[i] + (n - m) * result[i - 1]) / n;
+        }
+        return result;
+    }
+}
+exports.FormulaEngine = FormulaEngine;

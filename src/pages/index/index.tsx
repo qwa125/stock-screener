@@ -952,49 +952,65 @@ const IndexPage = () => {
     }
   }, [fetchMainTop]);
 
-  // ========== 扫描函数：只扫描科创板(688xxx) ==========
+  // ========== 扫描函数：扫描整个A股市场 ==========
   const scanSectorOnly = useCallback(async () => {
-    setSectorScanStatus('🔄 正在扫描科创板(688xxx)...');
+    setSectorScanStatus('🔄 正在扫描整个A股市场...');
     try {
-      // 第一步：用腾讯API批量查询科创板股票
-      const stockCodes: string[] = [];
-      for (let i = 1; i <= 999; i++) stockCodes.push('sh688' + String(i).padStart(3, '0'));
-      let sectorStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
-      for (let i = 0; i < stockCodes.length; i += 80) {
-        const batch = stockCodes.slice(i, i + 80);
-        const qstr = batch.join(',');
-        try {
-          const url = 'https://qt.gtimg.cn/q=' + qstr;
-          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const txt = await res.text();
-          const lines = txt.trim().split(';');
-          const batchStocks: typeof sectorStocks = [];
-          for (const line of lines) {
-            if (!line) continue;
-            const codeMatch = line.match(/v_(sh688\d+)="(.*)"/);
-            if (!codeMatch || !codeMatch[2]) continue;
-            const parts = codeMatch[2].split('~');
-            const code = codeMatch[1].replace('sh', '');
-            const name = parts[1];
-            if (!code || !name || name === '' || /^\d+$/.test(name)) continue;
-            const price = parseFloat(parts[3]) || 0;
-            const changePercent = parseFloat(parts[32]) || 0;
-            const inflow = parseFloat(parts[45]) || 0;
-            if (price <= 0) continue;
-            batchStocks.push({ code, name, sectorName: '科创板', price, changePercent, inflow });
+      // 生成全市场代码范围：创业板+主板+科创板+北交所
+      const codeRanges: { prefix: string; start: number; end: number; label: string; digitLen: number }[] = [
+        { prefix: 'sz3', start: 0, end: 1999, label: '创业板', digitLen: 3 },
+        { prefix: 'sh6', start: 0, end: 9999, label: '沪主板', digitLen: 4 },
+        { prefix: 'sz0', start: 0, end: 3999, label: '深主板', digitLen: 4 },
+        { prefix: 'sh68', start: 8001, end: 8999, label: '科创板', digitLen: 1 },
+        { prefix: 'sz4', start: 0, end: 9999, label: '北交所', digitLen: 4 },
+        { prefix: 'sz8', start: 0, end: 9999, label: '北交所', digitLen: 4 },
+      ];
+      let allStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
+      for (const range of codeRanges) {
+        const codes: string[] = [];
+        for (let i = range.start; i <= range.end; i++) {
+          codes.push(range.prefix + String(i).padStart(range.digitLen, '0'));
+        }
+        const rangeStocks: typeof allStocks = [];
+        for (let i = 0; i < codes.length; i += 80) {
+          const batch = codes.slice(i, i + 80);
+          const qstr = batch.join(',');
+          try {
+            const url = 'https://qt.gtimg.cn/q=' + qstr;
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const txt = await res.text();
+            const lines = txt.trim().split(';');
+            for (const line of lines) {
+              if (!line) continue;
+              const codeMatch = line.match(/v_(sh\d+|sz\d+)="(.*)"/);
+              if (!codeMatch || !codeMatch[2] || codeMatch[2] === '') continue;
+              const parts = codeMatch[2].split('~');
+              const code = codeMatch[1].replace(/^(sh|sz)/, '');
+              const name = parts[1];
+              if (!code || !name || name === '' || /^\d+$/.test(name)) continue;
+              const price = parseFloat(parts[3]) || 0;
+              const changePercent = parseFloat(parts[32]) || 0;
+              const inflow = parseFloat(parts[45]) || 0;
+              if (price <= 0) continue;
+              rangeStocks.push({ code, name, sectorName: range.label, price, changePercent, inflow });
+            }
+          } catch(e2) { console.warn('腾讯' + range.label + '批次失败', e2); }
+          if ((i + 80) % 160 === 0 || i + 80 >= codes.length) {
+            setSectorScanStatus('📥 ' + range.label + ' ' + Math.min(i + 80, codes.length) + '/' + codes.length + ' 已找到' + rangeStocks.length + '只');
           }
-          sectorStocks = sectorStocks.concat(batchStocks);
-          setSectorScanStatus('📥 科创板 ' + Math.min(i + 80, stockCodes.length) + '/' + stockCodes.length + ' 已找到' + sectorStocks.length + '只');
-        } catch(e2) { console.warn('腾讯科创板批次失败', e2); }
+        }
+        allStocks = allStocks.concat(rangeStocks);
+        setSectorScanStatus('✅ ' + range.label + ': ' + rangeStocks.length + '只（累计' + allStocks.length + '只）');
       }
-      setSectorScanStatus('✅ 科创板: ' + sectorStocks.length + '只');
+      setSectorScanStatus('✅ 全市场扫描完成: ' + allStocks.length + '只');
       // 第二步：拉取K线
       const sectorStockWithKlines: any[] = [];
-      for (let si = 0; si < sectorStocks.length; si += 20) {
-        const sbatch = sectorStocks.slice(si, si + 20);
+      for (let si = 0; si < allStocks.length; si += 20) {
+        const sbatch = allStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
-            const url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=sh' + s.code + '&scale=240&ma=5&datalen=100';
+            const marketPrefix = s.code.startsWith('6') || s.code.startsWith('68') ? 'sh' : 'sz';
+            const url = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=' + marketPrefix + s.code + '&scale=240&ma=5&datalen=100';
             const r = await fetch(url);
             const txt = await r.text();
             const sinaData = JSON.parse(txt);
@@ -1003,8 +1019,8 @@ const IndexPage = () => {
           } catch(e2) {}
         });
         await Promise.all(batchPromises);
-        if ((si + 20) % 40 === 0 || si + 20 >= sectorStocks.length) {
-          setSectorScanStatus('📥 K线 ' + Math.min(si + 20, sectorStocks.length) + '/' + sectorStocks.length);
+        if ((si + 20) % 40 === 0 || si + 20 >= allStocks.length) {
+          setSectorScanStatus('📥 K线 ' + Math.min(si + 20, allStocks.length) + '/' + allStocks.length);
         }
       }
       setSectorScanStatus('📤 分批推送 ' + sectorStockWithKlines.length + '只(50只/批)...');
@@ -1019,7 +1035,7 @@ const IndexPage = () => {
             if (pushData?.code === 200) {
               totalFound += pushData?.data?.opportunities?.length || 0;
             }
-          } catch(e2) { console.warn('板块批次推送失败', e2); }
+          } catch(e2) { console.warn('全市场批次推送失败', e2); }
           if ((ci + CHUNK) % 100 === 0 || ci + CHUNK >= sectorStockWithKlines.length) {
             setSectorScanStatus('📤 ' + Math.min(ci + CHUNK, sectorStockWithKlines.length) + '/' + sectorStockWithKlines.length + ' 已发现' + totalFound + '只');
           }
@@ -1027,11 +1043,11 @@ const IndexPage = () => {
         setSectorScanStatus('✅ 完成! 累加发现 ' + totalFound + '只机会');
         await fetchSectorHot();
       } else {
-        setSectorScanStatus('⚠️ 科创板无足够K线数据');
+        setSectorScanStatus('⚠️ 无足够K线数据');
       }
     } catch (e) {
-      console.warn('科创板数据拉取失败:', e);
-      setSectorScanStatus('❌ 科创板拉取失败');
+      console.warn('全市场数据拉取失败:', e);
+      setSectorScanStatus('❌ 全市场拉取失败');
     }
   }, [fetchSectorHot]);
 
@@ -1716,10 +1732,10 @@ const IndexPage = () => {
           )}
         </View>
 
-        {/* 科创板机会区 */}
+        {/* 全A股机会区 */}
         <View className="mt-4">
           <View className="flex flex-row items-center gap-2 mb-2">
-            <Text className="block text-sm font-semibold">🚀 科创板机会区(688xxx)</Text>
+            <Text className="block text-sm font-semibold">🌐 全A股机会区</Text>
             <View className="flex-1" />
             {sectorTimestamp > 0 && !sectorLoading && (() => {
               const diff = Math.floor((Date.now() - sectorTimestamp) / 60000);
