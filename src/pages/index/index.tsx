@@ -122,6 +122,43 @@ interface OpportunityStock {
   entryTiming?: number;
   safetyScore?: number;
 }
+// ===== 东方财富主力资金拉取（前端直连，浏览器在国内可访问） =====
+async function enrichMainForceFlow(stocks: OpportunityStock[]): Promise<void> {
+  if (!stocks || stocks.length === 0) return;
+  const BATCH = 50;
+  for (let i = 0; i < stocks.length; i += BATCH) {
+    const batch = stocks.slice(i, i + BATCH);
+    const secids = batch.map(r => {
+      const mkt = r.code.startsWith('6') ? 1 : 0;
+      return `${mkt}.${r.code}`;
+    });
+    try {
+      const res = await fetch(
+        `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(',')}&fields=f12,f14,f62,f184`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://quote.eastmoney.com/',
+          },
+        }
+      );
+      if (!res.ok) continue;
+      const data = await res.json() as any;
+      if (!data?.data?.diff) continue;
+      for (const item of data.data.diff) {
+        const code = String(item.f12);
+        const flow = item.f62;
+        if (flow !== undefined && flow !== null) {
+          const target = stocks.find(s => s.code === code);
+          if (target) target.mainForceInflow = Math.round(flow);
+        }
+      }
+    } catch (e) {
+      console.warn('[东方财富] 主力资金获取失败:', e);
+    }
+  }
+}
+
 const trendText = (state: number): string => {
   switch (state) {
     case 3: return '主升浪';
@@ -595,7 +632,10 @@ const IndexPage = () => {
       const res = await Network.request({ url: '/api/gem/top/gem' });
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
-        setGemData(apiData.data.opportunities);
+        // 前端补充拉取真实主力资金（浏览器在国内可访问东方财富）
+        const stocks = apiData.data.opportunities;
+        await enrichMainForceFlow(stocks);
+        setGemData(stocks);
         if (apiData.data.timestamp) setGemTimestamp(apiData.data.timestamp);
         else setGemTimestamp(Date.now());
       }
@@ -619,7 +659,9 @@ const IndexPage = () => {
       const res = await Network.request({ url: '/api/gem/top/main-board' });
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
-        setMainData(apiData.data.opportunities);
+        const stocks = apiData.data.opportunities;
+        await enrichMainForceFlow(stocks);
+        setMainData(stocks);
         if (apiData.data.timestamp) setMainTimestamp(apiData.data.timestamp);
         else setMainTimestamp(Date.now());
       }
@@ -643,7 +685,9 @@ const IndexPage = () => {
       console.log('[板块机会区] 响应:', res.data);
       const apiData = res.data as any;
       if (apiData?.data?.opportunities) {
-        setSectorData(apiData.data.opportunities);
+        const stocks = apiData.data.opportunities;
+        await enrichMainForceFlow(stocks);
+        setSectorData(stocks);
         if (apiData.data.timestamp) setSectorTimestamp(apiData.data.timestamp);
         else setSectorTimestamp(Date.now());
         setSectorLoading(false);
