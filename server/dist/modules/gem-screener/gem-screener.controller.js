@@ -17,6 +17,8 @@ exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
 const gem_screener_service_1 = require("./gem-screener.service");
 const iconv = require("iconv-lite");
+const fs_1 = require("fs");
+const path_1 = require("path");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
     constructor(gemScreener) {
         this.gemScreener = gemScreener;
@@ -73,15 +75,30 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         if (cachedHeavyBuy.length >= 3) {
             return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
         }
-        this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
-        const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
-        if (globalHeavyBuy.length >= 1) {
-            return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+        try {
+            const paths = [
+                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
+                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
+            ];
+            for (const p of paths) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
+                    const parsed = JSON.parse(raw);
+                    const seedData = parsed.data || parsed.opportunities || parsed;
+                    if (Array.isArray(seedData) && seedData.length > 0) {
+                        this.logger.log(`✅ 使用种子缓存: ${seedData.length} 只重仓买入`);
+                        return { code: 200, msg: 'success', data: { opportunities: seedData.slice(0, 3), timestamp: Date.now() } };
+                    }
+                }
+            }
         }
-        this.logger.log('⚠️ 全局扫描无结果，使用种子缓存...');
-        const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'), 'utf-8');
-        const seedData = JSON.parse(seed);
-        return { code: 200, msg: 'success', data: { opportunities: seedData.data || seedData, timestamp: Date.now() } };
+        catch (e) {
+            this.logger.warn('读取重仓买入种子缓存失败: ' + e.message);
+        }
+        this.gemScreener.scanGlobalHeavyBuy().catch(e => {
+            this.logger.warn('后台全局重仓扫描失败: ' + e.message);
+        });
+        return { code: 200, msg: 'success', data: { opportunities: [], timestamp: Date.now() } };
     }
     async getIndustrySectorsTop10() {
         try {
@@ -91,10 +108,28 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
         }
         catch (e) {
-            this.logger.warn('实时行业板块排行失败，使用种子缓存: ' + e.message);
+            this.logger.warn('实时行业板块排行失败: ' + e.message);
         }
-        const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'), 'utf-8');
-        return { code: 200, msg: 'success', data: JSON.parse(seed) };
+        try {
+            const paths = [
+                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'),
+                (0, path_1.join)(process.cwd(), 'assets', 'industry-sectors-cache.json'),
+            ];
+            for (const p of paths) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
+                    const data = JSON.parse(raw);
+                    if (data && data.sectors && data.sectors.length > 0) {
+                        this.logger.log(`✅ 使用行业板块种子缓存: ${data.sectors.length} 个板块`);
+                        return { code: 200, msg: 'success', data };
+                    }
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error('读取行业板块种子缓存失败: ' + e.message);
+        }
+        return { code: 200, msg: 'success', data: { sectors: [], timestamp: Date.now() } };
     }
     async seedCache() {
         const result = await this.gemScreener.generateSeedCache();

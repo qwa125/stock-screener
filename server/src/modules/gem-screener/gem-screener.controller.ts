@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Query, HttpCode, Logger } from '@nestjs/common';
 import { GemScreenerService } from './gem-screener.service';
 import * as iconv from 'iconv-lite';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
 
 @Controller('gem')
 export class GemScreenerController {
@@ -85,26 +87,40 @@ export class GemScreenerController {
    */
   @Get('top/heavy-buy')
   async getHeavyBuy() {
-    // 先尝试从缓存获取
+    // 1. 先尝试从缓存获取
     const all = await this.gemScreener.getAllOpportunities();
     const cachedHeavyBuy = all.filter(s => s.suggestion === '重仓买入');
-    
     if (cachedHeavyBuy.length >= 3) {
       return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
     }
 
-    // 缓存不足3只 → 启动全局重仓买入扫描
-    this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
-    const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
-    if (globalHeavyBuy.length >= 1) {
-      return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+    // 2. 优先读取种子缓存（快速响应，不从Render访问腾讯API）
+    try {
+      const paths = [
+        join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
+        join(process.cwd(), 'assets', 'heavy-buy-cache.json'),
+      ];
+      for (const p of paths) {
+        if (existsSync(p)) {
+          const raw = readFileSync(p, 'utf-8');
+          const parsed = JSON.parse(raw);
+          const seedData = parsed.data || parsed.opportunities || parsed;
+          if (Array.isArray(seedData) && seedData.length > 0) {
+            this.logger.log(`✅ 使用种子缓存: ${seedData.length} 只重仓买入`);
+            return { code: 200, msg: 'success', data: { opportunities: seedData.slice(0, 3), timestamp: Date.now() } };
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn('读取重仓买入种子缓存失败: ' + e.message);
     }
 
-    // 全局扫描失败 → 使用种子缓存数据
-    this.logger.log('⚠️ 全局扫描无结果，使用种子缓存...');
-    const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'), 'utf-8');
-    const seedData = JSON.parse(seed);
-    return { code: 200, msg: 'success', data: { opportunities: seedData.data || seedData, timestamp: Date.now() } };
+    // 3. 后台异步触发全局扫描（不阻塞返回）
+    this.gemScreener.scanGlobalHeavyBuy().catch(e => {
+      this.logger.warn('后台全局重仓扫描失败: ' + e.message);
+    });
+
+    return { code: 200, msg: 'success', data: { opportunities: [], timestamp: Date.now() } };
   }
 
   /**
@@ -120,11 +136,28 @@ export class GemScreenerController {
         return { code: 200, msg: 'success', data: result };
       }
     } catch (e) {
-      this.logger.warn('实时行业板块排行失败，使用种子缓存: ' + e.message);
+      this.logger.warn('实时行业板块排行失败: ' + e.message);
     }
     // 降级: 使用种子缓存
-    const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'), 'utf-8');
-    return { code: 200, msg: 'success', data: JSON.parse(seed) };
+    try {
+      const paths = [
+        join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'),
+        join(process.cwd(), 'assets', 'industry-sectors-cache.json'),
+      ];
+      for (const p of paths) {
+        if (existsSync(p)) {
+          const raw = readFileSync(p, 'utf-8');
+          const data = JSON.parse(raw);
+          if (data && data.sectors && data.sectors.length > 0) {
+            this.logger.log(`✅ 使用行业板块种子缓存: ${data.sectors.length} 个板块`);
+            return { code: 200, msg: 'success', data };
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error('读取行业板块种子缓存失败: ' + e.message);
+    }
+    return { code: 200, msg: 'success', data: { sectors: [], timestamp: Date.now() } };
   }
 
   /**
