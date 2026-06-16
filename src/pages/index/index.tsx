@@ -721,13 +721,23 @@ const IndexPage = () => {
     setGemScanStatus('🔄 正在获取创业板股票列表...');
     let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
-      const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
-      const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const txt1 = await res1.text();
-      const j1 = JSON.parse(txt1);
-      const items = j1?.data?.diff || [];
-      for (const item of items) {
-        gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+      // 分页拉取：先获取总数，再逐页请求
+      const PAGE_SIZE = 500;
+      const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12';
+      const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const metaJson = JSON.parse(await metaRes.text());
+      const total = metaJson?.data?.total || 0;
+      const totalPages = Math.ceil(total / PAGE_SIZE);
+      for (let pn = 1; pn <= totalPages; pn++) {
+        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const txt = await res.text();
+        const j = JSON.parse(txt);
+        const items = j?.data?.diff || [];
+        for (const item of items) {
+          gemCodes.push({ code: 'sz' + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+        }
+        setGemScanStatus('📥 创业板 ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
       }
       setGemScanStatus('✅ 创业板: ' + gemCodes.length + '只');
     } catch (e) {
@@ -793,18 +803,26 @@ const IndexPage = () => {
     setMainScanStatus('🔄 正在获取主板股票列表...');
     let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
-      const mainUrls = [
-        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
-        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
-      ];
-      for (const url of mainUrls) {
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const txt = await res.text();
-        const j = JSON.parse(txt);
-        const items = j?.data?.diff || [];
-        for (const item of items) {
-          const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
-          mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+      const PAGE_SIZE = 500;
+      const mainFsList = ['m:1+t:2+f:!2', 'm:0+t:1+f:!2'];
+      const mainLabels = ['沪主板', '深主板'];
+      for (let mi = 0; mi < mainFsList.length; mi++) {
+        const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12';
+        const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const metaJson = JSON.parse(await metaRes.text());
+        const total = metaJson?.data?.total || 0;
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        for (let pn = 1; pn <= totalPages; pn++) {
+          const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12,f14,f2,f3,f62';
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const txt = await res.text();
+          const j = JSON.parse(txt);
+          const items = j?.data?.diff || [];
+          for (const item of items) {
+            const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
+            mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
+          }
+          setMainScanStatus('📥 ' + mainLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
         }
       }
       setMainScanStatus('✅ 主板: ' + mainCodes.length + '只');
