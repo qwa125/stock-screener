@@ -223,7 +223,7 @@ export class DataFetcherService {
       try {
         const prefix = code.startsWith('6') ? 'sh' : 'sz';
         const tencentUrl = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,500,qfq`;
-        const tRes = await fetch(tencentUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const tRes = await fetch(tencentUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(10000) });
         const tData = await tRes.json();
         if (tData?.data?.[`${prefix}${code}`]?.qfqday?.length > 20) {
           const lines = tData.data[`${prefix}${code}`].qfqday;
