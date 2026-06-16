@@ -542,6 +542,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
+    // 从东方财富拉取真实主力资金净流入 (替代成交额近似值)
+    await this.enrichWithMainForceFlow(results);
+
     results.sort((a, b) => {
       const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
       const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
@@ -554,6 +557,61 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 后台预缓存分析结果（不阻塞）
     this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => {});
     return finalResults;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 东方财富主力资金净流入 (f62)
+  // ---------------------------------------------------------------------------
+  /**
+   * 从东方财富批量拉取真实主力资金净流入数据，替换成交额近似值。
+   * f62 = 主力净流入（元），正=净买入，负=净卖出
+   */
+  private async enrichWithMainForceFlow(results: OpportunityStock[]): Promise<void> {
+    if (results.length === 0) return;
+
+    // 分批请求 (东方财富一次最多约80只)
+    const BATCH = 50;
+    for (let i = 0; i < results.length; i += BATCH) {
+      const batch = results.slice(i, i + BATCH);
+      // 构建 secid: 6xxxxx → 1.code, 0xxxxx/3xxxxx → 0.code
+      const secids = batch.map(r => {
+        const mkt = r.code.startsWith('6') ? 1 : 0;
+        return `${mkt}.${r.code}`;
+      });
+
+      const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(',')}&fields=f12,f14,f62,f184`;
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://quote.eastmoney.com/',
+          },
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (!res.ok) {
+          this.logger.warn(`⚠️ 东方财富主力资金API返回 ${res.status}`);
+          continue;
+        }
+
+        const data = await res.json() as any;
+        if (!data?.data?.diff) continue;
+
+        for (const item of data.data.diff) {
+          const code = String(item.f12);
+          const mainForce = item.f62; // 主力净流入（元）
+          if (mainForce !== undefined && mainForce !== null) {
+            const target = results.find(r => r.code === code);
+            if (target) {
+              target.mainForceInflow = Math.round(mainForce);
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`⚠️ 东方财富主力资金获取失败: ${(err as Error).message}`);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1337,6 +1395,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
     }
+
+    // 从东方财富拉取真实主力资金净流入
+    await this.enrichWithMainForceFlow(results);
 
     results.sort((a, b) => {
       const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;

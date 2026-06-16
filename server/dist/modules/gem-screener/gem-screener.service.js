@@ -418,6 +418,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
+        await this.enrichWithMainForceFlow(results);
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
@@ -429,6 +430,48 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const finalResults = results.slice(0, 10);
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
         return finalResults;
+    }
+    async enrichWithMainForceFlow(results) {
+        if (results.length === 0)
+            return;
+        const BATCH = 50;
+        for (let i = 0; i < results.length; i += BATCH) {
+            const batch = results.slice(i, i + BATCH);
+            const secids = batch.map(r => {
+                const mkt = r.code.startsWith('6') ? 1 : 0;
+                return `${mkt}.${r.code}`;
+            });
+            const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(',')}&fields=f12,f14,f62,f184`;
+            try {
+                const res = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        Referer: 'https://quote.eastmoney.com/',
+                    },
+                    signal: AbortSignal.timeout(15000),
+                });
+                if (!res.ok) {
+                    this.logger.warn(`⚠️ 东方财富主力资金API返回 ${res.status}`);
+                    continue;
+                }
+                const data = await res.json();
+                if (!data?.data?.diff)
+                    continue;
+                for (const item of data.data.diff) {
+                    const code = String(item.f12);
+                    const mainForce = item.f62;
+                    if (mainForce !== undefined && mainForce !== null) {
+                        const target = results.find(r => r.code === code);
+                        if (target) {
+                            target.mainForceInflow = Math.round(mainForce);
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                this.logger.warn(`⚠️ 东方财富主力资金获取失败: ${err.message}`);
+            }
+        }
     }
     async checkOpportunity(s) {
         const kline = await this.dataFetcher.getKLineData(s.code);
@@ -1134,6 +1177,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
+        await this.enrichWithMainForceFlow(results);
         results.sort((a, b) => {
             const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
             const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
