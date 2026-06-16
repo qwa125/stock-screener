@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView } from '@tarojs/components';
 import { Network } from '@/network';
 import { Button } from '@/components/ui/button';
@@ -653,6 +653,8 @@ const IndexPage = () => {
   const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
   const [sectorLoading, setSectorLoading] = useState(true);
   const [sectorScanStatus, setSectorScanStatus] = useState<string>('');
+  const gemCachedStocks = useRef<any[]>([]);
+  const mainCachedStocks = useRef<any[]>([]);
   const sectorTags = () => [...new Set((sectorData || []).map((s: any) => s.sectorName).filter(Boolean))].slice(0, 10);
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
@@ -830,6 +832,7 @@ const IndexPage = () => {
       }
     }
     setGemScanStatus('📤 分批推送 ' + gemStocks.length + '只(50只/批)...');
+    gemCachedStocks.current = gemStocks.map((s: any) => ({ ...s }));
     if (gemStocks.length > 0) {
       let totalFound = 0;
       const CHUNK = 50;
@@ -951,6 +954,7 @@ const IndexPage = () => {
       }
     }
     setMainScanStatus('📤 分批推送 ' + mainStocks.length + '只(50只/批)...');
+    mainCachedStocks.current = mainStocks.map((s: any) => ({ ...s }));
     if (mainStocks.length > 0) {
       let totalFound = 0;
       const CHUNK = 50;
@@ -974,26 +978,36 @@ const IndexPage = () => {
     }
   }, [fetchMainTop]);
 
-  // ========== 扫描函数：热点板块机会区 ==========
+  // ========== 扫描函数：热点板块机会区（聚合全市场） ==========
   const scanSectorOnly = useCallback(async () => {
-    setSectorScanStatus('🔄 正在筛选前10热门细分板块成分股...');
+    setSectorScanStatus('🔄 聚合全市场数据（GEM+主板+热点板块）...');
     try {
-      // 收集所有热门板块成分股（去重）
+      // 第一步：从缓存获取GEM和主板扫描结果（如果有）
+      const gemPool = gemCachedStocks.current || [];
+      const mainPool = mainCachedStocks.current || [];
+      const cachedMap = new Map<string, any>();
+      for (const s of [...gemPool, ...mainPool]) {
+        if (!cachedMap.has(s.code)) cachedMap.set(s.code, s);
+      }
+      setSectorScanStatus('📋 已缓存 ' + cachedMap.size + '只(K线就绪)');
+
+      // 第二步：拉取热点板块实时行情（获取板块归属）
       const stockToSector = new Map<string, string>();
-      const uniqueCodes: string[] = [];
+      const hotOnlyCodes: string[] = [];
       for (const sec of HOT_SECTORS) {
         for (const code of sec.codes) {
           if (!stockToSector.has(code)) {
             stockToSector.set(code, sec.name);
-            uniqueCodes.push(code);
+            if (!cachedMap.has(code)) hotOnlyCodes.push(code);
           }
         }
       }
-      setSectorScanStatus('📋 共' + HOT_SECTORS.length + '个热门板块, 合计' + uniqueCodes.length + '只成分股');
-      // 第一步：查询腾讯行情（80只/批）
-      const foundStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
-      for (let i = 0; i < uniqueCodes.length; i += 80) {
-        const batch = uniqueCodes.slice(i, i + 80);
+      setSectorScanStatus('📋 热点板块 ' + HOT_SECTORS.length + '个, 需要额外拉取 ' + hotOnlyCodes.length + '只');
+
+      // 第三步：查询热点板块中未缓存的股票行情
+      const freshStocks: { code: string; name: string; sectorName: string; price: number; changePercent: number; inflow: number }[] = [];
+      for (let i = 0; i < hotOnlyCodes.length; i += 80) {
+        const batch = hotOnlyCodes.slice(i, i + 80);
         const qstr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
         try {
           const txt = await fetchTencentViaProxy(qstr);
@@ -1009,17 +1023,26 @@ const IndexPage = () => {
             if (price <= 0) continue;
             const changePercent = parseFloat(parts[32]) || 0;
             const inflow = parseFloat(parts[45]) || 0;
-            foundStocks.push({ code, name, sectorName: stockToSector.get(code) || '热门板块', price, changePercent, inflow });
+            freshStocks.push({ code, name, sectorName: stockToSector.get(code) || '热门板块', price, changePercent, inflow });
           }
         } catch(e2) { console.warn('腾讯行情批次失败', e2); }
-        setSectorScanStatus('📥 腾讯行情 ' + Math.min(i + 80, uniqueCodes.length) + '/' + uniqueCodes.length + ' 找到' + foundStocks.length + '只');
+        setSectorScanStatus('📥 腾讯行情 ' + Math.min(i + 80, hotOnlyCodes.length) + '/' + hotOnlyCodes.length);
       }
-      if (foundStocks.length === 0) { setSectorScanStatus('⚠️ 未找到有效成分股'); return; }
-      setSectorScanStatus('✅ 找到' + foundStocks.length + '只热门板块成分股');
-      // 第二步：拉取K线（腾讯K线API，20只并发）
-      const sectorStocks: any[] = [];
-      for (let si = 0; si < foundStocks.length; si += 20) {
-        const sbatch = foundStocks.slice(si, si + 20);
+      setSectorScanStatus('✅ 新增 ' + freshStocks.length + '只热点板块股');
+
+      // 第四步：合并全量数据 + 获取缺失K线
+      const allStocks: any[] = [];
+      // 4a. 从缓存取（已有K线）
+      for (const s of cachedMap.values()) {
+        allStocks.push({
+          code: s.code, name: s.name,
+          sectorName: stockToSector.get(s.code) || (s.code.startsWith('3') ? '创业板' : (s.code.startsWith('6') ? '沪主板' : '深主板')),
+          price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: s.klines,
+        });
+      }
+      // 4b. 热点板块独家股（需要拉K线）
+      for (let si = 0; si < freshStocks.length; si += 20) {
+        const sbatch = freshStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
             const prefix = s.code.startsWith('6') ? 'sh' : 'sz';
@@ -1027,21 +1050,22 @@ const IndexPage = () => {
             const txt = await res.text();
             const j = JSON.parse(txt);
             const klines = (j?.data?.[prefix + s.code]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-            if (klines.length >= 60) sectorStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            if (klines.length >= 60) allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
           } catch(e2) {}
         });
         await Promise.all(batchPromises);
-        setSectorScanStatus('📥 K线 ' + Math.min(si + 20, foundStocks.length) + '/' + foundStocks.length);
+        setSectorScanStatus('📥 K线 ' + Math.min(si + 20, freshStocks.length) + '/' + freshStocks.length);
       }
-      // 第三步：分批推送分析
-      setSectorScanStatus('📤 分批推送 ' + sectorStocks.length + '只...');
-      if (sectorStocks.length > 0) {
-        for (let ci = 0; ci < sectorStocks.length; ci += 50) {
-          const chunk = sectorStocks.slice(ci, ci + 50);
+
+      setSectorScanStatus('📤 分批推送 ' + allStocks.length + '只(全市场汇总)...');
+      // 第五步：分批推送分析
+      if (allStocks.length > 0) {
+        for (let ci = 0; ci < allStocks.length; ci += 50) {
+          const chunk = allStocks.slice(ci, ci + 50);
           try {
             await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: chunk } });
           } catch(e2) { console.warn('批次推送失败', e2); }
-          setSectorScanStatus('📤 ' + Math.min(ci + 50, sectorStocks.length) + '/' + sectorStocks.length + ' 对比中...');
+          setSectorScanStatus('📤 ' + Math.min(ci + 50, allStocks.length) + '/' + allStocks.length + ' 对比中...');
         }
         setSectorScanStatus('✅ 分析完成! 获取最优结果中');
         await fetchSectorHot();
