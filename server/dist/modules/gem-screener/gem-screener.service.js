@@ -606,8 +606,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const hasQiangShiHuiCai = !!bx.qiangShiHuiCai;
         const macdResult = this.calcCustomMACD(kline);
         const isGoldenCross = macdResult.isGoldenCross;
-        const isApproaching = !isGoldenCross && macdResult.currentDiff > macdResult.currentDea * 0.95;
-        if (!isGoldenCross && !isApproaching)
+        if (macdResult.currentDiff < macdResult.currentDea)
             return null;
         const excludeKeywords = ['银行', '保险', '农商', '兴业银', '中国人寿', '中国平安', '中国人保', '中国太保', '新华保险'];
         for (const kw of excludeKeywords) {
@@ -615,48 +614,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return null;
         }
         const goldenCrossDays = macdResult.goldenCrossDays || 15;
-        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-        const ma20 = len >= 20 ? closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : ma10;
-        if (ma5 <= ma10 * 1.001)
+        const hasAnyBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai ||
+            bx.diBuBuy || bx.gaoWeiHuiDiaoBuy || bx.zhuLiShiPan || bx.jiaCang);
+        if (!hasAnyBaiXiaoSignal)
             return null;
-        if (len >= 8) {
-            const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-            if (ma5 < ma5_3d)
-                return null;
-        }
-        if (len >= 15) {
-            const ma10_5d = closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10;
-            if (ma10 <= ma10_5d)
-                return null;
-        }
-        if (closeArr[len - 1] <= ma10)
-            return null;
-        if (len >= 30) {
-            const ma20_10d = closeArr.slice(-30, -10).reduce((a, b) => a + b, 0) / 20;
-            if (ma20 < ma20_10d)
-                return null;
-        }
-        if (closeArr[len - 1] <= ma5)
-            return null;
-        let isPullbackRecovery = false;
-        if (len >= 6) {
-            const ma5_yest = closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
-            if (closeArr[len - 2] < ma5_yest * 0.99) {
-                const ma20_arr = [];
-                for (let i = Math.max(0, len - 20); i < len; i++)
-                    ma20_arr.push(closeArr[i]);
-                const ma20_recent = ma20_arr.length >= 20
-                    ? ma20_arr.slice(-20).reduce((a, b) => a + b, 0) / 20
-                    : ma20_arr.reduce((a, b) => a + b, 0) / ma20_arr.length;
-                isPullbackRecovery =
-                    closeArr[len - 1] >= ma5 &&
-                        closeArr[len - 1] > closeArr[len - 2] &&
-                        Math.min(...closeArr.slice(-5)) > ma20_recent * 0.97;
-                if (!isPullbackRecovery)
-                    return null;
-            }
-        }
         const highs = kline.map(k => k.high);
         const lows = kline.map(k => k.low);
         const periodHigh = Math.max(...highs.slice(-60));
@@ -664,17 +625,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const pricePosition = periodHigh > periodLow
             ? ((closeArr[len - 1] - periodLow) / (periodHigh - periodLow)) * 100
             : 50;
-        if (pricePosition >= this.POSITION_THRESHOLD && !isPullbackRecovery && !hasQiangShiHuiCai)
+        const isLowPosition = pricePosition < 25;
+        const hasStrongSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.jiaCang);
+        if (pricePosition >= this.POSITION_THRESHOLD && !isLowPosition && !hasStrongSignal)
             return null;
-        let priceIncrease = 0;
-        const lookbackDays = Math.max(1, goldenCrossDays || 15);
         const closeIdx = len - 1;
+        const lookbackDays = Math.max(1, goldenCrossDays || 15);
         const triggerIdx = closeIdx - lookbackDays;
         const triggerClose = triggerIdx >= 0 ? kline[triggerIdx].close : kline[0].close;
         const currentClose = kline[closeIdx].close;
-        priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
+        const priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
         if (isGoldenCross && priceIncrease > 25)
             return null;
+        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
         const inflowScore = Math.min(s.inflow / 100000000, 1);
         const incScore = priceIncrease > 0 ? Math.min(priceIncrease / 15, 1) : 0;
         const positionScore = 1 - pricePosition / 100;
@@ -682,7 +647,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const capScore = s.marketCap ? Math.max(0, 1 - Math.max(0, s.marketCap - 5_000_000_000) / 45_000_000_000) : 0.3;
         const score = inflowScore * 0.35 + incScore * 0.25 + positionScore * 0.20 + gcScore * 0.10 + capScore * 0.10;
         let buySignal = '';
-        if (isBaiXiaoBuy && (isPullbackRecovery || hasQiangShiHuiCai)) {
+        if (isBaiXiaoBuy && hasQiangShiHuiCai) {
             buySignal = '白消启动回踩';
         }
         else if (isBaiXiaoBuy) {
@@ -693,9 +658,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         else if (isBaiXiaoActive && bxDays >= 3) {
             buySignal = '白消蓄力';
-        }
-        else if (isPullbackRecovery) {
-            buySignal = '回踩确认';
         }
         else {
             buySignal = '突破上涨';
@@ -712,7 +674,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
         const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
         const volumeBullishR = recentVolR > avgVolR * 1.1;
-        const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai || isPullbackRecovery;
+        const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai;
         const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
         const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
         let suggestionR = '观望';

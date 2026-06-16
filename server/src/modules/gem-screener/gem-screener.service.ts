@@ -757,13 +757,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
     const hasQiangShiHuiCai = !!bx.qiangShiHuiCai;
 
-    // ---------- MACD 检查 (用户自定义公式) ----------
+    // ---------- MACD 检查: DIFF >= DEA（金叉/接近金叉/已金叉均放行）----------
     const macdResult = this.calcCustomMACD(kline);
-
-    // 金叉天数 <= 15 天, 非金叉也放行（DIFF接近DEA也算）
     const isGoldenCross = macdResult.isGoldenCross;
-    const isApproaching = !isGoldenCross && macdResult.currentDiff > macdResult.currentDea * 0.95;
-    if (!isGoldenCross && !isApproaching) return null;
+    if (macdResult.currentDiff < macdResult.currentDea) return null;
 
     // 排除银行保险股
     const excludeKeywords = ['银行', '保险', '农商', '兴业银', '中国人寿', '中国平安', '中国人保', '中国太保', '新华保险'];
@@ -773,58 +770,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     const goldenCrossDays = macdResult.goldenCrossDays || 15;
 
-    // ---------- 趋势二次确认 ----------
-    const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-    const ma20 = len >= 20 ? closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : ma10;
+    // ---------- 白消买点信号筛选 ----------
+    const hasAnyBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai ||
+      bx.diBuBuy || bx.gaoWeiHuiDiaoBuy || bx.zhuLiShiPan || bx.jiaCang);
 
-    // ① MA5 > MA10（短线趋势向上, 需有足够差距）
-    if (ma5 <= ma10 * 1.001) return null;
-
-    // ② MA5 斜率向上
-    if (len >= 8) {
-      const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-      if (ma5 < ma5_3d) return null;
-    }
-
-    // ③ MA10 斜率向上或走平（中短线趋势确认）
-    if (len >= 15) {
-      const ma10_5d = closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10;
-      if (ma10 <= ma10_5d) return null;
-    }
-
-    // ④ 收盘价在 MA10 之上
-    if (closeArr[len - 1] <= ma10) return null;
-
-    // ⑤ MA20 走平或向上（中长期趋势确认）
-    if (len >= 30) {
-      const ma20_10d = closeArr.slice(-30, -10).reduce((a, b) => a + b, 0) / 20;
-      if (ma20 < ma20_10d) return null;
-    }
-
-    // ⑥ 收盘价在 MA5 之上（必须站在5日线上方）
-    if (closeArr[len - 1] <= ma5) return null;
-
-    // ⑦ 回踩确认形态检测
-    let isPullbackRecovery = false;
-    if (len >= 6) {
-      const ma5_yest = closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
-      if (closeArr[len - 2] < ma5_yest * 0.99) {
-        // 昨日跌破MA5 → 检测是否为"回踩确认"形态
-        const ma20_arr: number[] = [];
-        for (let i = Math.max(0, len - 20); i < len; i++) ma20_arr.push(closeArr[i]);
-        const ma20_recent = ma20_arr.length >= 20
-          ? ma20_arr.slice(-20).reduce((a, b) => a + b, 0) / 20
-          : ma20_arr.reduce((a, b) => a + b, 0) / ma20_arr.length;
-
-        isPullbackRecovery =
-          closeArr[len - 1] >= ma5 &&                // 今日收复MA5
-          closeArr[len - 1] > closeArr[len - 2] &&   // 今日上涨
-          Math.min(...closeArr.slice(-5)) > ma20_recent * 0.97; // 回踩未破MA20
-
-        if (!isPullbackRecovery) return null;
-      }
-    }
+    if (!hasAnyBaiXiaoSignal) return null;
 
     // ---------- 价格位置 ----------
     const highs = kline.map(k => k.high);
@@ -835,17 +785,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
       ? ((closeArr[len - 1] - periodLow) / (periodHigh - periodLow)) * 100
       : 50;
 
-    if (pricePosition >= this.POSITION_THRESHOLD && !isPullbackRecovery && !hasQiangShiHuiCai) return null;
+    const isLowPosition = pricePosition < 25;
+    const hasStrongSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.jiaCang);
+    if (pricePosition >= this.POSITION_THRESHOLD && !isLowPosition && !hasStrongSignal) return null;
 
-    // ---------- 涨幅检查 (对所有通过股票都计算, 仅金叉股限制涨幅过快) ----------
-    let priceIncrease = 0;
-    const lookbackDays = Math.max(1, goldenCrossDays || 15);
+    // ---------- 涨幅检查 (仅金叉股限制涨幅过快) ----------
     const closeIdx = len - 1;
+    const lookbackDays = Math.max(1, goldenCrossDays || 15);
     const triggerIdx = closeIdx - lookbackDays;
     const triggerClose = triggerIdx >= 0 ? kline[triggerIdx].close : kline[0].close;
     const currentClose = kline[closeIdx].close;
-    priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
+    const priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
     if (isGoldenCross && priceIncrease > 25) return null;
+
+    // ---------- 计算均线(用于评分/建议) ----------
+    const ma5  = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
 
     // ---------- 综合得分(按优先级: 活跃度 > 涨幅 > 最佳介入点) ----------
     const inflowScore = Math.min(s.inflow / 100000000, 1);
@@ -857,7 +813,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // ---------- 买点信号类型 ----------
     let buySignal = '';
-    if (isBaiXiaoBuy && (isPullbackRecovery || hasQiangShiHuiCai)) {
+    if (isBaiXiaoBuy && hasQiangShiHuiCai) {
       buySignal = '白消启动回踩';
     } else if (isBaiXiaoBuy) {
       buySignal = '白消启动突破';
@@ -865,8 +821,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
       buySignal = '强势回踩';
     } else if (isBaiXiaoActive && bxDays >= 3) {
       buySignal = '白消蓄力';
-    } else if (isPullbackRecovery) {
-      buySignal = '回踩确认';
     } else {
       buySignal = '突破上涨';
     }
@@ -883,7 +837,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
     const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
     const volumeBullishR = recentVolR > avgVolR * 1.1;
-    const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai || isPullbackRecovery;
+    const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai;
     const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
 
     const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
