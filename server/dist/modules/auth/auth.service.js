@@ -12,14 +12,27 @@ const common_1 = require("@nestjs/common");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const supabase_client_1 = require("../../storage/database/supabase-client");
-const supabase = (0, supabase_client_1.getSupabaseClient)();
 const JWT_SECRET = process.env.JWT_SECRET || 'stock-screener-secret-key-2025';
 let AuthService = AuthService_1 = class AuthService {
     constructor() {
         this.logger = new common_1.Logger(AuthService_1.name);
+        this._supabase = null;
+    }
+    get supabase() {
+        if (!this._supabase) {
+            try {
+                this._supabase = (0, supabase_client_1.getSupabaseClient)();
+            }
+            catch (e) {
+                this.logger.warn('Supabase 未配置，认证功能不可用');
+                throw new Error('认证功能未启用（缺少 Supabase 配置）');
+            }
+        }
+        return this._supabase;
     }
     async register(username, password) {
-        const { data: existing } = await supabase
+        const sb = this.supabase;
+        const { data: existing } = await sb
             .from('users')
             .select('id')
             .eq('username', username)
@@ -30,7 +43,7 @@ let AuthService = AuthService_1 = class AuthService {
         const passwordHash = await bcrypt.hash(password, 10);
         const now = new Date();
         const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('users')
             .insert({
             username,
@@ -55,7 +68,7 @@ let AuthService = AuthService_1 = class AuthService {
         };
     }
     async login(username, password) {
-        const { data: user, error } = await supabase
+        const { data: user, error } = await this.supabase
             .from('users')
             .select('*')
             .eq('username', username)
@@ -89,7 +102,7 @@ let AuthService = AuthService_1 = class AuthService {
         }
     }
     async getUserStatus(userId) {
-        const { data: user } = await supabase
+        const { data: user } = await this.supabase
             .from('users')
             .select('*')
             .eq('id', userId)
@@ -108,7 +121,7 @@ let AuthService = AuthService_1 = class AuthService {
         };
     }
     async extendSubscription(username, extraDays) {
-        const { data: user } = await supabase
+        const { data: user } = await this.supabase
             .from('users')
             .select('*')
             .eq('username', username)
@@ -120,7 +133,7 @@ let AuthService = AuthService_1 = class AuthService {
         const currentDate = new Date();
         const baseDate = new Date(currentExpiry) > currentDate ? new Date(currentExpiry) : currentDate;
         const newExpiry = new Date(baseDate.getTime() + extraDays * 24 * 60 * 60 * 1000);
-        await supabase
+        await this.supabase
             .from('users')
             .update({ subscription_end: newExpiry.toISOString() })
             .eq('id', u.id);
@@ -129,14 +142,14 @@ let AuthService = AuthService_1 = class AuthService {
         return { newExpiry: newExpiry.toISOString(), totalDaysLeft };
     }
     async setExpiryDate(username, expiryDate) {
-        const { data: user } = await supabase
+        const { data: user } = await this.supabase
             .from('users')
             .select('*')
             .eq('username', username)
             .single();
         if (!user)
             throw new Error('用户不存在');
-        await supabase
+        await this.supabase
             .from('users')
             .update({ subscription_end: expiryDate })
             .eq('id', user.id);

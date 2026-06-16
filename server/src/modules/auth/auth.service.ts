@@ -1,8 +1,7 @@
-import { Injectable, Logger, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, ConflictException, OnModuleInit } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
-const supabase = getSupabaseClient();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'stock-screener-secret-key-2025';
 
@@ -20,11 +19,26 @@ interface UserRow {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private _supabase: any = null;
+
+  private get supabase(): any {
+    if (!this._supabase) {
+      try {
+        this._supabase = getSupabaseClient();
+      } catch (e) {
+        // 在 Render 等无 Supabase 环境下，auth 功能不可用但不影响其他功能
+        this.logger.warn('Supabase 未配置，认证功能不可用');
+        throw new Error('认证功能未启用（缺少 Supabase 配置）');
+      }
+    }
+    return this._supabase;
+  }
 
   /** 注册新用户（自动赠送 7 天试用） */
   async register(username: string, password: string): Promise<{ token: string; expiresAt: string; trialDaysLeft: number }> {
     // 检查用户名是否已存在
-    const { data: existing } = await supabase
+    const sb = this.supabase;
+    const { data: existing } = await sb
       .from('users')
       .select('id')
       .eq('username', username)
@@ -38,7 +52,7 @@ export class AuthService {
     const now = new Date();
     const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('users')
       .insert({
         username,
@@ -68,7 +82,7 @@ export class AuthService {
 
   /** 用户登录 */
   async login(username: string, password: string): Promise<{ token: string; expiresAt: string; trialDaysLeft: number; username: string }> {
-    const { data: user, error } = await supabase
+    const { data: user, error } = await this.supabase
       .from('users')
       .select('*')
       .eq('username', username)
@@ -116,7 +130,7 @@ export class AuthService {
     daysLeft: number;
     isActive: boolean;
   } | null> {
-    const { data: user } = await supabase
+    const { data: user } = await this.supabase
       .from('users')
       .select('*')
       .eq('id', userId)
@@ -139,7 +153,7 @@ export class AuthService {
 
   /** 管理员：延长用户订阅（叠加） */
   async extendSubscription(username: string, extraDays: number): Promise<{ newExpiry: string; totalDaysLeft: number }> {
-    const { data: user } = await supabase
+    const { data: user } = await this.supabase
       .from('users')
       .select('*')
       .eq('username', username)
@@ -154,7 +168,7 @@ export class AuthService {
     const baseDate = new Date(currentExpiry) > currentDate ? new Date(currentExpiry) : currentDate;
     const newExpiry = new Date(baseDate.getTime() + extraDays * 24 * 60 * 60 * 1000);
 
-    await supabase
+    await this.supabase
       .from('users')
       .update({ subscription_end: newExpiry.toISOString() })
       .eq('id', u.id);
@@ -167,7 +181,7 @@ export class AuthService {
 
   /** 管理员：设置用户订阅到期日（精确控制） */
   async setExpiryDate(username: string, expiryDate: string): Promise<{ newExpiry: string; totalDaysLeft: number }> {
-    const { data: user } = await supabase
+    const { data: user } = await this.supabase
       .from('users')
       .select('*')
       .eq('username', username)
@@ -175,7 +189,7 @@ export class AuthService {
 
     if (!user) throw new Error('用户不存在');
 
-    await supabase
+    await this.supabase
       .from('users')
       .update({ subscription_end: expiryDate })
       .eq('id', (user as UserRow).id);
