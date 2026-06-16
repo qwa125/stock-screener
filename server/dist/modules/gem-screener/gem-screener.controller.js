@@ -11,14 +11,16 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var GemScreenerController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
 const gem_screener_service_1 = require("./gem-screener.service");
 const iconv = require("iconv-lite");
-let GemScreenerController = class GemScreenerController {
+let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
     constructor(gemScreener) {
         this.gemScreener = gemScreener;
+        this.logger = new common_1.Logger(GemScreenerController_1.name);
     }
     async tencentProxy(body) {
         if (!body.q)
@@ -67,8 +69,13 @@ let GemScreenerController = class GemScreenerController {
     }
     async getHeavyBuy() {
         const all = await this.gemScreener.getAllOpportunities();
-        const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
-        return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
+        const cachedHeavyBuy = all.filter(s => s.suggestion === '重仓买入');
+        if (cachedHeavyBuy.length >= 3) {
+            return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+        }
+        this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
+        const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
+        return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
     }
     async getIndustrySectorsTop10() {
         const result = await this.gemScreener.getIndustrySectorTop10();
@@ -161,7 +168,7 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getIndustrySectorsTop10", null);
-exports.GemScreenerController = GemScreenerController = __decorate([
+exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
 ], GemScreenerController);

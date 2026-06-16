@@ -2175,6 +2175,112 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   /**
+   * 全局重仓买入扫描: 从全行业成分股(280只) + 已知机会股中扫描"重仓买入"
+   * 先获取实时行情过滤正涨幅, 再分析K线
+   */
+  async scanGlobalHeavyBuy(): Promise<OpportunityStock[]> {
+    this.logger.log('🔍 [全局重仓买入] 开始扫描...');
+    try {
+      // 1. 收集全行业280只成分股code (无前缀)
+      const allCodes: string[] = [];
+      const codeToSectorName = new Map<string, string>();
+      for (const sector of INDUSTRY_SECTORS) {
+        for (const code of sector.codes) {
+          if (!allCodes.includes(code)) {
+            allCodes.push(code);
+            codeToSectorName.set(code, sector.name);
+          }
+        }
+      }
+
+      // 2. 再加入已缓存的机会股code
+      const cachedCodes = [
+        ...(this.cache?.data?.map(s => s.code.replace(/^(sh|sz)/,'')) ?? []),
+        ...(this.mainBoardCache?.data?.map(s => s.code.replace(/^(sh|sz)/,'')) ?? []),
+        ...(this.sectorCache?.data?.map(s => s.code.replace(/^(sh|sz)/,'')) ?? []),
+      ];
+      for (const c of cachedCodes) {
+        if (c && !allCodes.includes(c)) allCodes.push(c);
+      }
+
+      this.logger.log(`🔍 共收集 ${allCodes.length} 只候选股票`);
+
+      // 3. 用腾讯API批量获取实时行情，定位正涨幅/好表现的股票
+      const heavyBuyResults: OpportunityStock[] = [];
+      const BATCH = 100;
+      for (let i = 0; i < allCodes.length; i += BATCH) {
+        const batch = allCodes.slice(i, i + BATCH);
+        const qStr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+        try {
+          const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(qStr);
+          const res = await fetch(url);
+          const buf = Buffer.from(await res.arrayBuffer());
+          const txt = iconv.decode(buf, 'gbk');
+          const lines = txt.split('\n').filter(l => l.includes('~'));
+          this.logger.log(`  📊 腾讯API返回 ${lines.length} 条行情`);
+
+          for (const line of lines) {
+            try {
+              const parts = line.split('~');
+              const name = parts[1]?.trim() || '';
+              const rawCode = parts[2]?.trim() || '';
+              const code = rawCode.startsWith('sh') || rawCode.startsWith('sz') ? rawCode.substring(2) : rawCode;
+              const price = parseFloat(parts[3]) || 0;
+              const changePct = parseFloat(parts[32]) || 0;
+
+              // 排除ST/银行/保险
+              if (/^(\*)?ST/.test(name) || /银行|保险/.test(name)) continue;
+
+              // 只保留涨幅>0且价格>2的股票做进一步K线分析
+              if (changePct < 0 || price < 2) continue;
+
+              // 4. 对候选股做完整的K线分析
+              try {
+                const result = await this.computeFullSuggestion(code);
+                if (result && result.suggestion === '重仓买入') {
+                  heavyBuyResults.push({
+                    code,
+                    name,
+                    currentPrice: price,
+                    changePercent: Math.round(changePct * 100) / 100,
+                    priceIncrease: 0,
+                    mainForceInflow: 0,
+                    pricePosition: 0,
+                    capitalRank: 0,
+                    baiXiaoDays: 0,
+                    score: result.score,
+                    suggestion: '重仓买入',
+                    entryTiming: 0,
+                    safetyScore: 0,
+                    isGoldenCross: false,
+                    diff: 0,
+                    dea: 0,
+                    buySignal: '',
+                  });
+                }
+              } catch (klineErr) {
+                // K线获取失败，跳过
+              }
+            } catch (parseErr) {
+              // 单行解析失败，跳过
+            }
+          }
+        } catch (batchErr) {
+          this.logger.warn(`  ⚠️ 批次 ${i}-${i+BATCH} 获取失败: ${batchErr.message}`);
+        }
+      }
+
+      // 排序取前3
+      heavyBuyResults.sort((a, b) => (b.score || 0) - (a.score || 0));
+      this.logger.log(`✅ [全局重仓买入] 完成, 发现 ${heavyBuyResults.length} 只`);
+      return heavyBuyResults.slice(0, 3);
+    } catch (error) {
+      this.logger.error(`❌ [全局重仓买入] 异常: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
    * 获取实时热门行业板块Top10（基于成分股实时涨跌幅均值排序）
    * 动态计算，非硬编码
    */

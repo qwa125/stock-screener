@@ -1866,6 +1866,97 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.stockService.preCacheAnalysisBatch(stocks.map(s => s.code)).catch(() => { });
         }
     }
+    async scanGlobalHeavyBuy() {
+        this.logger.log('🔍 [全局重仓买入] 开始扫描...');
+        try {
+            const allCodes = [];
+            const codeToSectorName = new Map();
+            for (const sector of data_1.default) {
+                for (const code of sector.codes) {
+                    if (!allCodes.includes(code)) {
+                        allCodes.push(code);
+                        codeToSectorName.set(code, sector.name);
+                    }
+                }
+            }
+            const cachedCodes = [
+                ...(this.cache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+                ...(this.mainBoardCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+                ...(this.sectorCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+            ];
+            for (const c of cachedCodes) {
+                if (c && !allCodes.includes(c))
+                    allCodes.push(c);
+            }
+            this.logger.log(`🔍 共收集 ${allCodes.length} 只候选股票`);
+            const heavyBuyResults = [];
+            const BATCH = 100;
+            for (let i = 0; i < allCodes.length; i += BATCH) {
+                const batch = allCodes.slice(i, i + BATCH);
+                const qStr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+                try {
+                    const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(qStr);
+                    const res = await fetch(url);
+                    const buf = Buffer.from(await res.arrayBuffer());
+                    const txt = iconv.decode(buf, 'gbk');
+                    const lines = txt.split('\n').filter(l => l.includes('~'));
+                    this.logger.log(`  📊 腾讯API返回 ${lines.length} 条行情`);
+                    for (const line of lines) {
+                        try {
+                            const parts = line.split('~');
+                            const name = parts[1]?.trim() || '';
+                            const rawCode = parts[2]?.trim() || '';
+                            const code = rawCode.startsWith('sh') || rawCode.startsWith('sz') ? rawCode.substring(2) : rawCode;
+                            const price = parseFloat(parts[3]) || 0;
+                            const changePct = parseFloat(parts[32]) || 0;
+                            if (/^(\*)?ST/.test(name) || /银行|保险/.test(name))
+                                continue;
+                            if (changePct < 0 || price < 2)
+                                continue;
+                            try {
+                                const result = await this.computeFullSuggestion(code);
+                                if (result && result.suggestion === '重仓买入') {
+                                    heavyBuyResults.push({
+                                        code,
+                                        name,
+                                        currentPrice: price,
+                                        changePercent: Math.round(changePct * 100) / 100,
+                                        priceIncrease: 0,
+                                        mainForceInflow: 0,
+                                        pricePosition: 0,
+                                        capitalRank: 0,
+                                        baiXiaoDays: 0,
+                                        score: result.score,
+                                        suggestion: '重仓买入',
+                                        entryTiming: 0,
+                                        safetyScore: 0,
+                                        isGoldenCross: false,
+                                        diff: 0,
+                                        dea: 0,
+                                        buySignal: '',
+                                    });
+                                }
+                            }
+                            catch (klineErr) {
+                            }
+                        }
+                        catch (parseErr) {
+                        }
+                    }
+                }
+                catch (batchErr) {
+                    this.logger.warn(`  ⚠️ 批次 ${i}-${i + BATCH} 获取失败: ${batchErr.message}`);
+                }
+            }
+            heavyBuyResults.sort((a, b) => (b.score || 0) - (a.score || 0));
+            this.logger.log(`✅ [全局重仓买入] 完成, 发现 ${heavyBuyResults.length} 只`);
+            return heavyBuyResults.slice(0, 3);
+        }
+        catch (error) {
+            this.logger.error(`❌ [全局重仓买入] 异常: ${error.message}`);
+            return [];
+        }
+    }
     async getIndustrySectorTop10() {
         const allCodes = [];
         const codeToSector = new Map();

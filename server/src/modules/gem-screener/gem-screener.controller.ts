@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Query, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, Logger } from '@nestjs/common';
 import { GemScreenerService } from './gem-screener.service';
 import * as iconv from 'iconv-lite';
 
 @Controller('gem')
 export class GemScreenerController {
+  private readonly logger = new Logger(GemScreenerController.name);
   constructor(private readonly gemScreener: GemScreenerService) {}
 
   /**
@@ -79,14 +80,23 @@ export class GemScreenerController {
   }
 
   /**
-   * 重仓买入专区: 从全市场(创业板+主板+热点板块)缓存中筛选出 "重仓买入" 级别的股票
+   * 重仓买入专区: 从全市场(创业板+主板+热点板块)缓存 + 全局重仓买入扫描中筛选出 "重仓买入" 级别的股票
    * GET /api/gem/top/heavy-buy
    */
   @Get('top/heavy-buy')
   async getHeavyBuy() {
+    // 先尝试从缓存获取
     const all = await this.gemScreener.getAllOpportunities();
-    const heavyBuy = all.filter(s => s.suggestion === '重仓买入');
-    return { code: 200, msg: 'success', data: { opportunities: heavyBuy, timestamp: Date.now() } };
+    const cachedHeavyBuy = all.filter(s => s.suggestion === '重仓买入');
+    
+    if (cachedHeavyBuy.length >= 3) {
+      return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+    }
+
+    // 缓存不足3只 → 启动全局重仓买入扫描（全行业280成分股 + 已知机会股）
+    this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
+    const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
+    return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
   }
 
   /**
