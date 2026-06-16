@@ -1,74 +1,43 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isTradingDay = isTradingDay;
-exports.isLunchBreak = isLunchBreak;
 exports.isMarketOpen = isMarketOpen;
+exports.isTradingDay = isTradingDay;
 exports.isAfterMarketClose = isAfterMarketClose;
-exports.getAfterMarketTTL = getAfterMarketTTL;
-exports.getMarketOpenTTL = getMarketOpenTTL;
-exports.getCacheTTL = getCacheTTL;
-exports.getNextOpenTime = getNextOpenTime;
-function now() {
-    const cst = new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' });
-    return new Date(cst);
+exports.beijingNow = beijingNow;
+function isMarketOpen() {
+    const d = new Date();
+    const bjH = (d.getUTCHours() + 8) % 24;
+    const bjM = d.getUTCMinutes();
+    const t = bjH * 100 + bjM;
+    return (t >= 915 && t <= 1130) || (t >= 1300 && t <= 1500);
 }
 function isTradingDay() {
-    const day = now().getDay();
-    return day >= 1 && day <= 5;
-}
-function isLunchBreak() {
-    if (!isTradingDay())
-        return false;
-    const h = now().getHours();
-    const m = now().getMinutes();
-    const t = h * 100 + m;
-    return t >= 1130 && t < 1300;
-}
-function isMarketOpen() {
-    if (!isTradingDay() || isLunchBreak())
-        return false;
-    const h = now().getHours();
-    const m = now().getMinutes();
-    const t = h * 100 + m;
-    return t >= 915 && t < 1500;
+    const d = new Date();
+    const utcDay = d.getUTCDay();
+    const bjHour = (d.getUTCHours() + 8) % 24;
+    let bjDay = utcDay;
+    if (d.getUTCHours() + 8 >= 24) {
+        bjDay = (utcDay + 1) % 7;
+    }
+    return bjDay >= 1 && bjDay <= 5;
 }
 function isAfterMarketClose() {
-    if (!isTradingDay())
-        return true;
-    const h = now().getHours();
-    const m = now().getMinutes();
-    const t = h * 100 + m;
+    const d = new Date();
+    const bjH = (d.getUTCHours() + 8) % 24;
+    const bjM = d.getUTCMinutes();
+    const t = bjH * 100 + bjM;
     return t >= 1500;
 }
-function getAfterMarketTTL() {
-    return 365 * 24 * 60 * 60 * 1000;
-}
-function getMarketOpenTTL() {
-    return 5 * 60 * 1000;
-}
-function getCacheTTL(staleTTL = 5 * 60 * 1000) {
-    if (isMarketOpen()) {
-        return { ttl: getMarketOpenTTL(), staleTTL, canRefresh: true };
-    }
-    return { ttl: getAfterMarketTTL(), staleTTL: getAfterMarketTTL(), canRefresh: false };
-}
-function getNextOpenTime() {
-    const d = now();
-    let daysToAdd = 0;
-    const day = d.getDay();
-    if (day === 0)
-        daysToAdd = 1;
-    else if (day === 6)
-        daysToAdd = 2;
-    else {
-        const h = d.getHours();
-        const m = d.getMinutes();
-        const t = h * 100 + m;
-        if (t >= 1500) {
-            daysToAdd = day === 5 ? 3 : 1;
-        }
-    }
-    d.setDate(d.getDate() + daysToAdd);
-    d.setHours(9, 15, 0, 0);
-    return d.getTime();
+function beijingNow() {
+    const d = new Date();
+    const bjH = (d.getUTCHours() + 8) % 24;
+    const bjM = d.getUTCMinutes();
+    const bjS = d.getUTCSeconds();
+    const y = d.getUTCFullYear();
+    const mo = d.getUTCMonth() + 1;
+    const da = d.getUTCDate();
+    const bjDate = d.getUTCHours() + 8 >= 24
+        ? `${y}-${String(mo).padStart(2, '0')}-${String(da + 1).padStart(2, '0')}`
+        : `${y}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+    return `${bjDate} ${String(bjH).padStart(2, '0')}:${String(bjM).padStart(2, '0')}:${String(bjS).padStart(2, '0')}`;
 }
