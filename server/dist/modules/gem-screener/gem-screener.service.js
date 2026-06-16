@@ -721,7 +721,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 suggestionR = hasBuySignalR ? '轻仓买入' : '观望';
             }
             else if (trendStateR >= 2) {
-                suggestionR = (trendStateR >= 3 && hasBuySignalR) ? '重仓买入' : '买入';
+                suggestionR = hasBuySignalR ? '重仓买入' : '买入';
             }
             else {
                 suggestionR = hasBuySignalR ? '持有' : '观望';
