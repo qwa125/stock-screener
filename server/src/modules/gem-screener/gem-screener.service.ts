@@ -235,43 +235,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // 公开 API
   // ---------------------------------------------------------------------------
   async getOpportunities(): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    const marketOpen = isMarketOpen();
-
-    // 缓存新鲜 → 直接返回
-    if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL && marketOpen) {
-      this.triggerAnalysisPreCache(this.cache.data);
-      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-    }
-    // 缓存还可用 → 返回旧 + 后台刷新
-    if (this.cache && Date.now() - this.cache.timestamp < this.STALE_TTL) {
-      this.triggerAnalysisPreCache(this.cache.data);
-      this.triggerRefresh();
-      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-    }
-    // 缓存非常旧 → 返回旧缓存 + 后台刷新（不阻塞HTTP请求，避免从美国扫描中国数据源超时）
+    // Render美国服务器调不通中国API(腾讯/东方财富)，不发起任何主动扫描
+    // 仅返回磁盘缓存的旧数据，由前端浏览器从中国拉数据POST到 /api/gem/refresh
     if (this.cache) {
-      this.logger.warn(`⚠️ 缓存过期, 后台刷新...`);
       this.triggerAnalysisPreCache(this.cache.data);
-      this.triggerRefresh();
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
-
-    // 无任何缓存 → 即使盘后也尝试首次加载（避免首次部署永远没数据）
-    this.logger.log('📦 首次加载或缓存已清空, 尝试获取数据...');
-    if (!marketOpen) {
-      // 盘后首次部署: 直接同步加载一次
-      try {
-        const opportunities = await this.scanAllStocks();
-        this.cache = { data: opportunities, timestamp: Date.now() };
-        this.saveCacheToDisk();
-        return { opportunities, timestamp: this.cache.timestamp };
-      } catch (err) {
-        this.logger.error(`❌ 首次加载失败: ${err.message}`);
-        return { opportunities: [], timestamp: Date.now() };
-      }
-    }
-    // 盘中: 后台异步刷新
-    this.triggerRefresh();
     return { opportunities: [], timestamp: Date.now() };
   }
 
@@ -342,14 +311,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     // 启动后预缓存分析结果
     this.triggerAnalysisPreCacheFromCache();
-
-    // 每15分钟定时刷新机会区（交易时段自动刷新，盘后跳过）
-    setInterval(() => {
-      if (isMarketOpen()) {
-        this.logger.log('⏰ 15分钟定时刷新触发');
-        this.triggerRefresh();
-      }
-    }, 15 * 60 * 1000);
   }
 
   // ---------------------------------------------------------------------------

@@ -183,36 +183,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
     }
     async getOpportunities() {
-        const marketOpen = (0, market_time_1.isMarketOpen)();
-        if (this.cache && Date.now() - this.cache.timestamp < this.CACHE_TTL && marketOpen) {
-            this.triggerAnalysisPreCache(this.cache.data);
-            return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-        }
-        if (this.cache && Date.now() - this.cache.timestamp < this.STALE_TTL) {
-            this.triggerAnalysisPreCache(this.cache.data);
-            this.triggerRefresh();
-            return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
-        }
         if (this.cache) {
-            this.logger.warn(`⚠️ 缓存过期, 后台刷新...`);
             this.triggerAnalysisPreCache(this.cache.data);
-            this.triggerRefresh();
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
-        this.logger.log('📦 首次加载或缓存已清空, 尝试获取数据...');
-        if (!marketOpen) {
-            try {
-                const opportunities = await this.scanAllStocks();
-                this.cache = { data: opportunities, timestamp: Date.now() };
-                this.saveCacheToDisk();
-                return { opportunities, timestamp: this.cache.timestamp };
-            }
-            catch (err) {
-                this.logger.error(`❌ 首次加载失败: ${err.message}`);
-                return { opportunities: [], timestamp: Date.now() };
-            }
-        }
-        this.triggerRefresh();
         return { opportunities: [], timestamp: Date.now() };
     }
     triggerRefresh() {
@@ -276,12 +250,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
         this.triggerAnalysisPreCacheFromCache();
-        setInterval(() => {
-            if ((0, market_time_1.isMarketOpen)()) {
-                this.logger.log('⏰ 15分钟定时刷新触发');
-                this.triggerRefresh();
-            }
-        }, 15 * 60 * 1000);
     }
     calcCustomMACD(kline) {
         const closes = kline.map(k => k.close);
