@@ -626,11 +626,13 @@ const IndexPage = () => {
   const [mainData, setMainData] = useState<OpportunityStock[] | null>(null);
   const [mainTimestamp, setMainTimestamp] = useState<number>(0);
   const [mainLoading, setMainLoading] = useState<boolean>(true);
+  const [mainScanStatus, setMainScanStatus] = useState<string>('');
 
   // 热点板块机会区（板块数据）
   const [sectorData, setSectorData] = useState<any[] | null>(null);
   const [sectorTimestamp, setSectorTimestamp] = useState<number>(0);
   const [sectorLoading, setSectorLoading] = useState(true);
+  const [sectorScanStatus, setSectorScanStatus] = useState<string>('');
 
   // 获取创业板Top10（后端控制缓存，前端只需读取）
   const fetchGemTop = useCallback(async () => {
@@ -811,6 +813,7 @@ const IndexPage = () => {
 
       // ===== 4. 拉取主板K线并推送 =====
       if (mainCodes.length > 0) {
+        setMainScanStatus('📥 正在拉取主板K线...');
         setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
         const mainTopN = mainCodes.slice(0, 30);
         const mainStocks: any[] = [];
@@ -828,17 +831,25 @@ const IndexPage = () => {
           });
           await Promise.all(batchPromises);
         }
+        setMainScanStatus('📤 推送主板 ' + mainStocks.length + '只...');
         setScanStatus(prev => prev + ' | 📤 推送主板 ' + mainStocks.length + '只...');
         if (mainStocks.length > 0) {
           const pushRes = await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: mainStocks } });
           const pushData = pushRes.data as any;
           if (pushData?.code === 200) {
-            setScanStatus('✅ 推送完成! 创业板:' + (gemStocks.length || 0) + '只 主板:' + mainStocks.length + '只 | 发现 ' + (pushData?.data?.opportunities?.length || 0) + '只主板机会');
+            const mainCount = pushData?.data?.opportunities?.length || 0;
+            setMainScanStatus('✅ 主板完成! ' + mainCount + '只机会');
+            setScanStatus('✅ 推送完成! 创业板:' + (gemStocks.length || 0) + '只 主板:' + mainStocks.length + '只 | 发现 ' + mainCount + '只主板机会');
             await fetchMainTop();
+          } else {
+            setMainScanStatus('❌ 主板推送失败');
           }
+        } else {
+          setMainScanStatus('⚠️ 主板无足够K线数据');
         }
       }
       // ===== 5. 拉取板块数据并推送 =====
+      setSectorScanStatus('🔄 正在拉取热点板块数据...');
       setScanStatus(prev => prev + ' | 🔥 拉取板块数据...');
       try {
         const sectorUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f12,f14,f3,f62';
@@ -885,9 +896,11 @@ const IndexPage = () => {
         }
         setScanStatus(prev => prev + ' | 📤 推送板块 ' + sectorStockWithKlines.length + '只...');
         if (sectorStockWithKlines.length > 0) {
+          setSectorScanStatus('📤 推送 ' + sectorStockWithKlines.length + ' 只板块机会...');
           const pushRes = await Network.request({ url: '/api/gem/refresh-sector', method: 'POST', data: { stocks: sectorStockWithKlines } });
           const pushData = pushRes.data as any;
           if (pushData?.code === 200) {
+            setSectorScanStatus('✅ 板块数据已更新!');
             setScanStatus('✅ 全部完成! 创业板:' + (gemStocks.length || 0) + '只 板块:' + (pushData?.data?.opportunities?.length || 0) + '只');
             await fetchSectorHot();
           }
@@ -896,13 +909,14 @@ const IndexPage = () => {
         }
       } catch (e) {
         console.warn('板块数据拉取失败:', e);
+        setSectorScanStatus('❌ 板块拉取失败');
         setScanStatus('✅ 扫描完成 (板块不可用)');
       }
     } catch (err: any) {
       setScanStatus('❌ 错误: ' + (err?.message || err));
     }
 
-  }, [fetchGemTop, fetchMainTop]);
+  }, [fetchGemTop, fetchMainTop, fetchSectorHot]);
 
   // 自动触发前端推送扫描(3秒后运行，避免阻塞页面渲染)
   useEffect(() => {
@@ -1480,6 +1494,11 @@ const IndexPage = () => {
               })() : '自动刷新中'}
             </Text>
           </View>
+          {mainScanStatus && (
+            <View className="mt-1 mb-1">
+              <Text className="block text-xs text-gray-400">{mainScanStatus}</Text>
+            </View>
+          )}
           {mainLoading && mainData === null ? (
             <View className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (
@@ -1572,6 +1591,11 @@ const IndexPage = () => {
             })()}
             {sectorLoading && <Text className="block text-xs text-gray-400">加载中...</Text>}
           </View>
+          {sectorScanStatus && (
+            <View className="mt-1 mb-1">
+              <Text className="block text-xs text-gray-400">{sectorScanStatus}</Text>
+            </View>
+          )}
 
           {sectorLoading && sectorData === null ? (
             <View className="flex flex-col gap-2">
