@@ -93,10 +93,18 @@ export class GemScreenerController {
       return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
     }
 
-    // 缓存不足3只 → 启动全局重仓买入扫描（全行业280成分股 + 已知机会股）
+    // 缓存不足3只 → 启动全局重仓买入扫描
     this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
     const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
-    return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+    if (globalHeavyBuy.length >= 1) {
+      return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+    }
+
+    // 全局扫描失败 → 使用种子缓存数据
+    this.logger.log('⚠️ 全局扫描无结果，使用种子缓存...');
+    const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'), 'utf-8');
+    const seedData = JSON.parse(seed);
+    return { code: 200, msg: 'success', data: { opportunities: seedData.data || seedData, timestamp: Date.now() } };
   }
 
   /**
@@ -106,8 +114,17 @@ export class GemScreenerController {
   @Get('industry-sectors/top10')
   @HttpCode(200)
   async getIndustrySectorsTop10() {
-    const result = await this.gemScreener.getIndustrySectorTop10();
-    return { code: 200, msg: 'success', data: result };
+    try {
+      const result = await this.gemScreener.getIndustrySectorTop10();
+      if (result && result.sectors && result.sectors.length > 0) {
+        return { code: 200, msg: 'success', data: result };
+      }
+    } catch (e) {
+      this.logger.warn('实时行业板块排行失败，使用种子缓存: ' + e.message);
+    }
+    // 降级: 使用种子缓存
+    const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'), 'utf-8');
+    return { code: 200, msg: 'success', data: JSON.parse(seed) };
   }
 
   /**

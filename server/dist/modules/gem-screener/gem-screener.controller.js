@@ -75,11 +75,26 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         this.logger.log('🔍 缓存重仓买入不足3只，启动全局扫描...');
         const globalHeavyBuy = await this.gemScreener.scanGlobalHeavyBuy();
-        return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+        if (globalHeavyBuy.length >= 1) {
+            return { code: 200, msg: 'success', data: { opportunities: globalHeavyBuy.slice(0, 3), timestamp: Date.now() } };
+        }
+        this.logger.log('⚠️ 全局扫描无结果，使用种子缓存...');
+        const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'), 'utf-8');
+        const seedData = JSON.parse(seed);
+        return { code: 200, msg: 'success', data: { opportunities: seedData.data || seedData, timestamp: Date.now() } };
     }
     async getIndustrySectorsTop10() {
-        const result = await this.gemScreener.getIndustrySectorTop10();
-        return { code: 200, msg: 'success', data: result };
+        try {
+            const result = await this.gemScreener.getIndustrySectorTop10();
+            if (result && result.sectors && result.sectors.length > 0) {
+                return { code: 200, msg: 'success', data: result };
+            }
+        }
+        catch (e) {
+            this.logger.warn('实时行业板块排行失败，使用种子缓存: ' + e.message);
+        }
+        const seed = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'), 'utf-8');
+        return { code: 200, msg: 'success', data: JSON.parse(seed) };
     }
     async seedCache() {
         const result = await this.gemScreener.generateSeedCache();
