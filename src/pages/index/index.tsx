@@ -721,7 +721,7 @@ const IndexPage = () => {
     setGemScanStatus('🔄 正在获取创业板股票列表...');
     let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
-      const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+      const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
       const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       const txt1 = await res1.text();
       const j1 = JSON.parse(txt1);
@@ -794,8 +794,8 @@ const IndexPage = () => {
     let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
     try {
       const mainUrls = [
-        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
-        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
+        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
+        'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
       ];
       for (const url of mainUrls) {
         const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -860,7 +860,7 @@ const IndexPage = () => {
       for (const sec of sectors) {
         const bkCode = sec.f12;
         const sectorName = sec.f14;
-        const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
+        const leadingUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:' + bkCode + '&fields=f12,f14,f2,f3,f62';
         try {
           const leadingRes = await fetch(leadingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
           const leadingTxt = await leadingRes.text();
