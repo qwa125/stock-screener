@@ -723,7 +723,7 @@ const IndexPage = () => {
       // ===== 1. 创业板数据 =====
       let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
       try {
-        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=300&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
+        const url1 = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:80+f:!2&fields=f12,f14,f2,f3,f62';
         const res1 = await fetch(url1, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const txt1 = await res1.text();
         const j1 = JSON.parse(txt1);
@@ -764,8 +764,8 @@ const IndexPage = () => {
       try {
         // 上海主板 m:1+t:2 + 深圳主板 m:0+t:1（排除创业板）
         const mainUrls = [
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
-          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:1+t:2+f:!2&fields=f12,f14,f2,f3,f62',
+          'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:0+t:1+f:!2&fields=f12,f14,f2,f3,f62',
         ];
         for (const url of mainUrls) {
           const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -785,10 +785,9 @@ const IndexPage = () => {
       }
 
       // ===== 3. 拉取创业板K线并推送 =====
-      const gemTopN = gemCodes.slice(0, 200);
       const gemStocks: any[] = [];
-      for (let i = 0; i < gemTopN.length; i += 15) {
-        const batch = gemTopN.slice(i, i + 15);
+      for (let i = 0; i < gemCodes.length; i += 20) {
+        const batch = gemCodes.slice(i, i + 20);
         const batchPromises = batch.map(async (s) => {
           try {
             const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
@@ -800,8 +799,8 @@ const IndexPage = () => {
           } catch(e) {}
         });
         await Promise.all(batchPromises);
-        if ((i + 15) % 30 === 0 || i + 15 >= gemTopN.length) {
-          setScanStatus('📥 创业板K线 ' + Math.min(i + 15, gemTopN.length) + '/' + gemTopN.length);
+        if ((i + 20) % 40 === 0 || i + 20 >= gemCodes.length) {
+          setScanStatus('📥 创业板K线 ' + Math.min(i + 20, gemCodes.length) + '/' + gemCodes.length);
         }
       }
       setScanStatus('📤 推送创业板 ' + gemStocks.length + '只到引擎...');
@@ -819,10 +818,9 @@ const IndexPage = () => {
       if (mainCodes.length > 0) {
         setMainScanStatus('📥 正在拉取主板K线...');
         setScanStatus(prev => prev + ' | 📥 拉取主板K线...');
-        const mainTopN = mainCodes.slice(0, 200);
         const mainStocks: any[] = [];
-        for (let i = 0; i < mainTopN.length; i += 15) {
-          const batch = mainTopN.slice(i, i + 15);
+        for (let i = 0; i < mainCodes.length; i += 20) {
+          const batch = mainCodes.slice(i, i + 20);
           const batchPromises = batch.map(async (s) => {
             try {
               const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
@@ -834,8 +832,8 @@ const IndexPage = () => {
             } catch(e) {}
           });
           await Promise.all(batchPromises);
-          if ((i + 15) % 30 === 0 || i + 15 >= mainTopN.length) {
-            setMainScanStatus('📥 主板K线 ' + Math.min(i + 15, mainTopN.length) + '/' + mainTopN.length);
+          if ((i + 20) % 40 === 0 || i + 20 >= mainCodes.length) {
+            setMainScanStatus('📥 主板K线 ' + Math.min(i + 20, mainCodes.length) + '/' + mainCodes.length);
           }
         }
         setMainScanStatus('📤 推送主板 ' + mainStocks.length + '只...');
@@ -886,9 +884,8 @@ const IndexPage = () => {
         sectorStocks = sectorStocks.filter(s => { if (seenCodes.has(s.code)) return false; seenCodes.add(s.code); return true; });
         setScanStatus(prev => prev + ' | 板块领涨: ' + sectorStocks.length + '只');
         const sectorStockWithKlines: any[] = [];
-        const sectorTopN = sectorStocks.slice(0, 40);
-        for (let si = 0; si < sectorTopN.length; si += 15) {
-          const sbatch = sectorTopN.slice(si, si + 15);
+        for (let si = 0; si < sectorStocks.length; si += 20) {
+          const sbatch = sectorStocks.slice(si, si + 20);
           const batchPromises = sbatch.map(async (s) => {
             try {
               const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + s.code + ',day,,,100,qfq';
