@@ -22,8 +22,9 @@ export class GemScreenerScheduler implements OnModuleInit {
     await new Promise(r => setTimeout(r, 3000));
     
     if (this._isTradingHours()) {
-      this.logger.log('⏰ 当前为交易时间，立即执行首次扫描');
-      await this.autoScan();
+      this.logger.log('⏰ 当前为交易时间，后台启动首次扫描');
+      // ⚠️ 重要：不阻塞等待，后台执行，否则会阻止 HTTP 服务启动
+      this.autoScan().catch(err => this.logger.error(`首次扫描异常: ${err.message}`));
     } else {
       this.logger.log('⏰ 当前非交易时间，等待定时任务触发');
     }
