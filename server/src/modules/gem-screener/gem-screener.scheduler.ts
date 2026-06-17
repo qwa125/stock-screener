@@ -22,6 +22,24 @@ export class GemScreenerScheduler implements OnModuleInit {
   }
 
   /**
+   * 测试腾讯API是否可达（区分Render海外环境）
+   */
+  private async _testTencentApi(): Promise<boolean> {
+    try {
+      const http = require('http');
+      return new Promise<boolean>((resolve) => {
+        const req = http.get('http://qt.gtimg.cn/q=sh000001', (res) => {
+          resolve(res.statusCode === 200);
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(3000, () => { req.destroy(); resolve(false); });
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * 判断当前是否为北京时间交易时段 (周一至周五 9:00-15:00)
    */
   private _isTradingHours(): boolean {
@@ -68,22 +86,40 @@ export class GemScreenerScheduler implements OnModuleInit {
     this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${new Date().toISOString()}`);
 
     try {
-      // 步骤1: 扫描创业板
+      // 步骤1: 先测试腾讯API是否可达（判断是否在Render海外环境）
+      const tencentReachable = await Promise.race([
+        this._testTencentApi(),
+        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+      ]).catch(() => false);
+
+      if (!tencentReachable) {
+        this.logger.warn('  ⚠️ 腾讯API不可达（Render海外环境），跳过扫描，使用缓存数据');
+        this.isScanning = false;
+        return;
+      }
+
+      // 步骤2: 扫描创业板
       this.logger.log('  扫描创业板...');
-      const gemResults = await this.gemService['scanAllStocks']();
+      const gemResults = await Promise.race([
+        this.gemService['scanAllStocks'](),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
+      ]).catch(() => null);
       if (gemResults && gemResults.length > 0) {
         this.logger.log(`  ✅ 创业板: ${gemResults.length} 只机会`);
       } else {
-        this.logger.warn('  ⚠️ 创业板扫描无结果');
+        this.logger.warn('  ⚠️ 创业板扫描无结果或超时');
       }
 
-      // 步骤2: 扫描主板
+      // 步骤3: 扫描主板
       this.logger.log('  扫描主板...');
-      const mainResults = await this.gemService['scanMainBoardStocks']();
+      const mainResults = await Promise.race([
+        this.gemService['scanMainBoardStocks'](),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
+      ]).catch(() => null);
       if (mainResults && mainResults.length > 0) {
         this.logger.log(`  ✅ 主板: ${mainResults.length} 只机会`);
       } else {
-        this.logger.warn('  ⚠️ 主板扫描无结果');
+        this.logger.warn('  ⚠️ 主板扫描无结果或超时');
       }
 
       // 步骤3: 合并全市场结果到 sectorCache

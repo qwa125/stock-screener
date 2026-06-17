@@ -25,6 +25,21 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
     async onModuleInit() {
         this.logger.log('🚀 服务启动，等待首次10分钟定时任务触发扫描');
     }
+    async _testTencentApi() {
+        try {
+            const http = require('http');
+            return new Promise((resolve) => {
+                const req = http.get('http://qt.gtimg.cn/q=sh000001', (res) => {
+                    resolve(res.statusCode === 200);
+                });
+                req.on('error', () => resolve(false));
+                req.setTimeout(3000, () => { req.destroy(); resolve(false); });
+            });
+        }
+        catch {
+            return false;
+        }
+    }
     _isTradingHours() {
         const now = new Date();
         const beijingOffset = 8 * 60;
@@ -55,21 +70,36 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.isScanning = true;
         this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${new Date().toISOString()}`);
         try {
+            const tencentReachable = await Promise.race([
+                this._testTencentApi(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+            ]).catch(() => false);
+            if (!tencentReachable) {
+                this.logger.warn('  ⚠️ 腾讯API不可达（Render海外环境），跳过扫描，使用缓存数据');
+                this.isScanning = false;
+                return;
+            }
             this.logger.log('  扫描创业板...');
-            const gemResults = await this.gemService['scanAllStocks']();
+            const gemResults = await Promise.race([
+                this.gemService['scanAllStocks'](),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
+            ]).catch(() => null);
             if (gemResults && gemResults.length > 0) {
                 this.logger.log(`  ✅ 创业板: ${gemResults.length} 只机会`);
             }
             else {
-                this.logger.warn('  ⚠️ 创业板扫描无结果');
+                this.logger.warn('  ⚠️ 创业板扫描无结果或超时');
             }
             this.logger.log('  扫描主板...');
-            const mainResults = await this.gemService['scanMainBoardStocks']();
+            const mainResults = await Promise.race([
+                this.gemService['scanMainBoardStocks'](),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
+            ]).catch(() => null);
             if (mainResults && mainResults.length > 0) {
                 this.logger.log(`  ✅ 主板: ${mainResults.length} 只机会`);
             }
             else {
-                this.logger.warn('  ⚠️ 主板扫描无结果');
+                this.logger.warn('  ⚠️ 主板扫描无结果或超时');
             }
             const allResults = [
                 ...(gemResults || []),
