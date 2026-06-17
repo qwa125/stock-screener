@@ -1,9 +1,11 @@
-name: 🔄 Wake Up Render
+name: 🔄 A股交易定时器
 
 on:
   schedule:
-    # 每10分钟运行一次，确保Render服务不休眠
+    # 每10分钟唤醒，确保Render服务不睡眠 + 激活前端扫描
     - cron: '*/10 * * * *'
+    # 北京时间9:00 (UTC 01:00) 周一至周五准点唤醒市场开盘
+    - cron: '0 1 * * 1-5'
   workflow_dispatch:  # 支持手动触发
 
 jobs:
@@ -22,7 +24,7 @@ jobs:
           echo "dow=$DOW" >> $GITHUB_OUTPUT
           echo "🕐 北京时间: $HOUR:$MINUTE 星期$DOW"
 
-      - name: 🌐 Ping Render 服务
+      - name: 🌐 Ping Render 服务（唤醒+激活前端JS扫描）
         id: ping
         run: |
           echo "⏳ 正在唤醒 Render..."
@@ -35,13 +37,13 @@ jobs:
           echo "duration_ms=$DURATION_MS" >> $GITHUB_OUTPUT
           echo "✅ HTTP $HTTP_CODE ($DURATION_MS ms)"
 
-      - name: 📊 是否在交易时段
+      - name: 📈 交易时段报告
         if: steps.beijing_time.outputs.hour >= 9 && steps.beijing_time.outputs.hour < 15 && steps.beijing_time.outputs.dow < 6
         run: |
-          echo "📈 当前在交易时段 (北上广深交易日 9:00-15:00)，服务正常"
+          echo "📈 交易时段 (北上广深交易日 9:00-15:00) — 前端JS将自动启动扫描"
           echo "🌡️ 冷启动耗时: ${{ steps.ping.outputs.duration_ms }}ms"
 
-      - name: 📊 非交易时段
+      - name: 💤 非交易时段报告
         if: steps.beijing_time.outputs.hour < 9 || steps.beijing_time.outputs.hour >= 15 || steps.beijing_time.outputs.dow >= 6
         run: |
-          echo "💤 当前非交易时段，唤醒保持服务在线即可"
+          echo "💤 非交易时段 — 唤醒仅保活，前端JS将显示冻结状态"

@@ -16,6 +16,86 @@ async function fetchTencentViaProxy(qstr: string): Promise<string> {
   return apiData?.data?.text || '';
 }
 
+// ========== 北京时间工具函数 ==========
+/** 获取当前北京时间 */
+function getBeijingNow(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + 8 * 3600000);
+}
+
+/** 判断是否为A股交易时间（北京时间：周一至周五 9:00-15:00） */
+function isTradingHour(): boolean {
+  const bj = getBeijingNow();
+  const day = bj.getDay();
+  if (day === 0 || day === 6) return false;
+  const totalMinutes = bj.getHours() * 60 + bj.getMinutes();
+  return totalMinutes >= 9 * 60 && totalMinutes < 15 * 60;
+}
+
+/** 获取冻结状态描述信息 */
+function getFreezeMessage(): string {
+  const bj = getBeijingNow();
+  const day = bj.getDay();
+  const totalMinutes = bj.getHours() * 60 + bj.getMinutes();
+
+  if (day === 0 || day === 6) return '📊 周末休市 · 数据已冻结至周一 9:00';
+  if (totalMinutes >= 15 * 60) {
+    if (day === 5) return '📊 周五收盘 · 数据已冻结至下周一 9:00';
+    return '📊 收盘数据已冻结 · 明早 9:00 恢复';
+  }
+  if (totalMinutes < 9 * 60) return '📊 盘前数据已冻结 · 9:00 恢复交易';
+  return '';
+}
+
+/** 通用K线获取：腾讯优先 → 同花顺兜底 → [] */
+async function fetchKlines(code: string, minLength: number = 20): Promise<{ date: string; open: number; close: number; high: number; low: number; volume: number; amount: number }[]> {
+  // 1. 腾讯优先（批量支持，速度快）
+  try {
+    const prefixedKey = (code.startsWith('6') ? 'sh' : 'sz') + code;
+    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const txt = await res.text();
+    const j = JSON.parse(txt);
+    const klines = (j?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({
+      date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0,
+      high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0
+    }));
+    if (klines.length >= minLength) return klines;
+  } catch(e) {}
+
+  // 2. 同花顺兜底（数据更全更准）
+  try {
+    const url = 'http://d.10jqka.com.cn/v2/line/hs_' + code + '/01/last.js';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const txt = await res.text();
+    const match = txt.match(/\{.*\}/);
+    if (!match) return [];
+    const j = JSON.parse(match[0]);
+    const dataStr = j?.data || '';
+    if (!dataStr) return [];
+    const items = dataStr.split(';').filter(Boolean);
+    const klines = items.map((item: string) => {
+      const parts = item.split(',');
+      return {
+        date: parts[0], open: parseFloat(parts[1]) || 0, high: parseFloat(parts[2]) || 0,
+        low: parseFloat(parts[3]) || 0, close: parseFloat(parts[4]) || 0,
+        volume: parseFloat(parts[5]) || 0, amount: parseFloat(parts[6]) || 0
+      };
+    });
+    if (klines.length >= minLength) return klines;
+  } catch(e) {}
+
+  return [];
+}
+
+
 interface StockInfo {
   code: string;
   name: string;
@@ -645,8 +725,12 @@ const IndexPage = () => {
   const [heavyBuyTimestamp, setHeavyBuyTimestamp] = useState<number>(0);
   const [heavyBuyLoading, setHeavyBuyLoading] = useState(true);
   const [heavyBuyScanStatus, setHeavyBuyScanStatus] = useState<string>('');
+  // 北京时区冻结状态
+  const [freezeMessage, setFreezeMessage] = useState<string>('');
+
   const gemCachedStocks = useRef<any[]>([]);
   const mainCachedStocks = useRef<any[]>([]);
+  const frozenRef = useRef<boolean>(false);
   const scanRefs = useRef<{ scanGem: () => Promise<void>; scanMain: () => Promise<void>; scanSector: () => Promise<void> }>({ scanGem: async () => {}, scanMain: async () => {}, scanSector: async () => {} });
   // 动态行业板块排行（Top10 热点行业板块）
   const [dynamicSectors, setDynamicSectors] = useState<any[] | null>(null);
@@ -686,9 +770,59 @@ const IndexPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchGemTop();
-    // 每10分钟重新扫描全市场（浏览器调腾讯API→推后端分析→更新数据）
+    // 初始化时检查北京时区
+    const checkTradingHour = () => {
+      const frozen = !isTradingHour();
+      setFreezeMessage(frozen ? getFreezeMessage() : '');
+      frozenRef.current = frozen;
+      return !frozen;
+    };
+
+    // 首次检查：如果在交易时间则立即扫描
+    if (checkTradingHour()) {
+      fetchGemTop();
+    } else {
+      setFreezeMessage(getFreezeMessage());
+    }
+
+    // 每分钟检查一次时区状态（用于实时刷新冻结提示 + 自动恢复开盘扫描）
+    const hourCheck = setInterval(() => {
+      const bj = getBeijingNow();
+      const day = bj.getDay();
+      const totalMinutes = bj.getHours() * 60 + bj.getMinutes();
+
+      // 检查是否已进入交易时间（之前冻结 → 现在解冻）
+      if (day >= 1 && day <= 5 && totalMinutes >= 9 * 60 && totalMinutes < 15 * 60) {
+        if (frozenRef.current) {
+          setFreezeMessage('');
+          frozenRef.current = false;
+          setGemScanStatus('🔄 开盘了，启动扫描...');
+          // 进入交易时间，立即触发一次扫描
+          scanRefs.current.scanGem().then(() => {
+            scanRefs.current.scanMain().then(() => {
+              scanRefs.current.scanSector().then(() => {
+                fetchHeavyBuy();
+                setGemScanStatus('✅ 全市场扫描完成');
+              });
+            });
+          });
+        }
+      } else {
+        // 不在交易时间
+        if (!frozenRef.current) {
+          setFreezeMessage(getFreezeMessage());
+          frozenRef.current = true;
+        }
+      }
+    }, 60000);
+
+    // 每10分钟重新扫描全市场（仅在交易时间执行）
     const timer = setInterval(async () => {
+      if (!isTradingHour()) {
+        setGemScanStatus('');
+        setFreezeMessage(getFreezeMessage());
+        return;
+      }
       setGemScanStatus('🔄 10分钟自动扫描中...');
       // scan functions stored in refs to avoid TS hoisting issues
       await scanRefs.current.scanGem();
@@ -697,7 +831,7 @@ const IndexPage = () => {
       fetchHeavyBuy();
       setGemScanStatus('✅ 全市场扫描完成');
     }, 600000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); clearInterval(hourCheck); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchGemTop]);
 
@@ -784,76 +918,44 @@ const IndexPage = () => {
   }, [fetchHeavyBuy]);
 
   // ========== 扫描函数：只扫描创业板 ==========
-  const scanGemOnly = useCallback(async () => {
-    setGemScanStatus('🔄 正在获取创业板股票列表...');
-    let gemCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
-    // 方案一：腾讯接口为主 — 生成代码范围批量查询
-    setGemScanStatus('🔄 腾讯创业板 ' + 0 + '/' + 2000 + '只');
-    {
-      const gemRanges: { prefix: string; label: string; start: number; end: number }[] = [
-        { prefix: 'sz', label: '创业板', start: 300000, end: 302999 },
-      ];
-      for (const rng of gemRanges) {
-        const allCodes: string[] = [];
-        for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + i);
-        for (let j = 0; j < allCodes.length; j += 80) {
-          const batch = allCodes.slice(j, j + 80);
-          try {
-            const txt = await fetchTencentViaProxy(batch.join(','));
-            const lines = txt.split('\n');
-            for (const line of lines) {
-              if (!line || line.length < 20) continue;
-              const parts = line.split('~');
-              if (parts.length < 6) continue;
-              const rawCode = parts[2] || '';
-              if (!rawCode) continue;
-              const name = parts[1] || '';
-              if (!name) continue;
-              const code = rawCode;
-              const price = parseFloat(parts[3]) || 0;
-              const prevClose = parseFloat(parts[4]) || price;
-              const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
-              gemCodes.push({ code, name, price, changePercent, inflow: 0 });
-            }
-          } catch(e) {}
-          if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
-            setGemScanStatus('📥 腾讯创业板 ' + gemCodes.length + '只');
+  /** 从东方财富获取完整股票列表 */
+  const fetchStockListFromEastMoney = async (fsList: string[], labels: string[], minTotal: number, prefixFmt: (code: string) => string, onProgress?: (msg: string) => void): Promise<{ code: string; name: string; price: number; changePercent: number }[]> => {
+    const all: any[] = [];
+    const PAGE_SIZE = 500;
+    for (let mi = 0; mi < fsList.length; mi++) {
+      const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + fsList[mi] + '&fields=f12';
+      let total = 0;
+      try {
+        const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        total = JSON.parse(await metaRes.text())?.data?.total || 0;
+      } catch(e) {}
+      if (total < minTotal) continue;
+      const totalPages = Math.ceil(total / PAGE_SIZE);
+      for (let pn = 1; pn <= totalPages; pn++) {
+        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + fsList[mi] + '&fields=f12,f14,f2,f3,f62';
+        try {
+          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const items = JSON.parse(await res.text())?.data?.diff || [];
+          for (const item of items) {
+            if (!item.f12 || !item.f14) continue;
+            all.push({ code: prefixFmt(item.f12), name: item.f14, price: item.f2 || 0, changePercent: item.f3 || 0 });
           }
-        }
+          onProgress?.(labels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total);
+        } catch(e) {}
       }
     }
-    // 方案二：腾讯数据不足（<1100）降级东方财富
-    if (gemCodes.length < 1100) {
-      setGemScanStatus('🔄 腾讯创业板数据不足(' + gemCodes.length + ')，改用东方财富...');
-      gemCodes = [];
-      try {
-        const PAGE_SIZE = 500;
-        const gemFsList = ['m:0+t:80+f:!2', 'm:0+t:16'];
-        const gemLabels = ['创业板t80', '创业板t16'];
-        const gemMinExpect = [500, 500];
-        for (let mi = 0; mi < gemFsList.length; mi++) {
-          const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + gemFsList[mi] + '&fields=f12';
-          const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const metaJson = JSON.parse(await metaRes.text());
-          const total = metaJson?.data?.total || 0;
-          if (total < gemMinExpect[mi]) continue;
-          const totalPages = Math.ceil(total / PAGE_SIZE);
-          for (let pn = 1; pn <= totalPages; pn++) {
-            const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + gemFsList[mi] + '&fields=f12,f14,f2,f3,f62';
-            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const txt = await res.text();
-            const j = JSON.parse(txt);
-            const items = j?.data?.diff || [];
-            for (const item of items) {
-              if (!item.f12 || !item.f14) continue;
-              gemCodes.push({ code: item.f12, name: item.f14, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
-            }
-            setGemScanStatus('📥 东方财富 ' + gemLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
-          }
-          if (gemCodes.length > 500) break;
-        }
-      } catch(e) {}
-    }
+    return all;
+  };
+
+  const scanGemOnly = useCallback(async () => {
+    setGemScanStatus('🔄 东方财富获取全市场创业板列表...');
+    const gemCodes = await fetchStockListFromEastMoney(
+      ['m:0+t:80+f:!2', 'm:0+t:16'],
+      ['创业板', '北交所'],
+      500,
+      (code: string) => code,
+      (msg: string) => setGemScanStatus('📥 东方财富 ' + msg + '只')
+    );
     setGemScanStatus('✅ 创业板: ' + gemCodes.length + '只');
 
     // 拉取K线
@@ -862,13 +964,8 @@ const IndexPage = () => {
       const batch = gemCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const gemPrefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
-          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + gemPrefixedKey + ',day,,,100,qfq';
-          const res3 = await fetch(url3);
-          const txt3 = await res3.text();
-          const j3 = JSON.parse(txt3);
-          const klines = (j3?.data?.[gemPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
+          const klines = await fetchKlines(s.code, 20);
+          gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: (s as any).inflow || 0, klines });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -905,78 +1002,41 @@ const IndexPage = () => {
   // ========== 扫描函数：只扫描主板 ==========
   const scanMainOnly = useCallback(async () => {
     setMainScanStatus('🔄 正在获取主板股票列表(腾讯)...');
-    let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow: number }[] = [];
+    let mainCodes: { code: string; name: string; price: number; changePercent: number; inflow?: number }[] = [];
     try {
-      // 方案一：腾讯接口为主 — 生成代码范围批量查询
+      // 东方财富为主（完整覆盖全市场主板）
+      setMainScanStatus('🔄 东方财富获取全市场主板列表...');
+      mainCodes = await fetchStockListFromEastMoney(
+        ['m:1+t:2+f:!2', 'm:0+t:1+f:!2'],
+        ['沪主板', '深主板'],
+        500,
+        (code: string) => code,
+        (msg) => setMainScanStatus('📥 东方财富 ' + msg + '只')
+      );
+      setMainScanStatus('✅ 主板: ' + mainCodes.length + '只');
+    } catch (e) {
+      setMainScanStatus('🔄 东方财富失败，腾讯兜底...');
       mainCodes = [];
-      const mainRanges: { prefix: string; label: string; start: number; end: number }[] = [
-        { prefix: 'sh', label: '沪主板', start: 600000, end: 609999 },
-        { prefix: 'sz', label: '深主板', start: 0, end: 3999 },
-        { prefix: 'sz', label: '深主板001', start: 1000, end: 1999 },
-        { prefix: 'sz', label: '深主板002', start: 2000, end: 2999 },
+      const qRanges = [
+        { p: 'sh', s: 600000, e: 609999 },
+        { p: 'sz', s: 0, e: 3999 },
       ];
-      for (const rng of mainRanges) {
-        const allCodes: string[] = [];
-        if (rng.prefix === 'sh') {
-          for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + i);
-        } else {
-          for (let i = rng.start; i <= rng.end; i++) allCodes.push(rng.prefix + String(i).padStart(6, '0'));
-        }
-        for (let j = 0; j < allCodes.length; j += 80) {
-          const batch = allCodes.slice(j, j + 80);
+      for (const r of qRanges) {
+        const a: string[] = [];
+        for (let i = r.s; i <= r.e; i++) a.push(r.p + String(i).padStart(6, '0'));
+        for (let j = 0; j < a.length; j += 80) {
           try {
-            const txt2 = await fetchTencentViaProxy(batch.join(','));
-            const lines = txt2.split('\n');
-            for (const line of lines) {
-              if (!line || line.length < 20) continue;
-              const parts = line.split('~');
-              if (parts.length < 6) continue;
-              const rawCode = parts[2] || '';
-              if (!rawCode) continue;
-              const name = parts[1] || '';
-              if (!name) continue;
-              const code = rawCode;
-              const price = parseFloat(parts[3]) || 0;
-              const prevClose = parseFloat(parts[4]) || price;
-              const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
-              mainCodes.push({ code, name, price, changePercent, inflow: 0 });
+            const t = await fetchTencentViaProxy(a.slice(j, j + 80).join(','));
+            for (const l of t.split('\n')) {
+              if (!l || l.length < 20) continue;
+              const p = l.split('~');
+              if (p.length < 6 || !p[2] || !p[1]) continue;
+              mainCodes.push({ code: p[2], name: p[1], price: parseFloat(p[3]) || 0, changePercent: parseFloat(p[3]) > 0 ? ((parseFloat(p[3]) - parseFloat(p[4])) / parseFloat(p[4]) * 100) : 0, inflow: 0 });
             }
           } catch(e2) {}
-          if ((j + 80) % 400 === 0 || j + 80 >= allCodes.length) {
-            setMainScanStatus('📥 腾讯 ' + rng.label + ' ' + Math.min(j + 80, allCodes.length) + '/' + allCodes.length + '只');
-          }
         }
       }
-      if (mainCodes.length < 3000) throw new Error('腾讯主板仅 ' + mainCodes.length + ' 只');
       setMainScanStatus('✅ 腾讯主板: ' + mainCodes.length + '只');
-    } catch (e) {
-      setMainScanStatus('🔄 腾讯数据不足，改用东方财富...');
-      mainCodes = [];
-      const PAGE_SIZE = 500;
-      const mainFsList = ['m:1+t:2+f:!2', 'm:0+t:1+f:!2'];
-      const mainLabels = ['沪主板', '深主板'];
-      const minExpect = [2000, 1000];
-      for (let mi = 0; mi < mainFsList.length; mi++) {
-        const metaUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12';
-        const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const metaJson = JSON.parse(await metaRes.text());
-        const total = metaJson?.data?.total || 0;
-        if (total < minExpect[mi]) throw new Error(mainLabels[mi] + '总数=' + total + ' 过少');
-        const totalPages = Math.ceil(total / PAGE_SIZE);
-        for (let pn = 1; pn <= totalPages; pn++) {
-          const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=' + pn + '&pz=' + PAGE_SIZE + '&po=1&np=1&fltt=2&invt=2&fid=f62&fs=' + mainFsList[mi] + '&fields=f12,f14,f2,f3,f62';
-          const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const txt = await res.text();
-          const j = JSON.parse(txt);
-          const items = j?.data?.diff || [];
-          for (const item of items) {
-            const prefix = (item.f12 || '').startsWith('6') ? 'sh' : 'sz';
-            mainCodes.push({ code: prefix + item.f12, name: item.f14 || item.f12, price: item.f2 || 0, changePercent: item.f3 || 0, inflow: parseFloat(item.f62) || 0 });
-          }
-          setMainScanStatus('📥 东方财富 ' + mainLabels[mi] + ' ' + Math.min(pn * PAGE_SIZE, total) + '/' + total + '只');
-        }
-      }
-      setMainScanStatus('✅ 东方财富主板: ' + mainCodes.length + '只');
     }
 
     // 拉取K线
@@ -985,13 +1045,8 @@ const IndexPage = () => {
       const batch = mainCodes.slice(i, i + 20);
       const batchPromises = batch.map(async (s) => {
         try {
-          const mainPrefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
-          const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + mainPrefixedKey + ',day,,,100,qfq';
-          const res = await fetch(url);
-          const txt = await res.text();
-          const j = JSON.parse(txt);
-          const klines = (j?.data?.[mainPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
+          const klines = await fetchKlines(s.code, 20);
+          if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: (s as any).inflow || 0, klines }); else mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: (s as any).inflow || 0, klines: [] });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -1120,11 +1175,7 @@ const IndexPage = () => {
         const sbatch = freshStocks.slice(si, si + 20);
         const batchPromises = sbatch.map(async (s) => {
           try {
-            const prefix = s.code.startsWith('6') ? 'sh' : 'sz';
-            const res = await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefix + s.code + ',day,,,100,qfq');
-            const txt = await res.text();
-            const j = JSON.parse(txt);
-            const klines = (j?.data?.[prefix + s.code]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
+            const klines = await fetchKlines(s.code, 20);
             if (klines.length >= 20) allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
           } catch(e2) {}
         });
@@ -1240,12 +1291,7 @@ const IndexPage = () => {
       const batch = scanList.slice(i, i + 20);
       await Promise.all(batch.map(async (s) => {
         try {
-          const prefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
-          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
-          const res3 = await fetch(url3);
-          const txt3 = await res3.text();
-          const j3 = JSON.parse(txt3);
-          const klines = (j3?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
+          const klines = await fetchKlines(s.code, 15);
           if (klines.length >= 15) hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines }); else hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines: [] });
         } catch(e2) {}
       }));
@@ -1274,6 +1320,11 @@ const IndexPage = () => {
 
   // 自动触发前端推送扫描(3秒后运行，依次扫描创业板→主板→板块)
   useEffect(() => {
+    // 不在交易时间则不启动自动扫描
+    if (!isTradingHour()) {
+      setFreezeMessage(getFreezeMessage());
+      return;
+    }
     const t1 = setTimeout(async () => {
       await scanGemOnly();
       // 创业板完成后，自动扫描主板
@@ -1433,6 +1484,13 @@ const IndexPage = () => {
             输入股票代码或名称，查看技术指标与数据统计
           </Text>
         </View>
+
+        {/* 冻结提示（非交易时间展示） */}
+        {freezeMessage && (
+          <View className="mb-4 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+            <Text className="block text-sm text-yellow-800 font-medium">{freezeMessage}</Text>
+          </View>
+        )}
 
         {/* 搜索栏 */}
         <View className="mb-6">
