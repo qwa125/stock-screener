@@ -686,7 +686,8 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchGemTop();
-    const timer = setInterval(fetchGemTop, 15000);
+    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    const timer = setInterval(fetchGemTop, 600000);
     return () => clearInterval(timer);
   }, [fetchGemTop]);
 
@@ -713,7 +714,8 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchMainTop();
-    const timer = setInterval(fetchMainTop, 15000);
+    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    const timer = setInterval(fetchMainTop, 600000);
     return () => clearInterval(timer);
   }, [fetchMainTop]);
 
@@ -740,7 +742,8 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchSectorHot();
-    const timer = setInterval(fetchSectorHot, 30000);
+    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    const timer = setInterval(fetchSectorHot, 600000);
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
 
@@ -765,7 +768,8 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchHeavyBuy();
-    const timer = setInterval(fetchHeavyBuy, 30000);
+    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    const timer = setInterval(fetchHeavyBuy, 600000);
     return () => clearInterval(timer);
   }, [fetchHeavyBuy]);
 
