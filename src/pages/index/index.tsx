@@ -1282,8 +1282,9 @@ const IndexPage = () => {
         await scanMainOnly();
         // 主板完成后，自动扫描板块
         setSectorScanStatus('🔄 主板已完成，开始自动扫描热点板块...');
-        const t3 = setTimeout(() => {
-          scanSectorOnly();
+        const t3 = setTimeout(async () => {
+          await scanSectorOnly().catch(() => {});
+          fetchHeavyBuy();
         }, 500);
         return () => clearTimeout(t3);
       }, 800);

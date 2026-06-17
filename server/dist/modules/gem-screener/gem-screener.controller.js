@@ -164,7 +164,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     const raw = (0, fs_1.readFileSync)(p, 'utf-8');
                     const data = JSON.parse(raw);
                     if (data && data.data && data.data.length > 0) {
-                        return data.data.map(s => ({ ...s, suggestion: '🔥 重仓买入', suggestText: '🔥 重仓买入' }));
+                        return data.data.map(s => ({ ...s, suggestion: '重仓买入', suggestText: '🔥 重仓买入' }));
                     }
                 }
             }
