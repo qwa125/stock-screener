@@ -1,1 +1,62 @@
-{"data": [{"code": "300052", "name": "中青宝", "currentPrice": 12.28, "changePercent": 1.66, "priceIncrease": 0, "mainForceInflow": 0, "pricePosition": 0, "capitalRank": 0, "baiXiaoDays": 0, "score": 120, "suggestion": "重仓买入", "entryTiming": 0, "safetyScore": 0, "isGoldenCross": false, "diff": 0, "dea": 0, "buySignal": ""}, {"code": "300122", "name": "智飞生物", "currentPrice": 12.48, "changePercent": 0.97, "priceIncrease": 0, "mainForceInflow": 0, "pricePosition": 0, "capitalRank": 0, "baiXiaoDays": 0, "score": 110, "suggestion": "重仓买入", "entryTiming": 0, "safetyScore": 0, "isGoldenCross": false, "diff": 0, "dea": 0, "buySignal": ""}, {"code": "300502", "name": "新易盛", "currentPrice": 549, "changePercent": 1.57, "priceIncrease": 0, "mainForceInflow": 0, "pricePosition": 0, "capitalRank": 0, "baiXiaoDays": 0, "score": 103, "suggestion": "重仓买入", "entryTiming": 0, "safetyScore": 0, "isGoldenCross": false, "diff": 0, "dea": 0, "buySignal": ""}]}
+{
+  "data": [
+    {
+      "code": "300052",
+      "name": "中青宝",
+      "currentPrice": 12.28,
+      "changePercent": 1.66,
+      "priceIncrease": 0,
+      "mainForceInflow": 0,
+      "pricePosition": 0,
+      "capitalRank": 0,
+      "baiXiaoDays": 0,
+      "score": 120,
+      "suggestion": "重仓买入",
+      "entryTiming": 0,
+      "safetyScore": 0,
+      "isGoldenCross": false,
+      "diff": 0,
+      "dea": 0,
+      "buySignal": ""
+    },
+    {
+      "code": "300122",
+      "name": "智飞生物",
+      "currentPrice": 12.48,
+      "changePercent": 0.97,
+      "priceIncrease": 0,
+      "mainForceInflow": 0,
+      "pricePosition": 0,
+      "capitalRank": 0,
+      "baiXiaoDays": 0,
+      "score": 110,
+      "suggestion": "重仓买入",
+      "entryTiming": 0,
+      "safetyScore": 0,
+      "isGoldenCross": false,
+      "diff": 0,
+      "dea": 0,
+      "buySignal": ""
+    },
+    {
+      "code": "300502",
+      "name": "新易盛",
+      "currentPrice": 549,
+      "changePercent": 1.57,
+      "priceIncrease": 0,
+      "mainForceInflow": 0,
+      "pricePosition": 0,
+      "capitalRank": 0,
+      "baiXiaoDays": 0,
+      "score": 103,
+      "suggestion": "重仓买入",
+      "entryTiming": 0,
+      "safetyScore": 0,
+      "isGoldenCross": false,
+      "diff": 0,
+      "dea": 0,
+      "buySignal": ""
+    }
+  ],
+  "timestamp": 1781689128430
+}
