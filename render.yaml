@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: node dist/main.js
     healthCheckPath: /api/health
     envVars:
