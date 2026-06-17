@@ -1,0 +1,25 @@
+name: 🚀 Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Trigger Render Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔄 Trigger Render Deploy Hook
+        run: |
+          echo "⏳ 触发 Render 部署..."
+          HTTP_CODE=$(curl -s -o /tmp/render-deploy.log -w "%{http_code}" \
+            -X POST "https://api.render.com/deploy/srv-d8ortc8js32c7385n72g?key=htmRK6ve_Qc" \
+            --max-time 60)
+          echo "HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ 部署已触发！"
+          else
+            echo "⚠️ 部署触发响应: $HTTP_CODE"
+            cat /tmp/render-deploy.log
+          fi
