@@ -310,8 +310,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
       this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
     }
-    // 启动后预缓存分析结果
-    this.triggerAnalysisPreCacheFromCache();
+    // Render海外服务器上不启动预缓存分析（跳过腾讯API调用避免超时/崩溃）
+    // 由用户前端页面访问时触发
   }
 
   // ---------------------------------------------------------------------------
@@ -1791,7 +1791,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // Render美国服务器无法访问中国股票API，始终返回缓存数据
     // 前端浏览器（在中国）通过 POST /api/gem/refresh-sector 推送实时数据更新缓存
     if (this.sectorCache && this.sectorCache.data?.length) {
-      this.triggerAnalysisPreCache(this.sectorCache.data);
       return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
     }
     // 完全没有缓存 → 返回空
@@ -1800,18 +1799,13 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   async scanTopGem(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    // Render美国服务器无法访问中国股票API，始终返回缓存数据
+    // Render海外服务器无法访问中国股票API，始终返回缓存数据
     // 前端浏览器（在中国）通过 POST /api/gem/refresh 推送实时数据更新缓存
+    // 注意：不要在Render上调用 triggerAnalysisPreCache，否则会触发腾讯API超时导致进程崩溃
     if (this.cache && this.cache.data?.length) {
-      const cacheStale = this.cache.data.every(s => !s.suggestion);
-      if (cacheStale) {
-        this.logger.log('🔄 缓存数据缺少 suggestion 字段, 触发异步刷新');
-        this.triggerAnalysisPreCache(this.cache.data);
-      }
-      this.triggerAnalysisPreCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
-    // 完全没有缓存 → 尝试异步扫描，立即返回空
+    // 完全没有缓存 → 触发异步扫描，立即返回空
     this.logger.log('📦 无缓存数据，触发异步扫描...');
     this.triggerRefresh();
     return { opportunities: [], timestamp: Date.now() };
@@ -1821,18 +1815,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
    * 扫描主板Top10机会股
    */
   async scanTopMainBoard(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
-    // Render美国服务器无法访问中国股票API，始终返回缓存数据
+    // Render海外服务器无法访问中国股票API，始终返回缓存数据
     // 前端浏览器（在中国）通过 POST /api/gem/refresh-main-board 推送实时数据更新缓存
     if (this.mainBoardCache && this.mainBoardCache.data?.length) {
-      const cacheStale = this.mainBoardCache.data.every(s => !s.suggestion);
-      if (cacheStale) {
-        this.logger.log('🔄 主板缓存缺少 suggestion 字段, 触发异步刷新');
-        this.triggerAnalysisPreCache(this.mainBoardCache.data);
-      }
-      this.triggerAnalysisPreCache(this.mainBoardCache.data);
       return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
     }
-    // 完全没有缓存 → 尝试异步扫描，立即返回空
+    // 完全没有缓存 → 触发异步扫描，立即返回空
     this.logger.log('📦 主板无缓存数据，触发异步扫描...');
     this.triggerRefresh();
     return { opportunities: [], timestamp: Date.now() };

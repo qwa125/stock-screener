@@ -250,7 +250,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
             this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
-        this.triggerAnalysisPreCacheFromCache();
     }
     calcCustomMACD(kline) {
         const closes = kline.map(k => k.close);
@@ -1537,7 +1536,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanSectorOpportunities(force = false) {
         if (this.sectorCache && this.sectorCache.data?.length) {
-            this.triggerAnalysisPreCache(this.sectorCache.data);
             return { opportunities: this.sectorCache.data, timestamp: this.sectorCache.timestamp };
         }
         this.logger.log('📦 板块无缓存数据，返回空');
@@ -1545,12 +1543,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopGem(force = false) {
         if (this.cache && this.cache.data?.length) {
-            const cacheStale = this.cache.data.every(s => !s.suggestion);
-            if (cacheStale) {
-                this.logger.log('🔄 缓存数据缺少 suggestion 字段, 触发异步刷新');
-                this.triggerAnalysisPreCache(this.cache.data);
-            }
-            this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         this.logger.log('📦 无缓存数据，触发异步扫描...');
@@ -1559,12 +1551,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopMainBoard(force = false) {
         if (this.mainBoardCache && this.mainBoardCache.data?.length) {
-            const cacheStale = this.mainBoardCache.data.every(s => !s.suggestion);
-            if (cacheStale) {
-                this.logger.log('🔄 主板缓存缺少 suggestion 字段, 触发异步刷新');
-                this.triggerAnalysisPreCache(this.mainBoardCache.data);
-            }
-            this.triggerAnalysisPreCache(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
         }
         this.logger.log('📦 主板无缓存数据，触发异步扫描...');
