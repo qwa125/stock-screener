@@ -25,6 +25,7 @@ const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
 const data_1 = require("../../industry-sectors/data");
+const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
 function getOpportunityTTL() {
@@ -1914,7 +1915,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         try {
             const allCodes = [];
             const codeToSectorName = new Map();
-            for (const sector of data_1.default) {
+            for (const sector of ALL_SECTORS) {
                 for (const code of sector.codes) {
                     if (!allCodes.includes(code)) {
                         allCodes.push(code);
@@ -2003,14 +2004,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async getIndustrySectorTop10() {
         const allCodes = [];
         const codeToSector = new Map();
-        for (const sec of data_1.default) {
+        for (const sec of ALL_SECTORS) {
             for (const code of sec.codes) {
                 codeToSector.set(code, sec.name);
                 if (!allCodes.includes(code))
                     allCodes.push(code);
             }
         }
-        this.logger.log(`📊 获取行业板块实时热度: ${data_1.default.length}个板块, ${allCodes.length}只成分股`);
+        this.logger.log(`📊 获取行业板块实时热度: ${ALL_SECTORS.length}个板块(含概念), ${allCodes.length}只成分股`);
         const quoteMap = new Map();
         const BATCH = 80;
         for (let i = 0; i < allCodes.length; i += BATCH) {
@@ -2042,7 +2043,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         this.logger.log(`📊 获取到 ${quoteMap.size}/${allCodes.length} 只行情数据`);
         const sectorMap = new Map();
-        for (const sec of data_1.default) {
+        for (const sec of ALL_SECTORS) {
             let totalChange = 0;
             let count = 0;
             let upCount = 0;

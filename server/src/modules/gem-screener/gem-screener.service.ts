@@ -12,7 +12,10 @@ import { StockService } from '../stock/stock.service';
 import { KLine } from '../stock/types';
 import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
-import INDUSTRY_SECTORS from '../../industry-sectors/data';
+import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
+
+// 合并申万行业 + 热点概念板块
+const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
 
 interface CacheEntry {
   data: OpportunityStock[];
@@ -2239,7 +2242,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 1. 收集全行业280只成分股code (无前缀)
       const allCodes: string[] = [];
       const codeToSectorName = new Map<string, string>();
-      for (const sector of INDUSTRY_SECTORS) {
+      for (const sector of ALL_SECTORS) {
         for (const code of sector.codes) {
           if (!allCodes.includes(code)) {
             allCodes.push(code);
@@ -2353,14 +2356,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 收集所有板块成分股
     const allCodes: string[] = [];
     const codeToSector = new Map<string, string>();
-    for (const sec of INDUSTRY_SECTORS) {
+    for (const sec of ALL_SECTORS) {
       for (const code of sec.codes) {
         codeToSector.set(code, sec.name);
         if (!allCodes.includes(code)) allCodes.push(code);
       }
     }
 
-    this.logger.log(`📊 获取行业板块实时热度: ${INDUSTRY_SECTORS.length}个板块, ${allCodes.length}只成分股`);
+    this.logger.log(`📊 获取行业板块实时热度: ${ALL_SECTORS.length}个板块(含概念), ${allCodes.length}只成分股`);
 
     // 分批获取实时行情（通过腾讯API）
     const quoteMap = new Map<string, { name: string; price: number; changePercent: number }>();
@@ -2394,7 +2397,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // 按板块分组计算平均涨幅
     const sectorMap = new Map<string, { totalChange: number; upCount: number; count: number; stocks: Array<{ code: string; name: string; price: number; changePercent: number }> }>();
-    for (const sec of INDUSTRY_SECTORS) {
+    for (const sec of ALL_SECTORS) {
       let totalChange = 0;
       let count = 0;
       let upCount = 0;
