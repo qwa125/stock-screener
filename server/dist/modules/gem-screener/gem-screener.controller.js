@@ -55,11 +55,15 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     async getTopGem(force) {
         const result = await this.gemScreener.scanTopGem(force === 'true');
-        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+        const heavyBuyGEM = this.readHeavyBuyCache().filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301')));
+        const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyGEM);
+        return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
     }
     async getTopMainBoard(force) {
         const result = await this.gemScreener.scanTopMainBoard(force === 'true');
-        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+        const heavyBuyMain = this.readHeavyBuyCache().filter(s => s.code && !s.code.startsWith('30'));
+        const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
+        return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
     }
     async getTopOpportunities(force) {
         const result = await this.gemScreener.scanTopOpportunities(force === 'true');
@@ -134,6 +138,32 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async seedCache() {
         const result = await this.gemScreener.generateSeedCache();
         return { code: 200, msg: 'success', data: result };
+    }
+    readHeavyBuyCache() {
+        try {
+            const paths = [
+                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
+            ];
+            for (const p of paths) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
+                    const data = JSON.parse(raw);
+                    if (data && data.data && data.data.length > 0) {
+                        return data.data.map(s => ({ ...s, suggestion: '🔥 重仓买入', suggestText: '🔥 重仓买入' }));
+                    }
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error('读取重仓买入缓存失败: ' + e.message);
+        }
+        return [];
+    }
+    mergeWithHeavyBuy(opportunities, heavyBuy) {
+        const heavyCodes = new Set(heavyBuy.map(s => s.code));
+        const uniqueOpps = opportunities.filter(s => !heavyCodes.has(s.code));
+        const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
+        return merged;
     }
 };
 exports.GemScreenerController = GemScreenerController;

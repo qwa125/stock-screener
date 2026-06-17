@@ -60,13 +60,23 @@ export class GemScreenerController {
   @Get('top/gem')
   async getTopGem(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopGem(force === 'true');
-    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+    // 合并重仓买入中GEM股(300/301开头)，按评分排序，重仓买入排最前面
+    const heavyBuyGEM = this.readHeavyBuyCache().filter(s =>
+      s.code && (s.code.startsWith('300') || s.code.startsWith('301'))
+    );
+    const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyGEM);
+    return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
   }
 
   @Get('top/main-board')
   async getTopMainBoard(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopMainBoard(force === 'true');
-    return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
+    // 合并重仓买入中主板股(非300/301开头)，按评分排序
+    const heavyBuyMain = this.readHeavyBuyCache().filter(s =>
+      s.code && !s.code.startsWith('30')
+    );
+    const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
+    return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
   }
 
   @Get('top/opportunities')
@@ -169,5 +179,40 @@ export class GemScreenerController {
   async seedCache() {
     const result = await this.gemScreener.generateSeedCache();
     return { code: 200, msg: 'success', data: result };
+  }
+
+  /**
+   * 读取重仓买入缓存
+   */
+  private readHeavyBuyCache(): any[] {
+    try {
+      const paths = [
+        join(process.cwd(), 'assets', 'heavy-buy-cache.json'),
+      ];
+      for (const p of paths) {
+        if (existsSync(p)) {
+          const raw = readFileSync(p, 'utf-8');
+          const data = JSON.parse(raw);
+          if (data && data.data && data.data.length > 0) {
+            return data.data.map(s => ({ ...s, suggestion: '🔥 重仓买入', suggestText: '🔥 重仓买入' }));
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error('读取重仓买入缓存失败: ' + e.message);
+    }
+    return [];
+  }
+
+  /**
+   * 合并机会股与重仓买入，按评分排序（重仓买入排最前面）
+   */
+  private mergeWithHeavyBuy(opportunities: any[], heavyBuy: any[]): any[] {
+    const heavyCodes = new Set(heavyBuy.map(s => s.code));
+    // 从机会股中排除已出现在重仓买入的(避免重复)
+    const uniqueOpps = opportunities.filter(s => !heavyCodes.has(s.code));
+    // 合并,按评分降序
+    const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
+    return merged;
   }
 }

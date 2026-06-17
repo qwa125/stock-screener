@@ -1692,7 +1692,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {gemData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((stock, idx) => {
+              {gemData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((stock, idx) => {
                 const action = stock.suggestion || getOpportunitySuggestion(stock);
                 return (
                 <Card key={stock.code}>
@@ -1793,7 +1793,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {mainData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
+              {mainData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 return (
                 <Card key={`main-${item.code}-${idx}`}>
@@ -1908,7 +1908,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {sectorData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
+              {sectorData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (
@@ -1989,7 +1989,7 @@ const IndexPage = () => {
             </View>
           ) : heavyBuyData && heavyBuyData.length > 0 ? (
             <View>
-              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 3).map((item: any, idx: number) => {
+              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (
