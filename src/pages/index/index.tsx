@@ -686,10 +686,17 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchGemTop();
-    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
-    const timer = setInterval(fetchGemTop, 600000);
+    // 每10分钟重新扫描全市场（浏览器调腾讯API→推后端分析→更新数据）
+    const timer = setInterval(async () => {
+      setGemScanStatus('🔄 10分钟自动扫描中...');
+      await scanGemOnly();
+      await scanMainOnly();
+      await scanSectorOnly();
+      // 重仓买入由scanSectorOnly内部触发更新
+      setGemScanStatus('✅ 全市场扫描完成');
+    }, 600000);
     return () => clearInterval(timer);
-  }, [fetchGemTop]);
+  }, [fetchGemTop, scanGemOnly, scanMainOnly, scanSectorOnly]);
 
   // 获取主板Top10（后端控制缓存）
   const fetchMainTop = useCallback(async () => {
@@ -714,7 +721,7 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchMainTop();
-    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    // 主板使用GEM定时器的扫描结果，这里只负责读取
     const timer = setInterval(fetchMainTop, 600000);
     return () => clearInterval(timer);
   }, [fetchMainTop]);
@@ -742,7 +749,7 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchSectorHot();
-    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    // 板块使用GEM定时器的扫描结果，这里只负责读取
     const timer = setInterval(fetchSectorHot, 600000);
     return () => clearInterval(timer);
   }, [fetchSectorHot]);
@@ -768,7 +775,7 @@ const IndexPage = () => {
 
   useEffect(() => {
     fetchHeavyBuy();
-    // 后端每10分钟重新扫描一次，前端同步拉取最新结果
+    // 重仓买入使用GEM定时器的扫描结果，这里只负责读取
     const timer = setInterval(fetchHeavyBuy, 600000);
     return () => clearInterval(timer);
   }, [fetchHeavyBuy]);
