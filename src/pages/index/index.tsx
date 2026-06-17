@@ -865,7 +865,7 @@ const IndexPage = () => {
           const txt3 = await res3.text();
           const j3 = JSON.parse(txt3);
           const klines = (j3?.data?.[gemPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 60) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          if (klines.length >= 20) gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else gemStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -987,7 +987,7 @@ const IndexPage = () => {
           const txt = await res.text();
           const j = JSON.parse(txt);
           const klines = (j?.data?.[mainPrefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 60) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+          if (klines.length >= 20) mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else mainStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
         } catch(e2) {}
       });
       await Promise.all(batchPromises);
@@ -1120,7 +1120,7 @@ const IndexPage = () => {
             const txt = await res.text();
             const j = JSON.parse(txt);
             const klines = (j?.data?.[prefix + s.code]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-            if (klines.length >= 60) allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines });
+            if (klines.length >= 20) allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines }); else allStocks.push({ code: s.code, name: s.name, sectorName: s.sectorName, price: s.price, changePercent: s.changePercent, inflow: s.inflow, klines: [] });
           } catch(e2) {}
         });
         await Promise.all(batchPromises);
@@ -1241,7 +1241,7 @@ const IndexPage = () => {
           const txt3 = await res3.text();
           const j3 = JSON.parse(txt3);
           const klines = (j3?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
-          if (klines.length >= 60) hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines });
+          if (klines.length >= 15) hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines }); else hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines: [] });
         } catch(e2) {}
       }));
       if (i % 100 === 0 || i + 20 >= scanList.length) {
