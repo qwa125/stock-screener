@@ -3,8 +3,8 @@
     {
       "code": "300052",
       "name": "中青宝",
-      "currentPrice": 12.28,
-      "changePercent": 1.66,
+      "currentPrice": 12.37,
+      "changePercent": 0.73,
       "priceIncrease": 0,
       "mainForceInflow": 0,
       "pricePosition": 0,
@@ -17,13 +17,14 @@
       "isGoldenCross": false,
       "diff": 0,
       "dea": 0,
-      "buySignal": ""
+      "buySignal": "",
+      "price": 12.37
     },
     {
       "code": "300122",
       "name": "智飞生物",
-      "currentPrice": 12.48,
-      "changePercent": 0.97,
+      "currentPrice": 12.61,
+      "changePercent": 1.04,
       "priceIncrease": 0,
       "mainForceInflow": 0,
       "pricePosition": 0,
@@ -36,13 +37,14 @@
       "isGoldenCross": false,
       "diff": 0,
       "dea": 0,
-      "buySignal": ""
+      "buySignal": "",
+      "price": 12.61
     },
     {
       "code": "300502",
       "name": "新易盛",
-      "currentPrice": 549,
-      "changePercent": 1.57,
+      "currentPrice": 557.88,
+      "changePercent": 1.62,
       "priceIncrease": 0,
       "mainForceInflow": 0,
       "pricePosition": 0,
@@ -55,8 +57,9 @@
       "isGoldenCross": false,
       "diff": 0,
       "dea": 0,
-      "buySignal": ""
+      "buySignal": "",
+      "price": 557.88
     }
   ],
-  "timestamp": 1781689128430
+  "timestamp": 1781693291868
 }

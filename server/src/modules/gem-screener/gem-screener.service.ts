@@ -720,11 +720,35 @@ export class GemScreenerService implements OnApplicationBootstrap {
    */
   async generateSeedCache() {
     const assetDir = join(__dirname, '..', '..', '..', 'assets');
-    this.logger.log(`📦 生成种子缓存到 ${assetDir}`);
+    this.logger.log(`📦 开始生成种子缓存到 ${assetDir}`);
 
     try {
       // 确保目录存在
       await fs.mkdir(assetDir, { recursive: true });
+
+      // 先全量扫描获取最新数据
+      this.logger.log('  ⏳ 正在全量扫描创业板...');
+      try {
+        await Promise.race([
+          this['scanAllStocks'](),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 120000))
+        ]);
+      } catch (scanErr) {
+        this.logger.warn(`  创业板扫描异常: ${scanErr.message}，使用当前缓存`);
+      }
+
+      this.logger.log('  ⏳ 正在扫描重仓买入...');
+      try {
+        await Promise.race([
+          this['scanGlobalHeavyBuy'](),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 60000))
+        ]);
+      } catch (scanErr) {
+        this.logger.warn(`  重仓买入扫描异常: ${scanErr.message}，使用当前缓存`);
+      }
+
+      // 更新GEM缓存时间戳
+      if (this.cache) { this.cache.timestamp = Date.now(); }
 
       // 写入GEM缓存
       if (this.cache && this.cache.data?.length > 0) {
@@ -733,21 +757,25 @@ export class GemScreenerService implements OnApplicationBootstrap {
         this.logger.log(`  ✅ GEM缓存: ${this.cache.data.length} 只`);
       }
 
-      // 写入主板缓存
-      if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
-        const mainPath = join(assetDir, 'main-board-cache.json');
-        await fs.writeFile(mainPath, JSON.stringify(this.mainBoardCache, null, 2));
-        this.logger.log(`  ✅ 主板缓存: ${this.mainBoardCache.data.length} 只`);
+      // 从/tmp读取其他缓存文件并写入assets（由其他服务维护）
+      for (const [cacheFile, tmpFile] of [
+        ['main-board-cache.json', 'main-board-opportunities-cache.json'],
+        ['sector-cache.json', 'sector-opportunities-cache.json'],
+        ['heavy-buy-cache.json', 'heavy-buy-cache.json'],
+      ]) {
+        const tmpPath = join('/tmp', tmpFile);
+        try {
+          const content = await fs.readFile(tmpPath, 'utf-8');
+          const parsed = JSON.parse(content);
+          parsed.timestamp = Date.now();
+          await fs.writeFile(join(assetDir, cacheFile), JSON.stringify(parsed, null, 2));
+          this.logger.log(`  ✅ ${cacheFile}: ${parsed.data?.length || 0} 只`);
+        } catch {
+          this.logger.warn(`  ⚠️ ${cacheFile} 跳过（无缓存文件）`);
+        }
       }
 
-      // 写入板块缓存
-      if (this.sectorCache && this.sectorCache.data?.length > 0) {
-        const sectorPath = join(assetDir, 'sector-cache.json');
-        await fs.writeFile(sectorPath, JSON.stringify(this.sectorCache, null, 2));
-        this.logger.log(`  ✅ 板块缓存: ${this.sectorCache.data.length} 只`);
-      }
-
-      return { success: true, files: ['gem-cache.json', 'main-board-cache.json', 'sector-cache.json'] };
+      return { success: true, files: ['gem-cache.json', 'main-board-cache.json', 'sector-cache.json', 'heavy-buy-cache.json'] };
     } catch (err) {
       this.logger.error(`❌ 种子缓存生成失败: ${err.message}`);
       return { success: false, error: err.message };

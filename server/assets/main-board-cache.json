@@ -3,8 +3,8 @@
     {
       "code": "603283",
       "name": "赛腾股份",
-      "currentPrice": 55.25,
-      "changePercent": 8.55,
+      "currentPrice": 63.06,
+      "changePercent": 9.99,
       "priceIncrease": -20.8,
       "mainForceInflow": 0,
       "pricePosition": 46,
@@ -17,13 +17,14 @@
       "isGoldenCross": true,
       "diff": 53.27637970800878,
       "dea": 53.00001104777575,
-      "buySignal": ""
+      "buySignal": "",
+      "price": 63.06
     },
     {
       "code": "002972",
       "name": "科安达",
-      "currentPrice": 14.54,
-      "changePercent": 9.98,
+      "currentPrice": 16.56,
+      "changePercent": 4.81,
       "priceIncrease": 11.5,
       "mainForceInflow": 0,
       "pricePosition": 100,
@@ -36,13 +37,14 @@
       "isGoldenCross": false,
       "diff": 12.455750902935243,
       "dea": 13.012288554582671,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 16.56
     },
     {
       "code": "002824",
       "name": "和胜股份",
-      "currentPrice": 31.74,
-      "changePercent": 10.02,
+      "currentPrice": 35.94,
+      "changePercent": 2.95,
       "priceIncrease": 18.26,
       "mainForceInflow": 0,
       "pricePosition": 99,
@@ -55,13 +57,14 @@
       "isGoldenCross": false,
       "diff": 25.890427075397863,
       "dea": 27.685440882646763,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 35.94
     },
     {
       "code": "000823",
       "name": "超声电子",
-      "currentPrice": 20.09,
-      "changePercent": 10.02,
+      "currentPrice": 22.11,
+      "changePercent": 10,
       "priceIncrease": 25.96,
       "mainForceInflow": 0,
       "pricePosition": 97,
@@ -74,13 +77,14 @@
       "isGoldenCross": false,
       "diff": 17.047970651214317,
       "dea": 18.029841932577224,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 22.11
     },
     {
       "code": "600226",
       "name": "亨通股份",
-      "currentPrice": 8.25,
-      "changePercent": 10,
+      "currentPrice": 8.87,
+      "changePercent": 1.37,
       "priceIncrease": 42,
       "mainForceInflow": 0,
       "pricePosition": 100,
@@ -93,13 +97,14 @@
       "isGoldenCross": false,
       "diff": 6.617109303788133,
       "dea": 7.179430187459599,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 8.87
     },
     {
       "code": "600228",
       "name": "返利科技",
-      "currentPrice": 8.11,
-      "changePercent": 8.42,
+      "currentPrice": 8.92,
+      "changePercent": 0,
       "priceIncrease": 24.2,
       "mainForceInflow": 0,
       "pricePosition": 100,
@@ -112,13 +117,14 @@
       "isGoldenCross": false,
       "diff": 6.3752156040336665,
       "dea": 6.954970666588313,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 8.92
     },
     {
       "code": "002768",
       "name": "国恩股份",
-      "currentPrice": 75.81,
-      "changePercent": 8.39,
+      "currentPrice": 78.36,
+      "changePercent": 0.89,
       "priceIncrease": 18.45,
       "mainForceInflow": 0,
       "pricePosition": 97,
@@ -131,13 +137,14 @@
       "isGoldenCross": false,
       "diff": 63.08314570997237,
       "dea": 66.76424197371256,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 78.36
     },
     {
       "code": "603011",
       "name": "合锻智能",
-      "currentPrice": 34.22,
-      "changePercent": 10,
+      "currentPrice": 35.95,
+      "changePercent": 3.9,
       "priceIncrease": 64.52,
       "mainForceInflow": 0,
       "pricePosition": 95,
@@ -150,13 +157,14 @@
       "isGoldenCross": false,
       "diff": 27.582825121899656,
       "dea": 29.99772084777968,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 35.95
     },
     {
       "code": "603124",
       "name": "江南新材",
-      "currentPrice": 196,
-      "changePercent": 9.68,
+      "currentPrice": 192.1,
+      "changePercent": -5.11,
       "priceIncrease": 62.51,
       "mainForceInflow": 0,
       "pricePosition": 100,
@@ -169,13 +177,14 @@
       "isGoldenCross": false,
       "diff": 147.95113906481353,
       "dea": 164.8768119625473,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 192.1
     },
     {
       "code": "002378",
       "name": "章源钨业",
-      "currentPrice": 37.4,
-      "changePercent": 7.97,
+      "currentPrice": 34.88,
+      "changePercent": -7.92,
       "priceIncrease": 32.06,
       "mainForceInflow": 0,
       "pricePosition": 96,
@@ -188,8 +197,9 @@
       "isGoldenCross": false,
       "diff": 29.935571096346386,
       "dea": 32.27469045660222,
-      "buySignal": "有信号"
+      "buySignal": "有信号",
+      "price": 34.88
     }
   ],
-  "timestamp": 1781689128431
+  "timestamp": 1781693291868
 }
