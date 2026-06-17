@@ -46,6 +46,22 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
   }
 
+
+  @Post('refresh-heavy-buy')
+  async refreshHeavyBuy(@Body() body: { stocks: any[] }): Promise<any> {
+    try {
+      const stocks = body?.stocks || [];
+      if (stocks.length === 0) {
+        return { code: 400, msg: 'no stocks data', data: { opportunities: [] } };
+      }
+      this.logger.log(`📥 接收到重仓买入推送: ${stocks.length} 只`);
+      const results = await this.gemScreener.scanWithFrontendHeavyBuyData(stocks);
+      return { code: 200, msg: 'success', data: { opportunities: results } };
+    } catch (e) {
+      this.logger.error(`❌ 重仓买入分析失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: { opportunities: [] } };
+    }
+  }
   @Get('opportunities')
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();

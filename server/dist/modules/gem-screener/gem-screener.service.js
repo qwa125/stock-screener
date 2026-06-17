@@ -583,6 +583,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`✅ 前端板块数据推送完成, 累加合并后 ${finalResults.length} 只`);
         return finalResults;
     }
+    async scanWithFrontendHeavyBuyData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 20) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const fullSuggestion = await this.computeFullSuggestion(s.code);
+                if (fullSuggestion && fullSuggestion.suggestion === '重仓买入') {
+                    results.push(fullSuggestion);
+                }
+            }
+            catch { }
+        }
+        results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const top = results.slice(0, 10);
+        this.logger.log(`✅ 重仓买入分析完成: ${top.length} 只`);
+        return top;
+    }
     async generateSeedCache() {
         const assetDir = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets');
         this.logger.log(`📦 开始生成种子缓存到 ${assetDir}`);

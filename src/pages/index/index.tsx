@@ -1148,19 +1148,124 @@ const IndexPage = () => {
     }
   }, [fetchSectorHot]);
 
-  // ========== 扫描函数：重仓买入专区（复用聚合缓存，筛选重仓买入级别） ==========
+  // ========== 扫描函数：重仓买入 ==========
+  // 独立扫描A股全市场（主板+创业板）→每批50只推后端→取前5
   const scanHeavyBuy = useCallback(async () => {
-    // 先触发全市场扫描（聚合GEM+主板+热点板块）
-    setHeavyBuyScanStatus('🔄 触发聚合全市场扫描...');
-    await scanSectorOnly();
-    setHeavyBuyScanStatus('🔍 筛选"重仓买入"级别...');
+    setHeavyBuyScanStatus('🔄 正在获取全市场股票(腾讯)...');
+    let allCodes: { code: string; name: string; price: number; changePercent: number }[] = [];
     try {
-      await fetchHeavyBuy();
-    } catch (e) {
-      console.warn('重仓买入扫描失败:', e);
-      setHeavyBuyScanStatus('❌ 重仓买入扫描失败');
+      // 扫描创业板 300000-302999
+      const szCodes: string[] = [];
+      for (let i = 300000; i <= 302999; i++) szCodes.push('sz' + i);
+      for (let j = 0; j < szCodes.length; j += 80) {
+        const batch = szCodes.slice(j, j + 80);
+        try {
+          const txt = await fetchTencentViaProxy(batch.join(','));
+          const lines = txt.split('\n');
+          for (const line of lines) {
+            if (!line || line.length < 20) continue;
+            const parts = line.split('~');
+            if (parts.length < 6) continue;
+            const code = parts[2] || ''; const name = parts[1] || '';
+            if (!code || !name) continue;
+            const price = parseFloat(parts[3]) || 0;
+            const prevClose = parseFloat(parts[4]) || price;
+            const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
+            allCodes.push({ code, name, price, changePercent });
+          }
+        } catch(e) {}
+        if ((j + 80) % 400 === 0 || j + 80 >= szCodes.length) {
+          setHeavyBuyScanStatus('📥 创业板 ' + allCodes.length + '只');
+        }
+      }
+      // 扫描主板 600000-609999 + 0000-3999 + 001/002
+      const mainRanges: { prefix: string; start: number; end: number }[] = [
+        { prefix: 'sh', start: 600000, end: 609999 },
+        { prefix: 'sz', start: 0, end: 3999 },
+        { prefix: 'sz', start: 1000, end: 1999 },
+        { prefix: 'sz', start: 2000, end: 2999 },
+      ];
+      for (const rng of mainRanges) {
+        const allMc: string[] = [];
+        if (rng.prefix === 'sh') {
+          for (let i = rng.start; i <= rng.end; i++) allMc.push(rng.prefix + i);
+        } else {
+          for (let i = rng.start; i <= rng.end; i++) allMc.push(rng.prefix + String(i).padStart(6, '0'));
+        }
+        for (let j = 0; j < allMc.length; j += 80) {
+          const batch = allMc.slice(j, j + 80);
+          try {
+            const txt2 = await fetchTencentViaProxy(batch.join(','));
+            const lines = txt2.split('\n');
+            for (const line of lines) {
+              if (!line || line.length < 20) continue;
+              const parts = line.split('~');
+              if (parts.length < 6) continue;
+              const code = parts[2] || ''; const name = parts[1] || '';
+              if (!code || !name) continue;
+              if (allCodes.some(c => c.code === code)) continue;
+              const price = parseFloat(parts[3]) || 0;
+              const prevClose = parseFloat(parts[4]) || price;
+              const changePercent = prevClose > 0 ? ((price - prevClose) / prevClose * 100) : 0;
+              allCodes.push({ code, name, price, changePercent });
+            }
+          } catch(e) {}
+          if ((j + 80) % 400 === 0 || j + 80 >= allMc.length) {
+            setHeavyBuyScanStatus('📥 全市场 ' + allCodes.length + '只');
+          }
+        }
+      }
+    } catch(e) {
+      console.warn('全市场扫描失败:', e);
     }
-  }, [scanSectorOnly, fetchHeavyBuy]);
+    setHeavyBuyScanStatus('✅ 全市场: ' + allCodes.length + '只');
+    // 降级：如果腾讯数据不足，复用已有缓存
+    if (allCodes.length < 1000) {
+      setHeavyBuyScanStatus('🔄 腾讯数据不足，改用缓存数据...');
+      const cachedMap = new Map<string, any>();
+      for (const s of cachedGemMap.current) cachedMap.set(s.code, s);
+      for (const s of cachedMainMap.current) cachedMap.set(s.code, s);
+      allCodes = Array.from(cachedMap.values()).map(s => ({ code: s.code, name: s.name, price: s.price || 0, changePercent: s.changePercent || 0 }));
+    }
+    // 拉取K线（取前1200只有交易量的）
+    setHeavyBuyScanStatus('📥 拉取K线数据...');
+    const hbStocks: any[] = [];
+    const scanList = allCodes.filter(s => s.price > 0).slice(0, 2000);
+    for (let i = 0; i < scanList.length; i += 20) {
+      const batch = scanList.slice(i, i + 20);
+      await Promise.all(batch.map(async (s) => {
+        try {
+          const prefixedKey = (s.code.startsWith('6') ? 'sh' : 'sz') + s.code;
+          const url3 = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
+          const res3 = await fetch(url3);
+          const txt3 = await res3.text();
+          const j3 = JSON.parse(txt3);
+          const klines = (j3?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({ date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0, high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0 }));
+          if (klines.length >= 60) hbStocks.push({ code: s.code, name: s.name, price: s.price, changePercent: s.changePercent, klines });
+        } catch(e2) {}
+      }));
+      if (i % 100 === 0 || i + 20 >= scanList.length) {
+        setHeavyBuyScanStatus('📥 K线 ' + Math.min(i + 20, scanList.length) + '/' + scanList.length);
+      }
+    }
+    setHeavyBuyScanStatus('📤 分批推送 ' + hbStocks.length + '只(50只/批)...');
+    if (hbStocks.length > 0) {
+      let totalFound = 0;
+      for (let ci = 0; ci < hbStocks.length; ci += 50) {
+        const chunk = hbStocks.slice(ci, ci + 50);
+        try {
+          const pushRes = await Network.request({ url: '/api/gem/refresh-heavy-buy', method: 'POST', data: { stocks: chunk } });
+          const pushData = pushRes.data as any;
+          if (pushData?.code === 200) totalFound += pushData?.data?.opportunities?.length || 0;
+        } catch(e2) { console.warn('重仓批次推送失败', e2); }
+        setHeavyBuyScanStatus('📤 ' + Math.min(ci + 50, hbStocks.length) + '/' + hbStocks.length + ' 已发现' + totalFound + '只重仓');
+      }
+      setHeavyBuyScanStatus('✅ 重仓扫描完成!');
+      await fetchHeavyBuy();
+    } else {
+      setHeavyBuyScanStatus('⚠️ 无足够K线数据');
+    }
+  }, [fetchHeavyBuy]);
 
   // 自动触发前端推送扫描(3秒后运行，依次扫描创业板→主板→板块)
   useEffect(() => {
@@ -1692,7 +1797,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {gemData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((stock, idx) => {
+              {gemData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((stock, idx) => {
                 const action = stock.suggestion || getOpportunitySuggestion(stock);
                 return (
                 <Card key={stock.code}>
@@ -1793,7 +1898,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {mainData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
+              {mainData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 return (
                 <Card key={`main-${item.code}-${idx}`}>
@@ -1908,7 +2013,7 @@ const IndexPage = () => {
                   <Text className="block text-xs text-gray-400">位置·资金</Text>
                 </View>
               </View>
-              {sectorData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
+              {sectorData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (
@@ -1989,7 +2094,7 @@ const IndexPage = () => {
             </View>
           ) : heavyBuyData && heavyBuyData.length > 0 ? (
             <View>
-              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 10).map((item: any, idx: number) => {
+              {heavyBuyData.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || getOpportunitySuggestion(s))).slice(0, 5).map((item: any, idx: number) => {
                 const action = item.suggestion || getOpportunitySuggestion(item);
                 const sectorName = item.sectorName || '';
                 return (

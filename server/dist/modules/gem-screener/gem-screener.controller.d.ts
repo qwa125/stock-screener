@@ -46,6 +46,9 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    refreshHeavyBuy(body: {
+        stocks: any[];
+    }): Promise<any>;
     getOpportunities(): Promise<{
         code: number;
         msg: string;

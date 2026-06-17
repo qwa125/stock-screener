@@ -720,7 +720,35 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
   /**
    * 生成初始缓存种子文件到 server/assets/，供Render首次部署使用
+   */  /**
+   * 扫描全市场主板+创业板 → 筛选重仓买入级别
    */
+  async scanWithFrontendHeavyBuyData(
+    stocks: { code: string; name: string; price?: number; changePercent?: number; klines: KLine[] }[]
+  ): Promise<OpportunityStock[]> {
+    const results: any[] = [];
+    // 预加载K线
+    for (const s of stocks) {
+      if (s.klines && s.klines.length >= 20) {
+        this.dataFetcher.preloadKline(s.code, s.klines);
+      }
+    }
+    for (const s of stocks) {
+      try {
+        const fullSuggestion = await this.computeFullSuggestion(s.code);
+        if (fullSuggestion && fullSuggestion.suggestion === '重仓买入') {
+          results.push(fullSuggestion);
+        }
+      } catch {}
+    }
+    // 排序：评分降序
+    results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const top = results.slice(0, 10);
+    this.logger.log(`✅ 重仓买入分析完成: ${top.length} 只`);
+    return top;
+  }
+
+
   async generateSeedCache() {
     const assetDir = join(__dirname, '..', '..', '..', 'assets');
     this.logger.log(`📦 开始生成种子缓存到 ${assetDir}`);
