@@ -50,24 +50,7 @@ function getFreezeMessage(): string {
 
 /** 通用K线获取：腾讯优先 → 同花顺兜底 → [] */
 async function fetchKlines(code: string, minLength: number = 20): Promise<{ date: string; open: number; close: number; high: number; low: number; volume: number; amount: number }[]> {
-  // 1. 腾讯优先（批量支持，速度快）
-  try {
-    const prefixedKey = (code.startsWith('6') ? 'sh' : 'sz') + code;
-    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    const txt = await res.text();
-    const j = JSON.parse(txt);
-    const klines = (j?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({
-      date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0,
-      high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0
-    }));
-    if (klines.length >= minLength) return klines;
-  } catch(e) {}
-
-  // 2. 同花顺兜底（数据更全更准）
+  // 1. 同花顺优先（数据更全更准）
   try {
     const url = 'http://d.10jqka.com.cn/v2/line/hs_' + code + '/01/last.js';
     const controller = new AbortController();
@@ -88,6 +71,41 @@ async function fetchKlines(code: string, minLength: number = 20): Promise<{ date
         low: parseFloat(parts[3]) || 0, close: parseFloat(parts[4]) || 0,
         volume: parseFloat(parts[5]) || 0, amount: parseFloat(parts[6]) || 0
       };
+    });
+    if (klines.length >= minLength) return klines;
+  } catch(e) {}
+
+  // 2. 腾讯备用（批量支持好）
+  try {
+    const prefixedKey = (code.startsWith('6') ? 'sh' : 'sz') + code;
+    const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + prefixedKey + ',day,,,100,qfq';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const txt = await res.text();
+    const j = JSON.parse(txt);
+    const klines = (j?.data?.[prefixedKey]?.qfqday || []).map((k: any) => ({
+      date: k[0], open: parseFloat(k[1]) || 0, close: parseFloat(k[2]) || 0,
+      high: parseFloat(k[3]) || 0, low: parseFloat(k[4]) || 0, volume: parseFloat(k[5]) || 0, amount: 0
+    }));
+    if (klines.length >= minLength) return klines;
+  } catch(e) {}
+
+  // 3. 东方财富K线兜底
+  try {
+    const market = code.startsWith('6') || code.startsWith('68') ? 1 : 0;
+    const url = 'http://push2.eastmoney.com/api/qt/stock/kline/get?secid=' + market + '.' + code + '&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const txt = await res.text();
+    const j = JSON.parse(txt);
+    const klines = (j?.data?.klines || []).map((k: string) => {
+      const parts = k.split(',');
+      return { date: parts[0], open: parseFloat(parts[1]) || 0, close: parseFloat(parts[2]) || 0,
+        high: parseFloat(parts[3]) || 0, low: parseFloat(parts[4]) || 0, volume: parseFloat(parts[5]) || 0, amount: parseFloat(parts[6]) || 0 };
     });
     if (klines.length >= minLength) return klines;
   } catch(e) {}
