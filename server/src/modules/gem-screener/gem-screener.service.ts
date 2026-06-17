@@ -333,19 +333,20 @@ export class GemScreenerService implements OnApplicationBootstrap {
   } {
     const closes = kline.map(k => k.close);
     const len = closes.length;
-    if (len < 35) {
+    if (len < 20) {
       return { diff: [], dea: [], currentDiff: 0, currentDea: 0, isGoldenCross: false, goldenCrossDays: 0, isDeathCross: false };
     }
 
-    // ---------- 均线 = (MA(C,3) + MA(C,5) + MA(C,8) + MA(C,13) + MA(C,21) + MA(C,34)*0.5) / 5.5 ----------
+    // ---------- 自适应均线: 短K线用可用数据计算 (除数随实际长度调整) ----------
     const avgLine: number[] = [];
-    for (let i = 33; i < len; i++) {
-      const ma3  = closes.slice(i - 2,  i + 1).reduce((a, b) => a + b, 0) / 3;
-      const ma5  = closes.slice(i - 4,  i + 1).reduce((a, b) => a + b, 0) / 5;
-      const ma8  = closes.slice(i - 7,  i + 1).reduce((a, b) => a + b, 0) / 8;
-      const ma13 = closes.slice(i - 12, i + 1).reduce((a, b) => a + b, 0) / 13;
-      const ma21 = closes.slice(i - 20, i + 1).reduce((a, b) => a + b, 0) / 21;
-      const ma34 = closes.slice(i - 33, i + 1).reduce((a, b) => a + b, 0) / 34;
+    for (let i = Math.min(33, Math.floor(len / 2)); i < len; i++) {
+      const ma3  = closes.slice(Math.max(0, i - 2),  i + 1).reduce((a, b) => a + b, 0) / Math.min(3, i + 1);
+      const ma5  = closes.slice(Math.max(0, i - 4),  i + 1).reduce((a, b) => a + b, 0) / Math.min(5, i + 1);
+      const ma8  = closes.slice(Math.max(0, i - 7),  i + 1).reduce((a, b) => a + b, 0) / Math.min(8, i + 1);
+      const ma13 = closes.slice(Math.max(0, i - 12), i + 1).reduce((a, b) => a + b, 0) / Math.min(13, i + 1);
+      const ma21 = closes.slice(Math.max(0, i - 20), i + 1).reduce((a, b) => a + b, 0) / Math.min(21, i + 1);
+      const ma34Count = Math.min(34, i + 1);
+      const ma34 = closes.slice(Math.max(0, i - ma34Count + 1), i + 1).reduce((a, b) => a + b, 0) / ma34Count;
       avgLine.push((ma3 + ma5 + ma8 + ma13 + ma21 + ma34 * 0.5) / 5.5);
     }
 
@@ -873,11 +874,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   async checkOpportunity(s: StockCandidate): Promise<OpportunityStock | null> {
     const kline = await this.dataFetcher.getKLineData(s.code);
-    if (!kline || kline.length < 60) return null;
+    if (!kline || kline.length < 20) return null;
 
     const closeArr = kline.map(k => k.close);
     const len = closeArr.length;
-    if (len < 35) return null;
+    if (len < 20) return null;
 
     // ---------- 白消启动检测 ----------
     const klineO = kline.map(k => k.open);
@@ -1102,11 +1103,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
   async checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null> {
     const kline = await this.dataFetcher.getKLineData(s.code);
-    if (!kline || kline.length < 60) return null;
+    if (!kline || kline.length < 20) return null;
 
     const closeArr = kline.map(k => k.close);
     const len = closeArr.length;
-    if (len < 35) return null;
+    if (len < 20) return null;
 
     // ---------- 白消启动检测 ----------
     const klineO = kline.map(k => k.open);
@@ -1764,7 +1765,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async computeFullSuggestion(code: string): Promise<{ suggestion: string; score: number; name: string } | null> {
     try {
       const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
-      if (!raw?.length || raw.length < 60) return null;
+      if (!raw?.length || raw.length < 20) return null;
       const name = raw[0]?.name ?? '';
       const klineV: any[] = raw.slice(-120);
       const closeArr: number[] = klineV.map((k: any) => Number(k.close));
@@ -2079,7 +2080,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
   private async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
     const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
-    if (!raw?.length || raw.length < 60) return null;
+    if (!raw?.length || raw.length < 20) return null;
 
     const klineV: any[] = raw.slice(-120);
     const closeArr: number[] = klineV.map((k: any) => Number(k.close));

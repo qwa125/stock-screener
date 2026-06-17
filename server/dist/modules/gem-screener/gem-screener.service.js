@@ -255,17 +255,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     calcCustomMACD(kline) {
         const closes = kline.map(k => k.close);
         const len = closes.length;
-        if (len < 35) {
+        if (len < 20) {
             return { diff: [], dea: [], currentDiff: 0, currentDea: 0, isGoldenCross: false, goldenCrossDays: 0, isDeathCross: false };
         }
         const avgLine = [];
-        for (let i = 33; i < len; i++) {
-            const ma3 = closes.slice(i - 2, i + 1).reduce((a, b) => a + b, 0) / 3;
-            const ma5 = closes.slice(i - 4, i + 1).reduce((a, b) => a + b, 0) / 5;
-            const ma8 = closes.slice(i - 7, i + 1).reduce((a, b) => a + b, 0) / 8;
-            const ma13 = closes.slice(i - 12, i + 1).reduce((a, b) => a + b, 0) / 13;
-            const ma21 = closes.slice(i - 20, i + 1).reduce((a, b) => a + b, 0) / 21;
-            const ma34 = closes.slice(i - 33, i + 1).reduce((a, b) => a + b, 0) / 34;
+        for (let i = Math.min(33, Math.floor(len / 2)); i < len; i++) {
+            const ma3 = closes.slice(Math.max(0, i - 2), i + 1).reduce((a, b) => a + b, 0) / Math.min(3, i + 1);
+            const ma5 = closes.slice(Math.max(0, i - 4), i + 1).reduce((a, b) => a + b, 0) / Math.min(5, i + 1);
+            const ma8 = closes.slice(Math.max(0, i - 7), i + 1).reduce((a, b) => a + b, 0) / Math.min(8, i + 1);
+            const ma13 = closes.slice(Math.max(0, i - 12), i + 1).reduce((a, b) => a + b, 0) / Math.min(13, i + 1);
+            const ma21 = closes.slice(Math.max(0, i - 20), i + 1).reduce((a, b) => a + b, 0) / Math.min(21, i + 1);
+            const ma34Count = Math.min(34, i + 1);
+            const ma34 = closes.slice(Math.max(0, i - ma34Count + 1), i + 1).reduce((a, b) => a + b, 0) / ma34Count;
             avgLine.push((ma3 + ma5 + ma8 + ma13 + ma21 + ma34 * 0.5) / 5.5);
         }
         const dea = [...avgLine];
@@ -705,11 +706,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async checkOpportunity(s) {
         const kline = await this.dataFetcher.getKLineData(s.code);
-        if (!kline || kline.length < 60)
+        if (!kline || kline.length < 20)
             return null;
         const closeArr = kline.map(k => k.close);
         const len = closeArr.length;
-        if (len < 35)
+        if (len < 20)
             return null;
         const klineO = kline.map(k => k.open);
         const klineH = kline.map(k => k.high);
@@ -933,11 +934,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async checkOpportunityRelaxed(s) {
         const kline = await this.dataFetcher.getKLineData(s.code);
-        if (!kline || kline.length < 60)
+        if (!kline || kline.length < 20)
             return null;
         const closeArr = kline.map(k => k.close);
         const len = closeArr.length;
-        if (len < 35)
+        if (len < 20)
             return null;
         const klineO = kline.map(k => k.open);
         const klineH = kline.map(k => k.high);
@@ -1513,7 +1514,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async computeFullSuggestion(code) {
         try {
             const raw = await this.dataFetcher.getKLineData(code);
-            if (!raw?.length || raw.length < 60)
+            if (!raw?.length || raw.length < 20)
                 return null;
             const name = raw[0]?.name ?? '';
             const klineV = raw.slice(-120);
@@ -1771,7 +1772,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async quickAnalyze(code, name) {
         const raw = await this.dataFetcher.getKLineData(code);
-        if (!raw?.length || raw.length < 60)
+        if (!raw?.length || raw.length < 20)
             return null;
         const klineV = raw.slice(-120);
         const closeArr = klineV.map((k) => Number(k.close));

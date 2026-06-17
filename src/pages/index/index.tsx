@@ -647,6 +647,7 @@ const IndexPage = () => {
   const [heavyBuyScanStatus, setHeavyBuyScanStatus] = useState<string>('');
   const gemCachedStocks = useRef<any[]>([]);
   const mainCachedStocks = useRef<any[]>([]);
+  const scanRefs = useRef<{ scanGem: () => Promise<void>; scanMain: () => Promise<void>; scanSector: () => Promise<void> }>({ scanGem: async () => {}, scanMain: async () => {}, scanSector: async () => {} });
   // 动态行业板块排行（Top10 热点行业板块）
   const [dynamicSectors, setDynamicSectors] = useState<any[] | null>(null);
   const sectorTags = () => {
@@ -689,14 +690,16 @@ const IndexPage = () => {
     // 每10分钟重新扫描全市场（浏览器调腾讯API→推后端分析→更新数据）
     const timer = setInterval(async () => {
       setGemScanStatus('🔄 10分钟自动扫描中...');
-      await scanGemOnly();
-      await scanMainOnly();
-      await scanSectorOnly();
+      // scan functions stored in refs to avoid TS hoisting issues
+      await scanRefs.current.scanGem();
+      await scanRefs.current.scanMain();
+      await scanRefs.current.scanSector();
       // 重仓买入由scanSectorOnly内部触发更新
       setGemScanStatus('✅ 全市场扫描完成');
     }, 600000);
     return () => clearInterval(timer);
-  }, [fetchGemTop, scanGemOnly, scanMainOnly, scanSectorOnly]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchGemTop]);
 
   // 获取主板Top10（后端控制缓存）
   const fetchMainTop = useCallback(async () => {
@@ -897,6 +900,7 @@ const IndexPage = () => {
       setGemScanStatus('⚠️ 无足够K线数据');
     }
   }, [fetchGemTop]);
+  scanRefs.current.scanGem = scanGemOnly;
 
   // ========== 扫描函数：只扫描主板 ==========
   const scanMainOnly = useCallback(async () => {
@@ -1019,6 +1023,7 @@ const IndexPage = () => {
       setMainScanStatus('⚠️ 无足够K线数据');
     }
   }, [fetchMainTop]);
+  scanRefs.current.scanMain = scanMainOnly;
 
   // ========== 扫描函数：热点板块机会区（聚合全市场） ==========
   const scanSectorOnly = useCallback(async () => {
@@ -1223,8 +1228,8 @@ const IndexPage = () => {
     if (allCodes.length < 1000) {
       setHeavyBuyScanStatus('🔄 腾讯数据不足，改用缓存数据...');
       const cachedMap = new Map<string, any>();
-      for (const s of cachedGemMap.current) cachedMap.set(s.code, s);
-      for (const s of cachedMainMap.current) cachedMap.set(s.code, s);
+      for (const s of gemCachedStocks.current) cachedMap.set(s.code, s);
+      for (const s of mainCachedStocks.current) cachedMap.set(s.code, s);
       allCodes = Array.from(cachedMap.values()).map(s => ({ code: s.code, name: s.name, price: s.price || 0, changePercent: s.changePercent || 0 }));
     }
     // 拉取K线（取前1200只有交易量的）
@@ -1286,6 +1291,7 @@ const IndexPage = () => {
     }, 3000);
     return () => clearTimeout(t1);
   }, [scanGemOnly, scanMainOnly, scanSectorOnly]);
+  scanRefs.current.scanSector = scanSectorOnly;
 
 
   // 搜索建议状态
