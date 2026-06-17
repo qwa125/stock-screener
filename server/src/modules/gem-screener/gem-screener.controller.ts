@@ -3,6 +3,7 @@ import { GemScreenerService } from './gem-screener.service';
 import * as iconv from 'iconv-lite';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
 @Controller('gem')
 export class GemScreenerController {
@@ -148,24 +149,23 @@ export class GemScreenerController {
     } catch (e) {
       this.logger.warn('实时行业板块排行失败: ' + e.message);
     }
-    // 降级: 使用种子缓存
+    // 降级: 使用ALL_SECTORS内置数据（始终包含概念板块）
     try {
-      const paths = [
-        join(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'),
-        join(process.cwd(), 'assets', 'industry-sectors-cache.json'),
-      ];
-      for (const p of paths) {
-        if (existsSync(p)) {
-          const raw = readFileSync(p, 'utf-8');
-          const data = JSON.parse(raw);
-          if (data && data.sectors && data.sectors.length > 0) {
-            this.logger.log(`✅ 使用行业板块种子缓存: ${data.sectors.length} 个板块`);
-            return { code: 200, msg: 'success', data };
-          }
-        }
-      }
+      const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
+      const fallbackSectors = ALL_SECTORS.map((s, i) => ({
+        rank: 0,
+        name: s.name,
+        avgChangePercent: 0,
+        totalStocks: s.codes.length,
+        upStocks: 0,
+        stocks: s.codes.slice(0, 5).map(code => ({ code, name: '', price: 0, changePercent: 0 })),
+      }));
+      fallbackSectors.sort((a, b) => a.name.localeCompare(b.name));
+      fallbackSectors.forEach((s, i) => { s.rank = i + 1; });
+      this.logger.log(`✅ 使用内置ALL_SECTORS降级: ${fallbackSectors.length} 个板块(含概念)`);
+      return { code: 200, msg: 'success', data: { sectors: fallbackSectors, timestamp: Date.now() } };
     } catch (e) {
-      this.logger.error('读取行业板块种子缓存失败: ' + e.message);
+      this.logger.error('ALL_SECTORS降级失败: ' + e.message);
     }
     return { code: 200, msg: 'success', data: { sectors: [], timestamp: Date.now() } };
   }

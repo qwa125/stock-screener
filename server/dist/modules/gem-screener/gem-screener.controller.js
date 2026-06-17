@@ -19,6 +19,7 @@ const gem_screener_service_1 = require("./gem-screener.service");
 const iconv = require("iconv-lite");
 const fs_1 = require("fs");
 const path_1 = require("path");
+const data_1 = require("../../industry-sectors/data");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
     constructor(gemScreener) {
         this.gemScreener = gemScreener;
@@ -115,23 +116,22 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             this.logger.warn('实时行业板块排行失败: ' + e.message);
         }
         try {
-            const paths = [
-                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'industry-sectors-cache.json'),
-                (0, path_1.join)(process.cwd(), 'assets', 'industry-sectors-cache.json'),
-            ];
-            for (const p of paths) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
-                    const data = JSON.parse(raw);
-                    if (data && data.sectors && data.sectors.length > 0) {
-                        this.logger.log(`✅ 使用行业板块种子缓存: ${data.sectors.length} 个板块`);
-                        return { code: 200, msg: 'success', data };
-                    }
-                }
-            }
+            const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
+            const fallbackSectors = ALL_SECTORS.map((s, i) => ({
+                rank: 0,
+                name: s.name,
+                avgChangePercent: 0,
+                totalStocks: s.codes.length,
+                upStocks: 0,
+                stocks: s.codes.slice(0, 5).map(code => ({ code, name: '', price: 0, changePercent: 0 })),
+            }));
+            fallbackSectors.sort((a, b) => a.name.localeCompare(b.name));
+            fallbackSectors.forEach((s, i) => { s.rank = i + 1; });
+            this.logger.log(`✅ 使用内置ALL_SECTORS降级: ${fallbackSectors.length} 个板块(含概念)`);
+            return { code: 200, msg: 'success', data: { sectors: fallbackSectors, timestamp: Date.now() } };
         }
         catch (e) {
-            this.logger.error('读取行业板块种子缓存失败: ' + e.message);
+            this.logger.error('ALL_SECTORS降级失败: ' + e.message);
         }
         return { code: 200, msg: 'success', data: { sectors: [], timestamp: Date.now() } };
     }
