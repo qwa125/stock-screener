@@ -55,65 +55,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     async getTopGem(force) {
         const result = await this.gemScreener.scanTopGem(force === 'true');
-        let opportunities = result.opportunities || [];
-        try {
-            const paths = [
-                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
-                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
-            ];
-            for (const p of paths) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
-                    const parsed = JSON.parse(raw);
-                    const seedData = parsed.data || parsed.opportunities || parsed;
-                    if (Array.isArray(seedData)) {
-                        const gemHeavyBuys = seedData.filter(s => (s.code.startsWith('30') || s.code.startsWith('00')) &&
-                            !opportunities.some(o => o.code === s.code));
-                        if (gemHeavyBuys.length) {
-                            opportunities = [...gemHeavyBuys, ...opportunities];
-                            this.logger.log(`✅ 合并 ${gemHeavyBuys.length} 只创业板重仓买入到机会区`);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        catch (e) {
-            this.logger.warn('合并重仓买入到创业板失败: ' + e.message);
-        }
-        opportunities.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-        return { code: 200, msg: 'success', data: { opportunities: opportunities.slice(0, 10), timestamp: result.timestamp } };
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
     async getTopMainBoard(force) {
         const result = await this.gemScreener.scanTopMainBoard(force === 'true');
-        let opportunities = result.opportunities || [];
-        try {
-            const paths = [
-                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
-                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
-            ];
-            for (const p of paths) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
-                    const parsed = JSON.parse(raw);
-                    const seedData = parsed.data || parsed.opportunities || parsed;
-                    if (Array.isArray(seedData)) {
-                        const mainHeavyBuys = seedData.filter(s => s.code.startsWith('60') &&
-                            !opportunities.some(o => o.code === s.code));
-                        if (mainHeavyBuys.length) {
-                            opportunities = [...mainHeavyBuys, ...opportunities];
-                            this.logger.log(`✅ 合并 ${mainHeavyBuys.length} 只主板重仓买入到机会区`);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        catch (e) {
-            this.logger.warn('合并重仓买入到主板失败: ' + e.message);
-        }
-        opportunities.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-        return { code: 200, msg: 'success', data: { opportunities: opportunities.slice(0, 10), timestamp: result.timestamp } };
+        return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
     }
     async getTopOpportunities(force) {
         const result = await this.gemScreener.scanTopOpportunities(force === 'true');
