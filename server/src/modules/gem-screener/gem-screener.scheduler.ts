@@ -16,18 +16,9 @@ export class GemScreenerScheduler implements OnModuleInit {
    * 用于：Render休眠后被请求唤醒 → 判断如果在交易时间内 → 立即扫描
    */
   async onModuleInit() {
-    this.logger.log('🚀 服务启动，检查是否需要立即触发定时扫描...');
-    
-    // 延迟3秒等所有模块就绪
-    await new Promise(r => setTimeout(r, 3000));
-    
-    if (this._isTradingHours()) {
-      this.logger.log('⏰ 当前为交易时间，后台启动首次扫描');
-      // ⚠️ 重要：不阻塞等待，后台执行，否则会阻止 HTTP 服务启动
-      this.autoScan().catch(err => this.logger.error(`首次扫描异常: ${err.message}`));
-    } else {
-      this.logger.log('⏰ 当前非交易时间，等待定时任务触发');
-    }
+    this.logger.log('🚀 服务启动，等待首次10分钟定时任务触发扫描');
+    // 启动时不做自动扫描，避免Render海外服务器访问Tencent API超时导致进程不稳定
+    // 所有扫描由每10分钟的Cron任务驱动
   }
 
   /**

@@ -28,6 +28,12 @@ function parsePort() {
     }
     return 3000;
 }
+process.on('uncaughtException', (err) => {
+    console.error(`[FATAL] uncaughtException: ${err.message}`, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error(`[FATAL] unhandledRejection:`, reason);
+});
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.enableCors({

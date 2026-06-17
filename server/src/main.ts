@@ -31,6 +31,15 @@ function parsePort(): number {
   return 3000;
 }
 
+// 全局未捕获异常处理，防止进程意外退出
+process.on('uncaughtException', (err) => {
+  console.error(`[FATAL] uncaughtException: ${err.message}`, err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error(`[FATAL] unhandledRejection:`, reason);
+});
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

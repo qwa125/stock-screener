@@ -23,15 +23,7 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.isFirstBoot = true;
     }
     async onModuleInit() {
-        this.logger.log('🚀 服务启动，检查是否需要立即触发定时扫描...');
-        await new Promise(r => setTimeout(r, 3000));
-        if (this._isTradingHours()) {
-            this.logger.log('⏰ 当前为交易时间，后台启动首次扫描');
-            this.autoScan().catch(err => this.logger.error(`首次扫描异常: ${err.message}`));
-        }
-        else {
-            this.logger.log('⏰ 当前非交易时间，等待定时任务触发');
-        }
+        this.logger.log('🚀 服务启动，等待首次10分钟定时任务触发扫描');
     }
     _isTradingHours() {
         const now = new Date();
