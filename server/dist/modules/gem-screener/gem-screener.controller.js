@@ -138,7 +138,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 avgChangePercent: 0,
                 totalStocks: s.codes.length,
                 upStocks: 0,
-                stocks: s.codes.slice(0, 5).map(code => ({ code, name: '', price: 0, changePercent: 0 })),
+                stocks: s.codes.slice(0, 10).map(code => ({ code, name: '', price: 0, changePercent: 0 })),
             }));
             fallbackSectors.sort((a, b) => a.name.localeCompare(b.name));
             fallbackSectors.forEach((s, i) => { s.rank = i + 1; });

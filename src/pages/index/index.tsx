@@ -694,7 +694,7 @@ const IndexPage = () => {
       await scanRefs.current.scanGem();
       await scanRefs.current.scanMain();
       await scanRefs.current.scanSector();
-      // 重仓买入由scanSectorOnly内部触发更新
+      fetchHeavyBuy();
       setGemScanStatus('✅ 全市场扫描完成');
     }, 600000);
     return () => clearInterval(timer);
