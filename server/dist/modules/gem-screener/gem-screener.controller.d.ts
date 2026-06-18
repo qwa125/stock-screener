@@ -189,4 +189,13 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    proxySearch(query: string): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: any;
+    }>;
 }

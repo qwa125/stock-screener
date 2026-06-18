@@ -381,4 +381,25 @@ export class GemScreenerController {
       return { code: 500, msg: '新浪API请求失败', data: [] };
     }
   }
+
+  /**
+   * 代理东方财富搜索API - 支持名称和代码搜索全A股
+   * GET /api/gem/proxy/search?q=朗科科技
+   */
+  @Get('proxy/search')
+  async proxySearch(@Query('q') query: string) {
+    if (!query || !query.trim()) {
+      return { code: 400, msg: '缺少搜索关键词' };
+    }
+    try {
+      const url = `https://searchadapter.eastmoney.com/api/suggest/get?input=${encodeURIComponent(query.trim())}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const data = await resp.json();
+      const results = data?.QuotationCodeTable?.Data || [];
+      return { code: 200, msg: 'success', data: results };
+    } catch (e) {
+      this.logger.error(`代理搜索失败: ${(e as Error).message}`);
+      return { code: 500, msg: '搜索请求失败', data: [] };
+    }
+  }
 }

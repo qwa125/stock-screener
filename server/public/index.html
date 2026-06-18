@@ -117,6 +117,12 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
+
+// 恢复上次扫描结果（冻结时也展示）
+try{
+  var ls=localStorage.getItem('lastStocks')
+  if(ls){stocks=JSON.parse(ls)}
+}catch(e){}
 function $(id){return document.getElementById(id)}
 function setStatus(s){$('status').textContent=s}
 var selectedIdx=-1
@@ -335,6 +341,7 @@ async function doScan(){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
     }
     stocks=d.data.opportunities
+    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
@@ -432,6 +439,7 @@ async function doFullRescan(){
   if(newStocks.length){
     setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只+缓存'+(newStocks.length-mainBoardCount-gemCount)+'只），排序中...')
     stocks=newStocks
+    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     // 排序：信号优先级优先，再按涨幅降序
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
@@ -530,20 +538,24 @@ async function doSearch(){
     if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP}
     else{stockName='股票'+v}
   }else{
-    // 名称搜索：从缓存股票列表中模糊匹配
-    var cache;try{cache=await getSearchCache()}catch(e){cache=[]}
-    var match=cache.find(function(s){
-      return s.name===v||s.name.includes(v)||v.includes(s.name)
-    })
-    if(match){
-      stockCode=match.symbol.replace(/^(sh|sz)/,'')
-      stockName=match.name
-      // 再查Tencent行情拿实时价
-      var t=await fetchTencentDetail(stockCode)
-      if(t){stockPrice=t.price;stockChgP=t.chgP}
-      // 缓存成功，移入顶部
-      $('searchInput').value=stockName
-    }
+    // 名称搜索：从东方财富搜索代理查全A股
+    try{
+      var r=await fetch('/api/gem/proxy/search?q='+encodeURIComponent(v))
+      var d=await r.json()
+      var items=d&&d.data
+      if(items&&items.length){
+        // 取第一个A股结果（排除ETF/指数）
+        var hit=items.find(function(x){return x.SecurityTypeName==='A股'||x.Code.startsWith('3')||x.Code.startsWith('6')||x.Code.startsWith('0')||x.Code.startsWith('1')})
+        if(!hit)hit=items[0]
+        var rawCode=hit.Code.replace(/\.(SZ|SH)$/i,'')
+        stockCode=rawCode
+        stockName=hit.Name||hit.Code
+        // 查Tencent行情拿实时价
+        var t=await fetchTencentDetail(stockCode)
+        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name}
+        $('searchInput').value=stockName
+      }
+    }catch(e){}
   }
   
   // 第二步：显示基础信息
@@ -608,6 +620,8 @@ setInterval(function(){
 // Initial
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+  // 加载上次缓存
+  try{var ls=localStorage.getItem('lastStocks');if(ls){stocks=JSON.parse(ls);renderList()}}catch(e){}
   if(isTH())doScan()
 },3000)
 </script>

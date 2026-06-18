@@ -301,6 +301,22 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: '新浪API请求失败', data: [] };
         }
     }
+    async proxySearch(query) {
+        if (!query || !query.trim()) {
+            return { code: 400, msg: '缺少搜索关键词' };
+        }
+        try {
+            const url = `https://searchadapter.eastmoney.com/api/suggest/get?input=${encodeURIComponent(query.trim())}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+            const data = await resp.json();
+            const results = data?.QuotationCodeTable?.Data || [];
+            return { code: 200, msg: 'success', data: results };
+        }
+        catch (e) {
+            this.logger.error(`代理搜索失败: ${e.message}`);
+            return { code: 500, msg: '搜索请求失败', data: [] };
+        }
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -449,6 +465,13 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxyStockList", null);
+__decorate([
+    (0, common_1.Get)('proxy/search'),
+    __param(0, (0, common_1.Query)('q')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxySearch", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
