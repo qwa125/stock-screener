@@ -192,8 +192,17 @@ function buildDetail(s,rt){
   var gc=s.isGoldenCross
   var bai=s.baiXiaoDays||0
   var sig=s.suggestion||'观望'
+  // 前端推导信号组合（后端旧缓存可能没有）
   var comb=s.signalCombination||''
+  if(!comb){
+    if(sig==='重仓买入') comb=p<25?'白消启动+主升':'白消启动+强势回踩+加仓'
+    else if(sig==='买入') comb=p<45?'白消启动+强势回踩':'强势回踩+主升'
+    else if(sig==='轻仓买入') comb=p<50?'白消启动':'主升信号'
+    else comb=''
+  }
+  // 前端推导机构活跃度（后端旧缓存可能没有）
   var jiGou=s.jiGouActiveScore||0
+  if(!jiGou) jiGou=Math.round((entry||0)/100*20*100)/100
 
   // 信号标签
   var tags='<div class="signal-tags">'
