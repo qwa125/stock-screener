@@ -2,5 +2,5 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: cd server && pnpm install && pnpm build
+    buildCommand: cd server && npm install && npm run build
     startCommand: cd server && node dist/main.js
