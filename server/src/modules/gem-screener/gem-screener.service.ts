@@ -1951,6 +1951,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 前端浏览器（在中国）通过 POST /api/gem/refresh 推送实时数据更新缓存
     // 注意：不要在Render上调用 triggerAnalysisPreCache，否则会触发腾讯API超时导致进程崩溃
     if (this.cache && this.cache.data?.length) {
+      this.upgradeCacheFields(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
     // 完全没有缓存 → 触发异步扫描，立即返回空
@@ -1966,6 +1967,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // Render海外服务器无法访问中国股票API，始终返回缓存数据
     // 前端浏览器（在中国）通过 POST /api/gem/refresh-main-board 推送实时数据更新缓存
     if (this.mainBoardCache && this.mainBoardCache.data?.length) {
+      this.upgradeCacheFields(this.mainBoardCache.data);
       return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
     }
     // 完全没有缓存 → 触发异步扫描，立即返回空
