@@ -2544,8 +2544,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { concentration90, peakPosition, pattern };
   }
 
-  async quickAnalyze(code: string, name?: string, keepAll?: boolean): Promise<OpportunityStock | null> {
-    const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
+  async quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[]): Promise<OpportunityStock | null> {
+    const raw: any[] = rawKline || await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 20) return null;
 
     const klineV: any[] = raw.slice(-120);

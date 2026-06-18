@@ -198,4 +198,17 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    analyzeWithKLine(body: {
+        code: string;
+        name?: string;
+        kline: any[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: import("./gem-screener.service").OpportunityStock[];
+    }>;
 }

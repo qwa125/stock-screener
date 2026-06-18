@@ -578,27 +578,55 @@ async function doSearch(){
       +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在分析该股票……</div>'
     scrollTo(0,da.offsetTop-80)
     
-    // 第三步：调后端分析
+    // 第三步：前端直接拉K线（用户中国浏览器→快）→ POST给后端即时分析
     try{
-      var r=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode))
-      var json=await r.json()
-      if(json.code===200&&json.data&&json.data.length>0){
-        var o=json.data[0]
-        o.name=stockName  // 始终用前端查到的真实名称
+      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+        +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在拉取K线数据进行分析……</div>'
+      
+      // 1. 前端直接拉取新浪K线（用户中国浏览器不超时）
+      var prefix='sz';if(stockCode.startsWith('6'))prefix='sh'
+      var kurl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+prefix+stockCode+'&scale=240&ma=5,10,20,30,60,120&datalen=500'
+      var kr=await fetch(kurl,{signal:AbortSignal.timeout(10000)})
+      var kdata=await kr.json()
+      if(!kdata||!kdata.length||kdata.length<50)throw new Error('K线数据不足')
+      
+      // 2. POST给后端即时分析
+      var ar=await fetch('/api/gem/analyze',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code:stockCode,name:stockName,kline:kdata})
+      })
+      var aj=await ar.json()
+      if(aj.code===200&&aj.data&&aj.data.length>0){
+        var o=aj.data[0]
+        o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
         da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP})
       }else{
-        // 后端没结果，保留基础信息并显示分析失败提示
-        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-          +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
-          +'<span style="font-size:28px;display:block;margin-bottom:8px">📊</span>'
-          +'股票已找到，但服务器分析超时（从美国拉取中国K线数据较慢）<br>'
-          +'请稍后点击「立即扫描」查看最新分析结果</div>'
+        throw new Error('分析无结果')
       }
     }catch(e){
+      // K线分析失败，兜底调后端搜索（可能慢但尽力）
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-        +'<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">分析请求失败，请重试</div>'
+        +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ K线分析暂不可用，切换服务器分析……</div>'
+      try{
+        var r2=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode),{signal:AbortSignal.timeout(15000)})
+        var j2=await r2.json()
+        if(j2.code===200&&j2.data&&j2.data.length>0){
+          var o2=j2.data[0];o2.name=stockName
+          o2.currentPrice=o2.currentPrice||stockPrice
+          o2.changePercent=o2.changePercent||stockChgP
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP})
+        }else{
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+            +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
+            +'<span style="font-size:28px;display:block;margin-bottom:8px">📊</span>'
+            +'股票已找到，但服务器分析超时<br>请稍后点击「立即扫描」查看最新分析结果</div>'
+        }
+      }catch(e2){
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+          +'<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">分析请求失败，请重试</div>'
+      }
     }
   }else{
     da.style.display='block'

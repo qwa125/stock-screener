@@ -402,4 +402,32 @@ export class GemScreenerController {
       return { code: 500, msg: '搜索请求失败', data: [] };
     }
   }
+
+  @Post('analyze')
+  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[] }) {
+    if (!body.code || !body.kline || !Array.isArray(body.kline)) {
+      return { code: 400, msg: '缺少股票代码或K线数据' };
+    }
+    try {
+      // 转换K线数据格式（Sina API返回day字段，quickAnalyze需要date字段）
+      const klineData = body.kline.map((item: any) => ({
+        date: item.day || item.date,
+        open: parseFloat(item.open) || 0,
+        close: parseFloat(item.close) || 0,
+        high: parseFloat(item.high) || 0,
+        low: parseFloat(item.low) || 0,
+        volume: parseFloat(item.volume) || 0,
+        amount: item.amount || 0,
+      }));
+      const opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+      if (opp) {
+        return { code: 200, msg: 'success', data: [opp] };
+      }
+      return { code: 200, msg: '分析完成但无有效信号', data: [] };
+    } catch (e) {
+      this.logger.error(`K线分析失败: ${(e as Error).message}`);
+      return { code: 500, msg: '分析失败', data: [] };
+    }
+  }
+
 }

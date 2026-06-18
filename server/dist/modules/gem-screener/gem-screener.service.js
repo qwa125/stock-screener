@@ -2180,8 +2180,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return { concentration90, peakPosition, pattern };
     }
-    async quickAnalyze(code, name, keepAll) {
-        const raw = await this.dataFetcher.getKLineData(code);
+    async quickAnalyze(code, name, keepAll, rawKline) {
+        const raw = rawKline || await this.dataFetcher.getKLineData(code);
         if (!raw?.length || raw.length < 20)
             return null;
         const klineV = raw.slice(-120);
