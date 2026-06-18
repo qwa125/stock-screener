@@ -270,13 +270,15 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
         return { code: 200, msg: 'ok', data: results.slice(0, 20) };
     }
-    async proxyStockList(node, page, num) {
+    async proxyStockList(node, page, num, sort, asc) {
         try {
             const nodes = ['hs_a', 'cyb', 'gem'];
             const safeNode = node && nodes.includes(node) ? node : 'hs_a';
             const safePage = parseInt(page || '1', 10);
             const safeNum = Math.min(parseInt(num || '80', 10), 100);
-            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=amount&asc=0&node=${safeNode}`;
+            const safeSort = sort || 'amount';
+            const safeAsc = asc || '0';
+            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=${safeSort}&asc=${safeAsc}&node=${safeNode}`;
             const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
             const text = await resp.text();
             let data;
@@ -435,8 +437,10 @@ __decorate([
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
+    __param(3, (0, common_1.Query)('sort')),
+    __param(4, (0, common_1.Query)('asc')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxyStockList", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([

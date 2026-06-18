@@ -342,17 +342,27 @@ export class GemScreenerController {
 
   /**
    * 代理新浪全市场股票列表（解决前端跨域问题）
-   * GET /api/gem/proxy/stock-list?node=cyb&page=1&num=80
+   * GET /api/gem/proxy/stock-list?node=cyb&page=1&num=80&sort=changepercent
    * node: cyb(创业板) / hs_a(沪深A股主板) / gem(创业板)
+   * sort: changepercent(涨跌幅) / amount(成交额) / price(股价) / turnover(换手率) — 默认 amount
+   * asc: 0(降序) / 1(升序) — 默认 0(降序)
    */
   @Get('proxy/stock-list')
-  async proxyStockList(@Query('node') node: string, @Query('page') page: string, @Query('num') num: string) {
+  async proxyStockList(
+    @Query('node') node: string,
+    @Query('page') page: string,
+    @Query('num') num: string,
+    @Query('sort') sort?: string,
+    @Query('asc') asc?: string,
+  ) {
     try {
       const nodes = ['hs_a', 'cyb', 'gem'];
       const safeNode = node && nodes.includes(node) ? node : 'hs_a';
       const safePage = parseInt(page || '1', 10);
       const safeNum = Math.min(parseInt(num || '80', 10), 100);
-      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=amount&asc=0&node=${safeNode}`;
+      const safeSort = sort || 'amount';
+      const safeAsc = asc || '0';
+      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=${safeSort}&asc=${safeAsc}&node=${safeNode}`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
       const text = await resp.text();
       let data;

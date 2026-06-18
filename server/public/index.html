@@ -346,11 +346,11 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
-// ---------- 全市场重扫（并行多页抓取主板+创业板） ----------
+// ---------- 全市场重扫（按涨幅排序抓取主板前500+创业板前500） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
-  setStatus('🔄 全市场重扫中（多页并行抓取主板+创业板）...')
+  setStatus('🔄 按涨幅排行抓取中（主板×5页+创业板×5页并行）...')
   
   // 1. 缓存重分析（瞬间）
   var newStocks=[]
@@ -359,19 +359,20 @@ async function doFullRescan(){
     var cd=await cr.json()
     newStocks=(cd.data||[]).slice()
   }catch(e){}
-  setStatus('🔄 缓存已分析 '+newStocks.length+' 只')
+  setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
   
-  // 2. 并行抓取多页主板+创业板（通过代理避免跨域）
+  // 2. 并行抓取多页（按涨幅降序排序）
+  //    主板(hs_a)：9页×100=900只（过滤出沪深主板代码，约~500只）
+  //    创业板(cyb)：5页×100=500只
   var pageTasks=[]
   var configs=[]
-  // 主板（hs_a）取前6页，创业板（cyb）取前3页
-  for(var pi=1;pi<=6;pi++)configs.push({node:'hs_a',page:pi})
-  for(var pi=1;pi<=3;pi++)configs.push({node:'cyb',page:pi})
+  for(var pi=1;pi<=9;pi++)configs.push({node:'hs_a',page:pi,desc:'主板'})
+  for(var pi=1;pi<=5;pi++)configs.push({node:'cyb',page:pi,desc:'创业板'})
   
   for(var ci=0;ci<configs.length;ci++){
     var cfg=configs[ci]
     pageTasks.push(
-      fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
+      fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100&sort=changepercent&asc=0')
         .then(function(r){return r.json()})
         .then(function(d){return d.code===200?d.data||[]:[]})
         .catch(function(){return[]})
@@ -379,20 +380,51 @@ async function doFullRescan(){
   }
   
   var pagesData=await Promise.all(pageTasks)
+  
+  // 沪深主板代码前缀
+  function isMainBoard(code){
+    return /^sh(600|601|603|605)/.test(code) || /^sz(000|001|002)/.test(code)
+  }
+  // 创业板代码前缀
+  function isGEM(code){
+    return /^sz(300|301)/.test(code)
+  }
+  // 清洗代码：去掉sz/sh/bj前缀取数字部分
+  function cleanCode(raw){
+    return (raw||'').replace(/^(sz|sh|bj)/,'')
+  }
+  
   var seen={}
   for(var si=0;si<newStocks.length;si++)if(newStocks[si].code)seen[newStocks[si].code]=1
   
+  var mainBoardCount=0, gemCount=0
+  
   for(var pi2=0;pi2<pagesData.length;pi2++){
     var arr=pagesData[pi2]
+    // 判断这页来自哪个节点（前9页是hs_a，后5页是cyb）
+    var isHsPage=pi2<9
     for(var ii=0;ii<arr.length;ii++){
       var item=arr[ii]
-      var code=item.symbol||item.code||''
+      var rawCode=item.symbol||item.code||''
+      var code=cleanCode(rawCode)
       var name=item.name||''
       if(!code||!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
+      
+      // 主板页只取沪深主板代码，创业板页只取创业板代码
+      if(isHsPage && !isMainBoard(rawCode)) continue
+      if(!isHsPage && !isGEM(rawCode)) continue
+      
+      // 控制数量：主板最多600，创业板最多500
+      if(isHsPage && mainBoardCount>=600) continue
+      if(!isHsPage && gemCount>=500) continue
+      
       var price=parseFloat(item.trade)||0
       if(price<3)continue
       if(seen[code])continue
       seen[code]=1
+      if(isHsPage) mainBoardCount++
+      else gemCount++
+      
       newStocks.push({code:code,name:name,currentPrice:price,pricePosition:50,suggestion:'持有',score:30,
         changePercent:parseFloat(item.changePercent||item.chg||'')||0,
         chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
@@ -401,18 +433,19 @@ async function doFullRescan(){
   }
   
   if(newStocks.length){
-    setStatus('🔄 共 '+newStocks.length+' 只，排序中...')
+    setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只+缓存'+(newStocks.length-mainBoardCount-gemCount)+'只），排序中...')
     stocks=newStocks
-    // 排序
+    // 排序：信号优先级优先，再按涨幅降序
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
       var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
-      return pa!==pb?pa-pb:(b.score||0)-(a.score||0)
+      if(pa!==pb) return pa-pb
+      return (b.changePercent||0)-(a.changePercent||0)
     })
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
-    setStatus('✅ 全市场重扫完成 - '+stocks.length+' 只（含'+Object.keys(seen).length+' 只不同股票）')
+    setStatus('✅ 全市场重扫完成 - 主板涨幅前'+mainBoardCount+'+创业板涨幅前'+gemCount+' = '+stocks.length+'只')
   }else{
     setStatus('❌ 重扫无结果')
   }
