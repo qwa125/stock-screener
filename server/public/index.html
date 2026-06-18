@@ -440,12 +440,18 @@ async function doFullRescan(){
     stocks.sort(function(a,b){
       var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
       if(pa!==pb) return pa-pb
-      return (b.changePercent||0)-(a.changePercent||0)
+      // 第二排序：入场时机(高→低)
+      var ea=a.entryTiming||0, eb=b.entryTiming||0
+      if(eb!==ea) return eb-ea
+      // 第三排序：主力资金流入(高→低)
+      return (b.mainForceInflow||0)-(a.mainForceInflow||0)
     })
+    // 只保留 Top20
+    if(stocks.length>20) stocks=stocks.slice(0,20)
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
-    setStatus('✅ 全市场重扫完成 - 主板涨幅前'+mainBoardCount+'+创业板涨幅前'+gemCount+' = '+stocks.length+'只')
+    setStatus('✅ Top20 已更新 - 信号排序→入场时机→主力资金')
   }else{
     setStatus('❌ 重扫无结果')
   }
