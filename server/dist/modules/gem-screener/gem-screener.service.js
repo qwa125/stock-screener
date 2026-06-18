@@ -195,7 +195,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     upgradeCacheFields(data) {
         if (!data || data.length === 0)
             return;
-        if (data[0].signalCombination !== undefined)
+        if (data[0].chipConcentration90 !== undefined)
             return;
         for (const s of data) {
             const sig = s.suggestion || '';
@@ -215,6 +215,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.signalCombination = '';
             }
             s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
+            s.chipConcentration90 = s.chipConcentration90 ?? 50;
+            s.chipPeakPosition = s.chipPeakPosition ?? 'mid';
+            s.chipPattern = s.chipPattern ?? 'dispersed';
         }
     }
     triggerRefresh() {
