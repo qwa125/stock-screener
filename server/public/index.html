@@ -14,47 +14,61 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .search-bar{display:flex;align-items:center;gap:8px;background:#f5f5f5;border-radius:10px;padding:8px 12px;margin:8px 16px}
 .search-bar input{flex:1;border:none;background:transparent;font-size:13px;outline:none}
 .search-bar button{background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+#searchResult{display:none;margin:0 12px 8px}
+.sr-card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+.sr-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#f9fafb;border-bottom:1px solid #eee}
+.sr-name{font-size:15px;font-weight:600}
+.sr-code{font-size:11px;color:#999}
+.sr-body{padding:0}
 .btn-scan{margin:8px 16px;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:13px;text-align:center;cursor:pointer}
 .btn-scan:disabled{opacity:.5;cursor:not-allowed}
 .list-header{display:flex;padding:8px 16px 4px;font-size:11px;color:#999;font-weight:500}
 .col-name{flex:1.5}
-.col-signal{flex:.75;text-align:center}
+.col-action{flex:.75;text-align:center}
 .col-price{flex:1;text-align:center}
 .col-chg{flex:1;text-align:center}
 .col-pos{flex:1.1;text-align:right}
 .stock-list{padding:0 12px 8px;display:flex;flex-direction:column;gap:6px}
-.stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s;border:2px solid transparent}
+.stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
 .stock-card:active{transform:scale(.98)}
 .stock-row{display:flex;align-items:center}
 .stock-info{display:flex;align-items:center;gap:6px;flex:1.5;min-width:0}
 .rank-badge{padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap}
 .rank-top3{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 .rank-other{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
-.signal-badge{padding:3px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;text-align:center;flex:.75;display:inline-block}
+.stock-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-code{font-size:10px;color:#999}
+.signal-badge{padding:3px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;text-align:center;flex:.75;display:inline-block;text-align:center}
 .price{font-size:13px;font-weight:500;flex:1;text-align:center}
 .chg{font-size:13px;font-weight:700;flex:1;text-align:center}
 .pos{font-size:13px;font-weight:700;flex:1.1;text-align:right}
-.detail-panel{display:none;margin:8px 0 0;padding:12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;font-size:12px;line-height:1.6}
+
+/* Detail panel - rich analysis style */
+.detail-panel{display:none;margin:6px 0 0;padding:0;background:#fff;border-radius:8px;overflow:hidden}
 .detail-panel.open{display:block}
-.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
-.detail-item{background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #eef2f6}
-.detail-item .label{font-size:10px;color:#94a3b8;margin-bottom:2px}
-.detail-item .value{font-size:14px;font-weight:700}
-.detail-item .value.red{color:#dc2626}
-.detail-item .value.green{color:#16a34a}
-.detail-item .value.yellow{color:#ca8a04}
-.advice-box{margin-top:6px;padding:10px 12px;border-radius:8px;font-size:12px;font-weight:500;line-height:1.6}
-.advice-buy{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d}
-.advice-hold{background:#fefce8;border:1px solid #fde68a;color:#a16207}
-.advice-watch{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
-.search-result{display:none;margin:0 16px;padding:12px;background:#fff;border-radius:10px;border:2px solid #3b82f6;font-size:13px;line-height:1.6;box-shadow:0 2px 8px rgba(59,130,246,.15)}
-.search-result .sr-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.search-result .sr-name{font-size:15px;font-weight:700}
-.search-result .sr-code{font-size:11px;color:#999}
-.search-result .sr-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px}
-.search-result .sr-item{padding:4px 0}
-.search-result .sr-label{font-size:10px;color:#94a3b8}
-.search-result .sr-value{font-size:13px;font-weight:600}
+.signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
+.signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
+
+/* Action button */
+.action-card{padding:0 12px 8px}
+.action-btn{display:flex;align-items:center;justify-content:space-between;border-radius:10px;padding:12px 14px;color:#fff;font-weight:600}
+.action-btn .action-label{font-size:16px;font-weight:700}
+.action-btn .action-reason{font-size:11px;opacity:.85}
+
+/* Prediction */
+.prediction-box{margin:0 12px 8px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
+.prediction-box .label{font-size:11px;color:#94a3b8;margin-bottom:4px}
+.prediction-box .text{font-size:13px;font-weight:600;color:#334155}
+
+/* Indicator grid */
+.indicator-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 12px 8px}
+.indicator-item{background:#f8fafc;padding:8px 10px;border-radius:8px;border:1px solid #eef2f6}
+.indicator-item .label{font-size:10px;color:#94a3b8;margin-bottom:2px}
+.indicator-item .value{font-size:13px;font-weight:600}
+.indicator-item .value.red{color:#dc2626}.indicator-item .value.green{color:#16a34a}.indicator-item .value.yellow{color:#ca8a04}
+
+/* Details list */
+.detail-list{padding:0 12px 10px}
 .footer{background:#fff;padding:10px 16px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}
 .loading{text-align:center;padding:40px 16px;font-size:14px;color:#999}
 .empty{text-align:center;padding:48px 16px;font-size:14px;color:#999}
@@ -71,16 +85,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <div class="search-bar">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-  <input id="searchInput" placeholder="输入代码或名称搜索" onkeydown="if(event.key==='Enter')doSearch()">
+  <input id="searchInput" placeholder="输入代码搜索" onkeydown="if(event.key==='Enter')doSearch()">
   <button onclick="doSearch()">搜索</button>
 </div>
-<div class="search-result" id="searchResult"></div>
+<div id="searchResult"></div>
 
 <button class="btn-scan" id="scanBtn" onclick="doScan()">🔄 立即扫描</button>
 
 <div class="list-header">
   <span class="col-name">名称</span>
-  <span class="col-signal">操作</span>
+  <span class="col-action">操作</span>
   <span class="col-price">实时价</span>
   <span class="col-chg">涨跌幅</span>
   <span class="col-pos">位置</span>
@@ -94,6 +108,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <script>
 var API='/api'
 var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','观望':'#6b7280'}
+var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
+
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=540&&m<900}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
@@ -103,219 +119,224 @@ function $(id){return document.getElementById(id)}
 function setStatus(s){$('status').textContent=s}
 
 function posLabel(p){
-  if(p<25) return '低位区 <25%'
-  if(p<45) return '中低位 25-45%'
-  if(p<55) return '中位区 45-55%'
-  if(p<80) return '中高位 55-80%'
-  return '高位区 >80%'
+  if(p<25) return '低位区'
+  if(p<45) return '中低位'
+  if(p<55) return '中位区'
+  if(p<80) return '中高位'
+  return '高位区'
 }
 
-/** 今日操作建议 */
-function todayAdvice(s,rt){
+function todayAdviceText(s,rt){
   var chg=rt.changePercent||0
-  var sig=s.suggestion
+  var sig=s.suggestion||''
   if(sig==='重仓买入'){
-    if(chg<-3) return '今日跌幅较大，可全仓买入把握低吸机会'
-    if(chg>3) return '今日强势上攻，可全仓买入积极跟进'
-    if(chg<0) return '今日小幅回调，全仓买入正当时'
-    return '今日走势稳健，建议全仓买入'
+    if(chg<-2) return'今日低开/回调，全仓买入把握低吸机会'
+    if(chg>3) return'今日强势上攻，全仓买入积极跟进'
+    return'今日走势符合预期，建议全仓买入'
   }
   if(sig==='买入'){
-    if(chg<-2) return '今日回调幅度较大，可半仓买入'
-    if(chg>0) return '今日上涨中，可半仓买入'
-    return '今日走势平稳，建议半仓买入'
+    if(chg<-2) return'今日回调幅度较大，可半仓买入布局'
+    if(chg>2) return'今日上涨中，可半仓买入跟进'
+    return'今日走势平稳，建议半仓买入'
   }
   if(sig==='轻仓买入'){
-    if(chg<-2) return '今日跌幅较大，1/3仓位试探性买入'
-    return '今日走势一般，建议1/3仓位买入'
+    return'今日建议1/3仓位试探性买入'
   }
-  return '今日暂无明显买入信号，建议观望'
+  return'今日暂无明显买入信号，建议观望'
 }
 
-/** 未来1-2日操作建议 */
-function futureAdvice(s){
-  if(s.suggestion==='重仓买入')return '未来1-2日：低位区+MA5>MA10多头+强信号，建议全仓买入'
-  if(s.suggestion==='买入')return '未来1-2日：低位区有买点信号，趋势企稳，建议半仓买入'
-  if(s.suggestion==='轻仓买入')return '未来1-2日：中位区有趋势但信号不强，建议1/3仓位买入'
-  return '未来1-2日：暂无明确买入信号，建议观望等待'
+function futurePrediction(s){
+  if(s.suggestion==='重仓买入')return'低位区+MA5>MA10多头排列+强信号，未来1-2日有望继续走强，建议全仓买入'
+  if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
+  if(s.suggestion==='轻仓买入')return'中位区有趋势但信号不够强，未来1-2日存在不确定性，建议1/3仓位试探'
+  return'暂无明确买入信号，未来1-2日建议观望为主'
 }
 
-function getSigColor(s){return COLORS[s.suggestion]||'#999'}
+function sigColor(s){return COLORS[s.suggestion]||'#999'}
+function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
 
-function toggleDetail(idx){
-  openDetail[idx]=!openDetail[idx]
-  renderList()
-}
+function toggleDetail(i){openDetail[i]=!openDetail[i];renderList()}
 
-/** 通过腾讯API获取实时行情 */
+// ---------- 腾讯实时行情 ----------
 async function fetchRealtime(codes){
-  if(!codes||codes.length===0)return{}
-  var result={}
+  if(!codes||!codes.length)return{}
+  var r={}
   for(var i=0;i<codes.length;i+=50){
-    var batch=codes.slice(i,i+50)
-    var q=batch.map(function(c){return(c.startsWith('6')?'sh':'sz')+c}).join(',')
+    var b=codes.slice(i,i+50).map(function(c){return(c.startsWith('6')?'sh':'sz')+c}).join(',')
     try{
-      var r=await fetch('https://qt.gtimg.cn/q='+q)
-      var buf=await r.arrayBuffer()
+      var res=await fetch('https://qt.gtimg.cn/q='+b)
+      var buf=await res.arrayBuffer()
       var txt=new TextDecoder('gbk').decode(buf)
-      txt.split(';').forEach(function(line){
-        var t=line.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
-        result[p[2]]={
-          price:parseFloat(p[3])||0,
-          yesterdayClose:parseFloat(p[4])||0,
-          change:parseFloat(p[31])||0,
-          changePercent:parseFloat(p[32])||0,
-          open:parseFloat(p[5])||0,
-          high:parseFloat(p[33])||0,
-          low:parseFloat(p[34])||0
-        }
+      txt.split(';').forEach(function(l){
+        var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
+        r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
       })
     }catch(e){}
   }
-  return result
+  return r
 }
 
-async function doScan(){
-  if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
-  setStatus('🔄 获取分析数据...')
-  try{
-    var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now());
-    var d=await r.json();
-    if(d.code!==200||!d.data||!d.data.opportunities){
-      setStatus('❌ 后端无数据')
-      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
-    }
-    stocks=d.data.opportunities
-    setStatus('🔄 获取实时行情...')
-    realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    openDetail={}
-    renderList()
-    setStatus('✅ 实时数据已更新')
-  }catch(e){setStatus('❌ '+e.message)}
-  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-}
-
-function buildDetailHTML(s,i){
-  var rt=realtimePrices[s.code]||{}
+// ---------- 构建分析详情HTML（仿旧版模板） ----------
+function buildDetail(s,rt){
+  var rt=rt||{}
   var price=rt.price||s.currentPrice||0
-  var chg=rt.changePercent!==undefined?rt.changePercent:(s.changePercent||0)
+  var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
   var chgClr=chg>=0?'#ef4444':'#22c55e'
   var p=s.pricePosition||0
-  var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
-  var entry=s.entryTiming||0,safe=s.safetyScore||0,mf=s.mainForceInflow||0,sc=s.score||0
-  var gc=s.isGoldenCross?'✅ 是':'❌ 否'
-  var chgTxt=(chg>=0?'+':'')+chg.toFixed(2)+'%'
-  var priceTxt=price.toFixed(2)
-  var today=todayAdvice(s,rt)
-  var future=futureAdvice(s)
-  var sg=getSigColor(s)
+  var posTag=posLabel(p)
+  var posTClr=TAG_COLORS[posTag]||'#6b7280'
+  var entry=s.entryTiming||0
+  var safe=s.safetyScore||0
+  var mf=s.mainForceInflow||0
+  var sc=s.score||0
+  var gc=s.isGoldenCross
+  var bai=s.baiXiaoDays||0
+  var sig=s.suggestion||'观望'
 
-  return '<div class="detail-grid">'
-    +'<div class="detail-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+priceTxt+'</div></div>'
-    +'<div class="detail-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+chgTxt+'</div></div>'
-    +'<div class="detail-item"><div class="label">价位位置</div><div class="value" style="color:'+posClr+'">'+posLabel(p)+' ('+p.toFixed(0)+'%)</div></div>'
-    +'<div class="detail-item"><div class="label">综合评分</div><div class="value'+(sc>=80?' green':sc>=50?' yellow':'')+'">'+sc+'分/120</div></div>'
-    +'<div class="detail-item"><div class="label">入场时机</div><div class="value'+(entry>=70?' green':entry>=40?' yellow':'')+'">'+(entry||0)+'分</div></div>'
-    +'<div class="detail-item"><div class="label">安全评分</div><div class="value'+(safe>=70?' green':safe>=40?' yellow':'')+'">'+(safe||0)+'分</div></div>'
-    +'<div class="detail-item"><div class="label">主力资金</div><div class="value'+(mf>0?' green':'')+'">¥'+(mf||0).toFixed(2)+'亿</div></div>'
-    +'<div class="detail-item"><div class="label">MACD金叉</div><div class="value'+(s.isGoldenCross?' green':'')+'">'+gc+'</div></div>'
+  // 信号标签
+  var tags='<div class="signal-tags">'
+    +'<span class="signal-tag" style="background:'+posTClr+'">'+posTag+' '+p.toFixed(0)+'%</span>'
+    +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'金叉✓':'未金叉')+'</span>'
+    +'<span class="signal-tag" style="background:#7c3aed">白消'+bai+'天</span>'
+    +'<span class="signal-tag" style="background:'+(entry>=60?'#16a34a':'#ca8a04')+'">入场'+(entry||0)+'分</span>'
     +'</div>'
-    +'<div class="advice-box advice-buy"><b>📌 今日操作建议</b><br>'+today+'</div>'
-    +'<div class="advice-box '+((s.suggestion==='重仓买入'||s.suggestion==='买入')?'advice-buy':s.suggestion==='轻仓买入'?'advice-hold':'advice-watch')+'"><b>📅 未来1-2日操作建议</b><br>'+future+'</div>'
+
+  // 操作按钮 - 今日操作建议
+  var btnColors={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','观望':'#6b7280'}
+  var btnColor=btnColors[sig]||'#6b7280'
+  var icons={'重仓买入':'📈','买入':'📊','轻仓买入':'🔍','观望':'⏸️'}
+  var today=todayAdviceText(s,rt)
+  var action='<div style="padding:0 12px 4px;font-size:12px;font-weight:600;color:#666">📌 今日操作建议</div><div class="action-card"><div class="action-btn" style="background:'+btnColor+'"><span class="action-label">'+icons[sig]+' '+sig+'</span><span class="action-reason">'+(sig==='重仓买入'?'全仓买入':sig==='买入'?'半仓买入':sig==='轻仓买入'?'1/3仓位':'观望')+'</span></div><div style="font-size:11px;color:#6b7280;padding:6px 4px 0">'+today+'</div></div>'
+
+  // 未来预测
+  var pred=futurePrediction(s)
+  var future='<div class="prediction-box"><div class="label">📅 未来1-2日操作建议</div><div class="text">'+pred+'</div></div>'
+
+  // 指标网格
+  var mfClr=mf>0?'green':mf<0?'red':''
+  var grid='<div style="padding:4px 12px 4px;font-size:12px;font-weight:600;color:#666">📊 技术指标</div><div class="indicator-grid">'
+    +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
+    +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
+    +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
+    +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=70?'green':entry>=40?'yellow':'')+'">'+(entry||0)+'分</div></div>'
+    +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
+    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">¥'+(mf||0).toFixed(2)+'亿</div></div>'
+    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high?rt.high.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low?rt.low.toFixed(2):'-')+'</div></div>'
+    +'</div>'
+
+  // 详情说明
+  var details=[]
+  if(sig==='重仓买入'){details.push('低位区'+p.toFixed(0)+'%：处于安全价位区间');details.push('MA5>MA10多头排列，趋势向上');details.push('强信号触发，技术面共振')}
+  else if(sig==='买入'){details.push('低位区出现买点信号');details.push('趋势企稳回升，均线走好');details.push('成交量配合较好')}
+  else if(sig==='轻仓买入'){details.push('中位区，具有一定安全边际');details.push('趋势向好但信号不强烈');details.push('建议控制仓位，设好止损')}
+  if(gc)details.push('MACD金叉信号，短期看多')
+  if(mf>0)details.push('主力资金净流入¥'+mf.toFixed(2)+'亿')
+  var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
+
+  return tags+action+future+grid+detailList
 }
 
+// ---------- 渲染列表 ----------
 function renderList(){
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   $('footer').textContent='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
+  setStatus('✅ Top '+stocks.length+' 已更新')
   stocks.forEach(function(s,i){
     var rt=realtimePrices[s.code]||{}
     var price=rt.price||s.currentPrice||0
-    var chg=rt.changePercent!==undefined?rt.changePercent:(s.changePercent||0)
+    var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
     var chgClr=chg>=0?'#ef4444':'#22c55e'
     var p=s.pricePosition||0
     var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
-    var sg=getSigColor(s)
-    var chgTxt=(chg>=0?'+':'')+chg.toFixed(2)+'%'
-
+    var sg=sigColor(s)
+    var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
     var card=document.createElement('div');card.className='stock-card'
     card.onclick=function(){toggleDetail(i)}
-    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgTxt+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
-
+    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     if(openDetail[i]){
       var pnl=document.createElement('div');pnl.className='detail-panel open'
-      pnl.innerHTML=buildDetailHTML(s,i)
-      card.appendChild(pnl)
-      card.style.border='2px solid '+sg
+      pnl.innerHTML=buildDetail(s,rt)
+      card.appendChild(pnl);card.style.border='2px solid '+sg
     }
     list.appendChild(card)
   })
 }
 
+// ---------- 扫描 ----------
+async function doScan(){
+  if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
+  setStatus('🔄 获取分析数据...')
+  try{
+    var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
+    var d=await r.json()
+    if(d.code!==200||!d.data||!d.data.opportunities){
+      setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
+    }
+    stocks=d.data.opportunities
+    setStatus('🔄 获取实时行情...')
+    realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
+    openDetail={};renderList()
+    setStatus('✅ 实时数据已更新')
+  }catch(e){setStatus('❌ '+e.message)}
+  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+}
+
+// ---------- 搜索 ----------
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   var sr=$('searchResult');sr.style.display='none'
   var found=false
-  // 在Top20中搜索
+  // 先在Top20搜索
   if(stocks.length>0){
     stocks.forEach(function(o){
       if(o.code===v||o.name.includes(v)){
         sr.style.display='block'
-
-        // 检查是否已有实时行情
-        if(!realtimePrices[o.code]&&stocks.length>0){
-          // 没实时行情时先拉取
-        }
         var rt=realtimePrices[o.code]||{}
         var price=rt.price||o.currentPrice||0
-        var chg=rt.changePercent!==undefined?rt.changePercent:(o.changePercent||0)
+        var chg=rt.chgP!==undefined?rt.chgP:(o.changePercent||0)
         var chgClr=chg>=0?'#ef4444':'#22c55e'
-        var sg=getSigColor(o)
-
-        sr.innerHTML='<div class="sr-header"><div><span class="sr-name">'+o.name+'</span> <span class="sr-code">'+o.code+'</span> | <span style="color:'+sg+';font-weight:700">'+o.suggestion+'</span></div><div style="font-size:14px;font-weight:700;color:'+chgClr+'">¥'+price.toFixed(2)+' '+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
-          +buildDetailHTML(o,-1)
-          +'<div style="margin-top:6px;font-size:11px;color:#999;text-align:center">👉 点击下方卡片可展开/收起详情</div>'
-        found=true
+        sr.innerHTML='<div class="sr-card"><div class="sr-header"><div><span class="sr-name">'+o.name+'</span> <span class="sr-code">'+o.code+'</span> <span class="signal-badge" style="background:'+sigColor(o)+';display:inline-block;padding:2px 6px;font-size:10px">'+o.suggestion+'</span></div><div style="font-size:14px;font-weight:700;color:'+chgClr+'">¥'+price.toFixed(2)+' '+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div><div class="sr-body">'+buildDetail(o,rt)+'</div></div>'
+        found=true;scrollTo(0,0)
       }
     })
   }
   if(!found){
+    // 直查腾讯
     try{
       var q=(v.startsWith('6')?'sh':'sz')+v
-      var r=await fetch('https://qt.gtimg.cn/q='+q)
-      var buf=await r.arrayBuffer();var txt=new TextDecoder('gbk').decode(buf)
-      txt.split(';').forEach(function(line){
-        var t=line.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
+      var res=await fetch('https://qt.gtimg.cn/q='+q)
+      var buf=await res.arrayBuffer();var txt=new TextDecoder('gbk').decode(buf)
+      txt.split(';').forEach(function(l){
+        var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
         if(p[2]===v){
           sr.style.display='block';var cp=parseFloat(p[32])||0
-          sr.innerHTML='<div class="sr-header"><div><span class="sr-name">'+p[1]+'</span> <span class="sr-code">'+p[2]+'</span></div><div style="font-size:14px;font-weight:700;color:'+(cp>=0?'#ef4444':'#22c55e')+'">¥'+p[3]+' '+(cp>=0?'+':'')+cp.toFixed(2)+'%</div></div>'
-            +'<div style="padding:12px;text-align:center;color:#999;font-size:13px">此股不在Top20优选列表中<br>建议扫描获取最新推荐</div>'
-          found=true
+          sr.innerHTML='<div class="sr-card"><div class="sr-header"><div><span class="sr-name">'+p[1]+'</span> <span class="sr-code">'+p[2]+'</span></div><div style="font-size:14px;font-weight:700;color:'+(cp>=0?'#ef4444':'#22c55e')+'">¥'+p[3]+' '+(cp>=0?'+':'')+cp.toFixed(2)+'%</div></div><div style="padding:16px;text-align:center;color:#999;font-size:13px">此股不在Top20优选列表中<br>⬇️ 先扫描获取最新推荐</div></div>'
+          found=true;scrollTo(0,0)
         }
       })
     }catch(e){}
   }
-  if(!found){
-    sr.style.display='block'
-    sr.innerHTML='<div style="padding:12px;text-align:center;color:#999">未找到该股票</div>'
-  }
+  if(!found){sr.style.display='block';sr.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票</div>'}
 }
 
+// Auto refresh
 setInterval(function(){
   if(isTH()&&!loading){doScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },600000)
-
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },60000)
 
-;(function(){
+// Initial
+setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  if(isTH())setTimeout(doScan,3000)
-})()
+  if(isTH())doScan()
+},3000)
 </script>
 </body>
 </html>
