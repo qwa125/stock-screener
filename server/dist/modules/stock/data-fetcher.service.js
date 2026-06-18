@@ -68,14 +68,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
     async searchStock(keyword) {
         const isCode = /^\d{6}$/.test(keyword.trim());
         if (isCode) {
-            const info = await this.fetchRealTimeQuote(keyword.trim());
-            if (info && info.name && info.name !== `股票${keyword}` && info.name !== keyword && info.price) {
-                return [info];
-            }
-            const eastRes = await this.searchEastMoney(keyword);
-            if (eastRes.length > 0)
-                return eastRes;
-            return this.fallbackSearch(keyword);
+            return this.fallbackSearch(keyword.trim());
         }
         const eastRes = await this.searchEastMoney(keyword);
         if (eastRes.length > 0)

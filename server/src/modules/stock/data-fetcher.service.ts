@@ -74,15 +74,9 @@ export class DataFetcherService {
     const isCode = /^\d{6}$/.test(keyword.trim());
 
     if (isCode) {
-      // 直接用代码查询腾讯实时行情获取股票名称
-      const info = await this.fetchRealTimeQuote(keyword.trim());
-      if (info && info.name && info.name !== `股票${keyword}` && info.name !== keyword && info.price) {
-        return [info];
-      }
-      // 腾讯API不可靠时走东方财富搜索
-      const eastRes = await this.searchEastMoney(keyword);
-      if (eastRes.length > 0) return eastRes;
-      return this.fallbackSearch(keyword);
+      // 代码搜索：快速返回 fallback，不等待外部API
+      // 从 Render US 调用中国 API 经常超时，直接走本地映射更快
+      return this.fallbackSearch(keyword.trim());
     }
 
     // 尝试东方财富搜索

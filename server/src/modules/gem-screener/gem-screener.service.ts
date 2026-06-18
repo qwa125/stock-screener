@@ -2747,14 +2747,36 @@ export class GemScreenerService implements OnApplicationBootstrap {
       for (let i = 0; i < maxResults; i++) {
         const s = stocks[i];
         try {
-          // 加超时：quickAnalyze 在海外可能因中国API超时长达15s
+          // 加超时：quickAnalyze 在海外可能因中国API超时长达25s+
           const opp = await Promise.race([
             this.quickAnalyze(s.code, s.name),
-            new Promise<null>(r => setTimeout(() => r(null), 12000))
+            new Promise<'TIMEOUT'>(r => setTimeout(() => r('TIMEOUT'), 28000))
           ]);
-          if (opp && opp.suggestion) {  // 搜索展示全部分析结果，包括观望/不要介入
-            opp.name = s.name;
-            results.push(opp);
+          if (opp && opp !== 'TIMEOUT' && (opp as OpportunityStock).suggestion) {
+            (opp as OpportunityStock).name = s.name;
+            results.push(opp as OpportunityStock);
+          } else {
+            // 超时(TIMEOUT) 或 quickAnalyze 返回 null (无K线/不符合条件)
+            // 都返回基础信息，让用户知道股票被找到了
+            this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp==='TIMEOUT'?'超时28s':'null'})，返回基础信息`);
+            results.push({
+              code: s.code,
+              name: s.name,
+              price: 0,
+              suggestion: '持有',
+              score: 0,
+              pricePosition: 50,
+              changePercent: 0,
+              entryTiming: 0,
+              capitalRank: 0,
+              mainForceInflow: 0,
+              baiXiaoDays: 0,
+              currentPrice: 0,
+              jiGouActiveScore: 0,
+              isGoldenCross: false,
+              priceIncrease: 0,
+              safetyScore: 50,
+            } as unknown as OpportunityStock);
           }
         } catch (e) {
           this.logger.warn(`搜索分析 ${s.code}(${s.name}) 失败: ${(e as Error).message}`);

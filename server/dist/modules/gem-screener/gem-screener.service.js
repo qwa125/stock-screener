@@ -2363,11 +2363,32 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 try {
                     const opp = await Promise.race([
                         this.quickAnalyze(s.code, s.name),
-                        new Promise(r => setTimeout(() => r(null), 12000))
+                        new Promise(r => setTimeout(() => r('TIMEOUT'), 28000))
                     ]);
-                    if (opp && opp.suggestion) {
+                    if (opp && opp !== 'TIMEOUT' && opp.suggestion) {
                         opp.name = s.name;
                         results.push(opp);
+                    }
+                    else {
+                        this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp === 'TIMEOUT' ? '超时28s' : 'null'})，返回基础信息`);
+                        results.push({
+                            code: s.code,
+                            name: s.name,
+                            price: 0,
+                            suggestion: '持有',
+                            score: 0,
+                            pricePosition: 50,
+                            changePercent: 0,
+                            entryTiming: 0,
+                            capitalRank: 0,
+                            mainForceInflow: 0,
+                            baiXiaoDays: 0,
+                            currentPrice: 0,
+                            jiGouActiveScore: 0,
+                            isGoldenCross: false,
+                            priceIncrease: 0,
+                            safetyScore: 50,
+                        });
                     }
                 }
                 catch (e) {
