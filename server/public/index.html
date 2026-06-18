@@ -88,7 +88,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <input id="searchInput" placeholder="输入代码搜索" onkeydown="if(event.key==='Enter')doSearch()">
   <button onclick="doSearch()">搜索</button>
 </div>
-<div id="searchResult"></div>
+
+<!-- 共享详情区域：列表点击 / 搜索都显示在这里 -->
+<div id="detailArea" class="detail-panel" style="margin:0 12px 8px;display:none"></div>
 
 <button class="btn-scan" id="scanBtn" onclick="doScan()">🔄 立即扫描</button>
 
@@ -114,9 +116,10 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=540&&m<900}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
 
-var stocks=[],loading=false,openDetail={},realtimePrices={}
+var stocks=[],loading=false,realtimePrices={}
 function $(id){return document.getElementById(id)}
 function setStatus(s){$('status').textContent=s}
+var selectedIdx=-1
 
 function posLabel(p){
   if(p<25) return '低位区'
@@ -161,7 +164,16 @@ function futurePrediction(s){
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
 
-function toggleDetail(i){openDetail[i]=!openDetail[i];renderList()}
+function showDetail(i){
+  selectedIdx=i
+  var s=stocks[i],rt=realtimePrices[s.code]||{}
+  var da=$('detailArea')
+  da.style.display='block'
+  da.innerHTML=buildDetail(s,rt)
+  da.scrollIntoView({behavior:'smooth',block:'nearest'})
+  // 高亮列表中的选中项
+  renderList()
+}
 
 // ---------- 腾讯实时行情 ----------
 async function fetchRealtime(codes){
@@ -272,14 +284,9 @@ function renderList(){
     var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
     var sg=sigColor(s)
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
-    var card=document.createElement('div');card.className='stock-card'
-    card.onclick=function(){toggleDetail(i)}
+    var card=document.createElement('div');card.className='stock-card'+(selectedIdx===i?' selected':'')
+    card.onclick=function(){showDetail(i)}
     card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
-    if(openDetail[i]){
-      var pnl=document.createElement('div');pnl.className='detail-panel open'
-      pnl.innerHTML=buildDetail(s,rt)
-      card.appendChild(pnl);card.style.border='2px solid '+sg
-    }
     list.appendChild(card)
   })
 }
@@ -297,7 +304,7 @@ async function doScan(){
     stocks=d.data.opportunities
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    openDetail={};renderList()
+    selectedIdx=-1;$('detailArea').style.display='none';renderList()
     setStatus('✅ 实时数据已更新')
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -306,19 +313,19 @@ async function doScan(){
 // ---------- 搜索 ----------
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
-  var sr=$('searchResult');sr.style.display='none'
+  var da=$('detailArea');da.style.display='none'
   var found=false
   // 先在Top20搜索
   if(stocks.length>0){
     stocks.forEach(function(o){
       if(o.code===v||o.name.includes(v)){
-        sr.style.display='block'
+        da.style.display='block'
         var rt=realtimePrices[o.code]||{}
         var price=rt.price||o.currentPrice||0
         var chg=rt.chgP!==undefined?rt.chgP:(o.changePercent||0)
         var chgClr=chg>=0?'#ef4444':'#22c55e'
-        sr.innerHTML='<div class="sr-card"><div class="sr-header"><div><span class="sr-name">'+o.name+'</span> <span class="sr-code">'+o.code+'</span> <span class="signal-badge" style="background:'+sigColor(o)+';display:inline-block;padding:2px 6px;font-size:10px">'+o.suggestion+'</span></div><div style="font-size:14px;font-weight:700;color:'+chgClr+'">¥'+price.toFixed(2)+' '+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div><div class="sr-body">'+buildDetail(o,rt)+'</div></div>'
-        found=true;scrollTo(0,0)
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索结果 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,rt)
+        found=true;scrollTo(0,da.offsetTop-80)
       }
     })
   }
@@ -331,14 +338,14 @@ async function doSearch(){
       txt.split(';').forEach(function(l){
         var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
         if(p[2]===v){
-          sr.style.display='block';var cp=parseFloat(p[32])||0
-          sr.innerHTML='<div class="sr-card"><div class="sr-header"><div><span class="sr-name">'+p[1]+'</span> <span class="sr-code">'+p[2]+'</span></div><div style="font-size:14px;font-weight:700;color:'+(cp>=0?'#ef4444':'#22c55e')+'">¥'+p[3]+' '+(cp>=0?'+':'')+cp.toFixed(2)+'%</div></div><div style="padding:16px;text-align:center;color:#999;font-size:13px">此股不在Top20优选列表中<br>⬇️ 先扫描获取最新推荐</div></div>'
-          found=true;scrollTo(0,0)
+          da.style.display='block';var cp=parseFloat(p[32])||0
+          da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">此股不在Top20优选列表中<br>⬇️ 先扫描获取最新推荐</div>'
+          found=true;scrollTo(0,da.offsetTop-80)
         }
       })
     }catch(e){}
   }
-  if(!found){sr.style.display='block';sr.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票</div>'}
+  if(!found){da.style.display='block';da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票</div>'}
 }
 
 // Auto refresh
