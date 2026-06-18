@@ -148,4 +148,14 @@ export declare class GemScreenerController {
     }>;
     private readHeavyBuyCache;
     private mergeWithHeavyBuy;
+    refreshAll(body: {
+        stocks: any[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            opportunities: any[];
+            timestamp: number;
+        };
+    }>;
 }

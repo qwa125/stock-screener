@@ -185,4 +185,12 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         }>;
         timestamp: number;
     }>;
+    scanAllWithFrontendData(stocks: {
+        code: string;
+        name: string;
+        price: number;
+        changePercent: number;
+        inflow: number;
+        klines: any[];
+    }[]): Promise<any[]>;
 }

@@ -261,4 +261,11 @@ export class GemScreenerController {
     const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
     return merged;
   }
+
+  @Post('refresh-all')
+  @HttpCode(200)
+  async refreshAll(@Body() body: { stocks: any[] }) {
+    const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
+    return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+  }
 }

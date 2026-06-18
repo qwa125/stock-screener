@@ -202,6 +202,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
         return merged;
     }
+    async refreshAll(body) {
+        const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
+        return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -310,6 +314,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "seedCache", null);
+__decorate([
+    (0, common_1.Post)('refresh-all'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "refreshAll", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])

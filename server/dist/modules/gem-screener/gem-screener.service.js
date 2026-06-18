@@ -49,7 +49,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.MAX_MARKET_CAP = 500_0000_0000;
         this.MIN_MARKET_CAP = 20_0000_0000;
         this.SUGGESTION_PRIORITY = {
-            '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+            '重仓买入': 1, '买入🏆': 2, '轻仓买入': 3, '准备买入': 4,
             '持有': 5, '减仓': 6, '观望': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
         };
         this.cache = null;
@@ -2102,6 +2102,53 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             .map((s, i) => ({ rank: i + 1, ...s }));
         this.logger.log(`📊 行业板块Top10: ${sorted.map(s => `${s.rank}.${s.name}(${s.avgChangePercent}%)`).join(', ')}`);
         return { sectors: sorted, timestamp: Date.now() };
+    }
+    async scanAllWithFrontendData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 20) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code, name: s.name, inflow: s.inflow,
+                    changePercent: s.changePercent, currentPrice: s.price,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result)
+                    results.push(result);
+            }
+            catch { }
+        }
+        if (results.length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code, name: s.name, inflow: s.inflow,
+                        changePercent: s.changePercent, currentPrice: s.price,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find((ex) => ex.code === result.code))
+                        results.push(result);
+                }
+                catch { }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const finalResults = results.slice(0, 20);
+        this.cache = { data: finalResults, timestamp: Date.now() };
+        this.saveCacheToDisk();
+        this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
+        return finalResults;
     }
 };
 exports.GemScreenerService = GemScreenerService;

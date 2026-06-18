@@ -82,7 +82,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly MIN_MARKET_CAP = 20_0000_0000;  // 20亿, 排除小盘庄股
   /** 建议优先级: 越小越优先 */
   private readonly SUGGESTION_PRIORITY: Record<string, number> = {
-    '重仓买入': 1, '买入': 2, '轻仓买入': 3, '准备买入': 4,
+    '重仓买入': 1, '买入🏆': 2, '轻仓买入': 3, '准备买入': 4,
     '持有': 5, '减仓': 6, '观望': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
   };
 
@@ -2466,5 +2466,51 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.logger.log(`📊 行业板块Top10: ${sorted.map(s => `${s.rank}.${s.name}(${s.avgChangePercent}%)`).join(', ')}`);
 
     return { sectors: sorted, timestamp: Date.now() };
+  }
+
+  async scanAllWithFrontendData(
+    stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: any[] }[]
+  ): Promise<any[]> {
+    const results: any[] = [];
+    for (const s of stocks) {
+      if (s.klines && s.klines.length >= 20) {
+        this.dataFetcher.preloadKline(s.code, s.klines);
+      }
+    }
+    for (const s of stocks) {
+      try {
+        const candidate: any = {
+          code: s.code, name: s.name, inflow: s.inflow,
+          changePercent: s.changePercent, currentPrice: s.price,
+        };
+        const result = await this.checkOpportunity(candidate);
+        if (result) results.push(result);
+      } catch {}
+    }
+    if (results.length <= 3) {
+      for (const s of stocks) {
+        try {
+          const candidate: any = {
+            code: s.code, name: s.name, inflow: s.inflow,
+            changePercent: s.changePercent, currentPrice: s.price,
+          };
+          const result = await this.checkOpportunityRelaxed(candidate);
+          if (result && !results.find((ex: any) => ex.code === result.code)) results.push(result);
+        } catch {}
+      }
+    }
+    results.sort((a: any, b: any) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    const finalResults = results.slice(0, 20);
+    this.cache = { data: finalResults, timestamp: Date.now() };
+    this.saveCacheToDisk();
+    this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
+    return finalResults;
   }
 }
