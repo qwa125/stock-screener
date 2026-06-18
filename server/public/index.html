@@ -347,38 +347,22 @@ async function doScan(){
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   var da=$('detailArea');da.style.display='none'
-  var found=false
-  // 先在Top20搜索
-  if(stocks.length>0){
-    stocks.forEach(function(o){
-      if(o.code===v||o.name.includes(v)){
-        da.style.display='block'
-        var rt=realtimePrices[o.code]||{}
-        var price=rt.price||o.currentPrice||0
-        var chg=rt.chgP!==undefined?rt.chgP:(o.changePercent||0)
-        var chgClr=chg>=0?'#ef4444':'#22c55e'
-        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索结果 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,rt)
-        found=true;scrollTo(0,da.offsetTop-80)
-      }
-    })
+  try{
+    var r=await fetch('/api/gem/search?q='+encodeURIComponent(v))
+    var json=await r.json()
+    if(json.code===200&&json.data&&json.data.length>0){
+      var o=json.data[0];var rt=realtimePrices[o.code]||{}
+      da.style.display='block'
+      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索结果 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,rt)
+      scrollTo(0,da.offsetTop-80)
+    }else{
+      da.style.display='block'
+      da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票或ETF/可转债</div>'
+    }
+  }catch(e){
+    da.style.display='block'
+    da.innerHTML='<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">查询失败，请重试</div>'
   }
-  if(!found){
-    // 直查腾讯
-    try{
-      var q=(v.startsWith('6')?'sh':'sz')+v
-      var res=await fetch('https://qt.gtimg.cn/q='+q)
-      var buf=await res.arrayBuffer();var txt=new TextDecoder('gbk').decode(buf)
-      txt.split(';').forEach(function(l){
-        var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
-        if(p[2]===v){
-          da.style.display='block';var cp=parseFloat(p[32])||0
-          da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">此股不在Top20优选列表中<br>⬇️ 先扫描获取最新推荐</div>'
-          found=true;scrollTo(0,da.offsetTop-80)
-        }
-      })
-    }catch(e){}
-  }
-  if(!found){da.style.display='block';da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票</div>'}
 }
 
 // Auto refresh

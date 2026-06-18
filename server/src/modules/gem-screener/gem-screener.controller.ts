@@ -272,6 +272,24 @@ export class GemScreenerController {
     return merged;
   }
 
+  /**
+   * 全市场搜索(含股票/ETF/可转债)，实时获取K线分析
+   * GET /api/gem/search?q=300052 or ?q=中青宝
+   */
+  @Get('search')
+  async searchStock(@Query('q') keyword: string) {
+    if (!keyword || keyword.trim().length === 0) {
+      return { code: 400, msg: '请输入搜索关键词', data: [] };
+    }
+    try {
+      const results = await this.gemScreener.searchStocks(keyword.trim());
+      return { code: 200, msg: 'ok', data: results };
+    } catch (e) {
+      this.logger.error(`搜索失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: [] };
+    }
+  }
+
   @Post('refresh-all')
   @HttpCode(200)
   async refreshAll(@Body() body: { stocks: any[] }) {

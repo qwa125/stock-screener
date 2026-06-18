@@ -2307,6 +2307,32 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             chipPattern,
         };
     }
+    async searchStocks(keyword) {
+        const results = [];
+        try {
+            const stocks = await this.dataFetcher.searchStock(keyword);
+            if (!stocks || stocks.length === 0)
+                return results;
+            const maxResults = Math.min(stocks.length, 5);
+            for (let i = 0; i < maxResults; i++) {
+                const s = stocks[i];
+                try {
+                    const opp = await this.quickAnalyze(s.code, s.name);
+                    if (opp && opp.suggestion && !['观望', '不要介入'].includes(opp.suggestion)) {
+                        opp.name = s.name;
+                        results.push(opp);
+                    }
+                }
+                catch (e) {
+                    this.logger.warn(`搜索分析 ${s.code}(${s.name}) 失败: ${e.message}`);
+                }
+            }
+        }
+        catch (e) {
+            this.logger.error(`搜索失败: ${e.message}`);
+        }
+        return results;
+    }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];
         if (this.cache?.data)

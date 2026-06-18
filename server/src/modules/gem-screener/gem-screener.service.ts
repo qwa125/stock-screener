@@ -2479,7 +2479,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { concentration90, peakPosition, pattern };
   }
 
-  private async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
+  async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
     const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 20) return null;
 
@@ -2668,6 +2668,33 @@ export class GemScreenerService implements OnApplicationBootstrap {
       chipPeakPosition,
       chipPattern,
     };
+  }
+
+  /**
+   * 全市场搜索：根据关键词搜索股票/ETF/可转债，实时分析
+   */
+  async searchStocks(keyword: string): Promise<OpportunityStock[]> {
+    const results: OpportunityStock[] = [];
+    try {
+      const stocks = await this.dataFetcher.searchStock(keyword);
+      if (!stocks || stocks.length === 0) return results;
+      const maxResults = Math.min(stocks.length, 5);
+      for (let i = 0; i < maxResults; i++) {
+        const s = stocks[i];
+        try {
+          const opp = await this.quickAnalyze(s.code, s.name);
+          if (opp && opp.suggestion && !['观望', '不要介入'].includes(opp.suggestion)) {
+            opp.name = s.name;
+            results.push(opp);
+          }
+        } catch (e) {
+          this.logger.warn(`搜索分析 ${s.code}(${s.name}) 失败: ${(e as Error).message}`);
+        }
+      }
+    } catch (e) {
+      this.logger.error(`搜索失败: ${(e as Error).message}`);
+    }
+    return results;
   }
 
   triggerAnalysisPreCacheFromCache() {

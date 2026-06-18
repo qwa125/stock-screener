@@ -213,6 +213,19 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
         return merged;
     }
+    async searchStock(keyword) {
+        if (!keyword || keyword.trim().length === 0) {
+            return { code: 400, msg: '请输入搜索关键词', data: [] };
+        }
+        try {
+            const results = await this.gemScreener.searchStocks(keyword.trim());
+            return { code: 200, msg: 'ok', data: results };
+        }
+        catch (e) {
+            this.logger.error(`搜索失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: [] };
+        }
+    }
     async refreshAll(body) {
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
@@ -325,6 +338,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "seedCache", null);
+__decorate([
+    (0, common_1.Get)('search'),
+    __param(0, (0, common_1.Query)('q')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "searchStock", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
     (0, common_1.HttpCode)(200),
