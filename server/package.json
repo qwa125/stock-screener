@@ -4,7 +4,7 @@
   "private": true,
   "description": "NestJS server application",
   "scripts": {
-    "build": "nest build && node scripts/obfuscate.js",
+    "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "start:debug": "nest start --debug --watch",
