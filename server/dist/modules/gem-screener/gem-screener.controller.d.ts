@@ -157,6 +157,15 @@ export declare class GemScreenerController {
         msg: any;
         data: never[];
     }>;
+    rescanMarket(): Promise<{
+        code: number;
+        msg: string;
+        data: import("./gem-screener.service").OpportunityStock[];
+    } | {
+        code: number;
+        msg: any;
+        data: never[];
+    }>;
     refreshAll(body: {
         stocks: any[];
     }): Promise<{

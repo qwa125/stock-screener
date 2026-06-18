@@ -226,6 +226,16 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: [] };
         }
     }
+    async rescanMarket() {
+        try {
+            const results = await this.gemScreener.rescanMarket();
+            return { code: 200, msg: 'ok', data: results };
+        }
+        catch (e) {
+            this.logger.error(`重扫失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: [] };
+        }
+    }
     async refreshAll(body) {
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
@@ -345,6 +355,12 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "searchStock", null);
+__decorate([
+    (0, common_1.Get)('rescan'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "rescanMarket", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
     (0, common_1.HttpCode)(200),

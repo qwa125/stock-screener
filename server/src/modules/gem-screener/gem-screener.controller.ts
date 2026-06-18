@@ -290,6 +290,17 @@ export class GemScreenerController {
     }
   }
 
+  @Get('rescan')
+  async rescanMarket() {
+    try {
+      const results = await this.gemScreener.rescanMarket();
+      return { code: 200, msg: 'ok', data: results };
+    } catch (e) {
+      this.logger.error(`重扫失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: [] };
+    }
+  }
+
   @Post('refresh-all')
   @HttpCode(200)
   async refreshAll(@Body() body: { stocks: any[] }) {

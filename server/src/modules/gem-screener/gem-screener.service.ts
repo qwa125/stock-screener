@@ -2479,7 +2479,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { concentration90, peakPosition, pattern };
   }
 
-  async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
+  async quickAnalyze(code: string, name?: string, keepAll?: boolean): Promise<OpportunityStock | null> {
     const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 20) return null;
 
@@ -2604,7 +2604,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 交叉验证：只排除结果明确为负面的（观望/减仓/卖出/清仓/不要介入）
     // "持有"不排除（用户: "选出来是买入，进去是持有也是可以的"）
     const NEGATIVE_CROSS = ['观望', '减仓', '卖出', '清仓', '不要介入'];
-    if (NEGATIVE_CROSS.includes(crossSuggestion)) return null;
+    if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion)) return null;
 
     const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
     const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
@@ -2683,7 +2683,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const s = stocks[i];
         try {
           const opp = await this.quickAnalyze(s.code, s.name);
-          if (opp && opp.suggestion && !['观望', '不要介入'].includes(opp.suggestion)) {
+          if (opp && opp.suggestion) {  // 搜索展示全部分析结果，包括观望/不要介入
             opp.name = s.name;
             results.push(opp);
           }
@@ -2695,6 +2695,83 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.logger.error(`搜索失败: ${(e as Error).message}`);
     }
     return results;
+  }
+
+  /**
+   * 服务端全市场重新扫描：从 Sina API 获取股票列表 → 筛选活跃股 → 全量分析 → 缓存结果
+   */
+  async rescanMarket(batchSize = 300): Promise<OpportunityStock[]> {
+    const allResults: OpportunityStock[] = [];
+    const now = Date.now();
+    this.logger.log('开始全市场重新扫描...');
+
+    try {
+      // 1. 从 Sina API 获取股票列表（GEM + 主板）
+      const allStocks: { code: string; name: string; market: number }[] = [];
+      for (const node of ['hs_a', 'cyb']) {
+        let page = 1;
+        while (page <= 50) {
+          try {
+            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=80&sort=amount&asc=0&node=${node}&symbol=&_s_r_a=page`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const txt = await resp.text();
+            const arr = JSON.parse(txt);
+            if (!arr || !arr.length) break;
+            for (const item of arr) {
+              if (item.symbol && item.code && item.name) {
+                const code = item.symbol || item.code;
+                const price = parseFloat(item.trade) || 0;
+                const amount = parseFloat(item.amount) || 0;
+                if (price < 5 || amount < 30000000) continue;
+                if (!item.name) continue;
+                allStocks.push({ code, name: item.name, market: code.startsWith('6') ? 1 : 0 });
+              }
+            }
+            page++;
+          } catch { break; }
+        }
+      }
+      this.logger.log(`获取到 ${allStocks.length} 只股票，开始K线分析`);
+
+      // 2. 按成交额排序取前 N
+      const top = allStocks.slice(0, batchSize);
+      this.logger.log(`取前 ${top.length} 只活跃股分析`);
+
+      // 3. 分析每只股票（quickAnalyze 已包含筹码分析+三层买卖体系）
+      for (let i = 0; i < top.length; i++) {
+        const s = top[i];
+        try {
+          const opp = await this.quickAnalyze(s.code, s.name, true);
+          if (opp) {
+            allResults.push(opp);
+          }
+        } catch {}
+        if ((i + 1) % 30 === 0) this.logger.log(`分析进度: ${i + 1}/${top.length}`);
+      }
+
+      // 4. 排序筛选
+      allResults.sort((a, b) => {
+        const order = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
+        const ai = order.indexOf(a.suggestion || '观望');
+        const bi = order.indexOf(b.suggestion || '观望');
+        if (ai !== bi) return ai - bi;
+        return (b.score || 0) - (a.score || 0);
+      });
+
+      const top20 = allResults.slice(0, 20);
+      
+      // 5. 更新缓存
+      this.cache = { data: top20, timestamp: now };
+      const fs = require('fs');
+      try { fs.writeFileSync('/tmp/gem-opportunities-cache.json', JSON.stringify(this.cache), 'utf-8'); } catch {}
+
+      const elapsed = ((Date.now() - now) / 1000).toFixed(1);
+      this.logger.log(`重扫完成，耗时 ${elapsed}s，共分析 ${allResults.length} 只，Top20 信号: ${top20.map(s=>s.suggestion).join(',')}`);
+    } catch (e) {
+      this.logger.error(`重扫失败: ${(e as Error).message}`);
+    }
+
+    return allResults.slice(0, 20);
   }
 
   triggerAnalysisPreCacheFromCache() {
