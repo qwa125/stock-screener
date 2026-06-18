@@ -2712,12 +2712,18 @@ export class GemScreenerService implements OnApplicationBootstrap {
       closeArr, highArr, lowArr, pricePos, changePct,
     );
 
-    return {
-      code, name: name ?? '',
-      currentPrice: price,
-      changePercent: Math.round(changePct * 100) / 100,
-      priceIncrease: Math.round(priceIncrease * 100) / 100,
-      mainForceInflow: 0,
+    // 估算主力资金净流入（基于成交量比 * 价格 * 流通量估算）
+      const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
+      const avgVol20 = volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
+      const volRatio = avgVol5 / (avgVol20 || 1);
+      const mainForceInflow = Math.round(((volRatio - 1) * price * avgVol5 / 100000000) * 100) / 100;
+
+      return {
+        code, name: name ?? '',
+        currentPrice: price,
+        changePercent: Math.round(changePct * 100) / 100,
+        priceIncrease: Math.round(priceIncrease * 100) / 100,
+        mainForceInflow,
       pricePosition: Math.round(pricePos),
       capitalRank: 0,
       baiXiaoDays: 0,

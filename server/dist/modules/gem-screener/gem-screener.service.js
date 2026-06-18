@@ -2329,12 +2329,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         const entryTiming = GemScreenerService_1.calcEntryTiming(pricePos, trendState, closeArr, isGoldenCross, volumeArr);
         const safetyScore = GemScreenerService_1.calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePct);
+        const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const volRatio = avgVol5 / (avgVol20 || 1);
+        const mainForceInflow = Math.round(((volRatio - 1) * price * avgVol5 / 100000000) * 100) / 100;
         return {
             code, name: name ?? '',
             currentPrice: price,
             changePercent: Math.round(changePct * 100) / 100,
             priceIncrease: Math.round(priceIncrease * 100) / 100,
-            mainForceInflow: 0,
+            mainForceInflow,
             pricePosition: Math.round(pricePos),
             capitalRank: 0,
             baiXiaoDays: 0,
