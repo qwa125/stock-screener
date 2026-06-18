@@ -96,6 +96,36 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
   }
 
+  
+  /**
+   * 合并主板+创业板最优前20: 按信号优先级(重仓买入>买入>轻仓买入)排序
+   * GET /api/gem/top/combined
+   */
+  @Get('top/combined')
+  async getCombinedTop(@Query('force') force?: string) {
+    const [gemResult, mainResult] = await Promise.all([
+      this.gemScreener.scanTopGem(force === 'true'),
+      this.gemScreener.scanTopMainBoard(force === 'true'),
+    ]);
+    // 合并并合并重仓买入
+    const heavyBuyAll = this.readHeavyBuyCache();
+    const gemMerged = this.mergeWithHeavyBuy(gemResult.opportunities, heavyBuyAll.filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301'))));
+    const mainMerged = this.mergeWithHeavyBuy(mainResult.opportunities, heavyBuyAll.filter(s => s.code && !s.code.startsWith('30')));
+    const all = [...gemMerged, ...mainMerged];
+    // 按信号排序: 重仓买入 > 买入 > 轻仓买入
+    const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2 };
+    const sorted = all
+      .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion))
+      .sort((a, b) => {
+        const ao = signalOrder[a.suggestion] ?? 9;
+        const bo = signalOrder[b.suggestion] ?? 9;
+        if (ao !== bo) return ao - bo;
+        return (a.pricePosition ?? 100) - (b.pricePosition ?? 100);
+      })
+      .slice(0, 20);
+    return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
+  }
+
   @Get('top/opportunities')
   async getTopOpportunities(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopOpportunities(force === 'true');

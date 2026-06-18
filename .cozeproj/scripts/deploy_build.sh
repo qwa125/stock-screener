@@ -13,7 +13,15 @@ echo "Installing dependencies..."
 # 安装所有依赖（包含 Taro 核心和 React）
 pnpm install
 
-echo "Building the Taro project..."
-pnpm build
+echo "Building the Taro project (H5 frontend)..."
+pnpm run build:web
 
-echo "Build completed successfully! Assets are in /dist"
+echo "Building NestJS server..."
+pnpm run build:server
+
+echo "Copying frontend to serving directory..."
+mkdir -p server/public
+cp -r dist/* server/public/ 2>/dev/null || cp -r dist/h5/* server/public/ 2>/dev/null || true
+rm -f build.log
+
+echo "Build completed successfully!"

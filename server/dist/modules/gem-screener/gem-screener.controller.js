@@ -81,6 +81,28 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
         return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
     }
+    async getCombinedTop(force) {
+        const [gemResult, mainResult] = await Promise.all([
+            this.gemScreener.scanTopGem(force === 'true'),
+            this.gemScreener.scanTopMainBoard(force === 'true'),
+        ]);
+        const heavyBuyAll = this.readHeavyBuyCache();
+        const gemMerged = this.mergeWithHeavyBuy(gemResult.opportunities, heavyBuyAll.filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301'))));
+        const mainMerged = this.mergeWithHeavyBuy(mainResult.opportunities, heavyBuyAll.filter(s => s.code && !s.code.startsWith('30')));
+        const all = [...gemMerged, ...mainMerged];
+        const signalOrder = { '重仓买入': 0, '买入': 1, '轻仓买入': 2 };
+        const sorted = all
+            .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion))
+            .sort((a, b) => {
+            const ao = signalOrder[a.suggestion] ?? 9;
+            const bo = signalOrder[b.suggestion] ?? 9;
+            if (ao !== bo)
+                return ao - bo;
+            return (a.pricePosition ?? 100) - (b.pricePosition ?? 100);
+        })
+            .slice(0, 20);
+        return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
+    }
     async getTopOpportunities(force) {
         const result = await this.gemScreener.scanTopOpportunities(force === 'true');
         return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
@@ -247,6 +269,13 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopMainBoard", null);
+__decorate([
+    (0, common_1.Get)('top/combined'),
+    __param(0, (0, common_1.Query)('force')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getCombinedTop", null);
 __decorate([
     (0, common_1.Get)('top/opportunities'),
     __param(0, (0, common_1.Query)('force')),

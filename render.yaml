@@ -1,15 +1,10 @@
 services:
   - type: web
     name: stock-screener
-    runtime: node
-    plan: free
-    region: singapore
-    rootDir: server
-    buildCommand: npm install
-    startCommand: node dist/main.js
-    healthCheckPath: /api/health
-    envVars:
-      - key: NODE_VERSION
-        value: "20"
-      - key: TZ
-        value: "Asia/Shanghai"
+    env: node
+    buildCommand: |
+      npm install
+      npx taro build --type h5
+      cp -r dist/* server/public/
+      cd server && npm install && npm run build
+    startCommand: cd server && node dist/main.js

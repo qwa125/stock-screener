@@ -81,6 +81,14 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    getCombinedTop(force?: string): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            opportunities: any[];
+            timestamp: number;
+        };
+    }>;
     getTopOpportunities(force?: string): Promise<{
         code: number;
         msg: string;
