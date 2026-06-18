@@ -240,6 +240,33 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
     }
+    async rescanBatch(body) {
+        if (!body.codes || !body.codes.length) {
+            return { code: 400, msg: '请提供股票代码列表', data: [] };
+        }
+        this.logger.log(`批量分析: ${body.codes.length} 只股票`);
+        const results = [];
+        for (let i = 0; i < body.codes.length; i++) {
+            const code = body.codes[i];
+            const name = body.names?.[i] || '';
+            try {
+                const opp = await this.gemScreener.quickAnalyze(code, name, true);
+                if (opp)
+                    results.push(opp);
+            }
+            catch { }
+        }
+        const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+        results.sort((a, b) => {
+            const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
+            const pb = PRIORITY[b.suggestion || '观望'] ?? 9;
+            if (pa !== pb)
+                return pa - pb;
+            return (b.score || 0) - (a.score || 0);
+        });
+        this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
+        return { code: 200, msg: 'ok', data: results.slice(0, 20) };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -369,6 +396,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "refreshAll", null);
+__decorate([
+    (0, common_1.Post)('rescan-batch'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "rescanBatch", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])

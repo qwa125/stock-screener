@@ -176,4 +176,12 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    rescanBatch(body: {
+        codes: string[];
+        names?: string[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: any[];
+    }>;
 }

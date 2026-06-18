@@ -307,4 +307,32 @@ export class GemScreenerController {
     const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
     return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
   }
+
+  @Post('rescan-batch')
+  @HttpCode(200)
+  async rescanBatch(@Body() body: { codes: string[]; names?: string[] }) {
+    if (!body.codes || !body.codes.length) {
+      return { code: 400, msg: '请提供股票代码列表', data: [] };
+    }
+    this.logger.log(`批量分析: ${body.codes.length} 只股票`);
+    const results: any[] = [];
+    for (let i = 0; i < body.codes.length; i++) {
+      const code = body.codes[i];
+      const name = body.names?.[i] || '';
+      try {
+        const opp = await this.gemScreener.quickAnalyze(code, name, true);
+        if (opp) results.push(opp);
+      } catch {}
+    }
+    // 按信号排序
+    const PRIORITY: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+    results.sort((a, b) => {
+      const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
+      const pb = PRIORITY[b.suggestion || '观望'] ?? 9;
+      if (pa !== pb) return pa - pb;
+      return (b.score || 0) - (a.score || 0);
+    });
+    this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
+    return { code: 200, msg: 'ok', data: results.slice(0, 20) };
+  }
 }

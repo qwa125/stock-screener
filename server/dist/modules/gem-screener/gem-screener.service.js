@@ -2333,78 +2333,129 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return results;
     }
-    async rescanMarket(batchSize = 300) {
-        const allResults = [];
+    async rescanMarket() {
         const now = Date.now();
-        this.logger.log('开始全市场重新扫描...');
+        this.logger.log('开始按新标准重新评估缓存的个股...');
         try {
-            const allStocks = [];
-            for (const node of ['hs_a', 'cyb']) {
-                let page = 1;
-                while (page <= 50) {
-                    try {
-                        const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=80&sort=amount&asc=0&node=${node}&symbol=&_s_r_a=page`;
-                        const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-                        const txt = await resp.text();
-                        const arr = JSON.parse(txt);
-                        if (!arr || !arr.length)
-                            break;
-                        for (const item of arr) {
-                            if (item.symbol && item.code && item.name) {
-                                const code = item.symbol || item.code;
-                                const price = parseFloat(item.trade) || 0;
-                                const amount = parseFloat(item.amount) || 0;
-                                if (price < 5 || amount < 30000000)
-                                    continue;
-                                if (!item.name)
-                                    continue;
-                                allStocks.push({ code, name: item.name, market: code.startsWith('6') ? 1 : 0 });
-                            }
-                        }
-                        page++;
-                    }
-                    catch {
-                        break;
-                    }
+            const allCached = [];
+            if (this.cache?.data)
+                allCached.push(...this.cache.data);
+            if (this.mainBoardCache?.data)
+                allCached.push(...this.mainBoardCache.data);
+            const seenCodes = new Set();
+            const uniqueStocks = [];
+            for (const s of allCached) {
+                if (s.code && !seenCodes.has(s.code)) {
+                    seenCodes.add(s.code);
+                    uniqueStocks.push(s);
                 }
             }
-            this.logger.log(`获取到 ${allStocks.length} 只股票，开始K线分析`);
-            const top = allStocks.slice(0, batchSize);
-            this.logger.log(`取前 ${top.length} 只活跃股分析`);
-            for (let i = 0; i < top.length; i++) {
-                const s = top[i];
+            this.logger.log(`收集到 ${uniqueStocks.length} 只缓存的个股，应用新标准重新评估`);
+            const updated = [];
+            for (const s of uniqueStocks) {
                 try {
-                    const opp = await this.quickAnalyze(s.code, s.name, true);
-                    if (opp) {
-                        allResults.push(opp);
+                    const pp = s.pricePosition ?? 50;
+                    const goldenCross = s.isGoldenCross ?? false;
+                    const jiGou = s.jiGouActiveScore ?? 0;
+                    const chipConc = s.chipConcentration90 ?? 50;
+                    const chipPeak = s.chipPeakPosition ?? 'mid';
+                    const chipPat = s.chipPattern ?? 'dispersed';
+                    let trendState = 1;
+                    if (pp > 55 && goldenCross)
+                        trendState = 3;
+                    else if (pp > 40)
+                        trendState = 2;
+                    else if (pp < 25)
+                        trendState = 0;
+                    let newSuggestion = s.suggestion || '观望';
+                    const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
+                    const baiXiaoDays = s.baiXiaoDays ?? 0;
+                    if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
+                        if (jiGou >= 14 && pp >= 20)
+                            newSuggestion = '重仓买入';
+                        else if (jiGou >= 10 || baiXiaoDays >= 4)
+                            newSuggestion = '买入';
+                        else
+                            newSuggestion = '轻仓买入';
                     }
+                    else if (trendState >= 1 && goldenCross && pp > 10 && pp < 50) {
+                        if (baiXiaoDays >= 6)
+                            newSuggestion = '买入';
+                        else if (pp >= 25)
+                            newSuggestion = '轻仓买入';
+                        else
+                            newSuggestion = '持有';
+                    }
+                    else if (trendState >= 1 && pp > 15) {
+                        newSuggestion = '持有';
+                    }
+                    else {
+                        newSuggestion = '观望';
+                    }
+                    const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
+                    const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
+                    if (chipDowngrade || chipRisk) {
+                        if (newSuggestion === '重仓买入')
+                            newSuggestion = '买入';
+                        else if (newSuggestion === '买入')
+                            newSuggestion = '轻仓买入';
+                        else if (newSuggestion === '轻仓买入')
+                            newSuggestion = '观望';
+                    }
+                    if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
+                        if (newSuggestion === '买入')
+                            newSuggestion = '重仓买入';
+                        else if (newSuggestion === '轻仓买入')
+                            newSuggestion = '买入';
+                    }
+                    const BASE = {
+                        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40, '观望': 25,
+                    };
+                    let newScore = BASE[newSuggestion] ?? 30;
+                    if (pp < 30)
+                        newScore += 15;
+                    else if (pp < 50)
+                        newScore += 8;
+                    if (goldenCross)
+                        newScore += 10;
+                    if (jiGou >= 12)
+                        newScore += 8;
+                    if (chipConc <= 25)
+                        newScore += 10;
+                    updated.push({
+                        ...s,
+                        suggestion: newSuggestion,
+                        score: newScore,
+                        chipConcentration90: s.chipConcentration90 ?? 50,
+                        chipPeakPosition: s.chipPeakPosition ?? 'mid',
+                        chipPattern: s.chipPattern ?? 'dispersed',
+                        jiGouActiveScore: s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100,
+                    });
                 }
-                catch { }
-                if ((i + 1) % 30 === 0)
-                    this.logger.log(`分析进度: ${i + 1}/${top.length}`);
+                catch (e) {
+                    updated.push(s);
+                }
             }
-            allResults.sort((a, b) => {
-                const order = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
-                const ai = order.indexOf(a.suggestion || '观望');
-                const bi = order.indexOf(b.suggestion || '观望');
-                if (ai !== bi)
-                    return ai - bi;
+            const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+            updated.sort((a, b) => {
+                const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
+                const pb = PRIORITY[b.suggestion || '观望'] ?? 9;
+                if (pa !== pb)
+                    return pa - pb;
                 return (b.score || 0) - (a.score || 0);
             });
-            const top20 = allResults.slice(0, 20);
+            const top20 = updated.slice(0, 20);
             this.cache = { data: top20, timestamp: now };
-            const fs = require('fs');
             try {
-                fs.writeFileSync('/tmp/gem-opportunities-cache.json', JSON.stringify(this.cache), 'utf-8');
+                require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
             }
             catch { }
-            const elapsed = ((Date.now() - now) / 1000).toFixed(1);
-            this.logger.log(`重扫完成，耗时 ${elapsed}s，共分析 ${allResults.length} 只，Top20 信号: ${top20.map(s => s.suggestion).join(',')}`);
+            this.logger.log(`重新评估完成：${top20.length} 只, 信号: ${top20.map(s => s.suggestion).join(',')}`);
         }
         catch (e) {
-            this.logger.error(`重扫失败: ${e.message}`);
+            this.logger.error(`重新评估失败: ${e.message}`);
         }
-        return allResults.slice(0, 20);
+        return (this.cache?.data || []).slice(0, 20);
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];
