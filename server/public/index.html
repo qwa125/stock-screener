@@ -346,57 +346,81 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
-// ---------- 全市场重扫 ----------
+// ---------- 全市场重扫（通过后端代理避免跨域） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
   setStatus('🔄 正在获取全市场股票列表...')
   try{
-    // 从新浪获取全市场活跃股
+    // 1. 通过后端代理获取全市场活跃股列表（解决前端跨域问题）
     var allCodes=[]
     var nodes=['hs_a','cyb']
     for(var ni=0;ni<nodes.length;ni++){
-      var node=nodes[ni]
-      for(var pg=1;pg<=10;pg++){
+      var n2=nodes[ni]
+      for(var pg=1;pg<=15;pg++){
         try{
-          var url='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+pg+'&num=80&sort=amount&asc=0&node='+node
+          var url=API+'/gem/proxy/stock-list?node='+n2+'&page='+pg+'&num=80'
           var r=await fetch(url)
-          var txt=await r.text()
-          var arr=JSON.parse(txt)
-          if(!arr||!arr.length)break
+          var d2=await r.json()
+          if(d2.code!==200||!d2.data||!d2.data.length)break
+          var arr=d2.data
           for(var ii=0;ii<arr.length;ii++){
             var item=arr[ii]
             var code=item.symbol||item.code||''
             var name=item.name||''
             var price=parseFloat(item.trade)||0
             if(price<5)continue
-            if(name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
+            if(!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
             allCodes.push({code:code,name:name})
           }
         }catch(e){break}
       }
     }
+    
+    // 2. 如果后端代理也没获得到数据，用缓存已有数据做基础
+    if(allCodes.length===0&&stocks&&stocks.length){
+      setStatus('🔄 ⚠️ 代理获取失败，用缓存数据重分析...')
+      for(var si=0;si<stocks.length;si++){
+        if(stocks[si].code&&stocks[si].name)
+          allCodes.push({code:stocks[si].code,name:stocks[si].name})
+      }
+    }
+    
+    if(allCodes.length===0){
+      setStatus('❌ 未能获取到股票列表，请稍后重试');loading=false;btn.disabled=false;btn.textContent='🌐 全市场重扫';return
+    }
+    
     setStatus('🔄 获取到 '+allCodes.length+' 只，发送给后端分析...')
     
-    // 发送到后端批量分析
-    var codes=allCodes.map(function(s){return s.code})
-    var names=allCodes.map(function(s){return s.name})
-    var resp=await fetch(API+'/gem/rescan-batch',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({codes:codes,names:names})
-    })
-    var d=await resp.json()
-    if(d.code===200&&d.data&&d.data.length){
-      stocks=d.data
+    // 3. 发送到后端批量分析（分批，每次最多30只）
+    var finalStocks=[]
+    batchCode:for(var bi=0;bi<allCodes.length;bi+=30){
+      var batch=allCodes.slice(bi,bi+30)
+      var codes=batch.map(function(s){return s.code})
+      var names=batch.map(function(s){return s.name})
+      try{
+        var resp=await fetch(API+'/gem/rescan-batch',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({codes:codes,names:names})
+        })
+        var d3=await resp.json()
+        if(d3.code===200&&d3.data)
+          for(var xi=0;xi<d3.data.length;xi++)finalStocks.push(d3.data[xi])
+        setStatus('🔄 分析进度: '+Math.min(bi+30,allCodes.length)+'/'+allCodes.length)
+      }catch(e){/* skip batch */ }
+    }
+    
+    if(finalStocks.length){
+      stocks=finalStocks
       setStatus('🔄 获取实时行情...')
       realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
       selectedIdx=-1;$('detailArea').style.display='none';renderList()
       setStatus('✅ 全市场重扫完成 - '+stocks.length+' 只')
     }else{
-      setStatus('❌ 后端分析无结果')
+      setStatus('❌ 分析无结果，回退到缓存数据')
+      doScan() // fallback to cache reload
     }
-  }catch(e){setStatus('❌ '+e.message)}
+  }catch(e){setStatus('❌ '+e.message);doScan()}
   loading=false;btn.disabled=false;btn.textContent='🌐 全市场重扫'
 }
 

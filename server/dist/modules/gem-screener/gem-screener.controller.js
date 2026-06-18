@@ -267,6 +267,29 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
         return { code: 200, msg: 'ok', data: results.slice(0, 20) };
     }
+    async proxyStockList(node, page, num) {
+        try {
+            const nodes = ['hs_a', 'cyb', 'gem'];
+            const safeNode = node && nodes.includes(node) ? node : 'hs_a';
+            const safePage = parseInt(page || '1', 10);
+            const safeNum = Math.min(parseInt(num || '80', 10), 100);
+            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=amount&asc=0&node=${safeNode}`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            const text = await resp.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            }
+            catch {
+                data = [];
+            }
+            return { code: 200, msg: 'success', data };
+        }
+        catch (e) {
+            this.logger.error(`代理新浪股票列表失败: ${e.message}`);
+            return { code: 500, msg: '新浪API请求失败', data: [] };
+        }
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -404,6 +427,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanBatch", null);
+__decorate([
+    (0, common_1.Get)('proxy/stock-list'),
+    __param(0, (0, common_1.Query)('node')),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('num')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxyStockList", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])

@@ -335,4 +335,28 @@ export class GemScreenerController {
     this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
     return { code: 200, msg: 'ok', data: results.slice(0, 20) };
   }
+
+  /**
+   * 代理新浪全市场股票列表（解决前端跨域问题）
+   * GET /api/gem/proxy/stock-list?node=cyb&page=1&num=80
+   * node: cyb(创业板) / hs_a(沪深A股主板) / gem(创业板)
+   */
+  @Get('proxy/stock-list')
+  async proxyStockList(@Query('node') node: string, @Query('page') page: string, @Query('num') num: string) {
+    try {
+      const nodes = ['hs_a', 'cyb', 'gem'];
+      const safeNode = node && nodes.includes(node) ? node : 'hs_a';
+      const safePage = parseInt(page || '1', 10);
+      const safeNum = Math.min(parseInt(num || '80', 10), 100);
+      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${safePage}&num=${safeNum}&sort=amount&asc=0&node=${safeNode}`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = []; }
+      return { code: 200, msg: 'success', data };
+    } catch (e) {
+      this.logger.error(`代理新浪股票列表失败: ${(e as Error).message}`);
+      return { code: 500, msg: '新浪API请求失败', data: [] };
+    }
+  }
 }

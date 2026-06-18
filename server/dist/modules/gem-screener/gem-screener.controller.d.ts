@@ -184,4 +184,9 @@ export declare class GemScreenerController {
         msg: string;
         data: any[];
     }>;
+    proxyStockList(node: string, page: string, num: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    }>;
 }
