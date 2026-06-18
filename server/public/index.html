@@ -20,7 +20,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .sr-name{font-size:15px;font-weight:600}
 .sr-code{font-size:11px;color:#999}
 .sr-body{padding:0}
-.btn-scan{margin:8px 16px;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:13px;text-align:center;cursor:pointer}
+.btn-scan{width:100%;margin:8px 0;padding:12px 0;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:14px;text-align:center;cursor:pointer;font-weight:600}
+.btn-scan-wrapper{padding:0 16px}
 .btn-scan:disabled{opacity:.5;cursor:not-allowed}
 .list-header{display:flex;padding:8px 16px 4px;font-size:11px;color:#999;font-weight:500}
 .col-name{flex:1.5}
@@ -92,7 +93,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <!-- 共享详情区域：列表点击 / 搜索都显示在这里 -->
 <div id="detailArea" class="detail-panel" style="margin:0 12px 8px;display:none"></div>
 
-<button class="btn-scan" id="scanBtn" onclick="doScan()" style="margin:8px 16px">🔄 立即扫描</button>
+<div class="btn-scan-wrapper"><button class="btn-scan" id="scanBtn" onclick="doScan()">🔄 立即扫描</button></div>
 
 <div class="list-header">
   <span class="col-name">名称</span>
