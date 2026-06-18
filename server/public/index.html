@@ -346,62 +346,73 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
-// ---------- 全市场重扫（后端缓存重分析 + 代理尝试获取新名单） ----------
+// ---------- 全市场重扫（并行多页抓取主板+创业板） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
-  setStatus('🔄 正在全市场重扫（缓存重分析+代理获取新股票）...')
+  setStatus('🔄 全市场重扫中（多页并行抓取主板+创业板）...')
   
-  // 1. 先做缓存重分析（瞬间完成）
-  var cacheRescan=await fetch(API+'/gem/rescan')
-  var cd=await cacheRescan.json()
-  var newStocks=cd.data||[]
-  setStatus('🔄 缓存重分析完成: '+newStocks.length+' 只')
-  
-  // 2. 尝试代理获取新股票（从新浪获取活跃股列表）
+  // 1. 缓存重分析（瞬间）
+  var newStocks=[]
   try{
-    setStatus('🔄 尝试获取新股票...')
-    var fetchedCodes=[]
-    var proxyDone=await fetch(API+'/gem/proxy/stock-list?node=hs_a&page=1&num=30')
-    var pd=await proxyDone.json()
-    if(pd.code===200&&pd.data&&pd.data.length){
-      var hasNew=false
-      for(var i=0;i<pd.data.length;i++){
-        var item=pd.data[i]
-        var code=item.symbol||item.code||''
-        var name=item.name||''
-        if(!code||!name)continue
-        if(name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
-        var dup=false
-        for(var j=0;j<newStocks.length;j++){
-          if(newStocks[j].code===code){dup=true;break}
-        }
-        if(!dup){
-          newStocks.push({code:code,name:name,pricePosition:50,suggestion:'持有',score:30,
-            chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
-            isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
-          hasNew=true
-        }
-      }
-      if(hasNew)setStatus('🔄 追加了新的活跃股')
-    }
-  }catch(e){/* proxy fail, use cache results */ }
+    var cr=await fetch(API+'/gem/rescan')
+    var cd=await cr.json()
+    newStocks=(cd.data||[]).slice()
+  }catch(e){}
+  setStatus('🔄 缓存已分析 '+newStocks.length+' 只')
   
-  // 3. 更新展示
+  // 2. 并行抓取多页主板+创业板（通过代理避免跨域）
+  var pageTasks=[]
+  var configs=[]
+  // 主板（hs_a）取前6页，创业板（cyb）取前3页
+  for(var pi=1;pi<=6;pi++)configs.push({node:'hs_a',page:pi})
+  for(var pi=1;pi<=3;pi++)configs.push({node:'cyb',page:pi})
+  
+  for(var ci=0;ci<configs.length;ci++){
+    var cfg=configs[ci]
+    pageTasks.push(
+      fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
+        .then(function(r){return r.json()})
+        .then(function(d){return d.code===200?d.data||[]:[]})
+        .catch(function(){return[]})
+    )
+  }
+  
+  var pagesData=await Promise.all(pageTasks)
+  var seen={}
+  for(var si=0;si<newStocks.length;si++)if(newStocks[si].code)seen[newStocks[si].code]=1
+  
+  for(var pi2=0;pi2<pagesData.length;pi2++){
+    var arr=pagesData[pi2]
+    for(var ii=0;ii<arr.length;ii++){
+      var item=arr[ii]
+      var code=item.symbol||item.code||''
+      var name=item.name||''
+      if(!code||!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
+      var price=parseFloat(item.trade)||0
+      if(price<3)continue
+      if(seen[code])continue
+      seen[code]=1
+      newStocks.push({code:code,name:name,currentPrice:price,pricePosition:50,suggestion:'持有',score:30,
+        changePercent:parseFloat(item.changePercent||item.chg||'')||0,
+        chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
+        isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
+    }
+  }
+  
   if(newStocks.length){
+    setStatus('🔄 共 '+newStocks.length+' 只，排序中...')
     stocks=newStocks
-    // 排序：买入信号优先
+    // 排序
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
       var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
       return pa!==pb?pa-pb:(b.score||0)-(a.score||0)
     })
     setStatus('🔄 获取实时行情...')
-    try{
-      realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    }catch(e){}
+    try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
-    setStatus('✅ 全市场重扫完成 - '+stocks.length+' 只')
+    setStatus('✅ 全市场重扫完成 - '+stocks.length+' 只（含'+Object.keys(seen).length+' 只不同股票）')
   }else{
     setStatus('❌ 重扫无结果')
   }
