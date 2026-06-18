@@ -861,76 +861,83 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const hasZhuSheng = zhuShengSignal;
             const hasZhenDang = zhenDangBuy;
             const hasHengPan = hengPanBreakout;
-            if (bxDays >= 4 && bxDays <= 6) {
-                if (hasBaiXiaoBuy && hasZhuSheng) {
-                    suggestionR = '重仓买入';
-                    signalCombination = '白消启动+主升';
-                }
-                else if (hasBaiXiaoBuy && hasQSHC) {
-                    suggestionR = '买入';
-                    signalCombination = '白消启动+强势回踩';
-                }
-                else if (hasBaiXiaoBuy && hasZhenDang) {
-                    suggestionR = '买入';
-                    signalCombination = '白消启动+震荡买点';
-                }
-                else if (hasQSHC && hasZhuSheng) {
-                    suggestionR = '买入';
-                    signalCombination = '强势回踩+主升';
-                }
-                else if (hasQSHC && hasJiaCang) {
-                    suggestionR = '重仓买入';
-                    signalCombination = '强势回踩+加仓';
-                }
-                else if (hasBaiXiaoBuy && hasJiaCang) {
-                    suggestionR = '重仓买入';
-                    signalCombination = '白消启动+加仓';
-                }
-                else if (hasBaiXiaoBuy) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '白消启动';
-                }
-                else if (hasQSHC) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '强势回踩';
-                }
-                else if (hasZhuSheng) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '主升信号';
-                }
+            const activeHigh = jiGouActive >= 12;
+            if (bxDays >= 4 && bxDays <= 6 && activeHigh && hasBaiXiaoBuy && (hasZhuSheng || hasQSHC || hasJiaCang)) {
+                suggestionR = '重仓买入';
+                signalCombination = '白消4-6天+机构活跃+主升';
             }
-            else if (bxDays > 6) {
-                if (hasHengPan && hasZhuSheng) {
-                    suggestionR = '买入';
-                    signalCombination = '横盘突破+主升';
-                }
-                else if (hasHengPan) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '横盘突破';
-                }
-                else if (hasQSHC && hasZhuSheng) {
-                    suggestionR = '买入';
-                    signalCombination = '强势回踩+主升';
-                }
+            else if (bxDays >= 4 && bxDays <= 6 && activeHigh && (hasBaiXiaoBuy || (hasQSHC && hasJiaCang))) {
+                suggestionR = '重仓买入';
+                signalCombination = '白消4-6天+机构活跃';
             }
-            if (suggestionR === '观望' && (hasBaiXiaoBuy || hasQSHC || hasZhenDang)) {
-                const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
-                if (zoneR.includes('低位') && trendStateR >= 1) {
-                    suggestionR = '重仓买入';
-                    signalCombination = '白消信号+低位';
-                }
-                else if (zoneR.includes('低位') || zoneR.includes('中低位')) {
-                    suggestionR = '买入';
-                    signalCombination = '白消信号+中低位';
-                }
-                else if (trendStateR >= 2) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '白消信号+趋势';
-                }
-                else {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '白消信号';
-                }
+            else if (bxDays >= 4 && bxDays <= 6 && hasBaiXiaoBuy && hasZhuSheng && hasJiaCang) {
+                suggestionR = '重仓买入';
+                signalCombination = '白消启动+主升+加仓';
+            }
+            else if (bxDays > 6 && activeHigh && hasHengPan && hasZhuSheng) {
+                suggestionR = '买入';
+                signalCombination = '白消6天+横盘突破+主升';
+            }
+            else if (bxDays > 6 && hasHengPan) {
+                suggestionR = '买入';
+                signalCombination = '白消6天+横盘突破';
+            }
+            else if (bxDays > 6 && hasQSHC && hasZhuSheng) {
+                suggestionR = '买入';
+                signalCombination = '白消6天+强势回踩+主升';
+            }
+            else if (bxDays > 6 && activeHigh && hasBaiXiaoBuy) {
+                suggestionR = '买入';
+                signalCombination = '白消6天+机构活跃';
+            }
+            else if (bxDays >= 4 && bxDays <= 6 && hasBaiXiaoBuy && hasZhenDang) {
+                suggestionR = '买入';
+                signalCombination = '白消启动+震荡买点';
+            }
+            else if (bxDays >= 4 && bxDays <= 6 && hasQSHC && hasZhuSheng) {
+                suggestionR = '买入';
+                signalCombination = '白消启动+强势回踩+主升';
+            }
+            else if (hasQSHC && hasZhuSheng) {
+                suggestionR = '轻仓买入';
+                signalCombination = '强势回踩+主升';
+            }
+            else if (hasQSHC) {
+                suggestionR = '轻仓买入';
+                signalCombination = '强势回踩';
+            }
+            else if (hasBaiXiaoBuy) {
+                suggestionR = '轻仓买入';
+                signalCombination = '白消启动';
+            }
+            else if (hasZhuSheng) {
+                suggestionR = '轻仓买入';
+                signalCombination = '主升信号';
+            }
+            else if (hasZhenDang) {
+                suggestionR = '轻仓买入';
+                signalCombination = '震荡买点';
+            }
+            else if (bxDays >= 4 && hasBaiXiaoBuy) {
+                suggestionR = '轻仓买入';
+                signalCombination = '白消信号';
+            }
+        }
+        if (isBaiBu && hasSellSignal) {
+            if (bx.baoLiangFuGaiQingCang || bx.po5RiXian) {
+                suggestionR = '清仓';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布:' + sellSignal;
+            }
+            else if (bx.gaoKaiDiZouQingCang || bx.yinDiePoWei) {
+                suggestionR = '卖出';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布:' + sellSignal;
+            }
+            else {
+                suggestionR = '减仓';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布:' + sellSignal;
             }
         }
         const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
@@ -1094,9 +1101,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         let signalCombination = '';
         const isBaiBu = !!bx.baiBu;
         if (isBaiBu && hasSellSignal && jiGouActive >= 12 && firstBreakMA5) {
-            suggestionR = '卖出';
-            sellSignal = baiBuSellSignals.join('+');
-            signalCombination = '白布区域:' + sellSignal;
+            if (bx.baoLiangFuGaiQingCang || bx.po5RiXian) {
+                suggestionR = '清仓';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布清仓:' + sellSignal;
+            }
+            else if (bx.gaoKaiDiZouQingCang || bx.yinDiePoWei) {
+                suggestionR = '卖出';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布卖出:' + sellSignal;
+            }
+            else {
+                suggestionR = '减仓';
+                sellSignal = baiBuSellSignals.join('+');
+                signalCombination = '白布减仓:' + sellSignal;
+            }
         }
         if (!sellSignal) {
             const hasBaiXiaoBuy = isBaiXiaoBuy;
@@ -1106,13 +1125,34 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const hasZhenDang = zhenDangBuy;
             const hasHengPan = hengPanBreakout;
             if (bxDays >= 4 && bxDays <= 6) {
-                if (hasBaiXiaoBuy && hasZhuSheng) {
+                const activeHigh = jiGouActive >= 12;
+                if (activeHigh && hasBaiXiaoBuy && (hasZhuSheng || hasQSHC || hasJiaCang)) {
                     suggestionR = '重仓买入';
-                    signalCombination = '白消启动+主升';
+                    signalCombination = '白消4-6天+机构活跃+主升';
                 }
-                else if (hasBaiXiaoBuy && hasQSHC) {
+                else if (activeHigh && (hasBaiXiaoBuy || (hasQSHC && hasJiaCang))) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消4-6天+机构活跃';
+                }
+                else if (hasBaiXiaoBuy && hasZhuSheng && hasJiaCang) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消启动+主升+加仓';
+                }
+                else if (bxDays > 6 && activeHigh && hasHengPan && hasZhuSheng) {
                     suggestionR = '买入';
-                    signalCombination = '白消启动+强势回踩';
+                    signalCombination = '白消6天+横盘突破+主升';
+                }
+                else if (bxDays > 6 && hasHengPan) {
+                    suggestionR = '买入';
+                    signalCombination = '白消6天+横盘突破';
+                }
+                else if (bxDays > 6 && hasQSHC && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '白消6天+强势回踩+主升';
+                }
+                else if (bxDays > 6 && activeHigh && hasBaiXiaoBuy) {
+                    suggestionR = '买入';
+                    signalCombination = '白消6天+机构活跃';
                 }
                 else if (hasBaiXiaoBuy && hasZhenDang) {
                     suggestionR = '买入';
@@ -1122,12 +1162,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     suggestionR = '买入';
                     signalCombination = '强势回踩+主升';
                 }
+                else if (hasBaiXiaoBuy && hasQSHC) {
+                    suggestionR = '买入';
+                    signalCombination = '白消启动+强势回踩';
+                }
                 else if (hasQSHC && hasJiaCang) {
-                    suggestionR = '重仓买入';
+                    suggestionR = '买入';
                     signalCombination = '强势回踩+加仓';
                 }
                 else if (hasBaiXiaoBuy && hasJiaCang) {
-                    suggestionR = '重仓买入';
+                    suggestionR = '买入';
                     signalCombination = '白消启动+加仓';
                 }
                 else if (hasBaiXiaoBuy) {
@@ -1142,15 +1186,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     suggestionR = '轻仓买入';
                     signalCombination = '主升信号';
                 }
+                else if (hasZhenDang) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '震荡买点';
+                }
             }
             else if (bxDays > 6) {
-                if (hasHengPan && hasZhuSheng) {
+                const activeHigh = jiGouActive >= 12;
+                if (activeHigh && hasHengPan && hasZhuSheng) {
                     suggestionR = '买入';
-                    signalCombination = '横盘突破+主升';
+                    signalCombination = '白消6天+横盘突破+主升';
                 }
                 else if (hasHengPan) {
-                    suggestionR = '轻仓买入';
-                    signalCombination = '横盘突破';
+                    suggestionR = '买入';
+                    signalCombination = '白消6天+横盘突破';
                 }
                 else if (hasQSHC && hasZhuSheng) {
                     suggestionR = '买入';
@@ -1176,33 +1225,34 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     signalCombination = '白消信号';
                 }
             }
+            const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+            if (NOT_BUY.includes(suggestionR))
+                return null;
+            if (sellSignal)
+                return null;
+            const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
+            const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
+            return {
+                capitalRank: 0,
+                entryTiming: Math.round(entryTiming * 100) / 100,
+                safetyScore: Math.round(safetyScore * 100) / 100,
+                code: s.code,
+                name: s.name,
+                mainForceInflow: s.inflow,
+                baiXiaoDays: bxDays,
+                buySignal,
+                currentPrice: s.currentPrice,
+                changePercent: s.changePercent,
+                pricePosition: Math.round(pricePosition * 100) / 100,
+                priceIncrease: Math.round(priceIncrease * 100) / 100,
+                score: Math.round(score * 100) / 100,
+                diff: Math.round(macdResult.currentDiff * 10000) / 10000,
+                dea: Math.round(macdResult.currentDea * 10000) / 10000,
+                isGoldenCross,
+                suggestion: suggestionR,
+            };
         }
-        const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
-        if (NOT_BUY.includes(suggestionR))
-            return null;
-        if (sellSignal)
-            return null;
-        const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
-        const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
-        return {
-            capitalRank: 0,
-            entryTiming: Math.round(entryTiming * 100) / 100,
-            safetyScore: Math.round(safetyScore * 100) / 100,
-            code: s.code,
-            name: s.name,
-            mainForceInflow: s.inflow,
-            baiXiaoDays: bxDays,
-            buySignal,
-            currentPrice: s.currentPrice,
-            changePercent: s.changePercent,
-            pricePosition: Math.round(pricePosition * 100) / 100,
-            priceIncrease: Math.round(priceIncrease * 100) / 100,
-            score: Math.round(score * 100) / 100,
-            diff: Math.round(macdResult.currentDiff * 10000) / 10000,
-            dea: Math.round(macdResult.currentDea * 10000) / 10000,
-            isGoldenCross,
-            suggestion: suggestionR,
-        };
+        return null;
     }
     calcEntryTiming(pricePosition, trendState, closeArr, highArr, lowArr, volumeArr, macdGoldenCross) {
         const len = closeArr.length;
