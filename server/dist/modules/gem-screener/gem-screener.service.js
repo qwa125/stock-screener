@@ -1290,6 +1290,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
             const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
             const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
+            const TIMING_ORDER = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
+            const sugIdx = TIMING_ORDER.indexOf(suggestionR);
+            if (sugIdx >= 0 && entryTiming >= 65 && sugIdx > 1) {
+                const upgrade = sugIdx <= 2 ? TIMING_ORDER[sugIdx - 1] : '轻仓买入';
+                if (upgrade !== suggestionR) {
+                    suggestionR = upgrade;
+                    signalCombination = (signalCombination || '') + '|入场对齐↑' + suggestionR;
+                }
+            }
+            else if (sugIdx >= 0 && entryTiming < 35 && sugIdx <= 1) {
+                suggestionR = TIMING_ORDER[sugIdx + 1];
+                signalCombination = (signalCombination || '') + '|入场对齐↓' + suggestionR;
+            }
             return {
                 capitalRank: 0,
                 entryTiming: Math.round(entryTiming * 100) / 100,
@@ -2453,6 +2466,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         else if (oldIdx === 2 && newIdx > 3) {
                             newSuggestion = '持有';
                         }
+                    }
+                    const entry = s.entryTiming ?? 50;
+                    const sugIdx2 = PRIORITY.indexOf(newSuggestion);
+                    if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
+                        newSuggestion = sugIdx2 <= 2 ? PRIORITY[sugIdx2 - 1] : '轻仓买入';
+                    }
+                    else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
+                        newSuggestion = PRIORITY[sugIdx2 + 1];
                     }
                     const BASE = {
                         '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40, '观望': 25,
