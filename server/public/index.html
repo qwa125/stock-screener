@@ -455,25 +455,142 @@ async function doFullRescan(){
   loading=false;btn.disabled=false;btn.textContent='🌐 全市场重扫'
 }
 
-// ---------- 搜索 ----------
+// ---------- 搜索缓存（前端代理股票列表，用于名称→代码映射） ----------
+var SEARCH_CACHE=null
+var SEARCH_CACHE_LOAD=null
+async function getSearchCache(){
+  if(SEARCH_CACHE){return SEARCH_CACHE}
+  if(SEARCH_CACHE_LOAD){return SEARCH_CACHE_LOAD}
+  var prom=(async function(){
+    var all=[]
+    // 主板：hs_a 前5页，过滤沪深主板代码
+    for(var pi=1;pi<=5;pi++){
+      try{
+        var r=await fetch('/api/gem/proxy/stock-list?node=hs_a&page='+pi+'&num=100&sort=changepercent&asc=0')
+        var d=await r.json()
+        if(d.code===200&&d.data) all=all.concat(d.data.filter(function(s){
+          var c=s.symbol||''
+          return c.startsWith('sh600')||c.startsWith('sh601')||c.startsWith('sh603')||c.startsWith('sh605')
+            ||c.startsWith('sz000')||c.startsWith('sz001')||c.startsWith('sz002')
+        }))
+      }catch(e){}
+    }
+    // 创业板：cyb 前3页
+    for(var pi=1;pi<=3;pi++){
+      try{
+        var r=await fetch('/api/gem/proxy/stock-list?node=cyb&page='+pi+'&num=100&sort=changepercent&asc=0')
+        var d=await r.json()
+        if(d.code===200&&d.data) all=all.concat(d.data.filter(function(s){
+          var c=s.symbol||''
+          return c.startsWith('sz300')||c.startsWith('sz301')
+        }))
+      }catch(e){}
+    }
+    SEARCH_CACHE=all
+    return all
+  })()
+  SEARCH_CACHE_LOAD=prom
+  var result=await prom
+  return result
+}
+
+// ---------- 前端查Tencent行情（带回真实名称+股价） ----------
+async function fetchTencentDetail(code){
+  if(!code||code.length<6)return null
+  var market=code.startsWith('6')?'sh':'sz'
+  try{
+    var res=await fetch('https://qt.gtimg.cn/q='+market+code)
+    var buf=await res.arrayBuffer()
+    var txt=new TextDecoder('gbk').decode(buf)
+    var p=txt.split('~')
+    if(p.length<40||p[1]==='')return null
+    return {
+      name: p[1]||('股票'+code),
+      code: p[2]||code,
+      price: parseFloat(p[3])||0,
+      yc: parseFloat(p[4])||0,
+      chg: parseFloat(p[31])||0,
+      chgP: parseFloat(p[32])||0
+    }
+  }catch(e){return null}
+}
+
+// ---------- 搜索（前端先拿真实名称+股价，再调后端分析） ----------
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   var da=$('detailArea');da.style.display='none'
-  try{
-    var r=await fetch('/api/gem/search?q='+encodeURIComponent(v))
-    var json=await r.json()
-    if(json.code===200&&json.data&&json.data.length>0){
-      var o=json.data[0];var rt=realtimePrices[o.code]||{}
-      da.style.display='block'
-      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索结果 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,rt)
-      scrollTo(0,da.offsetTop-80)
-    }else{
-      da.style.display='block'
-      da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票或ETF/可转债</div>'
+  var isCode=/^\d{6}$/.test(v)
+  var stockName='',stockCode='',stockPrice=0,stockChgP=0
+  
+  // 第一步：确定代码和真实名称
+  if(isCode){
+    stockCode=v
+    // 前端查Tencent拿真实名称+股价
+    var t=await fetchTencentDetail(v)
+    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP}
+    else{stockName='股票'+v}
+  }else{
+    // 名称搜索：从缓存股票列表中模糊匹配
+    var cache;try{cache=await getSearchCache()}catch(e){cache=[]}
+    var match=cache.find(function(s){
+      return s.name===v||s.name.includes(v)||v.includes(s.name)
+    })
+    if(match){
+      stockCode=match.symbol.replace(/^(sh|sz)/,'')
+      stockName=match.name
+      // 再查Tencent行情拿实时价
+      var t=await fetchTencentDetail(stockCode)
+      if(t){stockPrice=t.price;stockChgP=t.chgP}
+      // 缓存成功，移入顶部
+      $('searchInput').value=stockName
     }
-  }catch(e){
+  }
+  
+  // 第二步：显示基础信息
+  if(stockCode){
     da.style.display='block'
-    da.innerHTML='<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">查询失败，请重试</div>'
+    // 构建临时股票对象
+    var tmpStock={
+      name: stockName,
+      code: stockCode,
+      currentPrice: stockPrice,
+      changePercent: stockChgP,
+      suggestion: '查找中…',
+      score: 0, entryTiming: 0, pricePosition: 0,
+      safetyScore: 0, mainForceInflow: 0,
+      isGoldenCross: false, baiXiaoDays: 0,
+      signalCombination: '', jiGouActiveScore: 0,
+      chipAnalysis: null
+    }
+    da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+      +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在分析该股票……</div>'
+    scrollTo(0,da.offsetTop-80)
+    
+    // 第三步：调后端分析
+    try{
+      var r=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode))
+      var json=await r.json()
+      if(json.code===200&&json.data&&json.data.length>0){
+        var o=json.data[0]
+        o.name=stockName  // 始终用前端查到的真实名称
+        o.currentPrice=o.currentPrice||stockPrice
+        o.changePercent=o.changePercent||stockChgP
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP})
+      }else{
+        // 后端没结果，保留基础信息并显示分析失败提示
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+          +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
+          +'<span style="font-size:28px;display:block;margin-bottom:8px">📊</span>'
+          +'股票已找到，但服务器分析超时（从美国拉取中国K线数据较慢）<br>'
+          +'请稍后点击「立即扫描」查看最新分析结果</div>'
+      }
+    }catch(e){
+      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+        +'<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">分析请求失败，请重试</div>'
+    }
+  }else{
+    da.style.display='block'
+    da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票或ETF/可转债</div>'
   }
 }
 
