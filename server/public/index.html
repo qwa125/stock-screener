@@ -227,7 +227,7 @@ function buildDetail(s,rt){
     +'<span class="signal-tag" style="background:'+posTClr+'">'+posTag+' '+p.toFixed(0)+'%</span>'
     +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'金叉✓':'未金叉')+'</span>'
     +'<span class="signal-tag" style="background:#7c3aed">白消'+bai+'天</span>'
-    +'<span class="signal-tag" style="background:'+(entry>=60?'#16a34a':'#ca8a04')+'">入场'+(entry||0)+'分</span>'
+    +'<span class="signal-tag" style="background:'+(entry>=65?'#16a34a':entry>=35?'#ca8a04':'#dc2626')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</span>'
     +(comb?'<span class="signal-tag" style="background:#0891b2">⚡ '+comb+'</span>':'')
     +'</div>'
 
@@ -248,7 +248,7 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
     +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
-    +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=70?'green':entry>=40?'yellow':'')+'">'+(entry||0)+'分</div></div>'
+    +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">¥'+(mf||0).toFixed(2)+'亿</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou||0).toFixed(1)+'分</div></div>'
