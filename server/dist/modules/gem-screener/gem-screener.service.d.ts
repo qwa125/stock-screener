@@ -134,10 +134,11 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         files?: undefined;
     }>;
     private enrichWithMainForceFlow;
-    checkOpportunity(s: StockCandidate): Promise<OpportunityStock | null>;
-    checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null>;
+    checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
+    checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     private calcEntryTiming;
     private calcSafetyScore;
+    private applySignalContinuity;
     private calcChipAnalysis;
     private fetchGEMCandidates;
     private parseSinaBatch;

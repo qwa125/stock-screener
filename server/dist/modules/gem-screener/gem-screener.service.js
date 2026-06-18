@@ -733,7 +733,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
     }
-    async checkOpportunity(s) {
+    async checkOpportunity(s, prevSuggestion) {
         const kline = await this.dataFetcher.getKLineData(s.code);
         if (!kline || kline.length < 20)
             return null;
@@ -982,7 +982,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             jiGouActiveScore: Math.round(jiGouActive * 100) / 100,
         };
     }
-    async checkOpportunityRelaxed(s) {
+    async checkOpportunityRelaxed(s, prevSuggestion) {
         const kline = await this.dataFetcher.getKLineData(s.code);
         if (!kline || kline.length < 20)
             return null;
@@ -1283,6 +1283,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     signalCombination = (signalCombination || '') + '|筹码集中支撑';
                 }
             }
+            const contResult = this.applySignalContinuity(suggestionR, prevSuggestion, pricePosition, trendStateR);
+            if (contResult.changed) {
+                suggestionR = contResult.suggestion;
+                signalCombination = (signalCombination || '') + '|信号延续:' + suggestionR;
+            }
             const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
             const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
             return {
@@ -1417,6 +1422,32 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             safety -= 10;
         }
         return Math.min(Math.max(safety, 0), 100);
+    }
+    applySignalContinuity(currentSuggestion, prevSuggestion, pricePosition, trendState) {
+        if (!prevSuggestion || prevSuggestion === '观望' || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
+            return { suggestion: currentSuggestion, changed: false };
+        }
+        const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入', '减仓', '卖出', '清仓'];
+        const prevIdx = PRIORITY.indexOf(prevSuggestion);
+        const curIdx = PRIORITY.indexOf(currentSuggestion);
+        if (prevIdx === -1 || curIdx === -1)
+            return { suggestion: currentSuggestion, changed: false };
+        if (prevIdx === 0) {
+            if (curIdx > 1) {
+                return { suggestion: '重仓买入', changed: true };
+            }
+        }
+        if (prevIdx === 1) {
+            if (curIdx > 2) {
+                return { suggestion: '买入', changed: true };
+            }
+        }
+        if (prevIdx === 2) {
+            if (curIdx > 3) {
+                return { suggestion: '持有', changed: true };
+            }
+        }
+        return { suggestion: currentSuggestion, changed: false };
     }
     calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, currentPrice) {
         const len = closeArr.length;
@@ -2407,6 +2438,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '重仓买入';
                         else if (newSuggestion === '轻仓买入')
                             newSuggestion = '买入';
+                    }
+                    const oldSug = s.suggestion;
+                    const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
+                    const oldIdx = PRIORITY.indexOf(oldSug || '');
+                    const newIdx = PRIORITY.indexOf(newSuggestion);
+                    if (oldIdx >= 0 && newIdx >= 0) {
+                        if (oldIdx === 0 && newIdx > 1) {
+                            newSuggestion = '重仓买入';
+                        }
+                        else if (oldIdx === 1 && newIdx > 2) {
+                            newSuggestion = '买入';
+                        }
+                        else if (oldIdx === 2 && newIdx > 3) {
+                            newSuggestion = '持有';
+                        }
                     }
                     const BASE = {
                         '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40, '观望': 25,

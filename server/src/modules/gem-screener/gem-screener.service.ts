@@ -916,7 +916,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // 个股检查 (严格)
   // ---------------------------------------------------------------------------
-  async checkOpportunity(s: StockCandidate): Promise<OpportunityStock | null> {
+  async checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
     const kline = await this.dataFetcher.getKLineData(s.code);
     if (!kline || kline.length < 20) return null;
 
@@ -1166,7 +1166,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       jiGouActiveScore: Math.round(jiGouActive * 100) / 100,
     };
   }
-  async checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null> {
+  async checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
     const kline = await this.dataFetcher.getKLineData(s.code);
     if (!kline || kline.length < 20) return null;
 
@@ -1453,6 +1453,13 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
+      // ---------- 信号连续性规则（买入必须维持，不能隔夜变卖出） ----------
+      const contResult = this.applySignalContinuity(suggestionR, prevSuggestion, pricePosition, trendStateR);
+      if (contResult.changed) {
+        suggestionR = contResult.suggestion;
+        signalCombination = (signalCombination || '') + '|信号延续:' + suggestionR;
+      }
+
       // ---------- 最佳介入时机 + 安全系数 ----------
       const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
       const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
@@ -1635,6 +1642,50 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // 筹码分布分析（从K线量价估算）
   // 输出: 集中度90, 峰位, 单峰/双峰/分散
   // ===========================================================================
+    /**
+   * 信号连续性规则（买入必须持续）
+   * 重仓买入→次/次日必须维持重仓买入; 买入→必须维持买入以上; 轻仓买入→至少持有
+   */
+  private applySignalContinuity(
+    currentSuggestion: string,
+    prevSuggestion: string | undefined | null,
+    pricePosition: number,
+    trendState: number,
+  ): { suggestion: string; changed: boolean } {
+    if (!prevSuggestion || prevSuggestion === '观望' || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
+      return { suggestion: currentSuggestion, changed: false };
+    }
+
+    const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入', '减仓', '卖出', '清仓'];
+    const prevIdx = PRIORITY.indexOf(prevSuggestion);
+    const curIdx = PRIORITY.indexOf(currentSuggestion);
+    if (prevIdx === -1 || curIdx === -1) return { suggestion: currentSuggestion, changed: false };
+
+    // ─── 买入信号必须有持续性 ───
+    // 重仓买入（index 0）→ 次日必须维持重仓买入（主升浪已开启，不会突然反转）
+    if (prevIdx === 0) {
+      if (curIdx > 1) {
+        // 即便今日信号变弱，也必须维持重仓买入
+        return { suggestion: '重仓买入', changed: true };
+      }
+    }
+    // 买入（index 1）→ 次日至少维持买入（不会突然降到轻仓买入以下）
+    if (prevIdx === 1) {
+      if (curIdx > 2) {
+        // 至少维持买入
+        return { suggestion: '买入', changed: true };
+      }
+    }
+    // 轻仓买入（index 2）→ 次日至少维持轻仓买入或持有
+    if (prevIdx === 2) {
+      if (curIdx > 3) {
+        return { suggestion: '持有', changed: true };
+      }
+    }
+
+    return { suggestion: currentSuggestion, changed: false };
+  }
+
   private calcChipAnalysis(
     closeArr: number[],
     highArr: number[],
@@ -2765,6 +2816,20 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
             if (newSuggestion === '买入') newSuggestion = '重仓买入';
             else if (newSuggestion === '轻仓买入') newSuggestion = '买入';
+          }
+
+          // ─── 信号连续性规则：买入信号必须维持，不能隔夜变卖出 ───
+          const oldSug = s.suggestion;
+          const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
+          const oldIdx = PRIORITY.indexOf(oldSug || '');
+          const newIdx = PRIORITY.indexOf(newSuggestion);
+          if (oldIdx >= 0 && newIdx >= 0) {
+            // 重仓买入 → 必须维持重仓买入
+            if (oldIdx === 0 && newIdx > 1) { newSuggestion = '重仓买入'; }
+            // 买入 → 至少维持买入
+            else if (oldIdx === 1 && newIdx > 2) { newSuggestion = '买入'; }
+            // 轻仓买入 → 至少轻仓买入或持有
+            else if (oldIdx === 2 && newIdx > 3) { newSuggestion = '持有'; }
           }
 
           // 更新评分
