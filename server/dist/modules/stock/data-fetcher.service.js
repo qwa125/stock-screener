@@ -75,7 +75,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
             const eastRes = await this.searchEastMoney(keyword);
             if (eastRes.length > 0)
                 return eastRes;
-            return [];
+            return this.fallbackSearch(keyword);
         }
         const eastRes = await this.searchEastMoney(keyword);
         if (eastRes.length > 0)

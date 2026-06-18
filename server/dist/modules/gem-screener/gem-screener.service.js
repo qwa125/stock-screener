@@ -2361,7 +2361,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             for (let i = 0; i < maxResults; i++) {
                 const s = stocks[i];
                 try {
-                    const opp = await this.quickAnalyze(s.code, s.name);
+                    const opp = await Promise.race([
+                        this.quickAnalyze(s.code, s.name),
+                        new Promise(r => setTimeout(() => r(null), 12000))
+                    ]);
                     if (opp && opp.suggestion) {
                         opp.name = s.name;
                         results.push(opp);

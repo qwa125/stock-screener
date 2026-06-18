@@ -82,7 +82,7 @@ export class DataFetcherService {
       // 腾讯API不可靠时走东方财富搜索
       const eastRes = await this.searchEastMoney(keyword);
       if (eastRes.length > 0) return eastRes;
-      return [];
+      return this.fallbackSearch(keyword);
     }
 
     // 尝试东方财富搜索

@@ -2747,7 +2747,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
       for (let i = 0; i < maxResults; i++) {
         const s = stocks[i];
         try {
-          const opp = await this.quickAnalyze(s.code, s.name);
+          // 加超时：quickAnalyze 在海外可能因中国API超时长达15s
+          const opp = await Promise.race([
+            this.quickAnalyze(s.code, s.name),
+            new Promise<null>(r => setTimeout(() => r(null), 12000))
+          ]);
           if (opp && opp.suggestion) {  // 搜索展示全部分析结果，包括观望/不要介入
             opp.name = s.name;
             results.push(opp);
