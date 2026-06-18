@@ -316,22 +316,17 @@ export class GemScreenerController {
     }
     this.logger.log(`批量分析: ${body.codes.length} 只股票`);
     const results: any[] = [];
-    const TIMEOUT = 12000; // 单只最多等12秒
-    
-    // 并行分析，每只带独立超时
-    const tasks = body.codes.map(async (code, i) => {
+    // 顺序分析，每只带超时（从Render到中国API不稳定，超时快速跳过）
+    for (let i = 0; i < body.codes.length; i++) {
+      const code = body.codes[i];
       const name = body.names?.[i] || '';
       try {
         const opp = await Promise.race([
           this.gemScreener.quickAnalyze(code, name, true),
-          new Promise<null>(resolve => setTimeout(() => resolve(null), TIMEOUT))
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 10000))
         ]);
-        return opp;
-      } catch { return null; }
-    });
-    const all = await Promise.all(tasks);
-    for (const opp of all) {
-      if (opp) results.push(opp);
+        if (opp) results.push(opp);
+      } catch {}
     }
     // 按信号排序
     const PRIORITY: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };

@@ -246,24 +246,18 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         this.logger.log(`批量分析: ${body.codes.length} 只股票`);
         const results = [];
-        const TIMEOUT = 12000;
-        const tasks = body.codes.map(async (code, i) => {
+        for (let i = 0; i < body.codes.length; i++) {
+            const code = body.codes[i];
             const name = body.names?.[i] || '';
             try {
                 const opp = await Promise.race([
                     this.gemScreener.quickAnalyze(code, name, true),
-                    new Promise(resolve => setTimeout(() => resolve(null), TIMEOUT))
+                    new Promise(resolve => setTimeout(() => resolve(null), 10000))
                 ]);
-                return opp;
+                if (opp)
+                    results.push(opp);
             }
-            catch {
-                return null;
-            }
-        });
-        const all = await Promise.all(tasks);
-        for (const opp of all) {
-            if (opp)
-                results.push(opp);
+            catch { }
         }
         const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
         results.sort((a, b) => {
