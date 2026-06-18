@@ -113,32 +113,30 @@ function posLabel(p){
 /** 今日操作建议 */
 function todayAdvice(s,rt){
   var chg=rt.changePercent||0
-  var price=rt.price||0
-  var yc=rt.yesterdayClose||0
   var sig=s.suggestion
-  var pos=p=s.pricePosition||0
   if(sig==='重仓买入'){
-    if(chg<-3) return '今日可逢低关注，当前跌幅较大，建议分批低吸'
-    if(chg>3) return '今日强势上攻，不建议追高，等待回调再入场'
-    if(chg<0) return '今日小幅回调，可关注盘中企稳后的机会'
-    return '今日维持强势，可密切关注盘中回调买点'
+    if(chg<-3) return '今日跌幅较大，可全仓买入把握低吸机会'
+    if(chg>3) return '今日强势上攻，可全仓买入积极跟进'
+    if(chg<0) return '今日小幅回调，全仓买入正当时'
+    return '今日走势稳健，建议全仓买入'
   }
   if(sig==='买入'){
-    if(chg<0) return '今日回调中，可轻仓试探性介入，严格止损'
-    return '今日走势平稳/偏强，建议小仓位试多'
+    if(chg<-2) return '今日回调幅度较大，可半仓买入'
+    if(chg>0) return '今日上涨中，可半仓买入'
+    return '今日走势平稳，建议半仓买入'
   }
   if(sig==='轻仓买入'){
-    if(chg<-2) return '今日跌幅较大，观望为主，等待企稳信号'
-    return '今日走势一般，建议轻仓试探或继续观望'
+    if(chg<-2) return '今日跌幅较大，1/3仓位试探性买入'
+    return '今日走势一般，建议1/3仓位买入'
   }
   return '今日暂无明显买入信号，建议观望'
 }
 
 /** 未来1-2日操作建议 */
 function futureAdvice(s){
-  if(s.suggestion==='重仓买入')return '未来1-2日：低位区+MA5>MA10多头+强信号，逢回调积极关注，分2-3批建仓，止损-3%~-5%'
-  if(s.suggestion==='买入')return '未来1-2日：低位区有买点信号，趋势企稳，轻仓试多或分批介入，严格止损，仓位20%以内'
-  if(s.suggestion==='轻仓买入')return '未来1-2日：中位区有趋势但信号不强，轻仓试探或观望，等回调至低位再介入，止损-2%'
+  if(s.suggestion==='重仓买入')return '未来1-2日：低位区+MA5>MA10多头+强信号，建议全仓买入'
+  if(s.suggestion==='买入')return '未来1-2日：低位区有买点信号，趋势企稳，建议半仓买入'
+  if(s.suggestion==='轻仓买入')return '未来1-2日：中位区有趋势但信号不强，建议1/3仓位买入'
   return '未来1-2日：暂无明确买入信号，建议观望等待'
 }
 
