@@ -2,9 +2,5 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: |
-      npm install
-      npx taro build --type h5
-      cp -r dist/* server/public/
-      cd server && npm install && npm run build
+    buildCommand: cd server && pnpm install && pnpm build
     startCommand: cd server && node dist/main.js
