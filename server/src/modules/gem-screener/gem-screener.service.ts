@@ -68,6 +68,12 @@ export interface OpportunityStock {
   sellSignal?: string;
   /** 机构活跃度评分 */
   jiGouActiveScore?: number;
+  /** 筹码集中度(0-100, 越低越集中) */
+  chipConcentration90?: number;
+  /** 筹码峰位: low=下方支撑, mid=当前附近, high=上方压力 */
+  chipPeakPosition?: 'low' | 'mid' | 'high';
+  /** 筹码形态: single_peak=单峰集中, double_peak=双峰, dispersed=分散 */
+  chipPattern?: 'single_peak' | 'double_peak' | 'dispersed';
 }
 
 @Injectable()
@@ -1409,6 +1415,40 @@ export class GemScreenerService implements OnApplicationBootstrap {
       if (NOT_BUY.includes(suggestionR)) return null;
       if (sellSignal) return null;
 
+      // ---------- 筹码分布分析（用量价估算） ----------
+      const chip = this.calcChipAnalysis(closeArr, klineH, klineL, klineV, currentClose);
+      const chipConcentration90 = chip.concentration90;
+      const chipPeakPosition = chip.peakPosition;
+      const chipPattern = chip.pattern;
+
+      // ─── 筹码数据修正买卖信号 ───
+      // 筹码分散+峰在高位(上方压力)+低位未企稳 → 降级或过滤
+      const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePosition < 30;
+      const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePosition < 25;
+
+      if (chipDowngrade || chipRisk) {
+        if (suggestionR === '重仓买入') {
+          suggestionR = '买入';
+          signalCombination = (signalCombination || '') + '|筹码分散降级';
+        } else if (suggestionR === '买入') {
+          suggestionR = '轻仓买入';
+          signalCombination = (signalCombination || '') + '|筹码承压降级';
+        } else if (suggestionR === '轻仓买入') {
+          suggestionR = '不要介入';
+          signalCombination = (signalCombination || '') + '|筹码结构差';
+        }
+      }
+      // 筹码集中+峰在下方(支撑)+低位企稳 → 加分
+      if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePosition > 15 && pricePosition < 45 && trendStateR >= 1) {
+        if (suggestionR === '买入') {
+          suggestionR = '重仓买入';
+          signalCombination = (signalCombination || '') + '|筹码集中支撑';
+        } else if (suggestionR === '轻仓买入') {
+          suggestionR = '买入';
+          signalCombination = (signalCombination || '') + '|筹码集中支撑';
+        }
+      }
+
       // ---------- 最佳介入时机 + 安全系数 ----------
       const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
       const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
@@ -1431,6 +1471,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
         dea: Math.round(macdResult.currentDea * 10000) / 10000,
         isGoldenCross,
         suggestion: suggestionR,
+        signalCombination,
+        jiGouActiveScore: 0,
+        chipConcentration90,
+        chipPeakPosition,
+        chipPattern,
       };
     }
 
@@ -1580,6 +1625,114 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
 
     return Math.min(Math.max(safety, 0), 100);
+  }
+
+  // ===========================================================================
+  // 筹码分布分析（从K线量价估算）
+  // 输出: 集中度90, 峰位, 单峰/双峰/分散
+  // ===========================================================================
+  private calcChipAnalysis(
+    closeArr: number[],
+    highArr: number[],
+    lowArr: number[],
+    volumeArr: number[],
+    currentPrice: number,
+  ): { concentration90: number; peakPosition: 'low' | 'mid' | 'high'; pattern: 'single_peak' | 'double_peak' | 'dispersed' } {
+    const len = closeArr.length;
+    if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+
+    // 取近60天数据
+    const N = Math.min(60, len);
+    const c = closeArr.slice(-N);
+    const h = highArr.slice(-N);
+    const l = lowArr.slice(-N);
+    const v = volumeArr.slice(-N);
+
+    // 价格区间
+    const minPrice = Math.min(...l);
+    const maxPrice = Math.max(...h);
+    const range = maxPrice - minPrice;
+    if (range < 0.01) return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+
+    // 分20个价格区间
+    const BINS = 20;
+    const binSize = range / BINS;
+    const bins = new Array(BINS).fill(0);
+
+    // 将每日成交量分配到价格区间（按当日 high-low 范围线性分配）
+    for (let i = 0; i < N; i++) {
+      const dayLow = l[i];
+      const dayHigh = h[i];
+      const dayVol = v[i];
+      const dayRange = dayHigh - dayLow;
+      if (dayRange < 0.01) continue;
+
+      const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+      const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+
+      if (startBin === endBin) {
+        bins[startBin] += dayVol;
+      } else {
+        // 线性分配成交量到每个触及的价格区间
+        const totalSteps = endBin - startBin + 1;
+        const volPerBin = dayVol / totalSteps;
+        for (let b = startBin; b <= endBin; b++) {
+          bins[b] += volPerBin;
+        }
+      }
+    }
+
+    // 找出峰值（局部最大值）
+    const totalVol = bins.reduce((a, b) => a + b, 0);
+    const peaks: number[] = [];
+    for (let i = 1; i < BINS - 1; i++) {
+      if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
+        peaks.push(i);
+      }
+    }
+    // 如果没找到峰值，取最高bin
+    if (peaks.length === 0) {
+      const maxIdx = bins.indexOf(Math.max(...bins));
+      peaks.push(maxIdx);
+    }
+
+    // 集中度90: 找到包含90%成交量的最小区间
+    const sortedBins = [...bins].sort((a, b) => b - a);
+    let cumVol = 0;
+    let binsNeeded = 0;
+    for (const vol of sortedBins) {
+      cumVol += vol;
+      binsNeeded++;
+      if (cumVol >= totalVol * 0.9) break;
+    }
+    const concentration90 = Math.round((binsNeeded / BINS) * 100);
+
+    // 峰位: 主峰对应的价格相对于当前价格的位置
+    const mainPeakIdx = peaks[0];
+    const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+    const pricePositionPct = (currentPrice - minPrice) / range;
+    let peakPosition: 'low' | 'mid' | 'high';
+    if (peakPrice < currentPrice * 0.85) {
+      peakPosition = 'low';  // 峰在下方（支撑位）
+    } else if (peakPrice > currentPrice * 1.15) {
+      peakPosition = 'high'; // 峰在上方（压力位）
+    } else {
+      peakPosition = 'mid';  // 峰在当前价附近
+    }
+
+    // 形态: 单峰/双峰/分散
+    let pattern: 'single_peak' | 'double_peak' | 'dispersed';
+    if (peaks.length >= 3) {
+      pattern = 'dispersed';
+    } else if (peaks.length >= 2) {
+      // 双峰：检查两峰是否足够分离
+      const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+      pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
+    } else {
+      pattern = 'single_peak';
+    }
+
+    return { concentration90, peakPosition, pattern };
   }
 
   // ---------------------------------------------------------------------------
@@ -2227,6 +2380,101 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return Math.min(Math.max(Math.round(score), 0), 100);
   }
 
+  // ===========================================================================
+  // 筹码分布分析（静态版本，用于 quickAnalyze）
+  // ===========================================================================
+  private static calcChipAnalysis(
+    closeArr: number[],
+    highArr: number[],
+    lowArr: number[],
+    volumeArr: number[],
+    currentPrice: number,
+  ): { concentration90: number; peakPosition: 'low' | 'mid' | 'high'; pattern: 'single_peak' | 'double_peak' | 'dispersed' } {
+    const len = closeArr.length;
+    if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+
+    const N = Math.min(60, len);
+    const c = closeArr.slice(-N);
+    const h = highArr.slice(-N);
+    const l = lowArr.slice(-N);
+    const v = volumeArr.slice(-N);
+
+    const minPrice = Math.min(...l);
+    const maxPrice = Math.max(...h);
+    const range = maxPrice - minPrice;
+    if (range < 0.01) return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+
+    const BINS = 20;
+    const binSize = range / BINS;
+    const bins = new Array(BINS).fill(0);
+
+    for (let i = 0; i < N; i++) {
+      const dayLow = l[i];
+      const dayHigh = h[i];
+      const dayVol = v[i];
+      const dayRange = dayHigh - dayLow;
+      if (dayRange < 0.01) continue;
+
+      const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+      const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+
+      if (startBin === endBin) {
+        bins[startBin] += dayVol;
+      } else {
+        const totalSteps = endBin - startBin + 1;
+        const volPerBin = dayVol / totalSteps;
+        for (let b = startBin; b <= endBin; b++) {
+          bins[b] += volPerBin;
+        }
+      }
+    }
+
+    const totalVol = bins.reduce((a: number, b: number) => a + b, 0);
+    const peaks: number[] = [];
+    for (let i = 1; i < BINS - 1; i++) {
+      if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
+        peaks.push(i);
+      }
+    }
+    if (peaks.length === 0) {
+      const maxIdx = bins.indexOf(Math.max(...bins));
+      peaks.push(maxIdx);
+    }
+
+    const sortedBins = [...bins].sort((a: number, b: number) => b - a);
+    let cumVol = 0;
+    let binsNeeded = 0;
+    for (const vol of sortedBins) {
+      cumVol += vol;
+      binsNeeded++;
+      if (cumVol >= totalVol * 0.9) break;
+    }
+    const concentration90 = Math.round((binsNeeded / BINS) * 100);
+
+    const mainPeakIdx = peaks[0];
+    const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+    let peakPosition: 'low' | 'mid' | 'high';
+    if (peakPrice < currentPrice * 0.85) {
+      peakPosition = 'low';
+    } else if (peakPrice > currentPrice * 1.15) {
+      peakPosition = 'high';
+    } else {
+      peakPosition = 'mid';
+    }
+
+    let pattern: 'single_peak' | 'double_peak' | 'dispersed';
+    if (peaks.length >= 3) {
+      pattern = 'dispersed';
+    } else if (peaks.length >= 2) {
+      const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+      pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
+    } else {
+      pattern = 'single_peak';
+    }
+
+    return { concentration90, peakPosition, pattern };
+  }
+
   private async quickAnalyze(code: string, name?: string): Promise<OpportunityStock | null> {
     const raw: any[] = await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 20) return null;
@@ -2366,6 +2614,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5]) score += 5;
     else score -= 5;
 
+    // === 筹码分布分析 ===
+    const chip = GemScreenerService.calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, price);
+    const chipConcentration90 = chip.concentration90;
+    const chipPeakPosition = chip.peakPosition;
+    const chipPattern = chip.pattern;
+
+    // 筹码修正：分散+峰高位+未企稳 → 降级
+    let finalSuggestion = suggestion;
+    const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
+    const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
+    if (chipDowngrade || chipRisk) {
+      if (finalSuggestion === '重仓买入') finalSuggestion = '买入';
+      else if (finalSuggestion === '买入') finalSuggestion = '轻仓买入';
+      else if (finalSuggestion === '轻仓买入') finalSuggestion = '不要介入';
+    }
+    // 筹码集中+峰在下方+低位企稳 → 升级
+    if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePos > 15 && pricePos < 45 && trendState >= 1) {
+      if (finalSuggestion === '买入') finalSuggestion = '重仓买入';
+      else if (finalSuggestion === '轻仓买入') finalSuggestion = '买入';
+    }
+
     // === 计算最佳介入时机和安全系数 ===
     const entryTiming = GemScreenerService.calcEntryTiming(
       pricePos, trendState, closeArr, isGoldenCross, volumeArr,
@@ -2384,13 +2653,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
       capitalRank: 0,
       baiXiaoDays: 0,
       score,
-      suggestion,
+      suggestion: finalSuggestion,
       entryTiming,
       safetyScore,
       isGoldenCross,
       diff,
       dea,
       buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || lingXing?.shortBuy) ? '有信号' : '',
+      chipConcentration90,
+      chipPeakPosition,
+      chipPattern,
     };
   }
 

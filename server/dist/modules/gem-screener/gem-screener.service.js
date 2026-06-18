@@ -1250,6 +1250,36 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return null;
             if (sellSignal)
                 return null;
+            const chip = this.calcChipAnalysis(closeArr, klineH, klineL, klineV, currentClose);
+            const chipConcentration90 = chip.concentration90;
+            const chipPeakPosition = chip.peakPosition;
+            const chipPattern = chip.pattern;
+            const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePosition < 30;
+            const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePosition < 25;
+            if (chipDowngrade || chipRisk) {
+                if (suggestionR === '重仓买入') {
+                    suggestionR = '买入';
+                    signalCombination = (signalCombination || '') + '|筹码分散降级';
+                }
+                else if (suggestionR === '买入') {
+                    suggestionR = '轻仓买入';
+                    signalCombination = (signalCombination || '') + '|筹码承压降级';
+                }
+                else if (suggestionR === '轻仓买入') {
+                    suggestionR = '不要介入';
+                    signalCombination = (signalCombination || '') + '|筹码结构差';
+                }
+            }
+            if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePosition > 15 && pricePosition < 45 && trendStateR >= 1) {
+                if (suggestionR === '买入') {
+                    suggestionR = '重仓买入';
+                    signalCombination = (signalCombination || '') + '|筹码集中支撑';
+                }
+                else if (suggestionR === '轻仓买入') {
+                    suggestionR = '买入';
+                    signalCombination = (signalCombination || '') + '|筹码集中支撑';
+                }
+            }
             const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
             const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
             return {
@@ -1270,6 +1300,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 dea: Math.round(macdResult.currentDea * 10000) / 10000,
                 isGoldenCross,
                 suggestion: suggestionR,
+                signalCombination,
+                jiGouActiveScore: 0,
+                chipConcentration90,
+                chipPeakPosition,
+                chipPattern,
             };
         }
         return null;
@@ -1379,6 +1414,90 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             safety -= 10;
         }
         return Math.min(Math.max(safety, 0), 100);
+    }
+    calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, currentPrice) {
+        const len = closeArr.length;
+        if (len < 20)
+            return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+        const N = Math.min(60, len);
+        const c = closeArr.slice(-N);
+        const h = highArr.slice(-N);
+        const l = lowArr.slice(-N);
+        const v = volumeArr.slice(-N);
+        const minPrice = Math.min(...l);
+        const maxPrice = Math.max(...h);
+        const range = maxPrice - minPrice;
+        if (range < 0.01)
+            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+        const BINS = 20;
+        const binSize = range / BINS;
+        const bins = new Array(BINS).fill(0);
+        for (let i = 0; i < N; i++) {
+            const dayLow = l[i];
+            const dayHigh = h[i];
+            const dayVol = v[i];
+            const dayRange = dayHigh - dayLow;
+            if (dayRange < 0.01)
+                continue;
+            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+            if (startBin === endBin) {
+                bins[startBin] += dayVol;
+            }
+            else {
+                const totalSteps = endBin - startBin + 1;
+                const volPerBin = dayVol / totalSteps;
+                for (let b = startBin; b <= endBin; b++) {
+                    bins[b] += volPerBin;
+                }
+            }
+        }
+        const totalVol = bins.reduce((a, b) => a + b, 0);
+        const peaks = [];
+        for (let i = 1; i < BINS - 1; i++) {
+            if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
+                peaks.push(i);
+            }
+        }
+        if (peaks.length === 0) {
+            const maxIdx = bins.indexOf(Math.max(...bins));
+            peaks.push(maxIdx);
+        }
+        const sortedBins = [...bins].sort((a, b) => b - a);
+        let cumVol = 0;
+        let binsNeeded = 0;
+        for (const vol of sortedBins) {
+            cumVol += vol;
+            binsNeeded++;
+            if (cumVol >= totalVol * 0.9)
+                break;
+        }
+        const concentration90 = Math.round((binsNeeded / BINS) * 100);
+        const mainPeakIdx = peaks[0];
+        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+        const pricePositionPct = (currentPrice - minPrice) / range;
+        let peakPosition;
+        if (peakPrice < currentPrice * 0.85) {
+            peakPosition = 'low';
+        }
+        else if (peakPrice > currentPrice * 1.15) {
+            peakPosition = 'high';
+        }
+        else {
+            peakPosition = 'mid';
+        }
+        let pattern;
+        if (peaks.length >= 3) {
+            pattern = 'dispersed';
+        }
+        else if (peaks.length >= 2) {
+            const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+            pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
+        }
+        else {
+            pattern = 'single_peak';
+        }
+        return { concentration90, peakPosition, pattern };
     }
     async fetchGEMCandidates() {
         const candidates = [];
@@ -1931,6 +2050,89 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             score += 5;
         return Math.min(Math.max(Math.round(score), 0), 100);
     }
+    static calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, currentPrice) {
+        const len = closeArr.length;
+        if (len < 20)
+            return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+        const N = Math.min(60, len);
+        const c = closeArr.slice(-N);
+        const h = highArr.slice(-N);
+        const l = lowArr.slice(-N);
+        const v = volumeArr.slice(-N);
+        const minPrice = Math.min(...l);
+        const maxPrice = Math.max(...h);
+        const range = maxPrice - minPrice;
+        if (range < 0.01)
+            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+        const BINS = 20;
+        const binSize = range / BINS;
+        const bins = new Array(BINS).fill(0);
+        for (let i = 0; i < N; i++) {
+            const dayLow = l[i];
+            const dayHigh = h[i];
+            const dayVol = v[i];
+            const dayRange = dayHigh - dayLow;
+            if (dayRange < 0.01)
+                continue;
+            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+            if (startBin === endBin) {
+                bins[startBin] += dayVol;
+            }
+            else {
+                const totalSteps = endBin - startBin + 1;
+                const volPerBin = dayVol / totalSteps;
+                for (let b = startBin; b <= endBin; b++) {
+                    bins[b] += volPerBin;
+                }
+            }
+        }
+        const totalVol = bins.reduce((a, b) => a + b, 0);
+        const peaks = [];
+        for (let i = 1; i < BINS - 1; i++) {
+            if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
+                peaks.push(i);
+            }
+        }
+        if (peaks.length === 0) {
+            const maxIdx = bins.indexOf(Math.max(...bins));
+            peaks.push(maxIdx);
+        }
+        const sortedBins = [...bins].sort((a, b) => b - a);
+        let cumVol = 0;
+        let binsNeeded = 0;
+        for (const vol of sortedBins) {
+            cumVol += vol;
+            binsNeeded++;
+            if (cumVol >= totalVol * 0.9)
+                break;
+        }
+        const concentration90 = Math.round((binsNeeded / BINS) * 100);
+        const mainPeakIdx = peaks[0];
+        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+        let peakPosition;
+        if (peakPrice < currentPrice * 0.85) {
+            peakPosition = 'low';
+        }
+        else if (peakPrice > currentPrice * 1.15) {
+            peakPosition = 'high';
+        }
+        else {
+            peakPosition = 'mid';
+        }
+        let pattern;
+        if (peaks.length >= 3) {
+            pattern = 'dispersed';
+        }
+        else if (peaks.length >= 2) {
+            const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+            pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
+        }
+        else {
+            pattern = 'single_peak';
+        }
+        return { concentration90, peakPosition, pattern };
+    }
     async quickAnalyze(code, name) {
         const raw = await this.dataFetcher.getKLineData(code);
         if (!raw?.length || raw.length < 20)
@@ -2057,6 +2259,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             score += 5;
         else
             score -= 5;
+        const chip = GemScreenerService_1.calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, price);
+        const chipConcentration90 = chip.concentration90;
+        const chipPeakPosition = chip.peakPosition;
+        const chipPattern = chip.pattern;
+        let finalSuggestion = suggestion;
+        const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
+        const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
+        if (chipDowngrade || chipRisk) {
+            if (finalSuggestion === '重仓买入')
+                finalSuggestion = '买入';
+            else if (finalSuggestion === '买入')
+                finalSuggestion = '轻仓买入';
+            else if (finalSuggestion === '轻仓买入')
+                finalSuggestion = '不要介入';
+        }
+        if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePos > 15 && pricePos < 45 && trendState >= 1) {
+            if (finalSuggestion === '买入')
+                finalSuggestion = '重仓买入';
+            else if (finalSuggestion === '轻仓买入')
+                finalSuggestion = '买入';
+        }
         const entryTiming = GemScreenerService_1.calcEntryTiming(pricePos, trendState, closeArr, isGoldenCross, volumeArr);
         const safetyScore = GemScreenerService_1.calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePct);
         return {
@@ -2069,13 +2292,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             capitalRank: 0,
             baiXiaoDays: 0,
             score,
-            suggestion,
+            suggestion: finalSuggestion,
             entryTiming,
             safetyScore,
             isGoldenCross,
             diff,
             dea,
             buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || lingXing?.shortBuy) ? '有信号' : '',
+            chipConcentration90,
+            chipPeakPosition,
+            chipPattern,
         };
     }
     triggerAnalysisPreCacheFromCache() {

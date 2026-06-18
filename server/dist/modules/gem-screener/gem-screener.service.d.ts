@@ -31,6 +31,9 @@ export interface OpportunityStock {
     signalCombination?: string;
     sellSignal?: string;
     jiGouActiveScore?: number;
+    chipConcentration90?: number;
+    chipPeakPosition?: 'low' | 'mid' | 'high';
+    chipPattern?: 'single_peak' | 'double_peak' | 'dispersed';
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
@@ -135,6 +138,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     checkOpportunityRelaxed(s: StockCandidate): Promise<OpportunityStock | null>;
     private calcEntryTiming;
     private calcSafetyScore;
+    private calcChipAnalysis;
     private fetchGEMCandidates;
     private parseSinaBatch;
     private fetchMainBoardCandidates;
@@ -169,6 +173,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private scanTopFromCandidates;
     private static calcEntryTiming;
     private static calcSafetyScore;
+    private static calcChipAnalysis;
     private quickAnalyze;
     triggerAnalysisPreCacheFromCache(): void;
     private triggerAnalysisPreCache;
