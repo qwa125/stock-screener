@@ -28,6 +28,9 @@ export interface OpportunityStock {
     suggestion?: string;
     entryTiming: number;
     safetyScore: number;
+    signalCombination?: string;
+    sellSignal?: string;
+    jiGouActiveScore?: number;
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
