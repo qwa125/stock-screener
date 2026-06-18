@@ -292,8 +292,8 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">¥'+(mf||0).toFixed(2)+'亿</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou||0).toFixed(1)+'分</div></div>'
     +gridChipLine(s,entry)
-    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high?rt.high.toFixed(2):'-')+'</div></div>'
-    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low?rt.low.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null&&rt.high?rt.high.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null&&rt.low?rt.low.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
   // 详情说明

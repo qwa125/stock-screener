@@ -419,7 +419,11 @@ export class GemScreenerController {
         volume: parseFloat(item.volume) || 0,
         amount: item.amount || 0,
       }));
-      const opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+      let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+      if (!opp) {
+        // quickAnalyze返回null（无买入信号）时，用keepAll=true再试，至少返回基础分析数据
+        opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData);
+      }
       if (opp) {
         return { code: 200, msg: 'success', data: [opp] };
       }

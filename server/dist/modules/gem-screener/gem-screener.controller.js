@@ -331,7 +331,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 volume: parseFloat(item.volume) || 0,
                 amount: item.amount || 0,
             }));
-            const opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+            let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+            if (!opp) {
+                opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData);
+            }
             if (opp) {
                 return { code: 200, msg: 'success', data: [opp] };
             }
