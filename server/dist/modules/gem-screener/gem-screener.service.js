@@ -186,10 +186,36 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async getOpportunities() {
         if (this.cache) {
+            this.upgradeCacheFields(this.cache.data);
             this.triggerAnalysisPreCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         return { opportunities: [], timestamp: Date.now() };
+    }
+    upgradeCacheFields(data) {
+        if (!data || data.length === 0)
+            return;
+        if (data[0].signalCombination !== undefined)
+            return;
+        for (const s of data) {
+            const sig = s.suggestion || '';
+            const pos = s.pricePosition || 0;
+            const gc = s.isGoldenCross;
+            const ok = s.entryTiming && s.entryTiming >= 60 ? '强' : '弱';
+            if (sig === '重仓买入') {
+                s.signalCombination = pos < 25 ? '白消信号+低位' : '白消信号+强势';
+            }
+            else if (sig === '买入') {
+                s.signalCombination = pos < 45 ? '白消信号+中低位' : '白消信号+趋势';
+            }
+            else if (sig === '轻仓买入') {
+                s.signalCombination = '白消信号';
+            }
+            else {
+                s.signalCombination = '';
+            }
+            s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
+        }
     }
     triggerRefresh() {
         if (!(0, market_time_1.isMarketOpen)()) {
@@ -797,118 +823,120 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const trendStrengthR = ((ma5 / ma10 - 1) * 100);
         const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
         const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const volumeBullishR = recentVolR > avgVolR * 1.1;
-        const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai;
-        const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
-        const strongBuyR = (isGoldenCross && volumeBullishR) || (bxDays >= 3) || (bx.baiXiaoBuy1 && volumeBullishR);
-        const strongSellR = !!bx.strongSell;
-        const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
+        const volumeRatio = recentVolR / avgVolR;
+        const volumeBullishR = volumeRatio > 1.1;
+        const zhuShengSignal = trendStateR >= 2 && macdBullishR;
+        const recent20High = Math.max(...highs.slice(-20));
+        const recent20Low = Math.min(...lows.slice(-20));
+        const rangePct = (recent20High - recent20Low) / (recent20Low || 1) * 100;
+        const isSideways = rangePct < 12;
+        const hengPanBreakout = isSideways && closeArr[len - 1] >= recent20High * 0.995 && volumeRatio > 1.3;
+        const zhenDangBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
+        const jiGouActive = Math.min(volumeRatio * 6, 20);
+        const prevClose = len > 1 ? closeArr[len - 2] : closeArr[0];
+        const firstBreakMA5 = prevClose <= ma5 * 1.005 && closeArr[len - 1] > ma5;
+        const baiBuSellSignals = [];
+        if (bx.gaoKaiDiZouQingCang)
+            baiBuSellSignals.push('高开低走清仓');
+        if (bx.baoLiangFuGaiQingCang)
+            baiBuSellSignals.push('爆量覆盖清仓');
+        if (bx.po5RiXian)
+            baiBuSellSignals.push('破5日线');
+        if (bx.yinDiePoWei)
+            baiBuSellSignals.push('阴跌破位');
+        const hasSellSignal = baiBuSellSignals.length > 0;
+        let sellSignal = '';
         let suggestionR = '观望';
-        if (zoneR.includes('低位')) {
-            if (longDeclineR && trendStateR <= 1 && !macdBullishR && !volumeBullishR) {
-                suggestionR = '不要介入';
+        let signalCombination = '';
+        const isBaiBu = !!bx.baiBu;
+        if (isBaiBu && hasSellSignal && jiGouActive >= 12 && firstBreakMA5) {
+            suggestionR = '卖出';
+            sellSignal = baiBuSellSignals.join('+');
+            signalCombination = '白布区域:' + sellSignal;
+        }
+        if (!sellSignal) {
+            const hasBaiXiaoBuy = isBaiXiaoBuy;
+            const hasQSHC = hasQiangShiHuiCai;
+            const hasJiaCang = !!bx.jiaCang;
+            const hasZhuSheng = zhuShengSignal;
+            const hasZhenDang = zhenDangBuy;
+            const hasHengPan = hengPanBreakout;
+            if (bxDays >= 4 && bxDays <= 6) {
+                if (hasBaiXiaoBuy && hasZhuSheng) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消启动+主升';
+                }
+                else if (hasBaiXiaoBuy && hasQSHC) {
+                    suggestionR = '买入';
+                    signalCombination = '白消启动+强势回踩';
+                }
+                else if (hasBaiXiaoBuy && hasZhenDang) {
+                    suggestionR = '买入';
+                    signalCombination = '白消启动+震荡买点';
+                }
+                else if (hasQSHC && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '强势回踩+主升';
+                }
+                else if (hasQSHC && hasJiaCang) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '强势回踩+加仓';
+                }
+                else if (hasBaiXiaoBuy && hasJiaCang) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消启动+加仓';
+                }
+                else if (hasBaiXiaoBuy) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消启动';
+                }
+                else if (hasQSHC) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '强势回踩';
+                }
+                else if (hasZhuSheng) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '主升信号';
+                }
             }
-            else if (trendStateR >= 1 && strongBuyR) {
-                suggestionR = '重仓买入';
+            else if (bxDays > 6) {
+                if (hasHengPan && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '横盘突破+主升';
+                }
+                else if (hasHengPan) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '横盘突破';
+                }
+                else if (hasQSHC && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '强势回踩+主升';
+                }
             }
-            else if (trendStateR >= 1 && hasBuySignalR) {
-                suggestionR = '买入';
-            }
-            else if (trendStateR === 0 && strongBuyR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 1) {
-                suggestionR = '持有';
-            }
-            else {
-                suggestionR = '观望';
+            if (suggestionR === '观望' && (hasBaiXiaoBuy || hasQSHC || hasZhenDang)) {
+                const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
+                if (zoneR.includes('低位') && trendStateR >= 1) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消信号+低位';
+                }
+                else if (zoneR.includes('低位') || zoneR.includes('中低位')) {
+                    suggestionR = '买入';
+                    signalCombination = '白消信号+中低位';
+                }
+                else if (trendStateR >= 2) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消信号+趋势';
+                }
+                else {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消信号';
+                }
             }
         }
-        else if (zoneR.includes('中低位')) {
-            if (trendStateR >= 2 && strongBuyR) {
-                suggestionR = '买入';
-            }
-            else if (trendStateR >= 1 && strongBuyR) {
-                suggestionR = '买入';
-            }
-            else if (trendStateR >= 2 && hasBuySignalR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 1 && hasBuySignalR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = '持有';
-            }
-            else {
-                suggestionR = '持有';
-            }
-        }
-        else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
-            if (trendStateR >= 2 && strongBuyR) {
-                suggestionR = '买入';
-            }
-            else if (trendStateR >= 2 && hasBuySignalR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 1) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 0 && strongBuyR) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 0) {
-                suggestionR = '减仓';
-            }
-        }
-        else if (zoneR.includes('中高位')) {
-            if (trendStateR >= 2 && strongBuyR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 1 && strongBuyR) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 1) {
-                suggestionR = '减仓';
-            }
-            else if (trendStateR === 0 && strongSellR) {
-                suggestionR = '卖出';
-            }
-            else if (trendStateR === 0) {
-                suggestionR = '减仓';
-            }
-        }
-        else {
-            if (trendStateR === 0 && strongSellR) {
-                suggestionR = '清仓';
-            }
-            else if (trendStateR === 0) {
-                suggestionR = '卖出';
-            }
-            else if (trendStateR === 1 && strongBuyR) {
-                suggestionR = '持有';
-            }
-            else if (trendStateR === 1 && strongSellR) {
-                suggestionR = '卖出';
-            }
-            else if (trendStateR === 1) {
-                suggestionR = '减仓';
-            }
-            else if (trendStateR >= 2 && strongBuyR) {
-                suggestionR = '轻仓买入';
-            }
-            else if (trendStateR >= 2) {
-                suggestionR = '持有';
-            }
-        }
-        const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
-        if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
+        const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+        if (NOT_BUY.includes(suggestionR))
+            return null;
+        if (sellSignal)
             return null;
         const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
         const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
@@ -930,6 +958,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             dea: Math.round(macdResult.currentDea * 10000) / 10000,
             isGoldenCross,
             suggestion: suggestionR,
+            signalCombination,
+            jiGouActiveScore: Math.round(jiGouActive * 100) / 100,
         };
     }
     async checkOpportunityRelaxed(s) {
@@ -1037,61 +1067,120 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const trendStrengthR = ((ma5 / ma10 - 1) * 100);
         const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
         const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const volumeBullishR = recentVolR > avgVolR * 1.1;
-        const hasBuySignalR = isBaiXiaoBuy || hasQiangShiHuiCai;
-        const longDeclineR = pricePosition < 20 && trendStrengthR < -1;
-        const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
+        const volumeRatio = recentVolR / avgVolR;
+        const volumeBullishR = volumeRatio > 1.1;
+        const zhuShengSignal = trendStateR >= 2 && macdBullishR;
+        const recent20High = Math.max(...highs.slice(-20));
+        const recent20Low = Math.min(...lows.slice(-20));
+        const rangePct = (recent20High - recent20Low) / (recent20Low || 1) * 100;
+        const isSideways = rangePct < 12;
+        const hengPanBreakout = isSideways && closeArr[len - 1] >= recent20High * 0.995 && volumeRatio > 1.3;
+        const zhenDangBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
+        const jiGouActive = Math.min(volumeRatio * 6, 20);
+        const prevClose = len > 1 ? closeArr[len - 2] : closeArr[0];
+        const firstBreakMA5 = prevClose <= ma5 * 1.005 && closeArr[len - 1] > ma5;
+        const baiBuSellSignals = [];
+        if (bx.gaoKaiDiZouQingCang)
+            baiBuSellSignals.push('高开低走清仓');
+        if (bx.baoLiangFuGaiQingCang)
+            baiBuSellSignals.push('爆量覆盖清仓');
+        if (bx.po5RiXian)
+            baiBuSellSignals.push('破5日线');
+        if (bx.yinDiePoWei)
+            baiBuSellSignals.push('阴跌破位');
+        const hasSellSignal = baiBuSellSignals.length > 0;
+        let sellSignal = '';
         let suggestionR = '观望';
-        if (zoneR.includes('高位')) {
-            if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '清仓';
-            else if (trendStateR === 1)
-                suggestionR = hasBuySignalR && macdBullishR ? '持有' : (!macdBullishR ? '卖出' : '减仓');
-            else
-                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
+        let signalCombination = '';
+        const isBaiBu = !!bx.baiBu;
+        if (isBaiBu && hasSellSignal && jiGouActive >= 12 && firstBreakMA5) {
+            suggestionR = '卖出';
+            sellSignal = baiBuSellSignals.join('+');
+            signalCombination = '白布区域:' + sellSignal;
         }
-        else if (zoneR.includes('中高位')) {
-            if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '减仓';
-            else if (trendStateR >= 2)
-                suggestionR = hasBuySignalR ? '轻仓买入' : '持有';
-            else
-                suggestionR = hasBuySignalR ? '持有' : '持有';
-        }
-        else if (zoneR.includes('中位') && !zoneR.includes('低') && !zoneR.includes('高')) {
-            if (trendStateR >= 2)
-                suggestionR = hasBuySignalR ? '买入' : '轻仓买入';
-            else if (trendStateR === 0)
-                suggestionR = hasBuySignalR ? '持有' : '减仓';
-            else
-                suggestionR = hasBuySignalR ? '持有' : '持有';
-        }
-        else if (zoneR.includes('中低位')) {
-            if (trendStateR >= 2 && hasBuySignalR)
-                suggestionR = '买入';
-            else if (trendStateR >= 1 && hasBuySignalR)
-                suggestionR = '轻仓买入';
-            else if (trendStateR === 0 && hasBuySignalR)
-                suggestionR = '持有';
-            else
-                suggestionR = '持有';
-        }
-        else {
-            if (trendStateR >= 1 && hasBuySignalR) {
-                suggestionR = '重仓买入';
+        if (!sellSignal) {
+            const hasBaiXiaoBuy = isBaiXiaoBuy;
+            const hasQSHC = hasQiangShiHuiCai;
+            const hasJiaCang = !!bx.jiaCang;
+            const hasZhuSheng = zhuShengSignal;
+            const hasZhenDang = zhenDangBuy;
+            const hasHengPan = hengPanBreakout;
+            if (bxDays >= 4 && bxDays <= 6) {
+                if (hasBaiXiaoBuy && hasZhuSheng) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消启动+主升';
+                }
+                else if (hasBaiXiaoBuy && hasQSHC) {
+                    suggestionR = '买入';
+                    signalCombination = '白消启动+强势回踩';
+                }
+                else if (hasBaiXiaoBuy && hasZhenDang) {
+                    suggestionR = '买入';
+                    signalCombination = '白消启动+震荡买点';
+                }
+                else if (hasQSHC && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '强势回踩+主升';
+                }
+                else if (hasQSHC && hasJiaCang) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '强势回踩+加仓';
+                }
+                else if (hasBaiXiaoBuy && hasJiaCang) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消启动+加仓';
+                }
+                else if (hasBaiXiaoBuy) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消启动';
+                }
+                else if (hasQSHC) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '强势回踩';
+                }
+                else if (hasZhuSheng) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '主升信号';
+                }
             }
-            else if (trendStateR === 0 && hasBuySignalR) {
-                suggestionR = '轻仓买入';
+            else if (bxDays > 6) {
+                if (hasHengPan && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '横盘突破+主升';
+                }
+                else if (hasHengPan) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '横盘突破';
+                }
+                else if (hasQSHC && hasZhuSheng) {
+                    suggestionR = '买入';
+                    signalCombination = '强势回踩+主升';
+                }
             }
-            else if (trendStateR >= 1 && !hasBuySignalR) {
-                suggestionR = '买入';
-            }
-            else {
-                suggestionR = '观望';
+            if (suggestionR === '观望' && (hasBaiXiaoBuy || hasQSHC || hasZhenDang)) {
+                const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
+                if (zoneR.includes('低位') && trendStateR >= 1) {
+                    suggestionR = '重仓买入';
+                    signalCombination = '白消信号+低位';
+                }
+                else if (zoneR.includes('低位') || zoneR.includes('中低位')) {
+                    suggestionR = '买入';
+                    signalCombination = '白消信号+中低位';
+                }
+                else if (trendStateR >= 2) {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消信号+趋势';
+                }
+                else {
+                    suggestionR = '轻仓买入';
+                    signalCombination = '白消信号';
+                }
             }
         }
-        const NEGATIVE_SUGGESTIONS = ['减仓', '卖出', '清仓', '不要介入'];
-        if (NEGATIVE_SUGGESTIONS.includes(suggestionR))
+        const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+        if (NOT_BUY.includes(suggestionR))
+            return null;
+        if (sellSignal)
             return null;
         const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
         const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
@@ -1596,6 +1685,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopGem(force = false) {
         if (this.cache && this.cache.data?.length) {
+            this.upgradeCacheFields(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         this.logger.log('📦 无缓存数据，触发异步扫描...');
@@ -1604,6 +1694,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanTopMainBoard(force = false) {
         if (this.mainBoardCache && this.mainBoardCache.data?.length) {
+            this.upgradeCacheFields(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
         }
         this.logger.log('📦 主板无缓存数据，触发异步扫描...');
