@@ -248,10 +248,38 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // Render美国服务器调不通中国API(腾讯/东方财富)，不发起任何主动扫描
     // 仅返回磁盘缓存的旧数据，由前端浏览器从中国拉数据POST到 /api/gem/refresh
     if (this.cache) {
+      // 旧缓存升级：给旧格式数据补上 signalCombination / jiGouActiveScore
+      this.upgradeCacheFields(this.cache.data);
       this.triggerAnalysisPreCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
     return { opportunities: [], timestamp: Date.now() };
+  }
+
+  // 旧缓存字段升级：新后端代码新增了 signalCombination / jiGouActiveScore，
+  // 旧缓存中没有，从现有字段推导补充
+  private upgradeCacheFields(data: OpportunityStock[]) {
+    if (!data || data.length === 0) return;
+    // 已有新字段则跳过
+    if (data[0].signalCombination !== undefined) return;
+    for (const s of data) {
+      // 根据 suggestion 推导 signalCombination
+      const sig = s.suggestion || '';
+      const pos = s.pricePosition || 0;
+      const gc = s.isGoldenCross;
+      const ok = s.entryTiming && s.entryTiming >= 60 ? '强' : '弱';
+      if (sig === '重仓买入') {
+        s.signalCombination = pos < 25 ? '白消信号+低位' : '白消信号+强势';
+      } else if (sig === '买入') {
+        s.signalCombination = pos < 45 ? '白消信号+中低位' : '白消信号+趋势';
+      } else if (sig === '轻仓买入') {
+        s.signalCombination = '白消信号';
+      } else {
+        s.signalCombination = '';
+      }
+      // 推导 jiGouActiveScore
+      s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
+    }
   }
 
   private triggerRefresh() {
