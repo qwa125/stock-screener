@@ -253,7 +253,7 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">¥'+(mf||0).toFixed(2)+'亿</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou||0).toFixed(1)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">筹码集中</div><div class="value '+(s.chipConcentration90&&s.chipConcentration90<=25?'green':s.chipConcentration90&&s.chipConcentration90<=45?'yellow':'red')+'">'+(s.chipConcentration90?s.chipConcentration90+'%':'?')+' '+(s.chipPattern?s.chipPattern=='single_peak'?'📊':s.chipPattern=='double_peak'?'📈📉':'📉':'')+'</div></div>'
-    +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+(s.chipPeakPosition=='low'?'green':s.chipPeakPosition=='mid'?'yellow':'red')+'">'+(s.chipPeakPosition=='low'?'下方支撑':s.chipPeakPosition=='mid'?'当前附近':s.chipPeakPosition=='high'?'上方压力':'?')+'</div></div>'
+    +(s.chipPeakPosition?'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+(s.chipPeakPosition=='low'?'green':s.chipPeakPosition=='mid'?'yellow':'red')+'">'+(s.chipPeakPosition=='low'?'下方支撑':s.chipPeakPosition=='mid'?'当前附近':'上方压力')+'</div></div>':'')
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high?rt.high.toFixed(2):'-')+'</div></div>'
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low?rt.low.toFixed(2):'-')+'</div></div>'
     +'</div>'

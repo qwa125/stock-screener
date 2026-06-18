@@ -267,7 +267,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private upgradeCacheFields(data: OpportunityStock[]) {
     if (!data || data.length === 0) return;
     // 已有新字段则跳过
-    if (data[0].signalCombination !== undefined) return;
+    if (data[0].chipConcentration90 !== undefined) return;
     for (const s of data) {
       // 根据 suggestion 推导 signalCombination
       const sig = s.suggestion || '';
@@ -285,6 +285,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
       // 推导 jiGouActiveScore
       s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
+      // 推导芯片筹码字段（旧缓存缺失）
+      s.chipConcentration90 = s.chipConcentration90 ?? 50;
+      s.chipPeakPosition = s.chipPeakPosition ?? 'mid';
+      s.chipPattern = s.chipPattern ?? 'dispersed';
     }
   }
 
