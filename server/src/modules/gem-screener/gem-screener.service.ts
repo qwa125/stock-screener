@@ -1109,7 +1109,20 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
-      // 排除非买入信号// 排除非买入信号
+      // ─── 持有/不要介入判断（无买入/卖出信号时）───
+      if (suggestionR === '观望') {
+        if (trendStateR >= 2 && ma5 > ma10) {
+          // 上涨趋势中，无买点但均线多头 → 持有
+          suggestionR = '持有';
+          signalCombination = '趋势向上+均线多头';
+        } else if (trendStateR === 0 || (ma5 < ma10 && !macdBullishR)) {
+          // 下跌趋势中，无买点、无企稳 → 不要介入
+          suggestionR = '不要介入';
+          signalCombination = '趋势向下';
+        }
+      }
+
+      // 排除非买入信号
     const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
     if (NOT_BUY.includes(suggestionR)) return null;
 
@@ -1376,6 +1389,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
           suggestionR = '轻仓买入'; signalCombination = '白消信号+趋势';
         } else {
           suggestionR = '轻仓买入'; signalCombination = '白消信号';
+        }
+      }
+
+      // ─── 持有/不要介入判断（无买入/卖出信号时）───
+      if (suggestionR === '观望') {
+        if (trendStateR >= 2 && ma5 > ma10) {
+          // 上涨趋势中，无买点但均线多头 → 持有
+          suggestionR = '持有';
+          signalCombination = '趋势向上+均线多头';
+        } else if (ma5 < ma10 && !macdBullishR) {
+          // 下跌趋势中，无买点、无企稳 → 不要介入
+          suggestionR = '不要介入';
+          signalCombination = '趋势向下';
         }
       }
 

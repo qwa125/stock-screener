@@ -940,6 +940,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 signalCombination = '白布:' + sellSignal;
             }
         }
+        if (suggestionR === '观望') {
+            if (trendStateR >= 2 && ma5 > ma10) {
+                suggestionR = '持有';
+                signalCombination = '趋势向上+均线多头';
+            }
+            else if (trendStateR === 0 || (ma5 < ma10 && !macdBullishR)) {
+                suggestionR = '不要介入';
+                signalCombination = '趋势向下';
+            }
+        }
         const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
         if (NOT_BUY.includes(suggestionR))
             return null;
@@ -1223,6 +1233,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 else {
                     suggestionR = '轻仓买入';
                     signalCombination = '白消信号';
+                }
+            }
+            if (suggestionR === '观望') {
+                if (trendStateR >= 2 && ma5 > ma10) {
+                    suggestionR = '持有';
+                    signalCombination = '趋势向上+均线多头';
+                }
+                else if (ma5 < ma10 && !macdBullishR) {
+                    suggestionR = '不要介入';
+                    signalCombination = '趋势向下';
                 }
             }
             const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
