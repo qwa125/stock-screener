@@ -101,6 +101,17 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return (a.pricePosition ?? 100) - (b.pricePosition ?? 100);
         })
             .slice(0, 20);
+        for (const s of sorted) {
+            if (s.chipConcentration90 === undefined) {
+                s.chipConcentration90 = 50;
+                s.chipPeakPosition = 'mid';
+                s.chipPattern = 'dispersed';
+            }
+            if (s.signalCombination === undefined)
+                s.signalCombination = '';
+            if (s.jiGouActiveScore === undefined)
+                s.jiGouActiveScore = 0;
+        }
         return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
     }
     async getTopOpportunities(force) {

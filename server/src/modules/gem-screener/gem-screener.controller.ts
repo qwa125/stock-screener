@@ -123,6 +123,16 @@ export class GemScreenerController {
         return (a.pricePosition ?? 100) - (b.pricePosition ?? 100);
       })
       .slice(0, 20);
+    // 给每只个股补充筹码字段（兼容旧缓存缺失场景）
+    for (const s of sorted) {
+      if (s.chipConcentration90 === undefined) {
+        s.chipConcentration90 = 50;
+        s.chipPeakPosition = 'mid';
+        s.chipPattern = 'dispersed';
+      }
+      if (s.signalCombination === undefined) s.signalCombination = '';
+      if (s.jiGouActiveScore === undefined) s.jiGouActiveScore = 0;
+    }
     return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
   }
 
