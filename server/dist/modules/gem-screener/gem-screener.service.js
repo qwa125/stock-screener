@@ -2349,6 +2349,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             chipConcentration90,
             chipPeakPosition,
             chipPattern,
+            signalCombination: result.reason || '',
+            jiGouActiveScore: Math.round(Math.min((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 || 1)) * 6, 20) * 100) / 100,
         };
     }
     async searchStocks(keyword) {

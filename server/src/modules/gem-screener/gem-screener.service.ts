@@ -2732,6 +2732,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       chipConcentration90,
       chipPeakPosition,
       chipPattern,
+      signalCombination: result.reason || '',
+      // 机构活跃度 = 基于成交量比率的评分 (0-20)
+      jiGouActiveScore: Math.round(Math.min((volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a: number, b: number) => a + b, 0) / 60 || 1)) * 6, 20) * 100) / 100,
     };
   }
 
