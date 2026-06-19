@@ -95,6 +95,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-list{max-height:260px;overflow-y:auto}
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
+.blocked-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center}
+.blocked-overlay.open{display:flex}
+.blocked-panel{text-align:center;background:#fff;border-radius:16px;padding:32px 24px;width:300px;box-shadow:0 8px 40px rgba(0,0,0,.3)}
 .admin-device-item .dev-name{font-weight:500;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-device-item .dev-time{font-size:10px;color:#9ca3af;margin-top:1px}
 .admin-device-item .dev-actions{display:flex;gap:4px;flex-shrink:0}
@@ -142,6 +145,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <div class="footer" id="footer">⏸️ 等待扫描</div>
 
+<!-- 设备被阻止提示 -->
+<div class="blocked-overlay" id="blockedOverlay">
+  <div class="blocked-panel">
+    <div style="font-size:48px;margin-bottom:16px">🚫</div>
+    <h2 style="margin:0 0 8px;font-size:20px">访问受限</h2>
+    <p style="margin:0 0 16px;color:#999;font-size:14px;line-height:1.6">
+      当前设备访问人数已满，<br>请联系管理员扩容后重试。
+    </p>
+    <button onclick="location.reload()" style="padding:8px 24px;border:none;border-radius:8px;background:#e74c3c;color:#fff;font-size:14px;cursor:pointer">重新加载</button>
+  </div>
+</div>
+
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -163,6 +178,27 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
+
+// 全局 fetch 拦截：检测 429 设备限制
+var _origFetch=window.fetch
+window.fetch=function(u,o){
+  return _origFetch.call(this,u,o).then(function(r){
+    if(r.status===429){
+      showBlocked()
+    }
+    return r
+  })
+}
+function showBlocked(){
+  $('blockedOverlay').classList.add('open')
+}
+function hideBlocked(){
+  $('blockedOverlay').classList.remove('open')
+}
+// 页面加载时检查设备状态（针对第一次访问就被阻止的情况）
+fetch('/api/auth/status').then(function(r){
+  if(r.status===429) showBlocked()
+}).catch(function(){})
 
 // 恢复上次扫描结果（冻结时也展示）
 try{
