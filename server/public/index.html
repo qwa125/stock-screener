@@ -707,11 +707,16 @@ async function fetchSinaUS(code){
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   var da=$('detailArea');da.style.display='none'
-  var isCode=/^\d{6}$/.test(v), isHK=/^\d{5}$/.test(v), isUS=/^[A-Za-z]{1,5}$/.test(v)
+
+  // 兼容指数代码：1A0001=上证指数
+  if(/^1a\\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
+
+
   var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
   
   // 第一步：确定代码和真实名称（多市场验证）
   if(isCode||isHK||isUS){
+    if(isIndex){stockMarket='sh';t=await fetchTencentDetail(v,'sh');if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low}}else
     stockCode=v
     // 多市场查询：A股(sz/sh)→港股(hk)→美股(us)
     var t=null
@@ -799,7 +804,7 @@ async function doSearch(){
       
       // 1a. 东方财富K线get2API（主力，历史数据稳定性好）
       try{
-        var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
+        var emSecId2=isIndex?"1.":(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
         var ekr2=await fetch(ekurl2,{signal:AbortSignal.timeout(5000)})
         var ekd2=await ekr2.json()
