@@ -686,8 +686,11 @@ async function fetchTencentDetail(code,market){
 async function fetchSinaUS(code){
   try{
     var res=await fetch('https://hq.sinajs.cn/list=gb_'+code.toLowerCase(),{headers:{Referer:'https://finance.sina.com.cn'}})
-    var txt=await res.text()
-    var p=txt.split('"')[1].split(',')
+    var buf=await res.arrayBuffer()
+    var txt=new TextDecoder('gb18030').decode(buf)
+    var body=txt.split('"')[1]
+    if(!body)return null
+    var p=body.split(',')
     if(!p||p.length<5||!p[1])return null
     return {
       name: p[0], code: code.toUpperCase(), market: 'us',
