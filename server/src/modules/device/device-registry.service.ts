@@ -37,7 +37,7 @@ export class DeviceRegistryService {
 
       // 对象格式 { maxSlots, devices: { id: {fingerprint, registeredAt, lastSeen} } }
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        if (typeof parsed.maxSlots === 'number') {
+        if (typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
           this.runtimeMaxSlots = parsed.maxSlots;
         }
         if (parsed.devices && typeof parsed.devices === 'object') {
@@ -82,7 +82,7 @@ export class DeviceRegistryService {
       if (existsSync(this.REGISTRY_FILE)) {
         const raw = readFileSync(this.REGISTRY_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.maxSlots === 'number') {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
           this.runtimeMaxSlots = parsed.maxSlots;
         }
       }

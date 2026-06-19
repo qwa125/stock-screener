@@ -31,7 +31,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                if (typeof parsed.maxSlots === 'number') {
+                if (typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
                     this.runtimeMaxSlots = parsed.maxSlots;
                 }
                 if (parsed.devices && typeof parsed.devices === 'object') {
@@ -71,7 +71,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             if ((0, fs_1.existsSync)(this.REGISTRY_FILE)) {
                 const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
                 const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.maxSlots === 'number') {
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
                     this.runtimeMaxSlots = parsed.maxSlots;
                 }
             }
