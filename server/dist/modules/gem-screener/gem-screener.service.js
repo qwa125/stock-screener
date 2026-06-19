@@ -2182,7 +2182,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async quickAnalyze(code, name, keepAll, rawKline, frontendMainForce) {
         const raw = rawKline || await this.dataFetcher.getKLineData(code);
-        if (!raw?.length || raw.length < 20)
+        if (!raw?.length || raw.length < 5)
             return null;
         const klineV = raw.slice(-120);
         const closeArr = klineV.map((k) => Number(k.close));
@@ -2193,14 +2193,15 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const high60 = Math.max(...highArr.slice(-60));
         const low60 = Math.min(...lowArr.slice(-60));
         const pricePos = ((price - low60) / (high60 - low60)) * 100;
-        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const n = closeArr.length;
+        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, n);
+        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, n);
+        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, n);
         const macdR = this.calcCustomMACD(klineV);
         const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
         const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-        const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
-        const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+        const ma5Up = closeArr.length > 5 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+        const ma10Up = closeArr.length > 10 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
         let trendState = 1;
         if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
             trendState = 3;
