@@ -160,46 +160,6 @@ function todayAdviceText(s,rt){
   return'今日暂无明显买入信号，建议观望'
 }
 
-// 前端拉取东方财富主力资金净流入（f62，单位：万元→亿）
-async function fetchEMainForce(codes){
-  try{
-    if(!codes||!codes.length)return{}
-    var secids=codes.map(function(c){return (c.startsWith('6')?'1.':'0.')+c}).join(',')
-    var r=await fetch('https://push2.eastmoney.com/api/qt/stock/get?secids='+secids+'&fields=f12,f62',{signal:AbortSignal.timeout(8000)})
-    var d=await r.json()
-    if(d&&d.data&&Array.isArray(d.data)){
-      var result={}
-      for(var i=0;i<d.data.length;i++){
-        var item=d.data[i]
-        if(item&&item.f12){
-          // f62单位：万元，转成亿
-          var f62=parseFloat(item.f62)||0
-          result[item.f12]=Math.round(f62/100) / 100  // 万元→亿，保留2位小数
-        }
-      }
-      return result
-    }
-  }catch(e){}
-  return{}
-}
-
-// 扫描结果前端补充主力资金数据
-async function enrichMainForce(arr){
-  var codes=arr.map(function(s){return s.code})
-  var chunkSize=30
-  var all={}
-  for(var i=0;i<codes.length;i+=chunkSize){
-    var chunk=codes.slice(i,i+chunkSize)
-    var mf=await fetchEMainForce(chunk)
-    Object.assign(all,mf)
-  }
-  for(var i=0;i<arr.length;i++){
-    var code=arr[i].code
-    if(all[code]!==undefined) arr[i].mainForceInflow=all[code]
-  }
-  return arr
-}
-
 function futurePrediction(s){
   if(s.suggestion==='重仓买入')return'低位区+MA5>MA10多头排列+强信号，未来1-2日有望继续走强，建议全仓买入'
   if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
@@ -383,7 +343,7 @@ async function doScan(){
     if(d.code!==200||!d.data||!d.data.opportunities){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
     }
-    try{stocks=await enrichMainForce(d.data.opportunities)}catch(e){console.log('[scan] enrichMainForce跳过:',e.message)}
+    stocks=d.data.opportunities
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
@@ -396,7 +356,7 @@ async function doScan(){
           stocks[si].mainForceInflow=rt.mainForceInflow
         }else if(stocks[si].mainForceInflow===0){
           // 兜底：从涨跌幅推算方向性资金流（rt.chg是涨跌额）
-          var proxyMf=Math.round((rt.chg||0)*((rt.price||10))*10)/100
+          var proxyMf=Math.round((rt.chgP||0)*10)/100
           if(proxyMf!==0) stocks[si].mainForceInflow=proxyMf
         }
       }
@@ -510,7 +470,7 @@ async function doFullRescan(){
     })
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
-    try{stocks=await enrichMainForce(stocks)}catch(e){console.log('[rescan] enrichMainForce跳过:',e.message)}
+    // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
@@ -521,7 +481,7 @@ async function doFullRescan(){
         if(rt2.mainForceInflow&&rt2.mainForceInflow!==0){
           stocks[si2].mainForceInflow=rt2.mainForceInflow
         }else if(stocks[si2].mainForceInflow===0){
-          var proxyMf2=Math.round((rt2.chg||0)*((rt2.price||10))*10)/100
+          var proxyMf2=Math.round((rt2.chgP||0)*10)/100
           if(proxyMf2!==0) stocks[si2].mainForceInflow=proxyMf2
         }
       }
