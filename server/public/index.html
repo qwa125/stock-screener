@@ -866,8 +866,12 @@ function showAdminPassword(){
 function checkAdminPwd(){
   var pwd=ad('adminPwdInput')?ad('adminPwdInput').value.trim():''
   if(!pwd){alert('请输入密码');return}
-  if(pwd===ADMIN_DEFAULT_PWD){
+  if(pwd===ADMIN_DEFAULT_PWD||pwd==='admin888'){
     ADMIN_PWD=pwd
+    // 如果用 master 密码 admin888 进入，自动重置 localStorage 的自定义密码
+    if(pwd==='admin888'&&ADMIN_DEFAULT_PWD!=='admin888'){
+      try{localStorage.removeItem('adminPassword');ADMIN_DEFAULT_PWD='admin888'}catch(e){}
+    }
     renderAdminView()
   }else{
     alert('密码错误，请重试')
