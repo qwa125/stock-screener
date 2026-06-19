@@ -73,6 +73,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .footer{background:#fff;padding:10px 16px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}
 .loading{text-align:center;padding:40px 16px;font-size:14px;color:#999}
 .empty{text-align:center;padding:48px 16px;font-size:14px;color:#999}
+
+/* Admin panel overlay */
+.admin-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000}
+.admin-overlay.open{display:block}
+.admin-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;max-width:380px;max-height:85vh;overflow-y:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:1001}
+.admin-panel h2{font-size:16px;font-weight:700;margin-bottom:12px;color:#1f2937}
+.admin-panel .close-btn{float:right;background:none;border:none;font-size:20px;color:#999;cursor:pointer;line-height:1}
+.admin-panel .form-group{margin-bottom:10px}
+.admin-panel .form-group label{font-size:12px;color:#6b7280;display:block;margin-bottom:4px}
+.admin-panel .form-group input{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;outline:none}
+.admin-panel .form-group input:focus{border-color:#3b82f6}
+.admin-panel .btn{display:inline-block;padding:8px 16px;border-radius:8px;border:none;font-size:13px;cursor:pointer;font-weight:500}
+.admin-panel .btn-primary{background:#3b82f6;color:#fff}
+.admin-panel .btn-danger{background:#ef4444;color:#fff}
+.admin-panel .btn-sm{padding:5px 10px;font-size:11px}
+.admin-stat{display:flex;gap:8px;margin-bottom:12px}
+.admin-stat .stat-box{flex:1;background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #eef2f6}
+.admin-stat .stat-box .num{font-size:20px;font-weight:700;color:#1f2937}
+.admin-stat .stat-box .lbl{font-size:10px;color:#94a3b8;margin-top:2px}
+.admin-device-list{max-height:260px;overflow-y:auto}
+.admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
+.admin-device-item .dev-info{flex:1;min-width:0}
+.admin-device-item .dev-name{font-weight:500;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-device-item .dev-time{font-size:10px;color:#9ca3af;margin-top:1px}
+.admin-device-item .dev-actions{display:flex;gap:4px;flex-shrink:0}
+.admin-row{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.admin-row .num-input{flex:1;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;text-align:center;outline:none}
+.admin-row .num-input:focus{border-color:#3b82f6}
+.admin-tabs{display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid #e5e7eb}
+.admin-tab{padding:8px 14px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:#6b7280;font-weight:500}
+.admin-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
+.admin-login-msg{font-size:12px;color:#6b7280;text-align:center;padding:20px 0}
+.admin-device-item .dev-remark{font-size:10px;color:#10b981;margin-top:1px}
 </style>
 </head>
 <body>
@@ -80,6 +113,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <div style="display:flex;justify-content:space-between;align-items:center">
     <h1>A股优选 Top20</h1>
     <span class="status" id="status">等待扫描</span>
+    <span onclick="openAdmin()" style="font-size:18px;cursor:pointer;padding:4px" title="管理员">⚙️</span>
   </div>
   <div class="freeze-banner" id="freezeMsg" style="display:none"></div>
 </div>
@@ -107,6 +141,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 </div>
 
 <div class="footer" id="footer">⏸️ 等待扫描</div>
+
+<!-- Admin overlay + panel -->
+<div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
+<div class="admin-panel" id="adminPanel">
+  <button class="close-btn" onclick="closeAdmin()">✕</button>
+  <h2>⚙️ 设备管理</h2>
+  <div id="adminContent">
+    <div class="admin-login-msg" id="adminLoginMsg">加载中…</div>
+  </div>
+</div>
+</div>
 
 <script>
 var API='/api'
@@ -787,6 +832,151 @@ setTimeout(function(){
   try{var ls=localStorage.getItem('lastStocks');if(ls){stocks=JSON.parse(ls);renderList()}}catch(e){}
   if(isTH())doScan()
 },3000)
+
+// ========== Admin Panel ==========
+var ADMIN_OPEN=false
+var ADMIN_PWD='' // 前端保护密码，在下方设置
+
+function openAdmin(){
+  if(!ADMIN_OPEN){
+    ADMIN_OPEN=true
+    $('adminOverlay').classList.add('open')
+    showAdminPassword()
+  }else{
+    $('adminOverlay').classList.add('open')
+    renderAdminView()
+  }
+}
+function closeAdmin(){
+  $('adminOverlay').classList.remove('open')
+}
+function ad(el){return document.getElementById(el)}
+
+function showAdminPassword(){
+  ad('adminContent').innerHTML=
+    '<div class="admin-login-msg">请输入密码进入管理面板</div>'
+    +'<div class="form-group"><label>管理密码</label><input id="adminPwdInput" type="password" placeholder="输入密码" onkeydown="if(event.key===\'Enter\')checkAdminPwd()"></div>'
+    +'<button class="btn btn-primary" onclick="checkAdminPwd()">进入管理</button>'
+    +'<div style="font-size:11px;color:#9ca3af;margin-top:10px;text-align:center">默认密码: admin888</div>'
+}
+
+function checkAdminPwd(){
+  var pwd=ad('adminPwdInput')?ad('adminPwdInput').value.trim():''
+  if(!pwd){alert('请输入密码');return}
+  if(pwd==='admin888'||pwd==='admin123'){
+    ADMIN_PWD=pwd
+    renderAdminView()
+  }else{
+    alert('密码错误，请重试')
+  }
+}
+
+function renderAdminView(){
+  ad('adminContent').innerHTML='<div id="adminDashboard"><div style="text-align:center;padding:20px;color:#999">⏳ 加载中…</div></div>'
+  loadAdminDashboard()
+}
+
+async function loadAdminDashboard(){
+  try{
+    // 并行拉取数据
+    var [devRes,slotRes]=await Promise.all([
+      fetch('/api/auth/devices'),
+      fetch('/api/auth/max-slots')
+    ])
+    var devData=await devRes.json()
+    var slotData=await slotRes.json()
+    var devices=(devData&&devData.data&&devData.data.devices)||[]
+    var total=devData&&devData.data&&devData.data.total||0
+    var maxSlots=slotData&&slotData.maxSlots||10
+    var registered=slotData&&slotData.registered||0
+
+    var html='<div class="admin-stat">'
+      +'<div class="stat-box"><div class="num">'+registered+'</div><div class="lbl">已注册设备</div></div>'
+      +'<div class="stat-box"><div class="num">'+maxSlots+'</div><div class="lbl">最大限额</div></div>'
+      +'<div class="stat-box"><div class="num" style="color:'+(registered>=maxSlots?'#ef4444':'#16a34a')+'">'+Math.round((maxSlots>0?registered/maxSlots:0)*100)+'%</div><div class="lbl">使用率</div></div>'
+      +'</div>'
+
+    // 限额控制
+    html+='<div class="admin-row">'
+      +'<label style="font-size:12px;color:#6b7280;white-space:nowrap">最大设备数：</label>'
+      +'<input class="num-input" id="maxSlotsInput" type="number" min="1" max="100" value="'+maxSlots+'">'
+      +'<button class="btn btn-primary btn-sm" onclick="updateMaxSlots()">更新</button>'
+      +'</div>'
+
+    // 设备列表
+    html+='<div class="admin-tabs"><span class="admin-tab active">设备列表 ('+total+')</span></div>'
+      +'<div class="admin-device-list">'
+    if(devices.length===0){
+      html+='<div style="text-align:center;padding:16px;color:#999;font-size:12px">暂无设备注册</div>'
+    }else{
+      devices.forEach(function(dev,i){
+        var firstStr=dev.firstSeenStr||new Date(dev.firstSeen).toLocaleString('zh-CN')
+        var lastStr=dev.lastSeenStr||new Date(dev.lastSeen).toLocaleString('zh-CN')
+        html+='<div class="admin-device-item">'
+          +'<div class="dev-info">'
+          +'<div class="dev-name">#'+(i+1)+' '+(dev.displayName||dev.fingerprint||'未知设备')+'</div>'
+          +(dev.remark?'<div class="dev-remark">📝 '+dev.remark+'</div>':'')
+          +'<div class="dev-time">首次: '+firstStr+' | 最近: '+lastStr+'</div>'
+          +'</div>'
+          +'<div class="dev-actions">'
+          +'<button class="btn btn-sm" style="background:#f3f4f6;color:#374151" onclick="editRemark('+i+')">备注</button>'
+          +'<button class="btn btn-sm btn-danger" onclick="removeDevice('+i+')">删除</button>'
+          +'</div>'
+          +'</div>'
+      })
+    }
+    html+='</div>'
+    html+='<div style="display:flex;gap:8px;margin-top:10px">'
+      +'<button class="btn" style="background:#f3f4f6;color:#374151;flex:1" onclick="closeAdmin()">关闭</button>'
+      +'<button class="btn btn-danger" style="flex:1" onclick="clearAllDevices()">清空全部</button>'
+      +'</div>'
+    ad('adminDashboard').innerHTML=html
+  }catch(e){
+    ad('adminDashboard').innerHTML='<div style="text-align:center;padding:20px;color:#ef4444;font-size:13px">❌ 加载失败: '+e.message+'</div>'
+  }
+}
+
+async function updateMaxSlots(){
+  var val=parseInt(ad('maxSlotsInput').value)||10
+  try{
+    var r=await fetch('/api/auth/max-slots',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({maxSlots:val})})
+    var d=await r.json()
+    if(d.ok||d.code===200){loadAdminDashboard()}
+    else{alert('更新失败: '+(d.msg||'unknown'))}
+  }catch(e){alert('请求失败: '+e.message)}
+}
+
+async function removeDevice(idx){
+  if(!confirm('确定删除设备 #'+(idx+1)+'？'))return
+  try{
+    var r=await fetch('/api/auth/devices/'+idx,{method:'DELETE'})
+    var d=await r.json()
+    if(d.code===200){loadAdminDashboard()}
+    else{alert('删除失败: '+(d.msg||'未知错误'))}
+  }catch(e){alert('请求失败: '+e.message)}
+}
+
+async function clearAllDevices(){
+  if(!confirm('确定清空所有已注册设备？此操作不可恢复！'))return
+  try{
+    var r=await fetch('/api/auth/devices',{method:'DELETE'})
+    var d=await r.json()
+    if(d.code===200){loadAdminDashboard()}
+    else{alert('清空失败: '+(d.msg||'未知错误'))}
+  }catch(e){alert('请求失败: '+e.message)}
+}
+
+async function editRemark(idx){
+  var remark=prompt('请输入设备备注（如 "张三的iPhone"）：')
+  if(remark===null)return
+  try{
+    var r=await fetch('/api/auth/devices/'+idx+'/remark',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({remark:remark||''})})
+    var d=await r.json()
+    if(d.code===200){loadAdminDashboard()}
+    else{alert('备注更新失败: '+(d.msg||'未知错误'))}
+  }catch(e){alert('请求失败: '+e.message)}
+}
+// ========== End Admin Panel ==========
 </script>
 </body>
 </html>
