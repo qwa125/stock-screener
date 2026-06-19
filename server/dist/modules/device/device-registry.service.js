@@ -78,6 +78,31 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         catch { }
     }
+    touchDevice(deviceId, ua) {
+        this.reloadRuntimeSlots();
+        const existing = this.registry.find(e => e.fingerprint === deviceId);
+        if (existing) {
+            existing.lastSeen = Date.now();
+            this.saveRegistry();
+            return { allowed: true };
+        }
+        const limit = this.effectiveMax;
+        if (this.registry.length >= limit) {
+            return {
+                allowed: false,
+                message: `访问受限：最多允许 ${limit} 个不同设备访问，当前已满。请联系管理员扩容。`,
+            };
+        }
+        this.registry.push({
+            fingerprint: deviceId,
+            ua,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
+        });
+        this.saveRegistry();
+        this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ID=${deviceId.slice(0, 12)}… UA=${ua.substring(0, 40)}`);
+        return { allowed: true };
+    }
     tryRegister(ip, ua) {
         this.reloadRuntimeSlots();
         const fingerprint = this.createFingerprint(ip, ua);

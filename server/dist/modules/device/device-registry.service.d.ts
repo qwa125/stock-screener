@@ -10,6 +10,10 @@ export declare class DeviceRegistryService {
     private saveRegistry;
     private createFingerprint;
     private reloadRuntimeSlots;
+    touchDevice(deviceId: string, ua: string): {
+        allowed: boolean;
+        message?: string;
+    };
     tryRegister(ip: string, ua: string): {
         allowed: boolean;
         message?: string;

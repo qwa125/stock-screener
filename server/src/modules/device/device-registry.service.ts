@@ -89,6 +89,40 @@ export class DeviceRegistryService {
     } catch { /* ignore */ }
   }
 
+  /** 通过前端设备 ID 注册/续签设备（浏览器 localStorage 持久化，更可靠） */
+  touchDevice(deviceId: string, ua: string): { allowed: boolean; message?: string } {
+    this.reloadRuntimeSlots();
+
+    // 已注册 → 更新
+    const existing = this.registry.find(e => e.fingerprint === deviceId);
+    if (existing) {
+      existing.lastSeen = Date.now();
+      this.saveRegistry();
+      return { allowed: true };
+    }
+
+    const limit = this.effectiveMax;
+
+    // 新设备 → 检查是否超限
+    if (this.registry.length >= limit) {
+      return {
+        allowed: false,
+        message: `访问受限：最多允许 ${limit} 个不同设备访问，当前已满。请联系管理员扩容。`,
+      };
+    }
+
+    // 注册新设备
+    this.registry.push({
+      fingerprint: deviceId,
+      ua,
+      firstSeen: Date.now(),
+      lastSeen: Date.now(),
+    });
+    this.saveRegistry();
+    this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ID=${deviceId.slice(0,12)}… UA=${ua.substring(0, 40)}`);
+    return { allowed: true };
+  }
+
   /** 检查设备是否允许访问 */
   tryRegister(ip: string, ua: string): { allowed: boolean; message?: string } {
     // 每次请求重新读运行时名额

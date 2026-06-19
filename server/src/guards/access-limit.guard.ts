@@ -59,6 +59,20 @@ export class AccessLimitGuard implements CanActivate {
     // ══════════════════════════════════
     // 无 token → 按设备限制检查（兜底）
     // ══════════════════════════════════
+
+    // 优先使用前端发送的设备 ID（浏览器 localStorage 持久化）
+    const deviceId = request.headers['x-device-id'];
+    if (deviceId) {
+      const result = this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+      if (!result.allowed) {
+        throw new HttpException(
+          { code: 429, msg: result.message, data: null },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      return true;
+    }
+
     const ip = request.headers['x-forwarded-for']?.split(',')[0]?.trim()
       || request.headers['x-real-ip']
       || request.ip

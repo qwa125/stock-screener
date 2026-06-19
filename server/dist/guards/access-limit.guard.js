@@ -51,6 +51,14 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
             request.user = payload;
             return true;
         }
+        const deviceId = request.headers['x-device-id'];
+        if (deviceId) {
+            const result = this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+            if (!result.allowed) {
+                throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+            }
+            return true;
+        }
         const ip = request.headers['x-forwarded-for']?.split(',')[0]?.trim()
             || request.headers['x-real-ip']
             || request.ip

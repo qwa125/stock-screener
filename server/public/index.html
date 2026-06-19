@@ -179,9 +179,26 @@ function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes()
 
 var stocks=[],loading=false,realtimePrices={}
 
-// 全局 fetch 拦截：检测 429 设备限制
+// ========== 设备 ID 管理 ==========
+function getOrCreateDeviceId(){
+  try{
+    var id=localStorage.getItem('deviceId')
+    if(!id){
+      id=Date.now().toString(36)+Math.random().toString(36).slice(2,10)
+      localStorage.setItem('deviceId',id)
+    }
+    return id
+  }catch(e){return 'unknown-'+Date.now()}
+}
+
+// 全局 fetch 拦截：检测 429 + 自动附加设备 ID
 var _origFetch=window.fetch
 window.fetch=function(u,o){
+  o=o||{}
+  o.headers=o.headers||{}
+  if(!o.headers['X-Device-Id']&&!o.headers['x-device-id']){
+    o.headers['X-Device-Id']=getOrCreateDeviceId()
+  }
   return _origFetch.call(this,u,o).then(function(r){
     if(r.status===429){
       showBlocked()
@@ -192,8 +209,8 @@ window.fetch=function(u,o){
 function showBlocked(){
   $('blockedOverlay').classList.remove('allowed')
 }
-// 页面加载立即检查：未被阻止才隐藏遮罩
-fetch('/api/auth/status').then(function(r){
+// 页面加载立即检查：未被阻止才隐藏遮罩（带上设备 ID）
+fetch('/api/auth/status',{headers:{'X-Device-Id':getOrCreateDeviceId()}}).then(function(r){
   if(r.status!==429) $('blockedOverlay').classList.add('allowed')
 }).catch(function(){
   $('blockedOverlay').classList.add('allowed')
