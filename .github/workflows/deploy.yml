@@ -13,10 +13,12 @@ jobs:
         run: |
           echo "⏳ 触发Render部署..."
           HTTP_CODE=$(curl -s -o /tmp/render-deploy.log -w "%{http_code}" \
-            -X POST "https://api.render.com/deploy/srv-d8ortc8js32c7385n72g?key=htmRK6ve_Qc" \
+            -X POST "https://api.render.com/deploy/srv-d8n3ku1o3t8c73cd4qs0?key=Fg1T5D-KRDc" \
             --max-time 120)
           echo "HTTP $HTTP_CODE"
+          echo "--- 响应 ---"
           cat /tmp/render-deploy.log
+          echo ""
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ 部署已触发！"
           else
