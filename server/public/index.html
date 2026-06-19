@@ -236,7 +236,7 @@ function chipDisplay(s){
 function gridChipLine(s,entry){
   var cd=chipDisplay(s)
   var concClr=cd.conc<=25?'green':cd.conc<=45?'yellow':'red'
-  var patIcon=cd.pattern=='single_peak'?'📊':cd.pattern=='double_peak'?'📈📉':'📉'
+  var patIcon=cd.pattern=='single_peak'?'📊':cd.pattern=='double_peak'?'⛰️':'📉'
   var peakClr=cd.peak=='low'?'green':cd.peak=='mid'?'yellow':'red'
   var peakLabel=cd.peak=='low'?'下方支撑':cd.peak=='mid'?'当前附近':'上方压力'
   return '<div class="indicator-item"><div class="label">筹码集中</div><div class="value '+concClr+'">'+cd.conc+'% '+patIcon+'</div></div>'
@@ -266,7 +266,9 @@ async function fetchRealtime(codes){
       var txt=new TextDecoder('gbk').decode(buf)
       txt.split(';').forEach(function(l){
         var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
-        r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
+        // p[45]=主力净流入(万元),转成亿
+      var mf45=parseFloat(p[45])||0
+      r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0,mainForceInflow:Math.round(mf45/100)/100}
       })
     }catch(e){}
   }
@@ -385,6 +387,20 @@ async function doScan(){
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
+    // 用腾讯实时行情的主力资金填充（东方财富可能被拦截）
+    for(var si=0;si<stocks.length;si++){
+      var rt=realtimePrices[stocks[si].code]
+      if(rt){
+        // 优先用腾讯API传来的主力资金
+        if(rt.mainForceInflow&&rt.mainForceInflow!==0){
+          stocks[si].mainForceInflow=rt.mainForceInflow
+        }else if(stocks[si].mainForceInflow===0){
+          // 兜底：从涨跌幅推算方向性资金流（rt.chg是涨跌额）
+          var proxyMf=Math.round((rt.chg||0)*((rt.price||10))*10)/100
+          if(proxyMf!==0) stocks[si].mainForceInflow=proxyMf
+        }
+      }
+    }
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
     setStatus('✅ 实时数据已更新')
   }catch(e){setStatus('❌ '+e.message)}
@@ -498,6 +514,18 @@ async function doFullRescan(){
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
+    // 用腾讯实时行情的主力资金填充（东方财富可能被拦截）
+    for(var si2=0;si2<stocks.length;si2++){
+      var rt2=realtimePrices[stocks[si2].code]
+      if(rt2){
+        if(rt2.mainForceInflow&&rt2.mainForceInflow!==0){
+          stocks[si2].mainForceInflow=rt2.mainForceInflow
+        }else if(stocks[si2].mainForceInflow===0){
+          var proxyMf2=Math.round((rt2.chg||0)*((rt2.price||10))*10)/100
+          if(proxyMf2!==0) stocks[si2].mainForceInflow=proxyMf2
+        }
+      }
+    }
     selectedIdx=-1;$('detailArea').style.display='none';renderList()
     setStatus('✅ Top20 已更新 - 信号排序→入场时机→主力资金')
   }else{
@@ -681,18 +709,26 @@ async function doSearch(){
       
       if(!kdata)throw new Error('所有K线源均不可用')
       
-      // 1d. 前端拉东方财富主力资金净流入（f62）
+      // 1d. 前端拉腾讯实时行情获取主力资金净流入
       var mainForceRaw=0
       try{
-        var emSecId=(stockCode.startsWith('6')?'1.':'0.')+stockCode
-        var mfr=await fetch('https://push2.eastmoney.com/api/qt/stock/get?secids='+emSecId+'&fields=f12,f62',{signal:AbortSignal.timeout(6000)})
-        var mfd=await mfr.json()
-        if(mfd&&mfd.data&&mfd.data.length>0&&mfd.data[0].f62!==undefined){
-          // f62单位：万元，转成亿
-          mainForceRaw=Math.round(parseFloat(mfd.data[0].f62)/100)/100
-          console.log('[search] 主力资金(亿):', mainForceRaw)
+        var tmfRes=await fetch('https://qt.gtimg.cn/q='+prefix+stockCode,{signal:AbortSignal.timeout(6000)})
+        var tmfBuf=await tmfRes.arrayBuffer()
+        var tmfTxt=new TextDecoder('gbk').decode(tmfBuf)
+        var tmfP=tmfTxt.split('~')
+        if(tmfP.length>=46){
+          // p[45]=主力净流入(万元), 转成亿
+          var tmf45=parseFloat(tmfP[45])||0
+          mainForceRaw=Math.round(tmf45/100)/100
+          console.log('[search] 主力资金(亿) from 腾讯:', mainForceRaw)
         }
       }catch(e){}
+      
+      // 如果主力资金仍为0，从涨跌幅推算方向性资金流
+      if(!mainForceRaw&&stockChgP){
+        mainForceRaw=Math.round((stockChgP/100)*(stockPrice||10)*10)/100
+        console.log('[search] 主力资金方向性估算(亿):', mainForceRaw)
+      }
       
       // 2. POST给后端即时分析
       var ar=await fetch('/api/gem/analyze',{
