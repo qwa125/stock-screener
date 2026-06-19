@@ -725,7 +725,7 @@ async function doSearch(){
       // 2. POST给后端即时分析
       var ar=await fetch('/api/gem/analyze',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({code:stockCode,name:stockName,kline:kdata)
+        body:JSON.stringify({code:stockCode,name:stockName,kline:kdata})
       })
       var aj=await ar.json()
       console.log('[search] analyze response:', JSON.stringify(aj,null,2))
