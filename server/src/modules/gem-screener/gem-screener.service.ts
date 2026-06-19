@@ -68,7 +68,7 @@ export interface OpportunityStock {
   sellSignal?: string;
   /** 机构活跃度评分 */
   jiGouActiveScore?: number;
-  /** 筹码集中度(0-100, 越高越集中) */
+  /** 筹码集中度(0-100, 越低越集中) */
   chipConcentration90?: number;
   /** 筹码峰位: low=下方支撑, mid=当前附近, high=上方压力 */
   chipPeakPosition?: 'low' | 'mid' | 'high';
@@ -1428,7 +1428,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // ─── 筹码数据修正买卖信号 ───
       // 筹码分散+峰在高位(上方压力)+低位未企稳 → 降级或过滤
       const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePosition < 30;
-      const chipRisk = chipConcentration90 < 60 && chipPeakPosition === 'high' && pricePosition < 25;
+      const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePosition < 25;
 
       if (chipDowngrade || chipRisk) {
         if (suggestionR === '重仓买入') {
@@ -1774,7 +1774,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       binsNeeded++;
       if (cumVol >= totalVol * 0.9) break;
     }
-    const concentration90 = Math.round((1 - binsNeeded / BINS) * 100);
+    const concentration90 = Math.round((binsNeeded / BINS) * 100);
 
     // 峰位: 主峰对应的价格相对于当前价格的位置
     const mainPeakIdx = peaks[0];
@@ -2518,7 +2518,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       binsNeeded++;
       if (cumVol >= totalVol * 0.9) break;
     }
-    const concentration90 = Math.round((1 - binsNeeded / BINS) * 100);
+    const concentration90 = Math.round((binsNeeded / BINS) * 100);
 
     const mainPeakIdx = peaks[0];
     const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
@@ -2692,7 +2692,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 筹码修正：分散+峰高位+未企稳 → 降级
     let finalSuggestion = suggestion;
     const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
-    const chipRisk = chipConcentration90 < 60 && chipPeakPosition === 'high' && pricePos < 25;
+    const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
     if (chipDowngrade || chipRisk) {
       if (finalSuggestion === '重仓买入') finalSuggestion = '买入';
       else if (finalSuggestion === '买入') finalSuggestion = '轻仓买入';
@@ -2856,7 +2856,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
           // 筹码修正：分散+峰高位+未企稳 → 降级
           const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
-          const chipRisk = chipConc < 60 && chipPeak === 'high' && pp < 25;
+          const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
           if (chipDowngrade || chipRisk) {
             if (newSuggestion === '重仓买入') newSuggestion = '买入';
             else if (newSuggestion === '买入') newSuggestion = '轻仓买入';
