@@ -223,19 +223,19 @@ function chipDisplay(s){
   // 用价位和趋势等信息估算
   var pos=s.pricePosition||50
   // 低位区(0-20)且无企稳→筹码分散在下方
-  if(pos<20) return{conc:pos*2+30,peak:'low',pattern:'dispersed'}
+  if(pos<20) return{conc:85,peak:'low',pattern:'dispersed'}
   // 低位偏上(20-40)→筹码部分集中
-  if(pos<40) return{conc:25,peak:'low',pattern:'double_peak'}
+  if(pos<40) return{conc:75,peak:'low',pattern:'double_peak'}
   // 中位(40-60)→筹码集中，单峰
-  if(pos<60) return{conc:15,peak:'mid',pattern:'single_peak'}
+  if(pos<60) return{conc:85,peak:'mid',pattern:'single_peak'}
   // 中高位(60-80)→筹码开始分散
-  if(pos<80) return{conc:25,peak:'high',pattern:'double_peak'}
+  if(pos<80) return{conc:60,peak:'high',pattern:'double_peak'}
   // 高位(80-100)→筹码分散在高位
-  return{conc:40,peak:'high',pattern:'dispersed'}
+  return{conc:30,peak:'high',pattern:'dispersed'}
 }
 function gridChipLine(s,entry){
   var cd=chipDisplay(s)
-  var concClr=cd.conc<=25?'green':cd.conc<=45?'yellow':'red'
+  var concClr=cd.conc>=75?'green':cd.conc>=50?'yellow':'red'
   var patIcon=cd.pattern=='single_peak'?'⛰️':cd.pattern=='double_peak'?'⛰️⛰️':'💨'
   var peakClr=cd.peak=='low'?'green':cd.peak=='mid'?'yellow':'red'
   var peakLabel=cd.peak=='low'?'下方支撑':cd.peak=='mid'?'当前附近':'上方压力'

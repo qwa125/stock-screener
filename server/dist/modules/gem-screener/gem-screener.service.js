@@ -1258,7 +1258,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const chipPeakPosition = chip.peakPosition;
             const chipPattern = chip.pattern;
             const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePosition < 30;
-            const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePosition < 25;
+            const chipRisk = chipConcentration90 < 60 && chipPeakPosition === 'high' && pricePosition < 25;
             if (chipDowngrade || chipRisk) {
                 if (suggestionR === '重仓买入') {
                     suggestionR = '买入';
@@ -1475,7 +1475,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const maxPrice = Math.max(...h);
         const range = maxPrice - minPrice;
         if (range < 0.01)
-            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+            return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
         const BINS = 20;
         const binSize = range / BINS;
         const bins = new Array(BINS).fill(0);
@@ -1519,7 +1519,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (cumVol >= totalVol * 0.9)
                 break;
         }
-        const concentration90 = Math.round((binsNeeded / BINS) * 100);
+        const concentration90 = Math.round((1 - binsNeeded / BINS) * 100);
         const mainPeakIdx = peaks[0];
         const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
         const pricePositionPct = (currentPrice - minPrice) / range;
@@ -2110,7 +2110,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const maxPrice = Math.max(...h);
         const range = maxPrice - minPrice;
         if (range < 0.01)
-            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+            return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
         const BINS = 20;
         const binSize = range / BINS;
         const bins = new Array(BINS).fill(0);
@@ -2154,7 +2154,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (cumVol >= totalVol * 0.9)
                 break;
         }
-        const concentration90 = Math.round((binsNeeded / BINS) * 100);
+        const concentration90 = Math.round((1 - binsNeeded / BINS) * 100);
         const mainPeakIdx = peaks[0];
         const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
         let peakPosition;
@@ -2312,7 +2312,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const chipPattern = chip.pattern;
         let finalSuggestion = suggestion;
         const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
-        const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
+        const chipRisk = chipConcentration90 < 60 && chipPeakPosition === 'high' && pricePos < 25;
         if (chipDowngrade || chipRisk) {
             if (finalSuggestion === '重仓买入')
                 finalSuggestion = '买入';
@@ -2468,7 +2468,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         newSuggestion = '观望';
                     }
                     const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
-                    const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
+                    const chipRisk = chipConc < 60 && chipPeak === 'high' && pp < 25;
                     if (chipDowngrade || chipRisk) {
                         if (newSuggestion === '重仓买入')
                             newSuggestion = '买入';
