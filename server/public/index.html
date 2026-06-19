@@ -236,7 +236,7 @@ function chipDisplay(s){
 function gridChipLine(s,entry){
   var cd=chipDisplay(s)
   var concClr=cd.conc<=25?'green':cd.conc<=45?'yellow':'red'
-  var patIcon=cd.pattern=='single_peak'?'⛰️':cd.pattern=='double_peak'?'⛰️⛰️':'📉'
+  var patIcon=cd.pattern=='single_peak'?'⛰️':cd.pattern=='double_peak'?'⛰️⛰️':'💨'
   var peakClr=cd.peak=='low'?'green':cd.peak=='mid'?'yellow':'red'
   var peakLabel=cd.peak=='low'?'下方支撑':cd.peak=='mid'?'当前附近':'上方压力'
   return '<div class="indicator-item"><div class="label">筹码集中</div><div class="value '+concClr+'">'+cd.conc+'% '+patIcon+'</div></div>'
