@@ -2,7 +2,8 @@ name: 🔄 Keep Render Awake
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # 周一至周五 北京时间9:00-15:00 (UTC 1:00-7:00) 每5分钟ping一次
+    - cron: '*/5 1-7 * * 1-5'
   workflow_dispatch:
 
 jobs:
