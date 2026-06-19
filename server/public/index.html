@@ -95,9 +95,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-list{max-height:260px;overflow-y:auto}
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
-.blocked-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center}
-.blocked-overlay.open{display:flex}
-.blocked-panel{text-align:center;background:#fff;border-radius:16px;padding:32px 24px;width:300px;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+	.blocked-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#fff;z-index:2000;align-items:center;justify-content:center}
+	.blocked-overlay.open{display:flex}
+	.blocked-panel{text-align:center;background:#fff;padding:48px 24px;width:280px;margin:auto}
+	.blocked-panel .icon-mark{font-size:72px;color:#ef4444;font-weight:900;line-height:1;margin-bottom:20px}
+	.blocked-panel .msg-text{font-size:18px;color:#333;letter-spacing:2px}
 .admin-device-item .dev-name{font-weight:500;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-device-item .dev-time{font-size:10px;color:#9ca3af;margin-top:1px}
 .admin-device-item .dev-actions{display:flex;gap:4px;flex-shrink:0}
@@ -148,12 +150,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <!-- 设备被阻止提示 -->
 <div class="blocked-overlay" id="blockedOverlay">
   <div class="blocked-panel">
-    <div style="font-size:48px;margin-bottom:16px">🚫</div>
-    <h2 style="margin:0 0 8px;font-size:20px">访问受限</h2>
-    <p style="margin:0 0 16px;color:#999;font-size:14px;line-height:1.6">
-      当前设备访问人数已满，<br>请联系管理员扩容后重试。
-    </p>
-    <button onclick="location.reload()" style="padding:8px 24px;border:none;border-radius:8px;background:#e74c3c;color:#fff;font-size:14px;cursor:pointer">重新加载</button>
+    <div class="icon-mark">!</div>
+    <div class="msg-text">拒绝访问</div>
   </div>
 </div>
 
