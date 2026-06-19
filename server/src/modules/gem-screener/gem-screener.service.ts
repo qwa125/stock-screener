@@ -2610,7 +2610,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // 排除预测文本严重负面关键词的
     const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
-    if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw))) return null;
+    if (!keepAll && NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw))) return null;
 
     // === 交叉验证：用全部K线数据模拟详情页的分析结果 ===
     // 详情页（stock/analyze）使用所有K线 + 简化版MACD（EMA12/EMA26）

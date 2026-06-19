@@ -289,10 +289,8 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
-    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">¥'+(
-      mf>=1?mf.toFixed(2)+'亿':(mf*10000).toFixed(0)+'万'
-    )+'</div></div>'
-    +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou||0).toFixed(1)+'分</div></div>'
+    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">'+(mf==0?'暂无':(mf>=1?'¥'+mf.toFixed(2)+'亿':'¥'+(mf*10000).toFixed(0)+'万'))+'</div></div>'
+    +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
     +gridChipLine(s,entry)
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
@@ -641,8 +639,10 @@ async function doSearch(){
         body:JSON.stringify({code:stockCode,name:stockName,kline:kdata})
       })
       var aj=await ar.json()
+      console.log('[search] analyze response:', JSON.stringify(aj,null,2))
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
+        console.log('[search] analysis result:', JSON.stringify(o,null,2))
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP

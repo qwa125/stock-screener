@@ -2243,7 +2243,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!keepAll && NEGATIVE.includes(suggestion))
             return null;
         const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
-        if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
+        if (!keepAll && NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
             return null;
         const rawFull = raw;
         const fullCloseArr = rawFull.map((k) => Number(k.close));
