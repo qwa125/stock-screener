@@ -835,7 +835,10 @@ setTimeout(function(){
 
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
-var ADMIN_PWD='' // 前端保护密码，在下方设置
+var ADMIN_PWD='' // 前端保护密码
+// 从 localStorage 读取自定义密码，没有则用默认
+var ADMIN_DEFAULT_PWD='admin888'
+try{var saved=localStorage.getItem('adminPassword');if(saved)ADMIN_DEFAULT_PWD=saved}catch(e){}
 
 function openAdmin(){
   if(!ADMIN_OPEN){
@@ -857,13 +860,13 @@ function showAdminPassword(){
     '<div class="admin-login-msg">请输入密码进入管理面板</div>'
     +'<div class="form-group"><label>管理密码</label><input id="adminPwdInput" type="password" placeholder="输入密码" onkeydown="if(event.key===\'Enter\')checkAdminPwd()"></div>'
     +'<button class="btn btn-primary" onclick="checkAdminPwd()">进入管理</button>'
-    +'<div style="font-size:11px;color:#9ca3af;margin-top:10px;text-align:center">默认密码: admin888</div>'
+    +'<div style="font-size:11px;color:#9ca3af;margin-top:10px;text-align:center">默认密码: admin888，可在管理面板中修改</div>'
 }
 
 function checkAdminPwd(){
   var pwd=ad('adminPwdInput')?ad('adminPwdInput').value.trim():''
   if(!pwd){alert('请输入密码');return}
-  if(pwd==='admin888'||pwd==='admin123'){
+  if(pwd===ADMIN_DEFAULT_PWD){
     ADMIN_PWD=pwd
     renderAdminView()
   }else{
@@ -927,6 +930,7 @@ async function loadAdminDashboard(){
     }
     html+='</div>'
     html+='<div style="display:flex;gap:8px;margin-top:10px">'
+      +'<button class="btn" style="background:#f3f4f6;color:#374151;flex:1" onclick="changeAdminPwd()">🔑 修改密码</button>'
       +'<button class="btn" style="background:#f3f4f6;color:#374151;flex:1" onclick="closeAdmin()">关闭</button>'
       +'<button class="btn btn-danger" style="flex:1" onclick="clearAllDevices()">清空全部</button>'
       +'</div>'
@@ -975,6 +979,22 @@ async function editRemark(idx){
     if(d.code===200){loadAdminDashboard()}
     else{alert('备注更新失败: '+(d.msg||'未知错误'))}
   }catch(e){alert('请求失败: '+e.message)}
+}
+
+// 修改密码
+function changeAdminPwd(){
+  var old=prompt('请输入当前密码：')
+  if(old===null)return
+  if(old!==ADMIN_DEFAULT_PWD){alert('当前密码错误');return}
+  var newPwd=prompt('请输入新密码（至少4个字符）：')
+  if(!newPwd||newPwd.length<4){alert('密码至少4个字符');return}
+  var confirmPwd=prompt('请再次输入新密码：')
+  if(newPwd!==confirmPwd){alert('两次密码不一致');return}
+  try{
+    localStorage.setItem('adminPassword',newPwd)
+    ADMIN_DEFAULT_PWD=newPwd
+    alert('✅ 密码已修改为：'+newPwd+'\n请牢记新密码！')
+  }catch(e){alert('保存失败: '+e.message)}
 }
 // ========== End Admin Panel ==========
 </script>
