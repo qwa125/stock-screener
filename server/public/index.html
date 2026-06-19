@@ -347,7 +347,7 @@ async function fetchRealtime(codes){
   if(!codes||!codes.length)return{}
   var r={}
   for(var i=0;i<codes.length;i+=50){
-    var b=codes.slice(i,i+50).map(function(c){return(c.startsWith('6')?'sh':'sz')+c}).join(',')
+    var b=codes.slice(i,i+50).map(function(c){return(function(c){return c.startsWith('6')?'sh':c.startsWith('92')||c.startsWith('4')||c.startsWith('8')?'bj':'sz'})(c)+c}).join(',')
     try{
       var res=await fetch('https://qt.gtimg.cn/q='+b)
       var buf=await res.arrayBuffer()
@@ -480,7 +480,7 @@ async function doScan(){
         fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
-            if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
+            if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
               var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
               var chip=calcChipAnalysis(kd)
               s._chipAnalyzed=true;s._chipConc=chip.conc;s._chipPeak=chip.peak;s._chipPattern=chip.pattern
@@ -610,7 +610,7 @@ async function doFullRescan(){
         fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
-            if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
+            if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
               var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
               var cp=calcChipAnalysis(kd)
               s._chipAnalyzed=true;s._chipConc=cp.conc;s._chipPeak=cp.peak;s._chipPattern=cp.pattern
@@ -668,7 +668,7 @@ async function getSearchCache(){
 // ---------- 前端查Tencent行情（带回真实名称+股价） ----------
 async function fetchTencentDetail(code,market){
   if(!code)return null
-  var m=market||(code.startsWith('6')?'sh':'sz')
+  var m=market||((code.startsWith('6')?'sh':code.startsWith('92')||code.startsWith('4')||code.startsWith('8')?'bj':'sz'))
   try{
     var res=await fetch('https://qt.gtimg.cn/q='+m+code)
     var buf=await res.arrayBuffer()
@@ -784,7 +784,7 @@ async function doSearch(){
           var hkr=await fetch(hkurl,{signal:AbortSignal.timeout(5000)})
           var hkd=await hkr.json()
           var hkArr=hkd&&hkd.data&&hkd.data[stockCode]&&hkd.data[stockCode].day
-          if(hkArr&&hkArr.length>=20){
+          if(hkArr&&hkArr.length>=1){
             kdata=hkArr.map(function(l){
               var d=l.split(' ')
               return {day:d[0],open:parseFloat(d[1]),close:parseFloat(d[2]),high:parseFloat(d[3]),low:parseFloat(d[4]),volume:parseFloat(d[5])||0}
@@ -802,7 +802,7 @@ async function doSearch(){
         var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
         var ekr2=await fetch(ekurl2,{signal:AbortSignal.timeout(5000)})
         var ekd2=await ekr2.json()
-        if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=20){
+        if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=1){
           kdata=ekd2.data.klines.map(function(l){
             var p=l.split(',')
             return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
@@ -817,7 +817,7 @@ async function doSearch(){
           var ekurl='https://push2.eastmoney.com/api/qt/stock/kline/get?secid='+emSecId+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=200'
           var ekr=await fetch(ekurl,{signal:AbortSignal.timeout(5000)})
           var ekd=await ekr.json()
-          if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=20){
+          if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=1){
             kdata=ekd.data.klines.map(function(l){
               var p=l.split(',')
               return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
@@ -834,7 +834,7 @@ async function doSearch(){
           var tkd=await tkr.json()
           var tkArr=tkd&&tkd.data&&(tkd.data[stockCode]||tkd.data[prefix+stockCode])
           tkArr=tkArr&&tkArr.day
-          if(tkArr&&tkArr.length>=20){
+	          if(tkArr&&tkArr.length>=1){
             kdata=tkArr.map(function(l){
               var d=l.split(' ')
               return {day:d[0],open:parseFloat(d[1]),close:parseFloat(d[2]),high:parseFloat(d[3]),low:parseFloat(d[4]),volume:parseFloat(d[5])}
