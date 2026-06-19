@@ -1,26 +1,27 @@
 export declare class DeviceRegistryService {
     private readonly logger;
-    private readonly REGISTRY_FILE;
+    private readonly supabase;
     private readonly envMaxUsers;
     private runtimeMaxSlots;
     private registry;
     constructor();
-    private loadRegistry;
+    private initializeRegistry;
     private get effectiveMax();
-    private saveRegistry;
+    private syncToSupabase;
+    private upsertDevice;
+    private deleteDeviceFromDB;
+    touchDevice(deviceId: string, ua: string): Promise<{
+        allowed: boolean;
+        message?: string;
+    }>;
+    tryRegister(ip: string, ua: string): Promise<{
+        allowed: boolean;
+        message?: string;
+    }>;
     private createFingerprint;
-    private reloadRuntimeSlots;
-    touchDevice(deviceId: string, ua: string): {
-        allowed: boolean;
-        message?: string;
-    };
-    tryRegister(ip: string, ua: string): {
-        allowed: boolean;
-        message?: string;
-    };
     get registeredCount(): number;
     get maxAllowed(): number;
-    setMaxSlots(value: number): void;
+    setMaxSlots(value: number): Promise<void>;
     private extractDisplayName;
     getDevices(): Array<{
         index: number;
@@ -30,7 +31,7 @@ export declare class DeviceRegistryService {
         firstSeen: number;
         lastSeen: number;
     }>;
-    updateRemark(index: number, remark: string): boolean;
-    removeDevice(index: number): boolean;
-    clearDevices(): void;
+    updateRemark(index: number, remark: string): Promise<boolean>;
+    removeDevice(index: number): Promise<boolean>;
+    clearDevices(): Promise<void>;
 }

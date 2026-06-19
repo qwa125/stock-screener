@@ -12,78 +12,110 @@ var DeviceRegistryService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceRegistryService = void 0;
 const common_1 = require("@nestjs/common");
-const fs_1 = require("fs");
+const supabase_client_1 = require("../../storage/database/supabase-client");
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
-        this.REGISTRY_FILE = '/tmp/device-registry.json';
+        this.supabase = (0, supabase_client_1.getSupabaseClient)();
         this.runtimeMaxSlots = null;
         this.registry = [];
         const envMax = parseInt(process.env.MAX_USERS || '', 10);
         this.envMaxUsers = !isNaN(envMax) && envMax > 0 ? envMax : 3;
-        this.loadRegistry();
-        this.logger.log(`🔐 设备注册表已加载，环境变量 ${this.envMaxUsers}，运行时 ${this.runtimeMaxSlots ?? '未设置'}，有效限额 ${this.effectiveMax}`);
+        this.initializeRegistry();
+        this.logger.log(`🔐 设备注册表初始化完成，环境变量 ${this.envMaxUsers}，运行时 ${this.runtimeMaxSlots ?? '未设置'}`);
     }
-    loadRegistry() {
+    async initializeRegistry() {
         try {
-            if (!(0, fs_1.existsSync)(this.REGISTRY_FILE))
-                return;
-            const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                if (typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
-                    this.runtimeMaxSlots = parsed.maxSlots;
-                }
-                if (parsed.devices && typeof parsed.devices === 'object') {
-                    this.registry = Object.values(parsed.devices).map((d) => ({
-                        fingerprint: typeof d.fingerprint === 'string'
-                            ? d.fingerprint
-                            : (d.fingerprint ? JSON.stringify(d.fingerprint) : 'unknown'),
-                        ua: d.ua || '',
-                        firstSeen: d.registeredAt || d.firstSeen || Date.now(),
-                        lastSeen: d.lastSeen || Date.now(),
-                    }));
-                }
+            const { data, error } = await this.supabase
+                .from('access_devices')
+                .select('*')
+                .order('first_seen', { ascending: true });
+            if (error)
+                throw error;
+            if (data && data.length > 0) {
+                this.registry = data.map(row => ({
+                    fingerprint: row.id,
+                    ua: row.ua || '',
+                    firstSeen: new Date(row.first_seen).getTime(),
+                    lastSeen: new Date(row.last_seen).getTime(),
+                    remark: row.remark || '',
+                }));
             }
-            else if (Array.isArray(parsed)) {
-                this.registry = parsed;
-            }
-            this.logger.log(`📋 已加载 ${this.registry.length} 个已注册设备，运行时名额: ${this.runtimeMaxSlots ?? '未设置'}`);
+            this.logger.log(`📋 已从数据库加载 ${this.registry.length} 个已注册设备`);
         }
         catch (e) {
-            this.logger.warn(`⚠️ 注册表文件解析失败: ${e.message}`);
+            this.logger.warn(`⚠️ 从数据库加载注册表失败，将使用空注册表: ${e.message}`);
         }
     }
     get effectiveMax() {
         return this.runtimeMaxSlots ?? this.envMaxUsers;
     }
-    saveRegistry() {
+    async syncToSupabase() {
         try {
-            (0, fs_1.writeFileSync)(this.REGISTRY_FILE, JSON.stringify(this.registry, null, 2), 'utf-8');
+            const { error: delErr } = await this.supabase
+                .from('access_devices')
+                .delete()
+                .neq('id', '__never__');
+            if (delErr)
+                throw delErr;
+            if (this.registry.length === 0)
+                return;
+            const rows = this.registry.map(d => ({
+                id: d.fingerprint,
+                ua: d.ua || null,
+                display_name: d.remark || null,
+                first_seen: new Date(d.firstSeen).toISOString(),
+                last_seen: new Date(d.lastSeen).toISOString(),
+                remark: d.remark || null,
+            }));
+            const { error: insErr } = await this.supabase
+                .from('access_devices')
+                .insert(rows);
+            if (insErr)
+                throw insErr;
         }
-        catch { }
+        catch (e) {
+            this.logger.warn(`⚠️ 同步注册表到数据库失败: ${e.message}`);
+        }
     }
-    createFingerprint(_ip, ua) {
-        return `${ua}`;
-    }
-    reloadRuntimeSlots() {
+    async upsertDevice(device) {
         try {
-            if ((0, fs_1.existsSync)(this.REGISTRY_FILE)) {
-                const raw = (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8');
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.maxSlots === 'number' && parsed.maxSlots !== 10) {
-                    this.runtimeMaxSlots = parsed.maxSlots;
-                }
-            }
+            const { error } = await this.supabase
+                .from('access_devices')
+                .upsert({
+                id: device.fingerprint,
+                ua: device.ua || null,
+                display_name: device.remark || null,
+                first_seen: new Date(device.firstSeen).toISOString(),
+                last_seen: new Date(device.lastSeen).toISOString(),
+                remark: device.remark || null,
+            });
+            if (error)
+                throw error;
         }
-        catch { }
+        catch (e) {
+            this.logger.warn(`⚠️ 写入设备到数据库失败: ${e.message}`);
+            await this.syncToSupabase();
+        }
     }
-    touchDevice(deviceId, ua) {
-        this.reloadRuntimeSlots();
+    async deleteDeviceFromDB(fingerprint) {
+        try {
+            const { error } = await this.supabase
+                .from('access_devices')
+                .delete()
+                .eq('id', fingerprint);
+            if (error)
+                throw error;
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 从数据库删除设备失败: ${e.message}`);
+        }
+    }
+    async touchDevice(deviceId, ua) {
         const existing = this.registry.find(e => e.fingerprint === deviceId);
         if (existing) {
             existing.lastSeen = Date.now();
-            this.saveRegistry();
+            await this.upsertDevice(existing);
             return { allowed: true };
         }
         const limit = this.effectiveMax;
@@ -93,23 +125,23 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 message: `访问受限：最多允许 ${limit} 个不同设备访问，当前已满。请联系管理员扩容。`,
             };
         }
-        this.registry.push({
+        const entry = {
             fingerprint: deviceId,
             ua,
             firstSeen: Date.now(),
             lastSeen: Date.now(),
-        });
-        this.saveRegistry();
+        };
+        this.registry.push(entry);
+        await this.upsertDevice(entry);
         this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): ID=${deviceId.slice(0, 12)}… UA=${ua.substring(0, 40)}`);
         return { allowed: true };
     }
-    tryRegister(ip, ua) {
-        this.reloadRuntimeSlots();
+    async tryRegister(ip, ua) {
         const fingerprint = this.createFingerprint(ip, ua);
         const existing = this.registry.find(e => e.fingerprint === fingerprint);
         if (existing) {
             existing.lastSeen = Date.now();
-            this.saveRegistry();
+            await this.upsertDevice(existing);
             return { allowed: true };
         }
         const limit = this.effectiveMax;
@@ -125,9 +157,11 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             firstSeen: Date.now(),
             lastSeen: Date.now(),
         });
-        this.saveRegistry();
         this.logger.log(`📱 新设备注册 (${this.registry.length}/${limit}): IP=${ip}, UA=${ua.substring(0, 40)}`);
         return { allowed: true };
+    }
+    createFingerprint(_ip, ua) {
+        return `${ua}`;
     }
     get registeredCount() {
         return this.registry.length;
@@ -135,14 +169,19 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     get maxAllowed() {
         return this.effectiveMax;
     }
-    setMaxSlots(value) {
+    async setMaxSlots(value) {
         this.runtimeMaxSlots = Math.max(1, Math.min(100, Math.round(value)));
         try {
-            const raw = (0, fs_1.existsSync)(this.REGISTRY_FILE) ? (0, fs_1.readFileSync)(this.REGISTRY_FILE, 'utf-8') : '{}';
-            const data = JSON.parse(raw);
-            const obj = typeof data === 'object' && !Array.isArray(data) ? data : { devices: {} };
-            obj.maxSlots = this.runtimeMaxSlots;
-            (0, fs_1.writeFileSync)(this.REGISTRY_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+            await this.supabase
+                .from('access_devices')
+                .upsert({
+                id: '__config__',
+                ua: null,
+                display_name: `maxSlots=${this.runtimeMaxSlots}`,
+                first_seen: new Date().toISOString(),
+                last_seen: new Date().toISOString(),
+                remark: `maxSlots=${this.runtimeMaxSlots}`,
+            });
         }
         catch { }
         this.logger.log(`🔐 运行时设备限额已更新为 ${this.runtimeMaxSlots}`);
@@ -207,26 +246,36 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             lastSeen: d.lastSeen,
         }));
     }
-    updateRemark(index, remark) {
+    async updateRemark(index, remark) {
         if (index < 0 || index >= this.registry.length)
             return false;
         this.registry[index].remark = remark.trim();
-        this.saveRegistry();
+        await this.upsertDevice(this.registry[index]);
         this.logger.log(`✏️ 设备 #${index} 备注已更新: "${remark.trim()}"`);
         return true;
     }
-    removeDevice(index) {
+    async removeDevice(index) {
         if (index < 0 || index >= this.registry.length)
             return false;
         const removed = this.registry.splice(index, 1)[0];
-        this.saveRegistry();
+        await this.deleteDeviceFromDB(removed.fingerprint);
         this.logger.log(`🗑️ 已删除设备 #${index}: ${removed.fingerprint}, 剩余 ${this.registry.length} 个`);
         return true;
     }
-    clearDevices() {
+    async clearDevices() {
         const count = this.registry.length;
         this.registry = [];
-        this.saveRegistry();
+        try {
+            const { error } = await this.supabase
+                .from('access_devices')
+                .delete()
+                .neq('id', '__never__');
+            if (error)
+                throw error;
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 清空数据库设备失败: ${e.message}`);
+        }
         this.logger.log(`🧹 已清空全部 ${count} 个已注册设备`);
     }
 };

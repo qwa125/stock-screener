@@ -1,23 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.subscriptions = exports.healthCheck = exports.devices = exports.users = void 0;
+exports.subscriptions = exports.healthCheck = exports.accessDevices = exports.devices = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
-exports.users = (0, pg_core_1.pgTable)("users", {
-    id: (0, pg_core_1.varchar)({ length: 36 }).default((0, drizzle_orm_1.sql) `gen_random_uuid()`).primaryKey().notNull(),
-    username: (0, pg_core_1.varchar)({ length: 100 }).notNull().unique(),
-    passwordHash: (0, pg_core_1.varchar)("password_hash", { length: 255 }).notNull(),
-    trialStart: (0, pg_core_1.timestamp)("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-    trialEnd: (0, pg_core_1.timestamp)("trial_end", { withTimezone: true, mode: 'string' }).default((0, drizzle_orm_1.sql) `(now() + '7 days'::interval)`).notNull(),
-    subscriptionEnd: (0, pg_core_1.timestamp)("subscription_end", { withTimezone: true, mode: 'string' }),
-    isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
-    createdAt: (0, pg_core_1.timestamp)("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-    updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }),
-}, (table) => [
-    (0, pg_core_1.index)("users_username_idx").on(table.username),
-    (0, pg_core_1.index)("users_trial_end_idx").on(table.trialEnd),
-    (0, pg_core_1.index)("users_is_active_idx").on(table.isActive),
-]);
 exports.devices = (0, pg_core_1.pgTable)("devices", {
     id: (0, pg_core_1.varchar)({ length: 36 }).default((0, drizzle_orm_1.sql) `gen_random_uuid()`).primaryKey().notNull(),
     trialStart: (0, pg_core_1.timestamp)("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -26,7 +11,19 @@ exports.devices = (0, pg_core_1.pgTable)("devices", {
     createdAt: (0, pg_core_1.timestamp)("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
     updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => [
-    (0, pg_core_1.index)("devices_id_idx").using("btree", table.id.asc().nullsLast().op("text_ops")),
+    (0, pg_core_1.index)("devices_id_idx").on(table.id),
+]);
+exports.accessDevices = (0, pg_core_1.pgTable)("access_devices", {
+    id: (0, pg_core_1.varchar)("id", { length: 64 }).primaryKey().notNull(),
+    ua: (0, pg_core_1.varchar)("ua", { length: 500 }),
+    displayName: (0, pg_core_1.varchar)("display_name", { length: 200 }),
+    firstSeen: (0, pg_core_1.timestamp)("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    lastSeen: (0, pg_core_1.timestamp)("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    createdAt: (0, pg_core_1.timestamp)("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+}, (table) => [
+    (0, pg_core_1.index)("access_devices_id_idx").on(table.id),
+    (0, pg_core_1.index)("access_devices_last_seen_idx").on(table.lastSeen),
 ]);
 exports.healthCheck = (0, pg_core_1.pgTable)("health_check", {
     id: (0, pg_core_1.serial)().notNull(),
@@ -43,9 +40,9 @@ exports.subscriptions = (0, pg_core_1.pgTable)("subscriptions", {
     endDate: (0, pg_core_1.timestamp)("end_date", { withTimezone: true, mode: 'string' }).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
-    (0, pg_core_1.index)("subscriptions_device_id_idx").using("btree", table.deviceId.asc().nullsLast().op("text_ops")),
-    (0, pg_core_1.index)("subscriptions_order_id_idx").using("btree", table.orderId.asc().nullsLast().op("text_ops")),
-    (0, pg_core_1.index)("subscriptions_pay_status_idx").using("btree", table.payStatus.asc().nullsLast().op("text_ops")),
+    (0, pg_core_1.index)("subscriptions_device_id_idx").on(table.deviceId),
+    (0, pg_core_1.index)("subscriptions_order_id_idx").on(table.orderId),
+    (0, pg_core_1.index)("subscriptions_pay_status_idx").on(table.payStatus),
     (0, pg_core_1.foreignKey)({
         columns: [table.deviceId],
         foreignColumns: [exports.devices.id],

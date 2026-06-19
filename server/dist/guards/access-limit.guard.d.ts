@@ -13,5 +13,5 @@ export declare class AccessLimitGuard implements CanActivate {
     private readonly reflector;
     private readonly logger;
     constructor(deviceRegistry: DeviceRegistryService, auth: AuthService, reflector: Reflector);
-    canActivate(context: ExecutionContext): boolean;
+    canActivate(context: ExecutionContext): Promise<boolean>;
 }

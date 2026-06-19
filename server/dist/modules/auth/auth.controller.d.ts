@@ -91,10 +91,10 @@ export declare class AuthController {
     };
     setMaxSlots(body: {
         maxSlots: number;
-    }): {
+    }): Promise<{
         ok: boolean;
         maxSlots: number;
-    };
+    }>;
     getDevices(): {
         code: number;
         data: {
@@ -111,28 +111,24 @@ export declare class AuthController {
             total: number;
         };
     };
-    removeDevice(index: string): {
+    removeDevice(index: string): Promise<{
         code: number;
         msg: string;
-        data?: undefined;
-    } | {
-        code: number;
-        msg: string;
-        data: {
+        data?: {
             registered: number;
         };
-    };
+    }>;
     updateRemark(index: string, body: {
         remark: string;
-    }): {
+    }): Promise<{
         code: number;
         msg: string;
-    };
-    clearDevices(): {
+    }>;
+    clearDevices(): Promise<{
         code: number;
         msg: string;
         data: {
             registered: number;
         };
-    };
+    }>;
 }

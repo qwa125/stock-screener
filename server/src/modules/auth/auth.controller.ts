@@ -97,9 +97,9 @@ export class AuthController {
 
   /** 设置设备限额（立即生效，无需重启） */
   @Put('max-slots')
-  setMaxSlots(@Body() body: { maxSlots: number }): { ok: boolean; maxSlots: number } {
+  async setMaxSlots(@Body() body: { maxSlots: number }): Promise<{ ok: boolean; maxSlots: number }> {
     const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
-    this.deviceRegistry.setMaxSlots(slots);
+    await this.deviceRegistry.setMaxSlots(slots);
     return { ok: true, maxSlots: slots };
   }
 
@@ -116,9 +116,9 @@ export class AuthController {
 
   /** 删除指定设备（按索引） */
   @Delete('devices/:index')
-  removeDevice(@Param('index') index: string) {
+  async removeDevice(@Param('index') index: string): Promise<{ code: number; msg: string; data?: { registered: number } }> {
     const idx = parseInt(index, 10);
-    const ok = this.deviceRegistry.removeDevice(idx);
+    const ok = await this.deviceRegistry.removeDevice(idx);
     if (!ok) {
       return { code: 404, msg: `设备 #${idx} 不存在` };
     }
@@ -127,9 +127,9 @@ export class AuthController {
 
   /** 更新设备备注 */
   @Put('devices/:index/remark')
-  updateRemark(@Param('index') index: string, @Body() body: { remark: string }) {
+  async updateRemark(@Param('index') index: string, @Body() body: { remark: string }): Promise<{ code: number; msg: string }> {
     const idx = parseInt(index, 10);
-    const ok = this.deviceRegistry.updateRemark(idx, body.remark || '');
+    const ok = await this.deviceRegistry.updateRemark(idx, body.remark || '');
     if (!ok) {
       return { code: 404, msg: `设备 #${idx} 不存在` };
     }
@@ -138,8 +138,8 @@ export class AuthController {
 
   /** 清空所有已注册设备 */
   @Delete('devices')
-  clearDevices(): { code: number; msg: string; data: { registered: number } } {
-    this.deviceRegistry.clearDevices();
+  async clearDevices(): Promise<{ code: number; msg: string; data: { registered: number } }> {
+    await this.deviceRegistry.clearDevices();
     return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
   }
 }

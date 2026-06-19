@@ -91,9 +91,9 @@ let AuthController = class AuthController {
             registered: this.deviceRegistry.registeredCount,
         };
     }
-    setMaxSlots(body) {
+    async setMaxSlots(body) {
         const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
-        this.deviceRegistry.setMaxSlots(slots);
+        await this.deviceRegistry.setMaxSlots(slots);
         return { ok: true, maxSlots: slots };
     }
     getDevices() {
@@ -104,24 +104,24 @@ let AuthController = class AuthController {
         }));
         return { code: 200, data: { devices, total: devices.length } };
     }
-    removeDevice(index) {
+    async removeDevice(index) {
         const idx = parseInt(index, 10);
-        const ok = this.deviceRegistry.removeDevice(idx);
+        const ok = await this.deviceRegistry.removeDevice(idx);
         if (!ok) {
             return { code: 404, msg: `设备 #${idx} 不存在` };
         }
         return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
     }
-    updateRemark(index, body) {
+    async updateRemark(index, body) {
         const idx = parseInt(index, 10);
-        const ok = this.deviceRegistry.updateRemark(idx, body.remark || '');
+        const ok = await this.deviceRegistry.updateRemark(idx, body.remark || '');
         if (!ok) {
             return { code: 404, msg: `设备 #${idx} 不存在` };
         }
         return { code: 200, msg: '备注已更新' };
     }
-    clearDevices() {
-        this.deviceRegistry.clearDevices();
+    async clearDevices() {
+        await this.deviceRegistry.clearDevices();
         return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
     }
 };
@@ -173,7 +173,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Object)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "setMaxSlots", null);
 __decorate([
     (0, common_1.Get)('devices'),
@@ -186,7 +186,7 @@ __decorate([
     __param(0, (0, common_1.Param)('index')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "removeDevice", null);
 __decorate([
     (0, common_1.Put)('devices/:index/remark'),
@@ -194,13 +194,13 @@ __decorate([
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "updateRemark", null);
 __decorate([
     (0, common_1.Delete)('devices'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Object)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "clearDevices", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),

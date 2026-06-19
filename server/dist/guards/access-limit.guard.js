@@ -25,7 +25,7 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         this.reflector = reflector;
         this.logger = new common_1.Logger(AccessLimitGuard_1.name);
     }
-    canActivate(context) {
+    async canActivate(context) {
         const skip = this.reflector.getAllAndOverride(exports.SKIP_ACCESS_LIMIT, [
             context.getHandler(),
             context.getClass(),
@@ -53,7 +53,7 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         }
         const deviceId = request.headers['x-device-id'];
         if (deviceId) {
-            const result = this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+            const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
             if (!result.allowed) {
                 throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
             }
@@ -64,7 +64,7 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
             || request.ip
             || 'unknown';
         const ua = request.headers['user-agent'] || 'unknown';
-        const result = this.deviceRegistry.tryRegister(ip, ua);
+        const result = await this.deviceRegistry.tryRegister(ip, ua);
         if (!result.allowed) {
             throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
         }

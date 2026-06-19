@@ -17,7 +17,7 @@ export class AccessLimitGuard implements CanActivate {
     private readonly reflector: Reflector,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     // 检查是否标记为跳过（如 /api/auth/*、/api/access/*）
     const skip = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
       context.getHandler(),
@@ -63,7 +63,7 @@ export class AccessLimitGuard implements CanActivate {
     // 优先使用前端发送的设备 ID（浏览器 localStorage 持久化）
     const deviceId = request.headers['x-device-id'];
     if (deviceId) {
-      const result = this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+      const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
       if (!result.allowed) {
         throw new HttpException(
           { code: 429, msg: result.message, data: null },
@@ -79,7 +79,7 @@ export class AccessLimitGuard implements CanActivate {
       || 'unknown';
     const ua = request.headers['user-agent'] || 'unknown';
 
-    const result = this.deviceRegistry.tryRegister(ip, ua);
+    const result = await this.deviceRegistry.tryRegister(ip, ua);
     if (!result.allowed) {
       throw new HttpException(
         { code: 429, msg: result.message, data: null },
