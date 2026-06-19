@@ -2606,7 +2606,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const reasonText = result.reason || '';
 
     const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
-    if (NEGATIVE.includes(suggestion)) return null;
+    if (!keepAll && NEGATIVE.includes(suggestion)) return null;
 
     // 排除预测文本严重负面关键词的
     const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];

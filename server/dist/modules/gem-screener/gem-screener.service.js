@@ -2240,7 +2240,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
         const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
-        if (NEGATIVE.includes(suggestion))
+        if (!keepAll && NEGATIVE.includes(suggestion))
             return null;
         const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
         if (NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
