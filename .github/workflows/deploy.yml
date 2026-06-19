@@ -1,4 +1,4 @@
-name: 🚀 Deploy to Render
+name: Deploy to Render
 
 on:
   push:
@@ -7,12 +7,11 @@ on:
 
 jobs:
   deploy:
-    name: Trigger Render Deploy
     runs-on: ubuntu-latest
     steps:
-      - name: 🔄 Trigger Render Deploy Hook
+      - name: Trigger Render Deploy
         run: |
-          echo "⏳ 触发 Render 部署..."
+          echo "⏳ 触发Render部署..."
           HTTP_CODE=$(curl -s -o /tmp/render-deploy.log -w "%{http_code}" \
             -X POST "https://api.render.com/deploy/srv-d8ortc8js32c7385n72g?key=htmRK6ve_Qc" \
             --max-time 120)
@@ -22,26 +21,5 @@ jobs:
             echo "✅ 部署已触发！"
           else
             echo "⚠️ 部署触发响应: $HTTP_CODE"
+            exit 1
           fi
-      
-      - name: ⏳ Wait for Render Build
-        run: |
-          echo "等待Render构建部署..."
-          for i in $(seq 1 12); do
-            sleep 30
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://stock-screener-54nd.onrender.com/api/health" --max-time 15)
-            echo "  $((i*30))s: health=${HTTP_CODE}"
-            
-            # After 3 minutes, check if concept sectors appear
-            if [ $i -ge 6 ]; then
-              HAS_CONCEPT=$(curl -s --max-time 15 \
-                "https://stock-screener-54nd.onrender.com/api/gem/industry-sectors/top10" \
-                | python3 -c "import json,sys;d=json.load(sys.stdin);s=[x['name'] for x in d.get('data',{}).get('sectors',[])];print(any(n in ['物理AI','HBM/存储','算力芯片','人形机器人'] for n in s))" 2>/dev/null)
-              if [ "$HAS_CONCEPT" = "True" ]; then
-                echo "✅ 概念板块已更新！部署成功！"
-                exit 0
-              fi
-            fi
-          done
-          echo "⚠️ 等待超时，请检查Render Dashboard"
