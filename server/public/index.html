@@ -171,14 +171,63 @@ function futurePrediction(s){
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
 
+// 前端筹码分析（从K线数据计算筹码集中度）
+function calcChipAnalysis(kline){
+  if(!kline||kline.length<20) return{conc:50,peak:'mid',pattern:'dispersed'}
+  var closeArr=kline.map(function(k){return k.close||k.close||0})
+  var highArr=kline.map(function(k){return k.high||0})
+  var lowArr=kline.map(function(k){return k.low||0})
+  var volArr=kline.map(function(k){return k.volume||0})
+  var currentPrice=closeArr[closeArr.length-1]
+  var maxH=Math.max.apply(null,highArr)
+  var minL=Math.min.apply(null,lowArr)
+  var range=maxH-minL
+  if(range<0.01) return{conc:95,peak:'mid',pattern:'single_peak'}
+  var BINS=20;var bins=[];for(var bi=0;bi<BINS;bi++)bins.push(0)
+  var totalVol=0
+  for(var i=Math.max(0,kline.length-120);i<kline.length;i++){
+    var idx=Math.min(BINS-1,Math.floor(((closeArr[i]-minL)/range)*BINS))
+    if(idx<0)idx=0
+    bins[idx]+=volArr[i]
+    totalVol+=volArr[i]
+  }
+  if(totalVol===0) return{conc:50,peak:'mid',pattern:'dispersed'}
+  var sorted=[];for(var si=0;si<BINS;si++)sorted.push({bin:si,vol:bins[si]})
+  sorted.sort(function(a,b){return b.vol-a.vol})
+  var cum=0;var binsNeeded=0
+  for(var si2=0;si2<sorted.length;si2++){
+    cum+=sorted[si2].vol;binsNeeded++
+    if(cum/totalVol>=0.9)break
+  }
+  var conc=Math.round((1-binsNeeded/BINS)*100)
+  // 找筹码峰位置
+  var peakIdx=0;var maxVol=0
+  for(var pi=0;pi<BINS;pi++){if(bins[pi]>maxVol){maxVol=bins[pi];peakIdx=pi}}
+  var peakPos=peakIdx/BINS
+  var peakLabel=peakPos<0.33?'low':peakPos<0.66?'mid':'high'
+  // 找第二峰
+  var peak2Idx=-1;var maxVol2=0
+  for(var pj=0;pj<BINS;pj++){
+    if(pj===peakIdx)continue
+    if(bins[pj]>maxVol2&&bins[pj]>maxVol*0.4){maxVol2=bins[pj];peak2Idx=pj}
+  }
+  var pattern=peak2Idx>=0?'double_peak':'single_peak'
+  if(conc<40) pattern='dispersed'
+  return{conc:conc,peak:peakLabel,pattern:pattern}
+}
+
 // 从 K 线数据推算筹码状态（当后端未提供时）
 function chipDisplay(s){
   // 如果后端提供了筹码数据，直接使用
-  if(s.chipConcentration90!==void 0&&s.chipConcentration90!==null){
+  if(s.chipConcentration90!==void 0&&s.chipConcentration90!==null&&s.chipPattern!=='dispersed'){
     var conc=s.chipConcentration90
     var peak=s.chipPeakPosition||'mid'
     var pat=s.chipPattern||'dispersed'
     return{conc:conc,peak:peak,pattern:pat}
+  }
+  // 如果前端已计算过芯片数据，使用前端结果
+  if(s._chipAnalyzed&&s._chipConc){
+    return{conc:s._chipConc,peak:s._chipPeak,pattern:s._chipPattern}
   }
   // 用价位和趋势等信息估算
   var pos=s.pricePosition||50
@@ -361,7 +410,26 @@ async function doScan(){
         }
       }
     }
-    selectedIdx=-1;$('detailArea').style.display='none';renderList()
+    selectedIdx=-1;$('detailArea').style.display='none'
+    // 前端拉K线计算筹码集中度（后端从美国拉不到）
+    setStatus('🔄 分析筹码集中度...')
+    try{
+      var chipPromises=stocks.map(function(s){
+        var c=s.code,pre=c.startsWith('6')?'sh':'sz',em=(c.startsWith('6')?'1.':'0.')+c
+        return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(8000)})
+          .then(function(r){return r.json()})
+          .then(function(d){
+            if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
+              var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
+              var chip=calcChipAnalysis(kd)
+              s._chipAnalyzed=true;s._chipConc=chip.conc;s._chipPeak=chip.peak;s._chipPattern=chip.pattern
+            }
+          }).catch(function(){})
+      })
+      await Promise.all(chipPromises)
+      console.log('[scan] 筹码分析完成')
+    }catch(e){console.log('[scan] 筹码分析跳过:',e.message)}
+    renderList()
     setStatus('✅ 实时数据已更新')
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -486,7 +554,24 @@ async function doFullRescan(){
         }
       }
     }
-    selectedIdx=-1;$('detailArea').style.display='none';renderList()
+    selectedIdx=-1;$('detailArea').style.display='none'
+    // 前端拉K线计算筹码集中度
+    try{
+      var chipP2=stocks.map(function(s){
+        var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
+        return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(8000)})
+          .then(function(r){return r.json()})
+          .then(function(d){
+            if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
+              var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
+              var cp=calcChipAnalysis(kd)
+              s._chipAnalyzed=true;s._chipConc=cp.conc;s._chipPeak=cp.peak;s._chipPattern=cp.pattern
+            }
+          }).catch(function(){})
+      })
+      await Promise.all(chipP2)
+    }catch(e){}
+    renderList()
     setStatus('✅ Top20 已更新 - 信号排序→入场时机→主力资金')
   }else{
     setStatus('❌ 重扫无结果')
