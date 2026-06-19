@@ -728,6 +728,11 @@ async function doSearch(){
   // 兼容指数代码：1A0001=上证指数
   if(/^1a\\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
 
+  // 判断输入类型：A股代码(6位)/港股(5位)/美股(含字母)/北交所(92/4/8开头)
+  var isCode=/^\\d{6}$/.test(v)||/^9\\d{5}$/.test(v)||/^[48]\\d{5}$/.test(v)
+  var isHK=/^\\d{5}$/.test(v)
+  var isUS=/[a-zA-Z]/.test(v)&&!/^\\d/.test(v)&&!/^1a/i.test(v)
+
 
   var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
   
