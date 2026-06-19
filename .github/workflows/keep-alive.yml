@@ -2,8 +2,8 @@ name: 🔄 Keep Render Awake
 
 on:
   schedule:
-    # 周一至周五 北京时间9:00-15:00 (UTC 1:00-7:00) 每5分钟ping一次
-    - cron: '*/5 1-7 * * 1-5'
+    # 每5分钟ping Render + 检查自动部署
+    - cron: '*/5 1-10 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -11,6 +11,10 @@ jobs:
     name: Ping Render
     runs-on: ubuntu-latest
     steps:
+      - name: 🚀 触发Render部署
+        run: |
+          curl -s -o /dev/null -w "Deploy: HTTP %{http_code}\n" --max-time 30 \
+            -X POST "https://api.render.com/deploy/srv-d8n3ku1o3t8c73cd4qs0?key=Fg1T5D-KRDc"
       - name: 🌐 Ping Render 保持活跃
         run: |
           CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://stock-screener-54nd.onrender.com")
