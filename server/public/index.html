@@ -381,7 +381,7 @@ async function doScan(){
     if(d.code!==200||!d.data||!d.data.opportunities){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
     }
-    stocks=await enrichMainForce(d.data.opportunities)
+    try{stocks=await enrichMainForce(d.data.opportunities)}catch(e){console.log('[scan] enrichMainForce跳过:',e.message)}
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
@@ -494,7 +494,7 @@ async function doFullRescan(){
     })
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
-    stocks=await enrichMainForce(stocks)
+    try{stocks=await enrichMainForce(stocks)}catch(e){console.log('[rescan] enrichMainForce跳过:',e.message)}
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
