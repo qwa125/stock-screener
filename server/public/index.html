@@ -586,16 +586,20 @@ async function doSearch(){
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
         +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在拉取K线数据进行分析……</div>'
       
-      // 1. 前端拉K线（多源兜底）
+      // 1. 前端拉K线（多源兜底：同花顺→东方财富→腾讯）
       var prefix='sz';if(stockCode.startsWith('6'))prefix='sh'
       var kdata=null
       
-      // 1a. 新浪API（主力）
+      // 1a. 同花顺API（主力）
       try{
-        var kurl='https://money.finance.sina.com.cn/quotes_service/api_json_v2.php/CN_MarketData.getKLineData?symbol='+prefix+stockCode+'&scale=240&ma=5,10,20,30,60,120&datalen=500'
-        var kr=await fetch(kurl,{signal:AbortSignal.timeout(8000)})
-        kdata=await kr.json()
-        if(!kdata||!kdata.length||kdata.length<20)kdata=null
+        var thurl='https://stockpage.10jqka.com.cn/spService/'+stockCode+'/Header/getKlineData?type=year&count=500'
+        var thr=await fetch(thurl,{signal:AbortSignal.timeout(8000)})
+        var thd=await thr.json()
+        if(thd&&Array.isArray(thd)&&thd.length>=20){
+          kdata=thd.map(function(l){
+            return {day:l.date||l.day,open:l.open,close:l.close,high:l.high,low:l.low,volume:l.volume||l.vol,amount:l.amount||0}
+          })
+        }
       }catch(e){kdata=null}
       
       // 1b. 东方财富API（兜底1）
