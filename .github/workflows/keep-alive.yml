@@ -1,0 +1,17 @@
+name: 🔄 Keep Render Awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Render
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🌐 Ping Render 保持活跃
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://stock-screener-54nd.onrender.com")
+          echo "[$(date '+%H:%M:%S')] HTTP $CODE"
+          [ "$CODE" = "200" ] || [ "$CODE" = "429" ] && echo "✅ 正常" || echo "⚠️ 异常"
