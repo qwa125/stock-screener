@@ -275,9 +275,7 @@ async function fetchRealtime(codes){
       var txt=new TextDecoder('gbk').decode(buf)
       txt.split(';').forEach(function(l){
         var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
-        // p[50]=主力净流入(万元),转成亿
-      var mf50=parseFloat(p[50])||0
-      r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0,mainForceInflow:Math.round(mf50/100)/100}
+        r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
       })
     }catch(e){}
   }
@@ -295,7 +293,6 @@ function buildDetail(s,rt){
   var posTClr=TAG_COLORS[posTag]||'#6b7280'
   var entry=s.entryTiming||0
   var safe=s.safetyScore||0
-  var mf=s.mainForceInflow||0
   var sc=s.score||0
   var gc=s.isGoldenCross
   var bai=s.baiXiaoDays||0
@@ -333,14 +330,13 @@ function buildDetail(s,rt){
   var future='<div class="prediction-box"><div class="label">📅 未来1-2日操作建议</div><div class="text">'+pred+'</div></div>'
 
   // 指标网格
-  var mfClr=mf>0?'red':mf<0?'green':''
+  var mfClr=''
   var grid='<div style="padding:4px 12px 4px;font-size:12px;font-weight:600;color:#666">📊 技术指标</div><div class="indicator-grid">'
     +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
     +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
-    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">'+(mf==0?'暂无':(mf>0?'+':mf<0?'-':'')+(mf>=1?Math.abs(mf).toFixed(2)+'亿':(Math.abs(mf)*10000).toFixed(0)+'万'))+'</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
     +gridChipLine(s,entry)
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
@@ -354,7 +350,6 @@ function buildDetail(s,rt){
   else if(sig==='轻仓买入'){details.push('中位区，具有一定安全边际');details.push('趋势向好但信号不强烈');details.push('建议控制仓位，设好止损')}
   else if(sig==='持有'){details.push('趋势向上，均线多头排列');details.push('无明确买入信号但形态良好');details.push('不急于卖出，持股待涨为主')}
   if(gc)details.push('MACD金叉信号，短期看多')
-  if(mf>0)details.push('主力资金净流入'+mf.toFixed(2)+'亿')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
   return tags+action+future+grid+detailList
@@ -396,20 +391,6 @@ async function doScan(){
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    // 用腾讯实时行情的主力资金填充（东方财富可能被拦截）
-    for(var si=0;si<stocks.length;si++){
-      var rt=realtimePrices[stocks[si].code]
-      if(rt){
-        // 优先用腾讯API传来的主力资金
-        if(rt.mainForceInflow&&rt.mainForceInflow!==0){
-          stocks[si].mainForceInflow=rt.mainForceInflow
-        }else if(stocks[si].mainForceInflow===0){
-          // 兜底：从涨跌幅推算方向性资金流（rt.chg是涨跌额）
-          var proxyMf=Math.round((rt.chgP||0)*10)/100
-          if(proxyMf!==0) stocks[si].mainForceInflow=proxyMf
-        }
-      }
-    }
     selectedIdx=-1;$('detailArea').style.display='none'
     // 前端拉K线计算筹码集中度（后端从美国拉不到）
     setStatus('🔄 分析筹码集中度...')
@@ -533,8 +514,8 @@ async function doFullRescan(){
       // 第二排序：入场时机(高→低)
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
-      // 第三排序：主力资金流入(高→低)
-      return (b.mainForceInflow||0)-(a.mainForceInflow||0)
+      // 第三排序：综合评分(高→低)
+      return (b.score||0)-(a.score||0)
     })
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
@@ -542,18 +523,6 @@ async function doFullRescan(){
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    // 用腾讯实时行情的主力资金填充（东方财富可能被拦截）
-    for(var si2=0;si2<stocks.length;si2++){
-      var rt2=realtimePrices[stocks[si2].code]
-      if(rt2){
-        if(rt2.mainForceInflow&&rt2.mainForceInflow!==0){
-          stocks[si2].mainForceInflow=rt2.mainForceInflow
-        }else if(stocks[si2].mainForceInflow===0){
-          var proxyMf2=Math.round((rt2.chgP||0)*10)/100
-          if(proxyMf2!==0) stocks[si2].mainForceInflow=proxyMf2
-        }
-      }
-    }
     selectedIdx=-1;$('detailArea').style.display='none'
     // 前端拉K线计算筹码集中度
     try{
@@ -572,7 +541,7 @@ async function doFullRescan(){
       await Promise.all(chipP2)
     }catch(e){}
     renderList()
-    setStatus('✅ Top20 已更新 - 信号排序→入场时机→主力资金')
+    setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中')
   }else{
     setStatus('❌ 重扫无结果')
   }
@@ -687,7 +656,7 @@ async function doSearch(){
       changePercent: stockChgP,
       suggestion: '查找中…',
       score: 0, entryTiming: 0, pricePosition: 0,
-      safetyScore: 0, mainForceInflow: 0,
+      safetyScore: 0,
       isGoldenCross: false, baiXiaoDays: 0,
       signalCombination: '', jiGouActiveScore: 0,
       chipAnalysis: null
@@ -754,31 +723,11 @@ async function doSearch(){
       
       if(!kdata)throw new Error('所有K线源均不可用')
       
-      // 1d. 前端拉腾讯实时行情获取主力资金净流入
-      var mainForceRaw=0
-      try{
-        var tmfRes=await fetch('https://qt.gtimg.cn/q='+prefix+stockCode,{signal:AbortSignal.timeout(6000)})
-        var tmfBuf=await tmfRes.arrayBuffer()
-        var tmfTxt=new TextDecoder('gbk').decode(tmfBuf)
-        var tmfP=tmfTxt.split('~')
-        if(tmfP.length>=51){
-          // p[50]=主力净流入(万元), 转成亿
-          var tmf50=parseFloat(tmfP[50])||0
-          mainForceRaw=Math.round(tmf50/100)/100
-          console.log('[search] 主力资金(亿) from 腾讯:', mainForceRaw)
-        }
-      }catch(e){}
-      
-      // 如果主力资金仍为0，从涨跌幅推算方向性资金流
-      if(!mainForceRaw&&stockChgP){
-        mainForceRaw=Math.round((stockChgP/100)*(stockPrice||10)*10)/100
-        console.log('[search] 主力资金方向性估算(亿):', mainForceRaw)
-      }
       
       // 2. POST给后端即时分析
       var ar=await fetch('/api/gem/analyze',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({code:stockCode,name:stockName,kline:kdata,mainForceInflow:mainForceRaw})
+        body:JSON.stringify({code:stockCode,name:stockName,kline:kdata)
       })
       var aj=await ar.json()
       console.log('[search] analyze response:', JSON.stringify(aj,null,2))
