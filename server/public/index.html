@@ -324,14 +324,14 @@ function buildDetail(s,rt){
   var future='<div class="prediction-box"><div class="label">📅 未来1-2日操作建议</div><div class="text">'+pred+'</div></div>'
 
   // 指标网格
-  var mfClr=mf>0?'green':mf<0?'red':''
+  var mfClr=mf>0?'red':mf<0?'green':''
   var grid='<div style="padding:4px 12px 4px;font-size:12px;font-weight:600;color:#666">📊 技术指标</div><div class="indicator-grid">'
     +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
     +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
-    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">'+(mf==0?'暂无':(mf>0?'+':'')+(mf>=1?'¥'+Math.abs(mf).toFixed(2)+'亿':'¥'+(Math.abs(mf)*10000).toFixed(0)+'万'))+'</div></div>'
+    +'<div class="indicator-item"><div class="label">主力资金</div><div class="value '+mfClr+'">'+(mf==0?'暂无':(mf>0?'+':'')+(mf>=1?Math.abs(mf).toFixed(2)+'亿':(Math.abs(mf)*10000).toFixed(0)+'万'))+'</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
     +gridChipLine(s,entry)
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
@@ -345,7 +345,7 @@ function buildDetail(s,rt){
   else if(sig==='轻仓买入'){details.push('中位区，具有一定安全边际');details.push('趋势向好但信号不强烈');details.push('建议控制仓位，设好止损')}
   else if(sig==='持有'){details.push('趋势向上，均线多头排列');details.push('无明确买入信号但形态良好');details.push('不急于卖出，持股待涨为主')}
   if(gc)details.push('MACD金叉信号，短期看多')
-  if(mf>0)details.push('主力资金净流入¥'+mf.toFixed(2)+'亿')
+  if(mf>0)details.push('主力资金净流入'+mf.toFixed(2)+'亿')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
   return tags+action+future+grid+detailList
