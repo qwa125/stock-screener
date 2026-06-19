@@ -837,7 +837,7 @@ setTimeout(function(){
 var ADMIN_OPEN=false
 var ADMIN_PWD='' // 前端保护密码
 // 从 localStorage 读取自定义密码，没有则用默认
-var ADMIN_DEFAULT_PWD='admin888'
+var ADMIN_DEFAULT_PWD='qws1248szx'
 try{var saved=localStorage.getItem('adminPassword');if(saved)ADMIN_DEFAULT_PWD=saved}catch(e){}
 
 function openAdmin(){
@@ -865,10 +865,10 @@ function showAdminPassword(){
 function checkAdminPwd(){
   var pwd=ad('adminPwdInput')?ad('adminPwdInput').value.trim():''
   if(!pwd){alert('请输入密码');return}
-  if(pwd===ADMIN_DEFAULT_PWD||pwd==='admin888'){
+  if(pwd===ADMIN_DEFAULT_PWD||pwd==='qws1248szx'){
     ADMIN_PWD=pwd
-    // 如果用 master 密码 admin888 进入，自动重置 localStorage 的自定义密码
-    if(pwd==='admin888'&&ADMIN_DEFAULT_PWD!=='admin888'){
+    // 如果用 master 密码 qws1248szx 进入，自动重置 localStorage 的自定义密码
+    if(pwd==='qws1248szx'&&ADMIN_DEFAULT_PWD!=='qws1248szx'){
       try{localStorage.removeItem('adminPassword');ADMIN_DEFAULT_PWD='admin888'}catch(e){}
     }
     renderAdminView()
