@@ -392,25 +392,23 @@ async function doScan(){
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none'
-    // 前端拉K线计算筹码集中度（后端从美国拉不到）
-    setStatus('🔄 分析筹码集中度...')
+    renderList() // 先显示结果，筹码集中度后台计算
+    setStatus('🔄 计算筹码集中度...')
     try{
-      var chipPromises=stocks.map(function(s){
-        var c=s.code,pre=c.startsWith('6')?'sh':'sz',em=(c.startsWith('6')?'1.':'0.')+c
-        return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(8000)})
+      stocks.forEach(function(s,idx){
+        var c=s.code,em=(c.startsWith('6')?'1.':'0.')+c
+        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
             if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
               var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
               var chip=calcChipAnalysis(kd)
               s._chipAnalyzed=true;s._chipConc=chip.conc;s._chipPeak=chip.peak;s._chipPattern=chip.pattern
+              renderList() // 每完成一只更新显示
             }
           }).catch(function(){})
       })
-      await Promise.all(chipPromises)
-      console.log('[scan] 筹码分析完成')
-    }catch(e){console.log('[scan] 筹码分析跳过:',e.message)}
-    renderList()
+    }catch(e){}
     setStatus('✅ 实时数据已更新')
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -524,23 +522,23 @@ async function doFullRescan(){
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
-    // 前端拉K线计算筹码集中度
+    renderList() // 先显示
+    setStatus('🔄 计算筹码集中度...')
     try{
-      var chipP2=stocks.map(function(s){
+      stocks.forEach(function(s,idx){
         var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
-        return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(8000)})
+        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
             if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
               var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
               var cp=calcChipAnalysis(kd)
               s._chipAnalyzed=true;s._chipConc=cp.conc;s._chipPeak=cp.peak;s._chipPattern=cp.pattern
+              renderList()
             }
           }).catch(function(){})
       })
-      await Promise.all(chipP2)
     }catch(e){}
-    renderList()
     setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中')
   }else{
     setStatus('❌ 重扫无结果')
@@ -678,7 +676,7 @@ async function doSearch(){
       try{
         var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
-        var ekr2=await fetch(ekurl2,{signal:AbortSignal.timeout(8000)})
+        var ekr2=await fetch(ekurl2,{signal:AbortSignal.timeout(5000)})
         var ekd2=await ekr2.json()
         if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=20){
           kdata=ekd2.data.klines.map(function(l){
@@ -693,7 +691,7 @@ async function doSearch(){
         try{
           var emSecId=(stockCode.startsWith('6')?'1.':'0.')+stockCode
           var ekurl='https://push2.eastmoney.com/api/qt/stock/kline/get?secid='+emSecId+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=200'
-          var ekr=await fetch(ekurl,{signal:AbortSignal.timeout(8000)})
+          var ekr=await fetch(ekurl,{signal:AbortSignal.timeout(5000)})
           var ekd=await ekr.json()
           if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=20){
             kdata=ekd.data.klines.map(function(l){
@@ -708,7 +706,7 @@ async function doSearch(){
       if(!kdata){
         try{
           var tkurl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+prefix+stockCode+',day,,,120,qfq'
-          var tkr=await fetch(tkurl,{signal:AbortSignal.timeout(8000)})
+          var tkr=await fetch(tkurl,{signal:AbortSignal.timeout(5000)})
           var tkd=await tkr.json()
           var tkArr=tkd&&tkd.data&&(tkd.data[stockCode]||tkd.data[prefix+stockCode])
           tkArr=tkArr&&tkArr.day
