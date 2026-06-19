@@ -666,24 +666,20 @@ async function getSearchCache(){
 }
 
 // ---------- 前端查Tencent行情（带回真实名称+股价） ----------
-async function fetchTencentDetail(code){
-  if(!code||code.length<6)return null
-  var market=code.startsWith('6')?'sh':'sz'
+async function fetchTencentDetail(code,market){
+  if(!code)return null
+  var m=market||(code.startsWith('6')?'sh':'sz')
   try{
-    var res=await fetch('https://qt.gtimg.cn/q='+market+code)
+    var res=await fetch('https://qt.gtimg.cn/q='+m+code)
     var buf=await res.arrayBuffer()
     var txt=new TextDecoder('gbk').decode(buf)
     var p=txt.split('~')
-    if(p.length<40||p[1]==='')return null
+    if(p.length<40||p[1]===''||p[1]==='-'||p[1]===code)return null
     return {
-      name: p[1]||('股票'+code),
-      code: p[2]||code,
-      price: parseFloat(p[3])||0,
-      yc: parseFloat(p[4])||0,
-      chg: parseFloat(p[31])||0,
-      chgP: parseFloat(p[32])||0,
-      high: parseFloat(p[33])||0,
-      low: parseFloat(p[34])||0
+      name: p[1]||null, code: p[2]||code, market: m,
+      price: parseFloat(p[3])||0, yc: parseFloat(p[4])||0,
+      chg: parseFloat(p[31])||0, chgP: parseFloat(p[32])||0,
+      high: parseFloat(p[33])||0, low: parseFloat(p[34])||0
     }
   }catch(e){return null}
 }
@@ -692,16 +688,27 @@ async function fetchTencentDetail(code){
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   var da=$('detailArea');da.style.display='none'
-  var isCode=/^\d{6}$/.test(v)
-  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0
+  var isCode=/^\d{6}$/.test(v), isHK=/^\d{5}$/.test(v), isUS=/^[A-Za-z]{1,5}$/.test(v)
+  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
   
-  // 第一步：确定代码和真实名称
-  if(isCode){
+  // 第一步：确定代码和真实名称（多市场验证）
+  if(isCode||isHK||isUS){
     stockCode=v
-    // 前端查Tencent拿真实名称+股价
-    var t=await fetchTencentDetail(v)
-    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low}
-    else{stockName='股票+v'}
+    // 多市场查询：A股(sz/sh)→港股(hk)→美股(us)
+    var t=null
+    if(isCode){
+      t=await fetchTencentDetail(v,'sz');if(!t)t=await fetchTencentDetail(v,'sh')
+      if(!t&&isHK)t=await fetchTencentDetail(v,'hk')
+    }else if(isHK){
+      t=await fetchTencentDetail(v,'hk');if(!t)t=await fetchTencentDetail(v,'sz')
+    }else if(isUS){
+      t=await fetchTencentDetail(v,'us')
+    }
+    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
+    else{
+      da.style.display='block';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
+      return
+    }
   }else{
     // 名称搜索：从东方财富搜索代理查全A股
     try{
@@ -717,7 +724,7 @@ async function doSearch(){
         stockName=hit.Name||hit.Code
         // 查Tencent行情拿实时价
         var t=await fetchTencentDetail(stockCode)
-        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low}
+        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
         $('searchInput').value=stockName
       }
     }catch(e){}
@@ -748,9 +755,28 @@ async function doSearch(){
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
         +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在拉取K线数据进行分析……</div>'
       
-      // 1. 前端拉K线（多源兜底：同花顺→东方财富→腾讯）
-      var prefix='sz';if(stockCode.startsWith('6'))prefix='sh'
+      // 1. 前端拉K线（A股→东方财富/腾讯；港股→腾讯HK）
+      var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
+      
+      if(stockMarket==='hk'||prefix==='hk'){
+        // 港股K线：腾讯HK API
+        try{
+          var hkurl='https://web.ifzq.gtimg.cn/appstock/app/hk/fqkline/get?param='+stockCode+',day,,,120,qfq'
+          var hkr=await fetch(hkurl,{signal:AbortSignal.timeout(5000)})
+          var hkd=await hkr.json()
+          var hkArr=hkd&&hkd.data&&hkd.data[stockCode]&&hkd.data[stockCode].day
+          if(hkArr&&hkArr.length>=20){
+            kdata=hkArr.map(function(l){
+              var d=l.split(' ')
+              return {day:d[0],open:parseFloat(d[1]),close:parseFloat(d[2]),high:parseFloat(d[3]),low:parseFloat(d[4]),volume:parseFloat(d[5])||0}
+            })
+          }
+        }catch(e){}
+      }else if(stockMarket==='us'){
+        // 美股暂无K线源，跳过深度分析
+      }else{
+      // A股/ETF/可转债：东方财富+腾讯多源兜底
       
       // 1a. 东方财富K线get2API（主力，历史数据稳定性好）
       try{
@@ -798,8 +824,9 @@ async function doSearch(){
           }
         }catch(e){}
       }
+      }
       
-      if(!kdata)throw new Error('所有K线源均不可用')
+      if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       
       
       // 2. POST给后端即时分析
