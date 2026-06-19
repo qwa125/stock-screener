@@ -202,6 +202,7 @@ export declare class GemScreenerController {
         code: string;
         name?: string;
         kline: any[];
+        mainForceInflow?: number;
     }): Promise<{
         code: number;
         msg: string;

@@ -2180,7 +2180,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return { concentration90, peakPosition, pattern };
     }
-    async quickAnalyze(code, name, keepAll, rawKline) {
+    async quickAnalyze(code, name, keepAll, rawKline, frontendMainForce) {
         const raw = rawKline || await this.dataFetcher.getKLineData(code);
         if (!raw?.length || raw.length < 20)
             return null;
@@ -2333,7 +2333,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
         const volRatio = avgVol5 / (avgVol20 || 1);
         const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
-        const mainForceInflow = Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
+        const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
         return {
             code, name: name ?? '',
             currentPrice: price,

@@ -404,7 +404,7 @@ export class GemScreenerController {
   }
 
   @Post('analyze')
-  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[] }) {
+  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {
       return { code: 400, msg: '缺少股票代码或K线数据' };
     }
@@ -419,10 +419,9 @@ export class GemScreenerController {
         volume: parseFloat(item.volume) || 0,
         amount: item.amount || 0,
       }));
-      let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData);
+      let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
       if (!opp) {
-        // quickAnalyze返回null（无买入信号）时，用keepAll=true再试，至少返回基础分析数据
-        opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData);
+        opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
       }
       if (opp) {
         return { code: 200, msg: 'success', data: [opp] };

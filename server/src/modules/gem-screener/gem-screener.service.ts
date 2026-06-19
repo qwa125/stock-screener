@@ -2544,7 +2544,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { concentration90, peakPosition, pattern };
   }
 
-  async quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[]): Promise<OpportunityStock | null> {
+  async quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[], frontendMainForce?: number): Promise<OpportunityStock | null> {
     const raw: any[] = rawKline || await this.dataFetcher.getKLineData(code) as any;
     if (!raw?.length || raw.length < 20) return null;
 
@@ -2717,7 +2717,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const avgVol20 = volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
       const volRatio = avgVol5 / (avgVol20 || 1);
       const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
-      const mainForceInflow = Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
+      const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
 
       return {
         code, name: name ?? '',
