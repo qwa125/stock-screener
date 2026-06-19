@@ -2332,7 +2332,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
         const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
         const volRatio = avgVol5 / (avgVol20 || 1);
-        const mainForceInflow = Math.round(((volRatio - 1) * price * avgVol5 / 100000000) * 100) / 100;
+        const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
+        const mainForceInflow = Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
         return {
             code, name: name ?? '',
             currentPrice: price,
