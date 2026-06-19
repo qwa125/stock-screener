@@ -198,6 +198,15 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    proxySinaUS(code: string): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: string;
+    }>;
     analyzeWithKLine(body: {
         code: string;
         name?: string;

@@ -317,6 +317,25 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: '搜索请求失败', data: [] };
         }
     }
+    async proxySinaUS(code) {
+        if (!code || !code.trim()) {
+            return { code: 400, msg: '缺少股票代码' };
+        }
+        try {
+            const url = `https://hq.sinajs.cn/list=gb_${encodeURIComponent(code.trim().toLowerCase())}`;
+            const resp = await fetch(url, {
+                headers: { Referer: 'https://finance.sina.com.cn' },
+                signal: AbortSignal.timeout(10000)
+            });
+            const buf = await resp.arrayBuffer();
+            const txt = new TextDecoder('gb18030').decode(buf);
+            return { code: 200, msg: 'success', data: txt };
+        }
+        catch (e) {
+            this.logger.error(`代理新浪美股失败: ${e.message}`);
+            return { code: 500, msg: '新浪美股API请求失败', data: '' };
+        }
+    }
     async analyzeWithKLine(body) {
         if (!body.code || !body.kline || !Array.isArray(body.kline)) {
             return { code: 400, msg: '缺少股票代码或K线数据' };
@@ -500,6 +519,13 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxySearch", null);
+__decorate([
+    (0, common_1.Get)('proxy/sina-us'),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxySinaUS", null);
 __decorate([
     (0, common_1.Post)('analyze'),
     __param(0, (0, common_1.Body)()),

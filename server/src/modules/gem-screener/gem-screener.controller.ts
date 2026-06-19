@@ -403,6 +403,30 @@ export class GemScreenerController {
     }
   }
 
+  /**
+   * 代理新浪美股/港股实时行情（解决前端跨域问题）
+   * GET /api/gem/proxy/sina-us?code=aapl
+   */
+  @Get('proxy/sina-us')
+  async proxySinaUS(@Query('code') code: string) {
+    if (!code || !code.trim()) {
+      return { code: 400, msg: '缺少股票代码' };
+    }
+    try {
+      const url = `https://hq.sinajs.cn/list=gb_${encodeURIComponent(code.trim().toLowerCase())}`;
+      const resp = await fetch(url, {
+        headers: { Referer: 'https://finance.sina.com.cn' },
+        signal: AbortSignal.timeout(10000)
+      });
+      const buf = await resp.arrayBuffer();
+      const txt = new TextDecoder('gb18030').decode(buf);
+      return { code: 200, msg: 'success', data: txt };
+    } catch (e) {
+      this.logger.error(`代理新浪美股失败: ${(e as Error).message}`);
+      return { code: 500, msg: '新浪美股API请求失败', data: '' };
+    }
+  }
+
   @Post('analyze')
   async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {
