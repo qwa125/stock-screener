@@ -159,6 +159,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <script>
 var API='/api'
+function timeoutSignal(ms){try{if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout)return AbortSignal.timeout(ms)}catch(e){}var c=new AbortController();setTimeout(function(){try{c.abort()}catch(e){}},ms);return c.signal}
 var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','观望':'#6b7280'}
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
@@ -541,7 +542,7 @@ async function doScan(){
     try{
       stocks.forEach(function(s,idx){
         var c=s.code,em=(c.startsWith('6')?'1.':'0.')+c
-        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
+        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
             if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
@@ -671,7 +672,7 @@ async function doFullRescan(){
     try{
       stocks.forEach(function(s,idx){
         var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
-        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:AbortSignal.timeout(5000)})
+        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
           .then(function(r){return r.json()})
           .then(function(d){
             if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
@@ -868,7 +869,7 @@ async function doSearch(){
         // 港股K线：腾讯HK API
         try{
           var hkurl='https://web.ifzq.gtimg.cn/appstock/app/hk/fqkline/get?param='+stockCode+',day,,,120,qfq'
-          var hkr=await fetch(hkurl,{signal:AbortSignal.timeout(5000)})
+          var hkr=await fetch(hkurl,{signal:timeoutSignal(5000)})
           var hkd=await hkr.json()
           var hkArr=hkd&&hkd.data&&hkd.data[stockCode]&&hkd.data[stockCode].day
           if(hkArr&&hkArr.length>=1){
@@ -887,7 +888,7 @@ async function doSearch(){
       try{
         var emSecId2=isIndex?"1.":(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
-        var ekr2=await fetch(ekurl2,{signal:AbortSignal.timeout(5000)})
+        var ekr2=await fetch(ekurl2,{signal:timeoutSignal(5000)})
         var ekd2=await ekr2.json()
         if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=1){
           kdata=ekd2.data.klines.map(function(l){
@@ -902,7 +903,7 @@ async function doSearch(){
         try{
           var emSecId=(stockCode.startsWith('6')?'1.':'0.')+stockCode
           var ekurl='https://push2.eastmoney.com/api/qt/stock/kline/get?secid='+emSecId+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=200'
-          var ekr=await fetch(ekurl,{signal:AbortSignal.timeout(5000)})
+          var ekr=await fetch(ekurl,{signal:timeoutSignal(5000)})
           var ekd=await ekr.json()
           if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=1){
             kdata=ekd.data.klines.map(function(l){
@@ -917,7 +918,7 @@ async function doSearch(){
       if(!kdata){
         try{
           var tkurl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+prefix+stockCode+',day,,,120,qfq'
-          var tkr=await fetch(tkurl,{signal:AbortSignal.timeout(5000)})
+          var tkr=await fetch(tkurl,{signal:timeoutSignal(5000)})
           var tkd=await tkr.json()
           var tkArr=tkd&&tkd.data&&(tkd.data[stockCode]||tkd.data[prefix+stockCode])
           tkArr=tkArr&&tkArr.day
@@ -956,7 +957,7 @@ async function doSearch(){
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
         +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ K线分析暂不可用，切换服务器分析……</div>'
       try{
-        var r2=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode),{signal:AbortSignal.timeout(15000)})
+        var r2=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode),{signal:timeoutSignal(15000)})
         var j2=await r2.json()
         if(j2.code===200&&j2.data&&j2.data.length>0){
           var o2=j2.data[0];o2.name=stockName
