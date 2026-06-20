@@ -185,8 +185,11 @@ var _origFetch=window.fetch
 window.fetch=function(u,o){
   o=o||{}
   o.headers=o.headers||{}
-  if(!o.headers["X-Device-Id"]&&!o.headers["x-device-id"]){
-    o.headers["X-Device-Id"]=getOrCreateDeviceId()
+  // 只给后端 API 请求加设备ID头（外部 API 如腾讯行情不加，避免 CORS 预检失败）
+  if(typeof u==='string'&&u.indexOf('/api/')===0){
+    if(!o.headers["X-Device-Id"]&&!o.headers["x-device-id"]){
+      o.headers["X-Device-Id"]=getOrCreateDeviceId()
+    }
   }
   return _origFetch.call(this,u,o).then(function(r){
     // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
