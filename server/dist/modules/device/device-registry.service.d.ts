@@ -5,7 +5,10 @@ export declare class DeviceRegistryService {
     private maxSlots;
     private registryLoaded;
     private supabase;
+    private readonly filePath;
     private initSupabase;
+    private saveToFile;
+    private loadFromFile;
     private ensureLoaded;
     private loadRegistry;
     touchDevice(deviceId: string, ua: string): Promise<{

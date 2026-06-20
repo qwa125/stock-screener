@@ -10,6 +10,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceRegistryService = void 0;
 const common_1 = require("@nestjs/common");
 const supabase_client_1 = require("../../storage/database/supabase-client");
+const fs = require("fs");
+const path = require("path");
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
@@ -17,6 +19,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.maxSlots = 3;
         this.registryLoaded = false;
         this.supabase = this.initSupabase();
+        this.filePath = path.resolve(process.cwd(), '.device_registry.json');
     }
     initSupabase() {
         try {
@@ -25,14 +28,39 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 return client;
         }
         catch {
-            this.logger.warn('Supabase未配置，使用内存模式（重启后设备列表会清空）');
+            this.logger.warn('Supabase未配置，使用JSON文件持久化设备列表');
         }
         return null;
+    }
+    saveToFile() {
+        try {
+            fs.writeFileSync(this.filePath, JSON.stringify(this.registry, null, 2), 'utf-8');
+        }
+        catch (e) {
+        }
+    }
+    loadFromFile() {
+        try {
+            if (fs.existsSync(this.filePath)) {
+                const raw = fs.readFileSync(this.filePath, 'utf-8');
+                const data = JSON.parse(raw);
+                if (Array.isArray(data) && data.length > 0) {
+                    this.registry = data;
+                    this.logger.log(`从文件加载了 ${this.registry.length} 个设备`);
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`文件加载设备失败: ${e.message}`);
+        }
     }
     async ensureLoaded() {
         if (this.registryLoaded)
             return;
         await this.loadRegistry();
+        if (!this.supabase) {
+            this.loadFromFile();
+        }
         this.registryLoaded = true;
     }
     async loadRegistry() {
@@ -94,6 +122,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             if (error)
                 this.logger.warn(`Supabase插入失败: ${error.message}`);
         }
+        this.saveToFile();
         return { allowed: true };
     }
     async tryRegister(ip, ua) {
@@ -110,6 +139,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         this.registry.push({ fingerprint, ua, displayName: '未识别', firstSeen: Date.now(), lastSeen: Date.now() });
         this.logger.log(`📱 新设备注册: ${fingerprint.slice(0, 30)} (${this.registry.length}/${limit})`);
+        this.saveToFile();
         return { allowed: true };
     }
     async getDevices() {
@@ -136,6 +166,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (this.supabase) {
             await this.supabase.from('access_devices').delete().eq('id', device.fingerprint);
         }
+        this.saveToFile();
         return { success: true };
     }
     async removeAllDevices() {
@@ -144,6 +175,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (this.supabase) {
             await this.supabase.from('access_devices').delete().neq('id', '0');
         }
+        this.saveToFile();
         return { success: true };
     }
     async updateRemark(index, remark) {

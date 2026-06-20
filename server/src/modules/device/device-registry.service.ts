@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-client'
+import * as fs from 'fs'
+import * as path from 'path'
 import type { DeviceRegistryEntry } from './device-registry.types'
 
 @Injectable()
@@ -9,20 +11,47 @@ export class DeviceRegistryService {
   private maxSlots = 3
   private registryLoaded = false
   private supabase = this.initSupabase()
+  private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
 
   private initSupabase() {
     try {
       const client = getSupabaseClient()
       if (client) return client
     } catch {
-      this.logger.warn('Supabase未配置，使用内存模式（重启后设备列表会清空）')
+      this.logger.warn('Supabase未配置，使用JSON文件持久化设备列表')
     }
     return null
+  }
+
+  private saveToFile() {
+    try {
+      fs.writeFileSync(this.filePath, JSON.stringify(this.registry, null, 2), 'utf-8')
+    } catch (e) {
+      // 文件写入失败不阻止主流程
+    }
+  }
+
+  private loadFromFile() {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, 'utf-8')
+        const data = JSON.parse(raw)
+        if (Array.isArray(data) && data.length > 0) {
+          this.registry = data
+          this.logger.log(`从文件加载了 ${this.registry.length} 个设备`)
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`文件加载设备失败: ${(e as Error).message}`)
+    }
   }
 
   private async ensureLoaded() {
     if (this.registryLoaded) return
     await this.loadRegistry()
+    if (!this.supabase) {
+      this.loadFromFile()
+    }
     this.registryLoaded = true
   }
 
@@ -88,6 +117,7 @@ export class DeviceRegistryService {
         .insert({ id: deviceId, ua, display_name: displayName })
       if (error) this.logger.warn(`Supabase插入失败: ${error.message}`)
     }
+    this.saveToFile()
 
     return { allowed: true }
   }
@@ -106,6 +136,7 @@ export class DeviceRegistryService {
     }
     this.registry.push({ fingerprint, ua, displayName: '未识别', firstSeen: Date.now(), lastSeen: Date.now() })
     this.logger.log(`📱 新设备注册: ${fingerprint.slice(0, 30)} (${this.registry.length}/${limit})`)
+    this.saveToFile()
     return { allowed: true }
   }
 
@@ -137,6 +168,7 @@ export class DeviceRegistryService {
     if (this.supabase) {
       await this.supabase.from('access_devices').delete().eq('id', device.fingerprint)
     }
+    this.saveToFile()
     return { success: true }
   }
 
@@ -146,6 +178,7 @@ export class DeviceRegistryService {
     if (this.supabase) {
       await this.supabase.from('access_devices').delete().neq('id', '0')
     }
+    this.saveToFile()
     return { success: true }
   }
 
