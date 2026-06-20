@@ -65,12 +65,9 @@ except Exception as e:
 function getSupabaseCredentials() {
     loadEnv();
     const url = process.env.COZE_SUPABASE_URL;
-    const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
+    const anonKey = process.env.COZE_SUPABASE_ANON_KEY || '';
     if (!url) {
         throw new Error('COZE_SUPABASE_URL is not set');
-    }
-    if (!anonKey) {
-        throw new Error('COZE_SUPABASE_ANON_KEY is not set');
     }
     return { url, anonKey };
 }
