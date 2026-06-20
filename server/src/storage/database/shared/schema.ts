@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm"
 
 
 export const devices = pgTable("devices", {
-	id: varchar({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
+	id: varchar({ length: 36 }).primaryKey().notNull(),
 	trialStart: timestamp("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	trialEnd: timestamp("trial_end", { withTimezone: true, mode: 'string' }).default(sql`(now() + '7 days'::interval)`).notNull(),
 	subscriptionEnd: timestamp("subscription_end", { withTimezone: true, mode: 'string' }),
@@ -30,7 +30,7 @@ export const accessDevices = pgTable("access_devices", {
 ]);
 
 export const subscriptions = pgTable("subscriptions", {
-	id: varchar({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
+	id: varchar({ length: 36 }).primaryKey().notNull(),
 	deviceId: varchar("device_id", { length: 36 }).notNull(),
 	orderId: varchar("order_id", { length: 64 }),
 	planType: varchar("plan_type", { length: 20 }).default('monthly').notNull(),

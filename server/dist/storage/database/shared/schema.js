@@ -4,7 +4,7 @@ exports.subscriptions = exports.accessDevices = exports.healthCheck = exports.de
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
 exports.devices = (0, pg_core_1.pgTable)("devices", {
-    id: (0, pg_core_1.varchar)({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
+    id: (0, pg_core_1.varchar)({ length: 36 }).primaryKey().notNull(),
     trialStart: (0, pg_core_1.timestamp)("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
     trialEnd: (0, pg_core_1.timestamp)("trial_end", { withTimezone: true, mode: 'string' }).default((0, drizzle_orm_1.sql) `(now() + '7 days'::interval)`).notNull(),
     subscriptionEnd: (0, pg_core_1.timestamp)("subscription_end", { withTimezone: true, mode: 'string' }),
@@ -27,7 +27,7 @@ exports.accessDevices = (0, pg_core_1.pgTable)("access_devices", {
     (0, pg_core_1.index)("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
 ]);
 exports.subscriptions = (0, pg_core_1.pgTable)("subscriptions", {
-    id: (0, pg_core_1.varchar)({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
+    id: (0, pg_core_1.varchar)({ length: 36 }).primaryKey().notNull(),
     deviceId: (0, pg_core_1.varchar)("device_id", { length: 36 }).notNull(),
     orderId: (0, pg_core_1.varchar)("order_id", { length: 64 }),
     planType: (0, pg_core_1.varchar)("plan_type", { length: 20 }).default('monthly').notNull(),

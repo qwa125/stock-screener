@@ -10,7 +10,7 @@ export declare const devices: import("drizzle-orm/pg-core").PgTableWithColumns<{
             data: string;
             driverParam: string;
             notNull: true;
-            hasDefault: true;
+            hasDefault: false;
             isPrimaryKey: true;
             isAutoincrement: false;
             hasRuntimeDefault: false;
@@ -260,7 +260,7 @@ export declare const subscriptions: import("drizzle-orm/pg-core").PgTableWithCol
             data: string;
             driverParam: string;
             notNull: true;
-            hasDefault: true;
+            hasDefault: false;
             isPrimaryKey: true;
             isAutoincrement: false;
             hasRuntimeDefault: false;
