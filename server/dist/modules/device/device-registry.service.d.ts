@@ -37,4 +37,5 @@ export declare class DeviceRegistryService {
         success: boolean;
     }>;
     private getEffectiveMax;
+    private getOrInitSupabase;
 }

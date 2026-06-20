@@ -43,7 +43,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         try {
             const ref = new URL(url).hostname.split('.')[0];
             const client = new pg.Client({
-                host: `aws-0-ap-northeast-1.pooler.supabase.com`,
+                host: `${ref}.pooler.supabase.com`,
                 port: 6543,
                 user: `postgres.${ref}`,
                 password: pwd,
@@ -63,7 +63,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             await client.query(`
         CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
       `);
+            await client.query(`NOTIFY pgrst, 'reload schema'`);
             await client.end();
+            await new Promise(r => setTimeout(r, 3000));
             this.logger.log('自动创建access_devices表成功');
             return true;
         }
@@ -134,7 +136,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                         .from('access_devices')
                         .select('*')
                         .order('first_seen', { ascending: true });
-                    if (!retry.error && retry.data && retry.data.length > 0) {
+                    if (!retry.error && retry.data) {
                         this.registry = retry.data.map((r) => ({
                             fingerprint: r.id,
                             ua: r.ua || '',
@@ -143,9 +145,11 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                             lastSeen: new Date(r.last_seen).getTime(),
                         }));
                         this.logger.log(`从Supabase加载了 ${this.registry.length} 个设备（建表后重试）`);
+                        return;
                     }
                 }
             }
+            this.logger.warn('Supabase 不可用，降级到文件存储');
             this.supabase = null;
         }
     }
@@ -162,8 +166,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         const existing = this.registry.find(e => e.fingerprint === deviceId);
         if (existing) {
             existing.lastSeen = Date.now();
-            if (this.supabase) {
-                await this.supabase
+            const supabase = await this.getOrInitSupabase();
+            if (supabase) {
+                await supabase
                     .from('access_devices')
                     .update({ last_seen: now, ua, display_name: displayName })
                     .eq('id', deviceId);
@@ -175,8 +180,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         this.registry.push({ fingerprint: deviceId, ua, displayName, firstSeen: Date.now(), lastSeen: Date.now() });
         this.logger.log(`📱 新设备注册: ${deviceId.slice(0, 20)} (${this.registry.length}/${limit})`);
-        if (this.supabase) {
-            const { error } = await this.supabase
+        const supabase = await this.getOrInitSupabase();
+        if (supabase) {
+            const { error } = await supabase
                 .from('access_devices')
                 .insert({ id: deviceId, ua, display_name: displayName });
             if (error)
@@ -199,6 +205,14 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         this.registry.push({ fingerprint, ua, displayName: '未识别', firstSeen: Date.now(), lastSeen: Date.now() });
         this.logger.log(`📱 新设备注册: ${fingerprint.slice(0, 30)} (${this.registry.length}/${limit})`);
+        const supabase = await this.getOrInitSupabase();
+        if (supabase) {
+            const { error } = await supabase
+                .from('access_devices')
+                .insert({ id: fingerprint, ua, display_name: '未识别' });
+            if (error)
+                this.logger.warn(`Supabase插入失败(tryRegister): ${error.message}`);
+        }
         this.saveToFile();
         return { allowed: true };
     }
@@ -254,6 +268,20 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     getEffectiveMax() {
         return this.maxSlots;
+    }
+    async getOrInitSupabase() {
+        if (this.supabase)
+            return this.supabase;
+        this.supabase = this.initSupabase();
+        if (this.supabase) {
+            try {
+                await this.supabase.from('access_devices').select('id').limit(1);
+            }
+            catch {
+                this.supabase = null;
+            }
+        }
+        return this.supabase;
     }
 };
 exports.DeviceRegistryService = DeviceRegistryService;
