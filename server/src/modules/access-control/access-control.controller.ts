@@ -33,7 +33,7 @@ export class AccessControlController {
       msg: 'ok',
       data: {
         ...acStatus,
-        usedSlots: this.deviceRegistry.registeredCount,
+        usedSlots: await this.deviceRegistry.registeredCount(),
       },
     };
   }

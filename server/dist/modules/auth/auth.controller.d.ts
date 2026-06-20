@@ -85,10 +85,10 @@ export declare class AuthController {
         msg: any;
         data?: undefined;
     }>;
-    getMaxSlots(): {
+    getMaxSlots(): Promise<{
         maxSlots: number;
         registered: number;
-    };
+    }>;
     setMaxSlots(body: {
         maxSlots: number;
     }): Promise<{

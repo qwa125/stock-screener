@@ -236,7 +236,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         await this.ensureLoaded();
         return [...this.registry];
     }
-    get registeredCount() {
+    async registeredCount() {
+        await this.ensureLoaded();
         return this.registry.length;
     }
     get maxAllowed() {

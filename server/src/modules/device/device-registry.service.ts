@@ -238,7 +238,8 @@ export class DeviceRegistryService {
     return [...this.registry]
   }
 
-  get registeredCount(): number {
+  async registeredCount(): Promise<number> {
+    await this.ensureLoaded()
     return this.registry.length
   }
 

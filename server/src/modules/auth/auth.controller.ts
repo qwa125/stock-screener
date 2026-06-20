@@ -88,10 +88,10 @@ export class AuthController {
 
   /** 获取当前设备限额 */
   @Get('max-slots')
-  getMaxSlots(): { maxSlots: number; registered: number } {
+  async getMaxSlots(): Promise<{ maxSlots: number; registered: number }> {
     return {
       maxSlots: this.deviceRegistry.maxAllowed,
-      registered: this.deviceRegistry.registeredCount,
+      registered: await this.deviceRegistry.registeredCount(),
     };
   }
 
@@ -122,7 +122,7 @@ export class AuthController {
     if (!ok) {
       return { code: 404, msg: `设备 #${idx} 不存在` };
     }
-    return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+    return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: await this.deviceRegistry.registeredCount() } };
   }
 
   /** 更新设备备注 */

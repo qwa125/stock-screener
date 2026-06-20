@@ -85,10 +85,10 @@ let AuthController = class AuthController {
             return { code: 404, msg: e.message };
         }
     }
-    getMaxSlots() {
+    async getMaxSlots() {
         return {
             maxSlots: this.deviceRegistry.maxAllowed,
-            registered: this.deviceRegistry.registeredCount,
+            registered: await this.deviceRegistry.registeredCount(),
         };
     }
     async setMaxSlots(body) {
@@ -110,7 +110,7 @@ let AuthController = class AuthController {
         if (!ok) {
             return { code: 404, msg: `设备 #${idx} 不存在` };
         }
-        return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: this.deviceRegistry.registeredCount } };
+        return { code: 200, msg: `已删除设备 #${idx}`, data: { registered: await this.deviceRegistry.registeredCount() } };
     }
     async updateRemark(index, body) {
         const idx = parseInt(index, 10);
@@ -166,7 +166,7 @@ __decorate([
     (0, common_1.Get)('max-slots'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Object)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getMaxSlots", null);
 __decorate([
     (0, common_1.Put)('max-slots'),
