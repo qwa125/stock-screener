@@ -292,12 +292,40 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (this.supabase) {
             try {
                 await this.supabase.from('access_devices').select('id').limit(1);
+                await this.syncRegistryToSupabase();
             }
             catch {
                 this.supabase = null;
             }
         }
         return this.supabase;
+    }
+    async syncRegistryToSupabase() {
+        if (!this.supabase || this.registry.length === 0)
+            return;
+        try {
+            const { data: existing } = await this.supabase
+                .from('access_devices')
+                .select('id');
+            const existingIds = new Set((existing || []).map((r) => r.id));
+            for (const device of this.registry) {
+                if (existingIds.has(device.fingerprint))
+                    continue;
+                await this.supabase
+                    .from('access_devices')
+                    .insert({
+                    id: device.fingerprint,
+                    ua: device.ua,
+                    display_name: device.displayName,
+                    first_seen: new Date(device.firstSeen).toISOString(),
+                    last_seen: new Date(device.lastSeen).toISOString(),
+                });
+            }
+            this.logger.log(`同步了 ${this.registry.length - existingIds.size} 台设备到 Supabase`);
+        }
+        catch (e) {
+            this.logger.warn(`同步设备到 Supabase 失败: ${e.message}`);
+        }
     }
 };
 exports.DeviceRegistryService = DeviceRegistryService;

@@ -301,10 +301,38 @@ export class DeviceRegistryService {
     if (this.supabase) {
       try {
         await this.supabase.from('access_devices').select('id').limit(1)
+        // 连接恢复后，将内存中已有的设备全量同步到 Supabase
+        await this.syncRegistryToSupabase()
       } catch {
         this.supabase = null
       }
     }
     return this.supabase
+  }
+
+  /** 将内存中所有设备写入 Supabase（用于连接恢复后的全量同步） */
+  private async syncRegistryToSupabase() {
+    if (!this.supabase || this.registry.length === 0) return
+    try {
+      const { data: existing } = await this.supabase
+        .from('access_devices')
+        .select('id')
+      const existingIds = new Set((existing || []).map((r: any) => r.id))
+      for (const device of this.registry) {
+        if (existingIds.has(device.fingerprint)) continue
+        await this.supabase
+          .from('access_devices')
+          .insert({
+            id: device.fingerprint,
+            ua: device.ua,
+            display_name: device.displayName,
+            first_seen: new Date(device.firstSeen).toISOString(),
+            last_seen: new Date(device.lastSeen).toISOString(),
+          })
+      }
+      this.logger.log(`同步了 ${this.registry.length - existingIds.size} 台设备到 Supabase`)
+    } catch (e) {
+      this.logger.warn(`同步设备到 Supabase 失败: ${(e as Error).message}`)
+    }
   }
 }

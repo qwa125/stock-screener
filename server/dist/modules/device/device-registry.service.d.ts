@@ -38,4 +38,5 @@ export declare class DeviceRegistryService {
     }>;
     private getEffectiveMax;
     private getOrInitSupabase;
+    private syncRegistryToSupabase;
 }
