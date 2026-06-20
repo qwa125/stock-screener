@@ -105,8 +105,8 @@ export class AuthController {
 
   /** 获取已注册设备列表 */
   @Get('devices')
-  getDevices() {
-    const devices = this.deviceRegistry.getDevices().map(d => ({
+  async getDevices() {
+    const devices = (await this.deviceRegistry.getDevices()).map(d => ({
       ...d,
       firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
       lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
@@ -139,7 +139,7 @@ export class AuthController {
   /** 清空所有已注册设备 */
   @Delete('devices')
   async clearDevices(): Promise<{ code: number; msg: string; data: { registered: number } }> {
-    await this.deviceRegistry.clearDevices();
+    await this.deviceRegistry.removeAllDevices();
     return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
   }
 }

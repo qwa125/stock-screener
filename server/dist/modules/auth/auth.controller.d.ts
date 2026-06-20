@@ -95,22 +95,22 @@ export declare class AuthController {
         ok: boolean;
         maxSlots: number;
     }>;
-    getDevices(): {
+    getDevices(): Promise<{
         code: number;
         data: {
             devices: {
                 firstSeenStr: string;
                 lastSeenStr: string;
-                index: number;
                 fingerprint: string;
-                displayName: string;
-                remark: string;
+                ua: string;
+                displayName?: string;
                 firstSeen: number;
                 lastSeen: number;
+                remark?: string;
             }[];
             total: number;
         };
-    };
+    }>;
     removeDevice(index: string): Promise<{
         code: number;
         msg: string;

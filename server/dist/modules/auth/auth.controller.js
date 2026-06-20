@@ -96,8 +96,8 @@ let AuthController = class AuthController {
         await this.deviceRegistry.setMaxSlots(slots);
         return { ok: true, maxSlots: slots };
     }
-    getDevices() {
-        const devices = this.deviceRegistry.getDevices().map(d => ({
+    async getDevices() {
+        const devices = (await this.deviceRegistry.getDevices()).map(d => ({
             ...d,
             firstSeenStr: new Date(d.firstSeen).toLocaleString('zh-CN'),
             lastSeenStr: new Date(d.lastSeen).toLocaleString('zh-CN'),
@@ -121,7 +121,7 @@ let AuthController = class AuthController {
         return { code: 200, msg: '备注已更新' };
     }
     async clearDevices() {
-        await this.deviceRegistry.clearDevices();
+        await this.deviceRegistry.removeAllDevices();
         return { code: 200, msg: '已清空全部设备注册', data: { registered: 0 } };
     }
 };
@@ -179,7 +179,7 @@ __decorate([
     (0, common_1.Get)('devices'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getDevices", null);
 __decorate([
     (0, common_1.Delete)('devices/:index'),

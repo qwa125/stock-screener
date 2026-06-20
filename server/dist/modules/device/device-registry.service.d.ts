@@ -1,15 +1,13 @@
+import type { DeviceRegistryEntry } from './device-registry.types';
 export declare class DeviceRegistryService {
     private readonly logger;
-    private readonly supabase;
-    private readonly envMaxUsers;
-    private runtimeMaxSlots;
     private registry;
-    constructor();
-    private initializeRegistry;
-    private get effectiveMax();
-    private syncToSupabase;
-    private upsertDevice;
-    private deleteDeviceFromDB;
+    private maxSlots;
+    private registryLoaded;
+    private supabase;
+    private initSupabase;
+    private ensureLoaded;
+    private loadRegistry;
     touchDevice(deviceId: string, ua: string): Promise<{
         allowed: boolean;
         message?: string;
@@ -18,20 +16,21 @@ export declare class DeviceRegistryService {
         allowed: boolean;
         message?: string;
     }>;
-    private createFingerprint;
+    getDevices(): Promise<DeviceRegistryEntry[]>;
     get registeredCount(): number;
     get maxAllowed(): number;
-    setMaxSlots(value: number): Promise<void>;
-    private extractDisplayName;
-    getDevices(): Array<{
-        index: number;
-        fingerprint: string;
-        displayName: string;
-        remark: string;
-        firstSeen: number;
-        lastSeen: number;
+    setMaxSlots(value: number): Promise<{
+        success: boolean;
+        maxSlots: number;
     }>;
-    updateRemark(index: number, remark: string): Promise<boolean>;
-    removeDevice(index: number): Promise<boolean>;
-    clearDevices(): Promise<void>;
+    removeDevice(index: number): Promise<{
+        success: boolean;
+    }>;
+    removeAllDevices(): Promise<{
+        success: boolean;
+    }>;
+    updateRemark(index: number, remark: string): Promise<{
+        success: boolean;
+    }>;
+    private getEffectiveMax;
 }
