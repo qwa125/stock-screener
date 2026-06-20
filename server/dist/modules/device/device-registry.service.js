@@ -42,32 +42,48 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         try {
             const ref = new URL(url).hostname.split('.')[0];
-            const client = new pg.Client({
-                host: `${ref}.pooler.supabase.com`,
-                port: 6543,
-                user: `postgres.${ref}`,
-                password: pwd,
-                database: 'postgres',
-                ssl: { rejectUnauthorized: false },
-            });
-            await client.connect();
-            await client.query(`
-        CREATE TABLE IF NOT EXISTS public.access_devices (
-          id TEXT PRIMARY KEY,
-          ua TEXT NOT NULL DEFAULT '',
-          display_name TEXT NOT NULL DEFAULT '',
-          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-      `);
-            await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
-      `);
-            await client.query(`NOTIFY pgrst, 'reload schema'`);
-            await client.end();
-            await new Promise(r => setTimeout(r, 3000));
-            this.logger.log('自动创建access_devices表成功');
-            return true;
+            const poolerHosts = [
+                `aws-0-ap-southeast-1.pooler.supabase.com`,
+                `aws-0-ap-northeast-1.pooler.supabase.com`,
+                `${ref}.pooler.supabase.com`,
+            ];
+            let lastError = null;
+            for (const host of poolerHosts) {
+                try {
+                    const client = new pg.Client({
+                        host,
+                        port: 6543,
+                        user: `postgres.${ref}`,
+                        password: pwd,
+                        database: 'postgres',
+                        ssl: { rejectUnauthorized: false },
+                        connectionTimeoutMillis: 5000,
+                    });
+                    await client.connect();
+                    await client.query(`
+            CREATE TABLE IF NOT EXISTS public.access_devices (
+              id TEXT PRIMARY KEY,
+              ua TEXT NOT NULL DEFAULT '',
+              display_name TEXT NOT NULL DEFAULT '',
+              first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+          `);
+                    await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
+          `);
+                    await client.query(`NOTIFY pgrst, 'reload schema'`);
+                    await client.end();
+                    this.logger.log(`通过 ${host} 自动创建/确认 access_devices 表成功`);
+                    await new Promise(r => setTimeout(r, 3000));
+                    return true;
+                }
+                catch (e) {
+                    lastError = e;
+                    this.logger.warn(`pooler ${host} 连接失败: ${e.message}`);
+                }
+            }
+            throw lastError || new Error('所有 pooler 连接均失败');
         }
         catch (e) {
             this.logger.warn(`自动创建表失败: ${e.message}`);
