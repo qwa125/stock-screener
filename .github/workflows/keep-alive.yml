@@ -3,7 +3,7 @@ name: 🔄 Keep Render Awake
 on:
   schedule:
     # 每5分钟ping Render + 检查自动部署
-    - cron: '*/5 1-10 * * 1-5'
+    - cron: '*/5 1-7 * * 1-5'
   workflow_dispatch:
 
 jobs:
