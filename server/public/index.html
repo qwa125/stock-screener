@@ -144,6 +144,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 </div>
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
+<div class="footer" id="footer">⏸️ 等待扫描</div>
 </div>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
@@ -1123,12 +1124,11 @@ function changeAdminPwd(){
 }
 // ========== End Admin Panel ==========
 </script>
-  <img src="https://api.render.com/deploy/srv-d8n3ku1o3t8c73cd4qs0?key=Fg1T5D-KRDc" style="display:none" alt=""/>
-</body>
 <div class="page-blur" id="pageBlur">
   <div class="blur-btn-wrap">
     <button class="blur-btn" onclick="doScan()">📊 点击扫描解锁</button>
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
+</body>
 </html>
