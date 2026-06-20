@@ -9,12 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceModule = void 0;
 const common_1 = require("@nestjs/common");
 const device_registry_service_1 = require("./device-registry.service");
+const device_controller_1 = require("./device.controller");
 let DeviceModule = class DeviceModule {
 };
 exports.DeviceModule = DeviceModule;
 exports.DeviceModule = DeviceModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
+        controllers: [device_controller_1.DeviceController],
         providers: [device_registry_service_1.DeviceRegistryService],
         exports: [device_registry_service_1.DeviceRegistryService],
     })

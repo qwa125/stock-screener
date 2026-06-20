@@ -96,12 +96,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-list{max-height:260px;overflow-y:auto}
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
-	.blocked-overlay{display:flex;position:fixed;top:0;left:0;right:0;bottom:0;background:#fff;z-index:2000;align-items:center;justify-content:center}
-	.blocked-overlay.open{display:flex}
-	.blocked-overlay.allowed{display:none}
-	.blocked-panel{text-align:center;background:#fff;padding:48px 24px;width:280px;margin:auto}
-	.blocked-panel .icon-mark{font-size:72px;color:#ef4444;font-weight:900;line-height:1;margin-bottom:20px}
-	.blocked-panel .msg-text{font-size:18px;color:#333;letter-spacing:2px}
+	.blocked-overlay{position:relative}
+	.blocked-overlay .blur-mask{position:absolute;top:0;left:0;right:0;bottom:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);background:rgba(255,255,255,.3);z-index:100;display:flex;align-items:center;justify-content:center;border-radius:12px}
+	.blocked-overlay .blur-msg{background:#fff;padding:20px 28px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.12);text-align:center}
+	.blocked-overlay .blur-msg .icon{font-size:40px;color:#ef4444;font-weight:900;line-height:1;margin-bottom:8px}
+	.blocked-overlay .blur-msg .msg-text{font-size:15px;color:#333;font-weight:500}
+	.blocked-overlay .blur-msg .sub-text{font-size:11px;color:#999;margin-top:6px}
+	.blocked-overlay.allowed .blur-mask{display:none}
 .admin-device-item .dev-name{font-weight:500;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-device-item .dev-time{font-size:10px;color:#9ca3af;margin-top:1px}
 .admin-device-item .dev-actions{display:flex;gap:4px;flex-shrink:0}
@@ -143,19 +144,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <span class="col-chg">涨跌幅</span>
   <span class="col-pos">位置</span>
 </div>
-<div class="stock-list" id="stockList">
-  <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
+<div class="blocked-overlay" id="blockedOverlay">
+  <div class="stock-list" id="stockList">
+    <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
+  </div>
+  <div class="blur-mask">
+    <div class="blur-msg">
+      <div class="icon">!</div>
+      <div class="msg-text">设备访问受限</div>
+      <div class="sub-text">请先搜索或扫描以注册设备</div>
+    </div>
+  </div>
 </div>
 
 <div class="footer" id="footer">⏸️ 等待扫描</div>
-
-<!-- 设备被阻止提示 -->
-<div class="blocked-overlay" id="blockedOverlay">
-  <div class="blocked-panel">
-    <div class="icon-mark">!</div>
-    <div class="msg-text">拒绝访问</div>
-  </div>
-</div>
 
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
@@ -202,15 +204,22 @@ window.fetch=function(u,o){
   return _origFetch.call(this,u,o).then(function(r){
     if(r.status===429){
       showBlocked()
+    } else if(r.status!==404){
+      // 非404的成功响应 → 设备已注册，取消模糊
+      $('blockedOverlay').classList.add('allowed')
     }
     return r
   })
 }
 function showBlocked(){
   $('blockedOverlay').classList.remove('allowed')
+  // 不清空已加载的股票列表，只是添加模糊遮罩
 }
-// 页面加载立即检查：未被阻止才隐藏遮罩（带上设备 ID）
-fetch('/api/auth/status',{headers:{'X-Device-Id':getOrCreateDeviceId()}}).then(function(r){
+// 页面加载时注册设备（POST 请求触发 guard 记录设备）
+fetch('/api/device/register',{
+  method:'POST',
+  headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'}
+}).then(function(r){
   if(r.status!==429) $('blockedOverlay').classList.add('allowed')
 }).catch(function(){
   $('blockedOverlay').classList.add('allowed')
