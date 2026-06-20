@@ -272,14 +272,32 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     async updateRemark(index, remark) {
         await this.ensureLoaded();
         if (index < 0 || index >= this.registry.length) {
+            this.logger.warn(`❌ 改名失败：设备索引 ${index} 不存在，当前共 ${this.registry.length} 台`);
             throw new Error(`设备索引 ${index} 不存在`);
         }
-        this.registry[index].displayName = remark;
-        if (this.supabase) {
-            await this.supabase
-                .from('access_devices')
-                .update({ display_name: remark })
-                .eq('id', this.registry[index].fingerprint);
+        const device = this.registry[index];
+        const oldName = device.displayName;
+        device.displayName = remark;
+        const client = await this.getOrInitSupabase();
+        if (client) {
+            try {
+                const { error } = await client
+                    .from('access_devices')
+                    .update({ display_name: remark })
+                    .eq('id', device.fingerprint);
+                if (error) {
+                    this.logger.error(`❌ Supabase 改名失败: ${error.message}`, { deviceId: device.fingerprint });
+                }
+                else {
+                    this.logger.log(`✅ Supabase 改名成功: ${oldName} → ${remark} (${device.fingerprint})`);
+                }
+            }
+            catch (e) {
+                this.logger.error(`❌ Supabase 改名异常: ${e.message}`);
+            }
+        }
+        else {
+            this.logger.warn(`⚠️ Supabase 不可用，仅内存中改名: ${oldName} → ${remark}`);
         }
         return { success: true };
     }
