@@ -1,7 +1,12 @@
-import { pgTable, index, varchar, timestamp, serial, foreignKey, numeric } from "drizzle-orm/pg-core"
+import { pgTable, serial, timestamp, index, varchar, foreignKey, numeric } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
+
+export const healthCheck = pgTable("health_check", {
+	id: serial().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+});
 
 export const devices = pgTable("devices", {
 	id: varchar({ length: 36 }).primaryKey().notNull(),
@@ -12,21 +17,6 @@ export const devices = pgTable("devices", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => [
 	index("devices_id_idx").using("btree", table.id.asc().nullsLast().op("text_ops")),
-]);
-
-export const healthCheck = pgTable("health_check", {
-	id: serial().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
-});
-
-export const accessDevices = pgTable("access_devices", {
-	id: varchar("id", { length: 255 }).primaryKey().notNull(),
-	ua: varchar("ua", { length: 512 }).notNull().default(''),
-	displayName: varchar("display_name", { length: 128 }).notNull().default(''),
-	firstSeen: timestamp("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	lastSeen: timestamp("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
 ]);
 
 export const subscriptions = pgTable("subscriptions", {
@@ -48,4 +38,14 @@ export const subscriptions = pgTable("subscriptions", {
 			foreignColumns: [devices.id],
 			name: "subscriptions_device_id_devices_id_fk"
 		}).onDelete("cascade"),
+]);
+
+export const accessDevices = pgTable("access_devices", {
+	id: varchar({ length: 255 }).primaryKey().notNull(),
+	ua: varchar({ length: 512 }).default('').notNull(),
+	displayName: varchar("display_name", { length: 128 }).default('').notNull(),
+	firstSeen: timestamp("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastSeen: timestamp("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
 ]);

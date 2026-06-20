@@ -1,3 +1,44 @@
+export declare const healthCheck: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "health_check";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "health_check";
+            dataType: "number";
+            columnType: "PgSerial";
+            data: number;
+            driverParam: number;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "health_check";
+            dataType: "string";
+            columnType: "PgTimestampString";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
 export declare const devices: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "devices";
     schema: undefined;
@@ -97,145 +138,6 @@ export declare const devices: import("drizzle-orm/pg-core").PgTableWithColumns<{
             data: string;
             driverParam: string;
             notNull: false;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: undefined;
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-    };
-    dialect: "pg";
-}>;
-export declare const healthCheck: import("drizzle-orm/pg-core").PgTableWithColumns<{
-    name: "health_check";
-    schema: undefined;
-    columns: {
-        id: import("drizzle-orm/pg-core").PgColumn<{
-            name: "id";
-            tableName: "health_check";
-            dataType: "number";
-            columnType: "PgSerial";
-            data: number;
-            driverParam: number;
-            notNull: true;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: undefined;
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
-            name: "updated_at";
-            tableName: "health_check";
-            dataType: "string";
-            columnType: "PgTimestampString";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: undefined;
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-    };
-    dialect: "pg";
-}>;
-export declare const accessDevices: import("drizzle-orm/pg-core").PgTableWithColumns<{
-    name: "access_devices";
-    schema: undefined;
-    columns: {
-        id: import("drizzle-orm/pg-core").PgColumn<{
-            name: "id";
-            tableName: "access_devices";
-            dataType: "string";
-            columnType: "PgVarchar";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: true;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {
-            length: 255;
-        }>;
-        ua: import("drizzle-orm/pg-core").PgColumn<{
-            name: "ua";
-            tableName: "access_devices";
-            dataType: "string";
-            columnType: "PgVarchar";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {
-            length: 512;
-        }>;
-        displayName: import("drizzle-orm/pg-core").PgColumn<{
-            name: "display_name";
-            tableName: "access_devices";
-            dataType: "string";
-            columnType: "PgVarchar";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {
-            length: 128;
-        }>;
-        firstSeen: import("drizzle-orm/pg-core").PgColumn<{
-            name: "first_seen";
-            tableName: "access_devices";
-            dataType: "string";
-            columnType: "PgTimestampString";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: true;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: undefined;
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        lastSeen: import("drizzle-orm/pg-core").PgColumn<{
-            name: "last_seen";
-            tableName: "access_devices";
-            dataType: "string";
-            columnType: "PgTimestampString";
-            data: string;
-            driverParam: string;
-            notNull: true;
             hasDefault: true;
             isPrimaryKey: false;
             isAutoincrement: false;
@@ -401,6 +303,104 @@ export declare const subscriptions: import("drizzle-orm/pg-core").PgTableWithCol
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "subscriptions";
+            dataType: "string";
+            columnType: "PgTimestampString";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export declare const accessDevices: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "access_devices";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "access_devices";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 255;
+        }>;
+        ua: import("drizzle-orm/pg-core").PgColumn<{
+            name: "ua";
+            tableName: "access_devices";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 512;
+        }>;
+        displayName: import("drizzle-orm/pg-core").PgColumn<{
+            name: "display_name";
+            tableName: "access_devices";
+            dataType: "string";
+            columnType: "PgVarchar";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            length: 128;
+        }>;
+        firstSeen: import("drizzle-orm/pg-core").PgColumn<{
+            name: "first_seen";
+            tableName: "access_devices";
+            dataType: "string";
+            columnType: "PgTimestampString";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        lastSeen: import("drizzle-orm/pg-core").PgColumn<{
+            name: "last_seen";
+            tableName: "access_devices";
             dataType: "string";
             columnType: "PgTimestampString";
             data: string;

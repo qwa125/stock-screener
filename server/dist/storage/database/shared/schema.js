@@ -1,8 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.subscriptions = exports.accessDevices = exports.healthCheck = exports.devices = void 0;
+exports.accessDevices = exports.subscriptions = exports.devices = exports.healthCheck = void 0;
 const pg_core_1 = require("drizzle-orm/pg-core");
 const drizzle_orm_1 = require("drizzle-orm");
+exports.healthCheck = (0, pg_core_1.pgTable)("health_check", {
+    id: (0, pg_core_1.serial)().notNull(),
+    updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+});
 exports.devices = (0, pg_core_1.pgTable)("devices", {
     id: (0, pg_core_1.varchar)({ length: 36 }).primaryKey().notNull(),
     trialStart: (0, pg_core_1.timestamp)("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -12,19 +16,6 @@ exports.devices = (0, pg_core_1.pgTable)("devices", {
     updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => [
     (0, pg_core_1.index)("devices_id_idx").using("btree", table.id.asc().nullsLast().op("text_ops")),
-]);
-exports.healthCheck = (0, pg_core_1.pgTable)("health_check", {
-    id: (0, pg_core_1.serial)().notNull(),
-    updatedAt: (0, pg_core_1.timestamp)("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
-});
-exports.accessDevices = (0, pg_core_1.pgTable)("access_devices", {
-    id: (0, pg_core_1.varchar)("id", { length: 255 }).primaryKey().notNull(),
-    ua: (0, pg_core_1.varchar)("ua", { length: 512 }).notNull().default(''),
-    displayName: (0, pg_core_1.varchar)("display_name", { length: 128 }).notNull().default(''),
-    firstSeen: (0, pg_core_1.timestamp)("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-    lastSeen: (0, pg_core_1.timestamp)("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-    (0, pg_core_1.index)("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
 ]);
 exports.subscriptions = (0, pg_core_1.pgTable)("subscriptions", {
     id: (0, pg_core_1.varchar)({ length: 36 }).primaryKey().notNull(),
@@ -45,4 +36,13 @@ exports.subscriptions = (0, pg_core_1.pgTable)("subscriptions", {
         foreignColumns: [exports.devices.id],
         name: "subscriptions_device_id_devices_id_fk"
     }).onDelete("cascade"),
+]);
+exports.accessDevices = (0, pg_core_1.pgTable)("access_devices", {
+    id: (0, pg_core_1.varchar)({ length: 255 }).primaryKey().notNull(),
+    ua: (0, pg_core_1.varchar)({ length: 512 }).default('').notNull(),
+    displayName: (0, pg_core_1.varchar)("display_name", { length: 128 }).default('').notNull(),
+    firstSeen: (0, pg_core_1.timestamp)("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+    lastSeen: (0, pg_core_1.timestamp)("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+    (0, pg_core_1.index)("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
 ]);

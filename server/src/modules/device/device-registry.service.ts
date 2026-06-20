@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-client'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as pg from 'pg'
 import type { DeviceRegistryEntry } from './device-registry.types'
 
 @Injectable()
@@ -21,6 +22,45 @@ export class DeviceRegistryService {
       this.logger.warn('Supabase未配置，使用JSON文件持久化设备列表')
     }
     return null
+  }
+
+  private async ensureTable() {
+    const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+    const pwd = process.env.SUPABASE_DB_PASSWORD || ''
+    if (!url || !pwd) {
+      this.logger.warn('缺少SUPABASE_DB_PASSWORD，无法自动创建表')
+      return false
+    }
+    try {
+      const ref = new URL(url).hostname.split('.')[0]
+      const client = new pg.Client({
+        host: `aws-0-ap-northeast-1.pooler.supabase.com`,
+        port: 6543,
+        user: `postgres.${ref}`,
+        password: pwd,
+        database: 'postgres',
+        ssl: { rejectUnauthorized: false },
+      })
+      await client.connect()
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.access_devices (
+          id TEXT PRIMARY KEY,
+          ua TEXT NOT NULL DEFAULT '',
+          display_name TEXT NOT NULL DEFAULT '',
+          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `)
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
+      `)
+      await client.end()
+      this.logger.log('自动创建access_devices表成功')
+      return true
+    } catch (e) {
+      this.logger.warn(`自动创建表失败: ${(e as Error).message}`)
+      return false
+    }
   }
 
   private saveToFile() {
@@ -74,7 +114,28 @@ export class DeviceRegistryService {
         this.logger.log(`从Supabase加载了 ${this.registry.length} 个设备`)
       }
     } catch (e) {
-      this.logger.warn(`Supabase加载失败，使用内存模式: ${(e as Error).message}`)
+      const msg = (e as Error).message
+      this.logger.warn(`Supabase加载失败: ${msg}`)
+      if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('404')) {
+        const created = await this.ensureTable()
+        if (created) {
+          // 重试一次
+          const retry = await this.supabase
+            .from('access_devices')
+            .select('*')
+            .order('first_seen', { ascending: true })
+          if (!retry.error && retry.data && retry.data.length > 0) {
+            this.registry = retry.data.map((r: any) => ({
+              fingerprint: r.id,
+              ua: r.ua || '',
+              displayName: r.display_name || '',
+              firstSeen: new Date(r.first_seen).getTime(),
+              lastSeen: new Date(r.last_seen).getTime(),
+            }))
+            this.logger.log(`从Supabase加载了 ${this.registry.length} 个设备（建表后重试）`)
+          }
+        }
+      }
       this.supabase = null
     }
   }

@@ -7,6 +7,7 @@ export declare class DeviceRegistryService {
     private supabase;
     private readonly filePath;
     private initSupabase;
+    private ensureTable;
     private saveToFile;
     private loadFromFile;
     private ensureLoaded;
