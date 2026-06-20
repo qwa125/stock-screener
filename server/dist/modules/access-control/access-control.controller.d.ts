@@ -1,7 +1,9 @@
 import { AccessControlService } from './access-control.service';
+import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 export declare class AccessControlController {
     private readonly service;
-    constructor(service: AccessControlService);
+    private readonly deviceRegistry;
+    constructor(service: AccessControlService, deviceRegistry: DeviceRegistryService);
     register(body: {
         deviceId: string;
         fingerprint: Record<string, any>;
@@ -19,8 +21,8 @@ export declare class AccessControlController {
         code: number;
         msg: string;
         data: {
-            allowed: boolean;
             usedSlots: number;
+            allowed: boolean;
             maxSlots: number;
             registered: boolean;
         };

@@ -1,11 +1,15 @@
 import { Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { AccessControlService } from './access-control.service';
+import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 
 @Controller('access')
 @SkipAccessLimit()
 export class AccessControlController {
-  constructor(private readonly service: AccessControlService) {}
+  constructor(
+    private readonly service: AccessControlService,
+    private readonly deviceRegistry: DeviceRegistryService,
+  ) {}
 
   /** 设备注册/续签 */
   @Post('register')
@@ -20,13 +24,17 @@ export class AccessControlController {
     };
   }
 
-  /** 查询当前设备状态 */
+  /** 查询当前设备状态（合并 AccessControl + Supabase 持久化数据） */
   @Get('status')
   async status(@Query('deviceId') deviceId?: string) {
+    const acStatus = this.service.getStatus(deviceId);
     return {
       code: 200,
       msg: 'ok',
-      data: this.service.getStatus(deviceId),
+      data: {
+        ...acStatus,
+        usedSlots: this.deviceRegistry.registeredCount,
+      },
     };
   }
 
