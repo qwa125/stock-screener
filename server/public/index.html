@@ -407,7 +407,8 @@ async function fetchRealtime(codes){
     var q=batch.map(function(c){return (c.startsWith('6')?'sh':'sz')+c}).join(',')
     try{
       var res=await fetch('https://qt.gtimg.cn/q='+q)
-      var txt=await res.text()  // 浏览器自动 charset=GBK 解码
+      var buf=await res.arrayBuffer()
+      var txt=decodeGBK(buf)
       var lines=txt.split(';')
       lines.forEach(function(line){
         if(line.indexOf('~')<0)return
@@ -725,14 +726,22 @@ async function getSearchCache(){
   return result
 }
 
-// ---------- 查腾讯行情（利用浏览器自动识别 charset=GBK，不用手动 TextDecoder） ----------
+// ---------- GBK字节→文本（兼容iOS：TextDecoder失败则手动提取ASCII） ----------
+function decodeGBK(buf){
+  try{return new TextDecoder('gbk').decode(buf)}catch(e){}
+  // 手动提取ASCII字符（数字/小数点/连字符/波浪号等均在ASCII范围）
+  var bytes=new Uint8Array(buf),a=[]
+  for(var i=0;i<bytes.length;i++) a.push(String.fromCharCode(bytes[i]))
+  return a.join('')
+}
+// ---------- 查腾讯行情（GBK解码，兼容所有浏览器） ----------
 async function fetchTencentDetail(code,market){
   if(!code)return null
   var m=market||(code.startsWith('6')?'sh':code.startsWith('92')||code.startsWith('4')||code.startsWith('8')?'bj':'sz')
   try{
     var res=await fetch('https://qt.gtimg.cn/q='+m+code)
-    // 用 res.text() 让浏览器自动处理 charset=GBK 解码，无需手动 TextDecoder
-    var txt=await res.text()
+    var buf=await res.arrayBuffer()
+    var txt=decodeGBK(buf)
     var p=txt.split('~')
     if(p.length<40||!p[1]||p[1]==='-'||p[1]===code)return null
     return {
