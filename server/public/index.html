@@ -211,6 +211,24 @@ function showBlocked(isLimited){
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
 }
+// 从本地缓存恢复上次扫描结果（已冻结时也展示）
+function restoreCachedStocks(){
+  try{
+    var ls=localStorage.getItem('lastStocks')
+    if(ls){
+      var cached=JSON.parse(ls)
+      if(cached.length>0){
+        stocks=cached
+        renderList()
+        setStatus('📊 已冻结 (非交易时间)')
+        $('scanBtn').textContent='📊 已冻结'
+        $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
+        return true
+      }
+    }
+  }catch(e){}
+  return false
+}
 // 页面加载时注册设备
 fetch("/api/device/register",{
   method:"POST",
@@ -220,11 +238,15 @@ fetch("/api/device/register",{
     showBlocked(true)
   } else if(r.status===200){
     hideBlocked()
+    if(!restoreCachedStocks()){
+      doScan()  // 首次访问，没有缓存，自动扫描
+    }
   } else {
     showBlocked(false)
   }
 }).catch(function(){
-  showBlocked(false)
+  hideBlocked()
+  restoreCachedStocks()
 })
 
 // 恢复上次扫描结果（冻结时也展示）
