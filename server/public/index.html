@@ -419,7 +419,7 @@ async function fetchRealtime(codes){
         var p=line.split('~')
         if(p.length<35||!p[2])return
         var code=p[2]
-        if(code) r[code]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
+        if(code) r[code]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,volume:parseFloat(p[6])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
       })
     }catch(e){}
   }
@@ -944,6 +944,13 @@ async function doSearch(){
       console.log('[search] analyze response:', JSON.stringify(aj,null,2))
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
+        // 前端从原始K线数据补算机构活跃度（后端海外可能解析volume异常）
+        if(kdata&&kdata.length>=20){
+          var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
+          var vol5=closedVols.slice(-5).reduce(function(a,b){return a+b},0)/5
+          var vol60=closedVols.reduce(function(a,b){return a+b},0)/Math.min(closedVols.length,60)
+          o.jiGouActiveScore=Math.min(Math.round(vol5/(vol60||1)*6*100)/100,20)
+        }
         console.log('[search] analysis result:', JSON.stringify(o,null,2))
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
