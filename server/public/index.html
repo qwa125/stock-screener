@@ -133,7 +133,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <!-- 共享详情区域：列表点击 / 搜索都显示在这里 -->
 <div id="detailArea" class="detail-panel" style="margin:0 12px 8px;display:none"></div>
 
-<div class="btn-scan-wrapper"><button class="btn-scan" id="scanBtn" onclick="doScan()">🔄 立即扫描</button></div>
+<div class="btn-scan-wrapper"><button class="btn-scan" id="scanBtn" onclick="handleScanClick()">🔄 立即扫描</button></div>
 
 <div class="list-header">
   <span class="col-name">名称</span>
@@ -180,7 +180,7 @@ function getOrCreateDeviceId(){
   }catch(e){return 'unknown-'+Date.now()}
 }
 
-// 全局 fetch 拦截：检测 429 + 自动附加设备 ID
+// 全局 fetch 拦截：检测 429 + 自动附加设备 ID，不自动隐藏毛玻璃
 var _origFetch=window.fetch
 window.fetch=function(u,o){
   o=o||{}
@@ -193,8 +193,6 @@ window.fetch=function(u,o){
     if(typeof u==='string'&&u.indexOf('/api/')===0){
       if(r.status===429){
         showBlocked(true)
-      } else if(r.status===200){
-        hideBlocked()
       }
     }
     return r
@@ -229,31 +227,38 @@ function restoreCachedStocks(){
   }catch(e){}
   return false
 }
-// 页面加载时注册设备
-fetch("/api/device/register",{
-  method:"POST",
-  headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-}).then(function(r){
-  if(r.status===429){
-    showBlocked(true)
-  } else if(r.status===200){
-    hideBlocked()
-    if(!restoreCachedStocks()){
-      doScan()  // 首次访问，没有缓存，自动扫描
-    }
-  } else {
-    showBlocked(false)
-  }
-}).catch(function(){
-  hideBlocked()
-  restoreCachedStocks()
-})
-
-// 恢复上次扫描结果（冻结时也展示）
+// 恢复上次扫描结果（冻结时也展示，预加载到内存供点击扫描后展示）
 try{
   var ls=localStorage.getItem('lastStocks')
   if(ls){stocks=JSON.parse(ls)}
 }catch(e){}
+
+// 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
+async function handleScanClick(){
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      showBlocked(true)
+      return
+    }
+    if(regRes.status!==200){
+      showBlocked(false)
+      return
+    }
+    // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描
+    hideBlocked()
+    if(!restoreCachedStocks()){
+      doScan()
+    }
+  }catch(e){
+    // 网络错误时放行（后端不可用时允许访问）
+    hideBlocked()
+    restoreCachedStocks()
+  }
+}
 function $(id){return document.getElementById(id)}
 function setStatus(s){$('status').textContent=s}
 var selectedIdx=-1
@@ -970,12 +975,10 @@ setInterval(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },60000)
 
-// Initial
+// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  // 加载上次缓存
-  try{var ls=localStorage.getItem('lastStocks');if(ls){stocks=JSON.parse(ls);renderList()}}catch(e){}
-  if(isTH())doScan()
+  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },3000)
 
 // ========== Admin Panel ==========
@@ -1148,7 +1151,7 @@ function changeAdminPwd(){
 </script>
 <div class="page-blur" id="pageBlur">
   <div class="blur-btn-wrap">
-    <button class="blur-btn" onclick="doScan()">📊 点击扫描解锁</button>
+    <button class="blur-btn" onclick="handleScanClick()">📊 点击扫描解锁</button>
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
