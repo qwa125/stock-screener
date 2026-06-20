@@ -15,6 +15,7 @@ var GemScreenerController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
+const access_limit_guard_1 = require("../../guards/access-limit.guard");
 const gem_screener_service_1 = require("./gem-screener.service");
 const iconv = require("iconv-lite");
 const fs_1 = require("fs");
@@ -368,6 +369,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
 exports.GemScreenerController = GemScreenerController;
 __decorate([
     (0, common_1.Post)('tencent-proxy'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),

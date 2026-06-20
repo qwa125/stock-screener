@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Query, HttpCode, Logger } from '@nestjs/common';
+import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { GemScreenerService } from './gem-screener.service';
 import * as iconv from 'iconv-lite';
 import { readFileSync, existsSync } from 'fs';
@@ -15,6 +16,7 @@ export class GemScreenerController {
    * POST /api/gem/tencent-proxy body: { q: "sz300001,sh600001" }
    */
   @Post('tencent-proxy')
+  @SkipAccessLimit()
   @HttpCode(200)
   async tencentProxy(@Body() body: { q: string }) {
     if (!body.q) return { code: 400, msg: 'missing q parameter' };
