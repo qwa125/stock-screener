@@ -403,18 +403,14 @@ async function fetchRealtime(codes){
   if(!codes||!codes.length)return{}
   var r={}
   for(var i=0;i<codes.length;i+=50){
-    var b=codes.slice(i,i+50).map(function(c){return(function(c){return c.startsWith('6')?'sh':c.startsWith('92')||c.startsWith('4')||c.startsWith('8')?'bj':'sz'})(c)+c}).join(',')
+    var secids=codes.slice(i,i+50).map(function(c){return ((c.startsWith('6')?1:0)+'.'+c)}).join(',')
     try{
-      var res=await fetch('/api/gem/tencent-proxy',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({q:b})
-      })
+      var res=await fetch('https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids='+secids+'&fields=f43,f44,f45,f46,f47,f57,f58,f170,f171')
       var d=await res.json()
-      if(d.code!==200||!d.data||!d.data.text)continue
-      d.data.text.split(';').forEach(function(l){
-        var t=l.trim();if(!t||!t.includes('~'))return;var p=t.split('~');if(p.length<40)return
-        r[p[2]]={price:parseFloat(p[3])||0,yc:parseFloat(p[4])||0,chg:parseFloat(p[31])||0,chgP:parseFloat(p[32])||0,open:parseFloat(p[5])||0,high:parseFloat(p[33])||0,low:parseFloat(p[34])||0}
+      if(!d||!d.data||!d.data.diff)continue
+      d.data.diff.forEach(function(item){
+        var code=String(item.f57||'')
+        if(code) r[code]={price:item.f43||0,yc:item.f46||0,chg:item.f171||0,chgP:item.f170||0,open:item.f46||0,high:item.f44||0,low:item.f45||0}
       })
     }catch(e){}
   }
@@ -725,25 +721,20 @@ async function getSearchCache(){
   return result
 }
 
-// ---------- 查Tencent行情（通过后端代理，避免浏览器GBK解码问题） ----------
+// ---------- 查东方财富行情（UTF-8 JSON，浏览器原生支持，无GBK解码问题） ----------
 async function fetchTencentDetail(code,market){
   if(!code)return null
-  var m=market||((code.startsWith('6')?'sh':code.startsWith('92')||code.startsWith('4')||code.startsWith('8')?'bj':'sz'))
+  var m=market||(code.startsWith('6')?'sh':code.startsWith('92')||code.startsWith('4')||code.startsWith('8')?'bj':'sz')
+  var secid=(m==='sh'?1:0)+'.'+code
   try{
-    var res=await fetch('/api/gem/tencent-proxy',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({q:m+code})
-    })
+    var res=await fetch('https://push2.eastmoney.com/api/qt/stock/get?secid='+secid+'&fields=f43,f44,f45,f46,f47,f48,f57,f58,f170,f171')
     var d=await res.json()
-    if(d.code!==200||!d.data||!d.data.text)return null
-    var p=d.data.text.split('~')
-    if(p.length<40||!p[1]||p[1]==='-'||p[1]===code)return null
+    if(!d||!d.data||String(d.data.f57)!==code)return null
     return {
-      name: p[1]||null, code: p[2]||code, market: m,
-      price: parseFloat(p[3])||0, yc: parseFloat(p[4])||0,
-      chg: parseFloat(p[31])||0, chgP: parseFloat(p[32])||0,
-      high: parseFloat(p[33])||0, low: parseFloat(p[34])||0
+      name: d.data.f58||null, code: String(d.data.f57)||code, market: m,
+      price: d.data.f43||0, yc: d.data.f46||0,
+      chg: d.data.f171||0, chgP: d.data.f170||0,
+      high: d.data.f44||0, low: d.data.f45||0
     }
   }catch(e){return null}
 }
