@@ -934,6 +934,16 @@ async function doSearch(){
       
       if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       
+      // ★ K线数据有效 → 前端直接从原始K线计算机构活跃度（不依赖后端）
+      var jiGouFromKdata=0
+      if(kdata&&kdata.length>=20){
+        var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
+        var vol5=closedVols.slice(-5).reduce(function(a,b){return a+b},0)/5
+        var vol60=closedVols.reduce(function(a,b){return a+b},0)/Math.min(closedVols.length,60)
+        jiGouFromKdata=Math.min(Math.round(vol5/(vol60||1)*6*100)/100,20)
+        console.log('[search] jiGouFromKdata:', jiGouFromKdata)
+      }
+      
       
       // 2. POST给后端即时分析
       var ar=await fetch('/api/gem/analyze',{
@@ -944,13 +954,8 @@ async function doSearch(){
       console.log('[search] analyze response:', JSON.stringify(aj,null,2))
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
-        // 前端从原始K线数据补算机构活跃度（后端海外可能解析volume异常）
-        if(kdata&&kdata.length>=20){
-          var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
-          var vol5=closedVols.slice(-5).reduce(function(a,b){return a+b},0)/5
-          var vol60=closedVols.reduce(function(a,b){return a+b},0)/Math.min(closedVols.length,60)
-          o.jiGouActiveScore=Math.min(Math.round(vol5/(vol60||1)*6*100)/100,20)
-        }
+        // 用前端计算的机构活跃度覆盖后端值（后端海外解析volume可能为0）
+        if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
         console.log('[search] analysis result:', JSON.stringify(o,null,2))
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
@@ -968,6 +973,7 @@ async function doSearch(){
         var j2=await r2.json()
         if(j2.code===200&&j2.data&&j2.data.length>0){
           var o2=j2.data[0];o2.name=stockName
+          if(jiGouFromKdata)o2.jiGouActiveScore=jiGouFromKdata
           o2.currentPrice=o2.currentPrice||stockPrice
           o2.changePercent=o2.changePercent||stockChgP
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
