@@ -1,28 +1,17 @@
 import { pgTable, index, varchar, timestamp, serial, foreignKey, numeric } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
+
+
 export const devices = pgTable("devices", {
-	id: varchar({ length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+	id: varchar({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
 	trialStart: timestamp("trial_start", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	trialEnd: timestamp("trial_end", { withTimezone: true, mode: 'string' }).default(sql`(now() + '7 days'::interval)`).notNull(),
 	subscriptionEnd: timestamp("subscription_end", { withTimezone: true, mode: 'string' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 }, (table) => [
-	index("devices_id_idx").on(table.id),
-]);
-
-export const accessDevices = pgTable("access_devices", {
-	id: varchar("id", { length: 64 }).primaryKey().notNull(),
-	ua: varchar("ua", { length: 500 }),
-	displayName: varchar("display_name", { length: 200 }),
-	firstSeen: timestamp("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	lastSeen: timestamp("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
-}, (table) => [
-	index("access_devices_id_idx").on(table.id),
-	index("access_devices_last_seen_idx").on(table.lastSeen),
+	index("devices_id_idx").using("btree", table.id.asc().nullsLast().op("text_ops")),
 ]);
 
 export const healthCheck = pgTable("health_check", {
@@ -30,8 +19,18 @@ export const healthCheck = pgTable("health_check", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
+export const accessDevices = pgTable("access_devices", {
+	id: varchar("id", { length: 255 }).primaryKey().notNull(),
+	ua: varchar("ua", { length: 512 }).notNull().default(''),
+	displayName: varchar("display_name", { length: 128 }).notNull().default(''),
+	firstSeen: timestamp("first_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastSeen: timestamp("last_seen", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("access_devices_first_seen_idx").using("btree", table.firstSeen.asc().nullsLast().op("timestamptz_ops")),
+]);
+
 export const subscriptions = pgTable("subscriptions", {
-	id: varchar({ length: 36 }).default(sql`gen_random_uuid()`).primaryKey().notNull(),
+	id: varchar({ length: 36 }).default(gen_random_uuid()).primaryKey().notNull(),
 	deviceId: varchar("device_id", { length: 36 }).notNull(),
 	orderId: varchar("order_id", { length: 64 }),
 	planType: varchar("plan_type", { length: 20 }).default('monthly').notNull(),
@@ -41,9 +40,9 @@ export const subscriptions = pgTable("subscriptions", {
 	endDate: timestamp("end_date", { withTimezone: true, mode: 'string' }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
-	index("subscriptions_device_id_idx").on(table.deviceId),
-	index("subscriptions_order_id_idx").on(table.orderId),
-	index("subscriptions_pay_status_idx").on(table.payStatus),
+	index("subscriptions_device_id_idx").using("btree", table.deviceId.asc().nullsLast().op("text_ops")),
+	index("subscriptions_order_id_idx").using("btree", table.orderId.asc().nullsLast().op("text_ops")),
+	index("subscriptions_pay_status_idx").using("btree", table.payStatus.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.deviceId],
 			foreignColumns: [devices.id],
