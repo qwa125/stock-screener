@@ -26,13 +26,22 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         this.logger = new common_1.Logger(AccessLimitGuard_1.name);
     }
     async canActivate(context) {
+        const request = context.switchToHttp().getRequest();
+        const deviceId = request.headers['x-device-id'];
+        if (deviceId && typeof deviceId === 'string') {
+            try {
+                await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+            }
+            catch (e) {
+                this.logger.warn(`设备注册失败: ${e.message}`);
+            }
+        }
         const skip = this.reflector.getAllAndOverride(exports.SKIP_ACCESS_LIMIT, [
             context.getHandler(),
             context.getClass(),
         ]);
         if (skip)
             return true;
-        const request = context.switchToHttp().getRequest();
         const authHeader = request.headers['authorization'];
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.slice(7);
@@ -51,7 +60,6 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
             request.user = payload;
             return true;
         }
-        const deviceId = request.headers['x-device-id'];
         if (deviceId) {
             const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
             if (!result.allowed) {

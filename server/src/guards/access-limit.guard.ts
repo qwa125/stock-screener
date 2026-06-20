@@ -18,6 +18,20 @@ export class AccessLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+
+    // ══════════════════════════════════
+    // 无论是否跳过限制，先注册设备（让所有请求都能记录设备）
+    // ══════════════════════════════════
+    const deviceId = request.headers['x-device-id'];
+    if (deviceId && typeof deviceId === 'string') {
+      try {
+        await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+      } catch (e) {
+        this.logger.warn(`设备注册失败: ${(e as Error).message}`);
+      }
+    }
+
     // 检查是否标记为跳过（如 /api/auth/*、/api/access/*）
     const skip = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
       context.getHandler(),
@@ -25,7 +39,6 @@ export class AccessLimitGuard implements CanActivate {
     ]);
     if (skip) return true;
 
-    const request = context.switchToHttp().getRequest();
     const authHeader = request.headers['authorization'];
 
     // ══════════════════════════════════
@@ -61,7 +74,7 @@ export class AccessLimitGuard implements CanActivate {
     // ══════════════════════════════════
 
     // 优先使用前端发送的设备 ID（浏览器 localStorage 持久化）
-    const deviceId = request.headers['x-device-id'];
+    // 注意：设备已在 guard 入口处注册过，这里只检查是否被限制
     if (deviceId) {
       const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
       if (!result.allowed) {
