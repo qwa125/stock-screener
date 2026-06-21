@@ -179,8 +179,9 @@ export class DeviceRegistryService {
       existing.lastSeen = Date.now()
       const now = new Date().toISOString()
 
-      // 即使已存在，也按最近活跃排序检查是否在限额内
-      const sorted = [...this.registry].sort((a, b) => b.lastSeen - a.lastSeen)
+      // 即使已存在，也按注册先后（firstSeen）检查是否在限额内
+      // 最早注册的设备永久占位，超出限额的设备永久拒绝（不轮转）
+      const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen)
       const rank = sorted.findIndex(e => e.fingerprint === deviceId)
       if (rank >= limit) {
         return { allowed: false, message: `设备限额 ${limit} 台，请先移除不常用设备` }

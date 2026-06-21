@@ -183,7 +183,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (existing) {
             existing.lastSeen = Date.now();
             const now = new Date().toISOString();
-            const sorted = [...this.registry].sort((a, b) => b.lastSeen - a.lastSeen);
+            const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen);
             const rank = sorted.findIndex(e => e.fingerprint === deviceId);
             if (rank >= limit) {
                 return { allowed: false, message: `设备限额 ${limit} 台，请先移除不常用设备` };
