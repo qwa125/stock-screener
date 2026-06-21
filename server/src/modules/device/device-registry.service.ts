@@ -64,13 +64,6 @@ export class DeviceRegistryService {
           await client.query(`
             CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
           `)
-          // 同时创建设置表（用于持久化 maxSlots 等配置）
-          await client.query(`
-            CREATE TABLE IF NOT EXISTS public.app_settings (
-              key TEXT PRIMARY KEY,
-              value TEXT NOT NULL DEFAULT ''
-            )
-          `)
           // 刷新 PostgREST schema 缓存
           await client.query(`NOTIFY pgrst, 'reload schema'`)
           await client.end()
@@ -92,8 +85,7 @@ export class DeviceRegistryService {
 
   private saveToFile() {
     try {
-      const data = JSON.stringify({ maxSlots: this.maxSlots, devices: this.registry }, null, 2)
-      fs.writeFileSync(this.filePath, data, 'utf-8')
+      fs.writeFileSync(this.filePath, JSON.stringify(this.registry, null, 2), 'utf-8')
     } catch (e) {
       // 文件写入失败不阻止主流程
     }
@@ -104,15 +96,10 @@ export class DeviceRegistryService {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, 'utf-8')
         const data = JSON.parse(raw)
-        // 新格式: { maxSlots, devices }
-        if (data && typeof data === 'object' && !Array.isArray(data)) {
-          if (typeof data.maxSlots === 'number') this.maxSlots = data.maxSlots
-          if (Array.isArray(data.devices)) this.registry = data.devices
-        } else if (Array.isArray(data) && data.length > 0) {
-          // 旧格式兼容: 纯数组
+        if (Array.isArray(data) && data.length > 0) {
           this.registry = data
+          this.logger.log(`从文件加载了 ${this.registry.length} 个设备`)
         }
-        this.logger.log(`从文件加载了 ${this.registry.length} 个设备, maxSlots=${this.maxSlots}`)
       }
     } catch (e) {
       this.logger.warn(`文件加载设备失败: ${(e as Error).message}`)
@@ -122,7 +109,6 @@ export class DeviceRegistryService {
   private async ensureLoaded() {
     if (this.registryLoaded) return
     await this.loadRegistry()
-    await this.loadSettings()
     if (!this.supabase) {
       this.loadFromFile()
     }
@@ -273,51 +259,7 @@ export class DeviceRegistryService {
 
   async setMaxSlots(value: number) {
     this.maxSlots = value
-    await this.saveSettings()
-    this.saveToFile()
     return { success: true, maxSlots: value }
-  }
-
-  /** 从 Supabase 加载设置（maxSlots） */
-  private async loadSettings() {
-    if (!this.supabase) return
-    try {
-      const { data, error } = await this.supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'max_slots')
-        .single()
-      if (error) {
-        // 表不存在或没数据，忽略
-        if (!error.message?.includes('does not exist') && !error.message?.includes('not found')) {
-          this.logger.warn(`加载设置失败: ${error.message}`)
-        }
-        return
-      }
-      if (data && data.value) {
-        const parsed = parseInt(data.value, 10)
-        if (!isNaN(parsed) && parsed > 0) {
-          this.maxSlots = parsed
-          this.logger.log(`从Supabase加载设置: maxSlots=${this.maxSlots}`)
-        }
-      }
-    } catch (e) {
-      this.logger.warn(`加载设置异常: ${(e as Error).message}`)
-    }
-  }
-
-  /** 将 maxSlots 保存到 Supabase */
-  private async saveSettings() {
-    const supabase = await this.getOrInitSupabase()
-    if (!supabase) return
-    try {
-      const { error } = await supabase
-        .from('app_settings')
-        .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' })
-      if (error) this.logger.warn(`保存设置失败: ${error.message}`)
-    } catch (e) {
-      this.logger.warn(`保存设置异常: ${(e as Error).message}`)
-    }
   }
 
   async removeDevice(index: number) {

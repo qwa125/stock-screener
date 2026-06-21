@@ -27,8 +27,6 @@ export declare class DeviceRegistryService {
         success: boolean;
         maxSlots: number;
     }>;
-    private loadSettings;
-    private saveSettings;
     removeDevice(index: number): Promise<{
         success: boolean;
     }>;
