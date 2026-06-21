@@ -254,8 +254,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         const device = this.registry[index];
         this.registry.splice(index, 1);
-        if (this.supabase) {
-            await this.supabase.from('access_devices').delete().eq('id', device.fingerprint);
+        const supabase = await this.getOrInitSupabase();
+        if (supabase) {
+            await supabase.from('access_devices').delete().eq('id', device.fingerprint);
         }
         this.saveToFile();
         return { success: true };
@@ -263,8 +264,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     async removeAllDevices() {
         await this.ensureLoaded();
         this.registry = [];
-        if (this.supabase) {
-            await this.supabase.from('access_devices').delete().neq('id', '0');
+        const supabase = await this.getOrInitSupabase();
+        if (supabase) {
+            await supabase.from('access_devices').delete().neq('id', '0');
         }
         this.saveToFile();
         return { success: true };
