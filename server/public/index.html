@@ -924,6 +924,9 @@ async function doSearch(){
           tkArr=tkArr&&(tkArr.day||tkArr.qfqday)
 	          if(tkArr&&tkArr.length>=1){
             kdata=tkArr.map(function(l){
+              if(Array.isArray(l)){
+                return {day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])}
+              }
               var d=l.split(' ')
               return {day:d[0],open:parseFloat(d[1]),close:parseFloat(d[2]),high:parseFloat(d[3]),low:parseFloat(d[4]),volume:parseFloat(d[5])}
             })
