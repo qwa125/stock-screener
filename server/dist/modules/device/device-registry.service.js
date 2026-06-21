@@ -8,14 +8,46 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var DeviceRegistryService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceRegistryService = void 0;
-const common_1 = require("@nestjs/common");
+const module_1 = require();
+trackGuestQuery(guestId, string);
+{
+    allowed: boolean;
+    remaining: number;
+}
+{
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `guest:${guestId}`;
+    const record = this.guestDailyQueries.get(key);
+    if (record && record.date === today) {
+        if (record.count >= 3) {
+            return { allowed: false, remaining: 0 };
+        }
+        record.count++;
+        return { allowed: true, remaining: 3 - record.count };
+    }
+    this.guestDailyQueries.set(key, { date: today, count: 1 });
+    return { allowed: true, remaining: 2 };
+}
+getGuestRemaining(guestId, string);
+number;
+{
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `guest:${guestId}`;
+    const record = this.guestDailyQueries.get(key);
+    if (record && record.date === today) {
+        return Math.max(0, 3 - record.count);
+    }
+    return 3;
+}
+from;
+'@nestjs/common';
 const supabase_client_1 = require("../../storage/database/supabase-client");
 const fs = require("fs");
 const path = require("path");
 const pg = require("pg");
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
-        this.logger = new common_1.Logger(DeviceRegistryService_1.name);
+        this.logger = new module_1.Logger(DeviceRegistryService_1.name);
         this.registry = [];
         this.maxSlots = 3;
         this.registryLoaded = false;
@@ -357,5 +389,5 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
 };
 exports.DeviceRegistryService = DeviceRegistryService;
 exports.DeviceRegistryService = DeviceRegistryService = DeviceRegistryService_1 = __decorate([
-    (0, common_1.Injectable)()
+    (0, module_1.Injectable)()
 ], DeviceRegistryService);

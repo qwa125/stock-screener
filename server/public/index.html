@@ -955,15 +955,30 @@ async function doSearch(){
       })
       var aj=await ar.json()
       console.log('[search] analyze response:', JSON.stringify(aj,null,2))
+      if(aj.code===429){
+        // 游客模式：今日查询次数已达上限
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+          +'<div style="padding:24px 16px;text-align:center;color:#999;font-size:13px">📊 游客每日限查 3 次<br>今日已用完，明天再来吧</div>'
+        return
+      }
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
-        // 用前端计算的机构活跃度覆盖后端值（后端海外解析volume可能为0）
+        // 前端计算的机构活跃度覆盖后端
         if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
         console.log('[search] analysis result:', JSON.stringify(o,null,2))
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
-        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        var guestHtml=''
+        if(aj.guestRemaining!==undefined){
+          var bars=''
+          for(var gi=0;gi<3;gi++)bars+=gi<aj.guestRemaining?'<span style="color:#f59e0b;font-size:16px">●</span>':'<span style="color:#ddd;font-size:16px">○</span>'
+          guestHtml='<div style="margin:4px 16px 0;padding:8px 12px;background:#fffbeb;border-radius:8px;font-size:12px;color:#92400e;display:flex;justify-content:space-between;align-items:center">'
+            +'<span>👤 游客 · 今日可查</span>'
+            +'<span>'+bars+' <span style="font-weight:600">'+aj.guestRemaining+'/3</span></span>'
+            +'</div>'
+        }
+        da.innerHTML=guestHtml+'<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
       }else{
         throw new Error('分析无结果')
       }

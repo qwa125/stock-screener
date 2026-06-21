@@ -63,7 +63,10 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         if (deviceId) {
             const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
             if (!result.allowed) {
-                throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+                request.guestMode = true;
+                request.guestId = deviceId;
+                this.logger.log(`👤 游客模式: ${deviceId.slice(0, 16)}...`);
+                return true;
             }
             return true;
         }
@@ -74,7 +77,10 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         const ua = request.headers['user-agent'] || 'unknown';
         const result = await this.deviceRegistry.tryRegister(ip, ua);
         if (!result.allowed) {
-            throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+            request.guestMode = true;
+            request.guestId = ip;
+            this.logger.log(`👤 游客模式(IP): ${ip.slice(0, 16)}...`);
+            return true;
         }
         return true;
     }

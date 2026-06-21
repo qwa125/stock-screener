@@ -17,13 +17,15 @@ exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
 const access_limit_guard_1 = require("../../guards/access-limit.guard");
 const gem_screener_service_1 = require("./gem-screener.service");
+const device_registry_service_1 = require("../device/device-registry.service");
 const iconv = require("iconv-lite");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const data_1 = require("../../industry-sectors/data");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
-    constructor(gemScreener) {
+    constructor(gemScreener, deviceRegistry) {
         this.gemScreener = gemScreener;
+        this.deviceRegistry = deviceRegistry;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
     }
     async tencentProxy(body) {
@@ -337,9 +339,19 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: '新浪美股API请求失败', data: '' };
         }
     }
-    async analyzeWithKLine(body) {
+    async analyzeWithKLine(body, req) {
         if (!body.code || !body.kline || !Array.isArray(body.kline)) {
             return { code: 400, msg: '缺少股票代码或K线数据' };
+        }
+        let guestRemaining = -1;
+        if (req.guestMode) {
+            const guestId = req.guestId || 'unknown';
+            const { allowed, remaining } = this.deviceRegistry.trackGuestQuery(guestId);
+            guestRemaining = remaining;
+            if (!allowed) {
+                return { code: 429, msg: `今日查询次数已达上限（3次），明天再来吧`, data: { guestRemaining: 0 } };
+            }
+            this.logger.log(`👤 游客查询: ${body.code} (${guestId.slice(0, 16)}...), 今日剩余 ${remaining} 次`);
         }
         try {
             const klineData = body.kline.map((item) => ({
@@ -356,7 +368,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
             }
             if (opp) {
-                return { code: 200, msg: 'success', data: [opp] };
+                const response = { code: 200, msg: 'success', data: [opp] };
+                if (guestRemaining >= 0)
+                    response.guestRemaining = guestRemaining;
+                return response;
             }
             return { code: 200, msg: '分析完成但无有效信号', data: [] };
         }
@@ -531,11 +546,13 @@ __decorate([
 __decorate([
     (0, common_1.Post)('analyze'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
-    __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
+    __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,
+        device_registry_service_1.DeviceRegistryService])
 ], GemScreenerController);
