@@ -921,7 +921,7 @@ async function doSearch(){
           var tkr=await fetch(tkurl,{signal:timeoutSignal(5000)})
           var tkd=await tkr.json()
           var tkArr=tkd&&tkd.data&&(tkd.data[stockCode]||tkd.data[prefix+stockCode])
-          tkArr=tkArr&&tkArr.day
+          tkArr=tkArr&&(tkArr.day||tkArr.qfqday)
 	          if(tkArr&&tkArr.length>=1){
             kdata=tkArr.map(function(l){
               var d=l.split(' ')
