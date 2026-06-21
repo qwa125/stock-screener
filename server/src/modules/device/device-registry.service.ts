@@ -1,39 +1,4 @@
-import { Injectable, Logger /** 游客每日查询追踪（内存 Map，按 deviceId 或 IP 记录） */
-  private guestDailyQueries = new Map<string, { date: string; count: number }>()
-
-  /**
-   * 游客查询扣减：每天每设备最多 3 次
-   * @returns { allowed, remaining } - 是否允许查询，当日剩余次数
-   */
-  trackGuestQuery(guestId: string): { allowed: boolean; remaining: number } {
-    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-    const key = `guest:${guestId}`
-    const record = this.guestDailyQueries.get(key)
-
-    if (record && record.date === today) {
-      if (record.count >= 3) {
-        return { allowed: false, remaining: 0 }
-      }
-      record.count++
-      return { allowed: true, remaining: 3 - record.count }
-    }
-
-    // 新的一天或新游客
-    this.guestDailyQueries.set(key, { date: today, count: 1 })
-    return { allowed: true, remaining: 2 }
-  }
-
-  /** 获取游客当日剩余查询次数 */
-  getGuestRemaining(guestId: string): number {
-    const today = new Date().toISOString().slice(0, 10)
-    const key = `guest:${guestId}`
-    const record = this.guestDailyQueries.get(key)
-    if (record && record.date === today) {
-      return Math.max(0, 3 - record.count)
-    }
-    return 3
-  }
-} from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-client'
 import * as fs from 'fs'
 import * as path from 'path'

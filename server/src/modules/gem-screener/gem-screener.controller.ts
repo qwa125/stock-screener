@@ -1,7 +1,6 @@
-import { Controller, Get, Post, Body, Query, HttpCode, Logger, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, Logger } from '@nestjs/common';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { GemScreenerService } from './gem-screener.service';
-import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 import * as iconv from 'iconv-lite';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -10,10 +9,7 @@ import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 @Controller('gem')
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
-  constructor(
-    private readonly gemScreener: GemScreenerService,
-    private readonly deviceRegistry: DeviceRegistryService,
-  ) {}
+  constructor(private readonly gemScreener: GemScreenerService) {}
 
   /**
    * 代理腾讯股票行情API（前端无法正确处理GBK编码，后端用iconv-lite解码）
@@ -434,24 +430,9 @@ export class GemScreenerController {
   }
 
   @Post('analyze')
-  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }, @Req() req: any) {
+  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {
       return { code: 400, msg: '缺少股票代码或K线数据' };
-    }
-
-    // ══════════════════════════════════
-    // 游客模式：每天最多查 3 只股票
-    // ══════════════════════════════════
-    let guestRemaining = -1 // -1 = 非游客模式
-    if (req.guestMode) {
-      const guestId = req.guestId || 'unknown'
-      const { allowed, remaining } = this.deviceRegistry.trackGuestQuery(guestId)
-      guestRemaining = remaining
-      if (!allowed) {
-        return { code: 429, msg: `今日查询次数已达上限（3次），明天再来吧`, data: { guestRemaining: 0 } }
-      }
-      // 在响应中透传剩余次数
-      this.logger.log(`👤 游客查询: ${body.code} (${guestId.slice(0, 16)}...), 今日剩余 ${remaining} 次`)
     }
     try {
       // 转换K线数据格式（Sina API返回day字段，quickAnalyze需要date字段）
@@ -469,9 +450,7 @@ export class GemScreenerController {
         opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
       }
       if (opp) {
-        const response: any = { code: 200, msg: 'success', data: [opp] };
-        if (guestRemaining >= 0) response.guestRemaining = guestRemaining
-        return response;
+        return { code: 200, msg: 'success', data: [opp] };
       }
       return { code: 200, msg: '分析完成但无有效信号', data: [] };
     } catch (e) {

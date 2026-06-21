@@ -1,10 +1,8 @@
 import { GemScreenerService } from './gem-screener.service';
-import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 export declare class GemScreenerController {
     private readonly gemScreener;
-    private readonly deviceRegistry;
     private readonly logger;
-    constructor(gemScreener: GemScreenerService, deviceRegistry: DeviceRegistryService);
+    constructor(gemScreener: GemScreenerService);
     tencentProxy(body: {
         q: string;
     }): Promise<{
@@ -214,5 +212,13 @@ export declare class GemScreenerController {
         name?: string;
         kline: any[];
         mainForceInflow?: number;
-    }, req: any): Promise<any>;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: import("./gem-screener.service").OpportunityStock[];
+    }>;
 }
