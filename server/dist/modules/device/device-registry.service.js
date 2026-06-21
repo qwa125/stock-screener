@@ -72,6 +72,12 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                     await client.query(`
             CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
           `);
+                    await client.query(`
+            CREATE TABLE IF NOT EXISTS public.app_settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL DEFAULT ''
+            )
+          `);
                     await client.query(`NOTIFY pgrst, 'reload schema'`);
                     await client.end();
                     this.logger.log(`通过 ${host} 自动创建/确认 access_devices 表成功`);
@@ -92,7 +98,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     saveToFile() {
         try {
-            fs.writeFileSync(this.filePath, JSON.stringify(this.registry, null, 2), 'utf-8');
+            const data = JSON.stringify({ maxSlots: this.maxSlots, devices: this.registry }, null, 2);
+            fs.writeFileSync(this.filePath, data, 'utf-8');
         }
         catch (e) {
         }
@@ -102,10 +109,16 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             if (fs.existsSync(this.filePath)) {
                 const raw = fs.readFileSync(this.filePath, 'utf-8');
                 const data = JSON.parse(raw);
-                if (Array.isArray(data) && data.length > 0) {
-                    this.registry = data;
-                    this.logger.log(`从文件加载了 ${this.registry.length} 个设备`);
+                if (data && typeof data === 'object' && !Array.isArray(data)) {
+                    if (typeof data.maxSlots === 'number')
+                        this.maxSlots = data.maxSlots;
+                    if (Array.isArray(data.devices))
+                        this.registry = data.devices;
                 }
+                else if (Array.isArray(data) && data.length > 0) {
+                    this.registry = data;
+                }
+                this.logger.log(`从文件加载了 ${this.registry.length} 个设备, maxSlots=${this.maxSlots}`);
             }
         }
         catch (e) {
@@ -116,6 +129,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (this.registryLoaded)
             return;
         await this.loadRegistry();
+        await this.loadSettings();
         if (!this.supabase) {
             this.loadFromFile();
         }
@@ -251,7 +265,51 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async setMaxSlots(value) {
         this.maxSlots = value;
+        await this.saveSettings();
+        this.saveToFile();
         return { success: true, maxSlots: value };
+    }
+    async loadSettings() {
+        if (!this.supabase)
+            return;
+        try {
+            const { data, error } = await this.supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'max_slots')
+                .single();
+            if (error) {
+                if (!error.message?.includes('does not exist') && !error.message?.includes('not found')) {
+                    this.logger.warn(`加载设置失败: ${error.message}`);
+                }
+                return;
+            }
+            if (data && data.value) {
+                const parsed = parseInt(data.value, 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    this.maxSlots = parsed;
+                    this.logger.log(`从Supabase加载设置: maxSlots=${this.maxSlots}`);
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`加载设置异常: ${e.message}`);
+        }
+    }
+    async saveSettings() {
+        const supabase = await this.getOrInitSupabase();
+        if (!supabase)
+            return;
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
+            if (error)
+                this.logger.warn(`保存设置失败: ${error.message}`);
+        }
+        catch (e) {
+            this.logger.warn(`保存设置异常: ${e.message}`);
+        }
     }
     async removeDevice(index) {
         await this.ensureLoaded();
