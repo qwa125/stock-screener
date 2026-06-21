@@ -177,6 +177,15 @@ export class DeviceRegistryService {
     const existing = this.registry.find(e => e.fingerprint === deviceId)
     if (existing) {
       existing.lastSeen = Date.now()
+      const now = new Date().toISOString()
+
+      // 即使已存在，也按最近活跃排序检查是否在限额内
+      const sorted = [...this.registry].sort((a, b) => b.lastSeen - a.lastSeen)
+      const rank = sorted.findIndex(e => e.fingerprint === deviceId)
+      if (rank >= limit) {
+        return { allowed: false, message: `设备限额 ${limit} 台，请先移除不常用设备` }
+      }
+
       const supabase = await this.getOrInitSupabase()
       if (supabase) {
         await supabase
