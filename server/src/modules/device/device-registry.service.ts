@@ -181,7 +181,7 @@ export class DeviceRegistryService {
       if (supabase) {
         await supabase
           .from('access_devices')
-          .update({ last_seen: now, ua, display_name: displayName })
+          .update({ last_seen: now, ua })
           .eq('id', deviceId)
       }
       return { allowed: true }
