@@ -236,8 +236,8 @@ function getCachedStocks(){
     var c=JSON.parse(ls)
     // 新格式：{date:'2026-06-22',stocks:[...]}，仅当天有效
     if(c.date&&c.date===new Date().toISOString().slice(0,10)&&Array.isArray(c.stocks))return c.stocks
-    // 旧格式：数组（兼容旧缓存，允许显示但下次保存会覆盖）
-    if(Array.isArray(c)&&c.length>0)return c
+    // 旧格式缓存（非当天数据）→ 清除
+    if(Array.isArray(c)||c.date){localStorage.removeItem('lastStocks')}
   }catch(e){}
   return null
 }
