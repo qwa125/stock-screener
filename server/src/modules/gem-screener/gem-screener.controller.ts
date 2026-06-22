@@ -404,7 +404,7 @@ export class GemScreenerController {
       const safeNode = node && fsMap[node] ? node : 'hs_a';
       const safePage = parseInt(page || '1', 10);
       const safeNum = Math.min(parseInt(num || '100', 10), 200);
-      const url = `https://push2.eastmoney.com/api/qt/clist/get?fltt=2&fields=f12,f14,f2,f3,f62,f184,f15,f16,f17,f18&pn=${safePage}&pz=${safeNum}&po=1&np=1&fid=f3&fs=${fsMap[safeNode]}&ut=bd1d9ddb04089700cf9c27f6f7426281`;
+      const url = `https://push2.eastmoney.com/api/qt/clist/get?fltt=2&fields=f12,f14,f2,f3,f62,f184,f15,f16,f17,f18,f20&pn=${safePage}&pz=${safeNum}&po=1&np=1&fid=f3&fs=${fsMap[safeNode]}&ut=bd1d9ddb04089700cf9c27f6f7426281`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
       const json = await resp.json();
       const data = (json?.data?.diff || []).map((item: any) => ({
@@ -412,10 +412,13 @@ export class GemScreenerController {
         name: item.f14 || '',
         trade: item.f2,
         changePercent: item.f3,
+        inflow: item.f62,          // 主力净流入
+        inflowAmount: item.f184,   // 流入总额
         high: item.f15,
         low: item.f16,
         open: item.f17,
         prevClose: item.f18,
+        marketCap: item.f20,       // 总市值
       }));
       return { code: 200, msg: 'success', data };
     } catch (e) {

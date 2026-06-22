@@ -542,19 +542,19 @@ async function doScan(){
   for(var ci=0;ci<configs.length;ci++){
     var cfg=configs[ci]
     pageTasks.push(
-      fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100&sort=changepercent&asc=0')
+      fetch(API+'/gem/proxy/eastmoney-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
         .then(function(r){return r.json()})
         .then(function(d){return d.code===200?d.data||[]:[]})
         .catch(function(){return[]})
-        .then(function(sinaData){
-          if(!sinaData||sinaData.length===0){
-            // 新浪失败 → 东方财富兜底
-            return fetch(API+'/gem/proxy/eastmoney-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
+        .then(function(emData){
+          if(!emData||emData.length===0){
+            // 东方财富失败 → 新浪兜底
+            return fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100&sort=changepercent&asc=0')
               .then(function(r2){return r2.json()})
               .then(function(d2){return d2.code===200?d2.data||[]:[]})
               .catch(function(){return[]})
           }
-          return sinaData
+          return emData
         })
     )
   }
@@ -585,7 +585,8 @@ async function doScan(){
       seen[code]=1;isHsPage?mainBoardCount++:gemCount++
       rawStocks.push({code:code,name:name,price:price,
         changePercent:parseFloat(item.changepercent||item.changePercent||item.chg||item.pctChg||'')||0,
-        inflow:parseFloat(item.inflow||0)})
+        inflow:parseFloat(item.inflow||0),
+        marketCap:parseFloat(item.marketCap||item.mktcap||0)})
     }
   }
   
