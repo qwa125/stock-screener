@@ -591,22 +591,52 @@ async function doScan(){
   
   if(!rawStocks.length){setStatus('❌ 未获取到数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
   
-  // 3. 异步送后端分析（不阻塞展示），后端能分析则更新缓存
-  try{
-    fetch(API+'/gem/refresh-all',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({stocks:rawStocks})
-    }).catch(function(){})
-  }catch(e){}
-  
-  // 4. 前端直接按涨跌幅排序取Top20（后端分析异步进行，不影响展示）
+  // 3. 取涨幅前60只 → 并行拉K线(浏览器直接调东方财富K线API)
+  setStatus('🔄 拉取60只备选股K线数据（并行）...')
   rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
-  stocks=rawStocks.slice(0,20)
+  var topForAnalysis=rawStocks.slice(0,60)
+  await Promise.all(topForAnalysis.map(function(stock){
+    var em2=(stock.code.startsWith('6')?'1.':'0.')+stock.code
+    return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
+          stock.klines=d.data.klines.map(function(l){var p=l.split(',');return{open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
+        }
+      }).catch(function(){})
+  }))
+  
+  // 4. 分批发送到后端(带K线) → 后端分析(信号/评分/入场时机)
+  setStatus('🔄 发送到后端分析（60只带K线数据）...')
+  var analyzed=[]
+  try{
+    var refreshRes=await fetch(API+'/gem/refresh-all',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stocks:topForAnalysis}),
+      signal:timeoutSignal(30000)
+    })
+    var refreshData=await refreshRes.json()
+    if(refreshData.code===200&&refreshData.data?.opportunities?.length){
+      analyzed=refreshData.data.opportunities
+    }
+  }catch(e){
+    console.error('后端分析请求失败:',e)
+  }
+  
+  // 5. 使用后端分析结果，不足则降级为按涨跌幅排
+  if(analyzed.length>=5){
+    stocks=analyzed.slice(0,20)
+    setStatus('✅ 后端分析完成 - Top20 已更新')
+  }else{
+    stocks=rawStocks.slice(0,20)
+    setStatus('⚠️ 后端分析未返回足够结果，降级为按涨跌幅展示 Top20')
+  }
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
   
   setStatus('🔄 获取实时行情...')
   try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
   selectedIdx=-1;$('detailArea').style.display='none'
+  setStatus('✅ Top20 已更新 - 后端分析→信号排序')
   renderList()
   setStatus('🔄 计算筹码集中度...')
   try{
@@ -628,7 +658,6 @@ async function doScan(){
     console.error('doScan error:',e)
     setStatus('⛔ 扫描失败，请稍后重试')
   }
-  setStatus('✅ Top20 已更新 - 东方财富→后端分析→信号排序')
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
