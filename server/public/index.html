@@ -567,6 +567,7 @@ async function doScan(){
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
+  stopPriceRefresh()
   setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')
   
   // 1. 缓存重分析（瞬间）
@@ -638,7 +639,7 @@ async function doFullRescan(){
   if(newStocks.length){
     setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只），排序中...')
     stocks=newStocks
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    // doScan会保存最新分析结果到缓存，这里不保存原始数据
     // 排序：信号优先级优先，再按涨幅降序
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
@@ -653,7 +654,7 @@ async function doFullRescan(){
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
     // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
@@ -679,6 +680,8 @@ async function doFullRescan(){
     setStatus('❌ 重扫无结果')
   }
   loading=false;btn.disabled=false;btn.textContent='🌐 全市场重扫'
+  // 全市场重扫完成后，调doScan保存最新分析结果的缓存
+  setTimeout(function(){if(!loading)doScan()},500)
 }
 
 // ---------- 搜索缓存（东方财富全量） ----------
