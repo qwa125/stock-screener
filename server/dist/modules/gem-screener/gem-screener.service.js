@@ -2332,7 +2332,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     return pa - pb;
                 return (b.score || 0) - (a.score || 0);
             });
-            const top20 = updated.slice(0, 20);
+            const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
+            const buyUpdated = updated.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
+            const top20 = buyUpdated.slice(0, 20);
             this.cache = { data: top20, timestamp: now };
             try {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
@@ -2343,7 +2345,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         catch (e) {
             this.logger.error(`重新评估失败: ${e.message}`);
         }
-        return (this.cache?.data || []).slice(0, 20);
+        const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
+        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 20);
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];
@@ -2572,7 +2575,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = results.slice(0, 20);
+        const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
+        const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
+        const finalResults = buyResults.slice(0, 20);
         this.cache = { data: finalResults, timestamp: Date.now() };
         this.saveCacheToDisk();
         this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
