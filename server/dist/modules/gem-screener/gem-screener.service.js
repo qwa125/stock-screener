@@ -959,9 +959,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const prevClose1 = closeArr?.[closeArr.length - 3] ?? 0;
         const prevDayGain = prevClose1 > 0 ? (prevClose0 - prevClose1) / prevClose1 * 100 : 0;
         if (baiBu && hasStrongSell)
-            return { suggestion: '卖出', signalComb: '白布+清仓' };
+            return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
         if (baiBu && hasChuHuo)
             return { suggestion: '卖出', signalComb: '白布+出货' };
+        if (!baiBu && hasChuHuo && baiXiaoStart)
+            return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
         if (priceIncrease > 60)
             return null;
         const cnb = [];
@@ -970,12 +972,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return { suggestion: '减仓', signalComb: '白消+出货' };
             const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
             if (baiXiaoDays <= 6) {
-                if (baiXiaoStart && hasMainRise)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
-                if (baiXiaoStart && qiangShiHuiCai)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
-                if (baiXiaoStart && hasZhenDang)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点' };
+                if (baiXiaoDays <= 3 && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+主升(间隔<3天)' };
+                if (baiXiaoDays <= 3 && qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩(间隔<3天)' };
+                if (baiXiaoDays <= 3 && hasZhenDang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点(间隔<3天)' };
                 if (qiangShiHuiCai && hasMainRise)
                     return { suggestion: '重仓买入', signalComb: '强势回踩+主升' };
                 if (baiXiaoStart)
@@ -984,8 +986,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     return { suggestion: '重仓买入', signalComb: '强势回踩' };
                 if (qiangShiHuiCai && jiaCang)
                     return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
-                if (baiXiaoStart && jiaCang)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
+                if (baiXiaoDays <= 3 && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓(间隔<3天)' };
                 if (hasMainRise)
                     return { suggestion: '重仓买入', signalComb: '主升' };
                 if (jiGouActiveBreak)
@@ -1023,7 +1025,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 if (jiaCang)
                     parts.push('★加仓');
                 if (lingXingBuy)
-                    parts.push('菱形买入');
+                    parts.push('菱形买入/成立');
                 if (xiPanFanZhuan)
                     parts.push('洗盘反转');
                 return { suggestion: '轻仓买入', signalComb: parts.join('+') };

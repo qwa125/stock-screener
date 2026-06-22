@@ -1215,9 +1215,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const prevClose1 = closeArr?.[closeArr.length-3] ?? 0;
     const prevDayGain = prevClose1 > 0 ? (prevClose0 - prevClose1) / prevClose1 * 100 : 0;
 
-    if (baiBu && hasStrongSell) return { suggestion: '卖出', signalComb: '白布+清仓' };
+    // 白布 + 清仓/爆量覆盖/破5日线 → 卖出
+    if (baiBu && hasStrongSell) return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
     // 白布 + 出货 → 卖出
     if (baiBu && hasChuHuo) return { suggestion: '卖出', signalComb: '白布+出货' };
+    // 白消 + 出货 → 减仓（覆盖买入信号）
+    if (!baiBu && hasChuHuo && baiXiaoStart) return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
     if (priceIncrease > 60) return null; // 涨幅过大过滤
 
     // ============= 信号分组（按白消状态层级） =============
@@ -1231,23 +1234,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
 
       if (baiXiaoDays <= 6) {
-        // ─── 重仓买入信号组 ───
-        // R1-2: 白消启动 + 任意主升
-        if (baiXiaoStart && hasMainRise) return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
-        // R3: 白消启动 + 强势回踩
-        if (baiXiaoStart && qiangShiHuiCai) return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
-        // R4: 白消启动 + 震荡买点
-        if (baiXiaoStart && hasZhenDang) return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点' };
-        // R5: 强势回踩 + 任意主升
+        // ─── 重仓买入信号组（间隔<3天 = 白消启动/强势回踩后3个交易日内出现即可）───
+        // R1-2: 白消启动后3日 + 任意主升
+        if (baiXiaoDays <= 3 && hasMainRise) return { suggestion: '重仓买入', signalComb: '白消启动+主升(间隔<3天)' };
+        // R3: 白消启动后3日 + 强势回踩
+        if (baiXiaoDays <= 3 && qiangShiHuiCai) return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩(间隔<3天)' };
+        // R4: 白消启动后3日 + 震荡买点
+        if (baiXiaoDays <= 3 && hasZhenDang) return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点(间隔<3天)' };
+        // R5: 强势回踩 + 任意主升（同时/先后间隔<3天）
         if (qiangShiHuiCai && hasMainRise) return { suggestion: '重仓买入', signalComb: '强势回踩+主升' };
-        // R6: 白消启动单独
+        // R6: 白消启动单独出现
         if (baiXiaoStart) return { suggestion: '重仓买入', signalComb: '白消启动' };
         // R7: 强势回踩单独
         if (qiangShiHuiCai) return { suggestion: '重仓买入', signalComb: '强势回踩' };
         // R8: 强势回踩 + 加仓 同时
         if (qiangShiHuiCai && jiaCang) return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
-        // R9: 白消启动 + 加仓
-        if (baiXiaoStart && jiaCang) return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
+        // R9: 白消启动后3日 + 加仓
+        if (baiXiaoDays <= 3 && jiaCang) return { suggestion: '重仓买入', signalComb: '白消启动+★加仓(间隔<3天)' };
         // R10: 任意主升单独
         if (hasMainRise) return { suggestion: '重仓买入', signalComb: '主升' };
         // R11: 机构活跃12+ 首次突破MA5 均线不下
@@ -1283,7 +1286,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         if (zhuLiShiPan)  parts.push('主力试盘');
         if (gaoWeiHuiDiao) parts.push('企稳');
         if (jiaCang)      parts.push('★加仓');
-        if (lingXingBuy)  parts.push('菱形买入');
+        if (lingXingBuy)  parts.push('菱形买入/成立');
         if (xiPanFanZhuan) parts.push('洗盘反转');
         return { suggestion: '轻仓买入', signalComb: parts.join('+') };
       }
