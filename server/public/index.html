@@ -561,11 +561,11 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
-// ---------- 全市场重扫（东方财富全量：主板+创业板+科创板） ----------
+// ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
-  setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板+科创板）...')
+  setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')
   
   // 1. 缓存重分析（瞬间）
   var newStocks=[]
@@ -577,15 +577,13 @@ async function doFullRescan(){
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
   
   // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
-  //    覆盖：沪深主板(600601603605000001002) + 创业板(300301) + 科创板(688)
+  //    覆盖：沪深主板(600601603605000001002) + 创业板(300301)
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，从东方财富获取全量排序...')
   
   // 沪深主板代码前缀
   function isMainBoard(c){return /^6/.test(c)||/^00/.test(c)||/^001/.test(c)||/^002/.test(c)}
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
-  // 科创板代码前缀
-  function isSTAR(c){return /^688/.test(c)}
   
   var emUrl='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'
   var emData=[]
@@ -607,7 +605,7 @@ async function doFullRescan(){
   var seen={}
   for(var si2=0;si2<newStocks.length;si2++)if(newStocks[si2].code)seen[newStocks[si2].code]=1
   
-  var mainBoardCount=0,gemCount=0,starCount=0
+  var mainBoardCount=0,gemCount=0
   
   for(var ei=0;ei<emData.length;ei++){
     var item=emData[ei]
@@ -615,12 +613,11 @@ async function doFullRescan(){
     var name=(item.f14||'').trim()
     if(!code||!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N')||name.startsWith('C'))continue
     
-    if(!isMainBoard(code)&&!isGEM(code)&&!isSTAR(code))continue
+    if(!isMainBoard(code)&&!isGEM(code))continue
     
     // 控制数量
     if(isMainBoard(code)&&mainBoardCount>=600)continue
     if(isGEM(code)&&gemCount>=500)continue
-    if(isSTAR(code)&&starCount>=200)continue
     
     var price=parseFloat(item.f2)||0
     if(price<3)continue
@@ -628,7 +625,6 @@ async function doFullRescan(){
     seen[code]=1
     if(isMainBoard(code))mainBoardCount++
     else if(isGEM(code))gemCount++
-    else starCount++
     
     var chg=parseFloat(item.f3)||0
     newStocks.push({code:code,name:name,currentPrice:price,pricePosition:50,suggestion:'持有',score:30,
@@ -638,7 +634,7 @@ async function doFullRescan(){
   }
   
   if(newStocks.length){
-    setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只+科创板'+starCount+'只），排序中...')
+    setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只），排序中...')
     stocks=newStocks
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     // 排序：信号优先级优先，再按涨幅降序
@@ -983,6 +979,9 @@ async function doSearch(){
     da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票或ETF/可转债</div>'
   }
 }
+
+// 9:30 开盘强制扫描一次（到次日9:30自动触发）
+(function(){var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),9,30,0,0);if(n>=t)t.setDate(t.getDate()+1);setTimeout(function(){if(isTH()&&!loading)doScan()},t.getTime()-n.getTime())})();
 
 // Auto refresh
 setInterval(function(){
