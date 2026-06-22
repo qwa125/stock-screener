@@ -561,50 +561,36 @@ function renderList(){
   }
 }
 
-// ---------- JSONP 辅助（新浪接口跨域用） ----------
-function jsonpFetch(url,paramName,callbackName,timeout){
-  return new Promise(function(resolve,reject){
-    if(!timeout)timeout=8000
-    var cb='jsonp_'+Math.random().toString(36).substr(2,9)
-    window[cb]=function(data){
-      clearTimeout(timer)
-      delete window[cb];document.body.removeChild(script)
-      resolve(data)
-    }
-    var timer=setTimeout(function(){
-      delete window[cb];if(script.parentNode)document.body.removeChild(script)
-      reject(new Error('JSONP timeout'))
-    },timeout)
-    var sep=url.indexOf('?')>=0?'&':'?'
-    var script=document.createElement('script')
-    script.src=url+sep+paramName+'='+cb
-    document.body.appendChild(script)
-  })
-}
+
 
 // ---------- 扫描（浏览器端拉~1400只+分批POST后端分析） ----------
 async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   setStatus('🔄 获取股票列表...',true)
   try{
-    // 1. 并行拉主板(hs_a)9页 + 创业板(cyb)5页 = ~1400只
+    // 1. 并行拉上海主板(sh_a~10页) + 深圳主板(sz_a~15页) + 创业板(cyb~5页) = ~3000只
+    var sinaBase='https://money.finance.sina.com.cn/quotes_service/api_json_v2.php/Market_Center.getHQNodeData'
     var sinaUrls=[]
-    for(var pi=1;pi<=9;pi++){
-      sinaUrls.push('https://vip.stock.finance.sina.com.cn/quotes_service/api_json_v2.php/Market_Center.getHQNodeData?page='+pi+'&num=100&sort=symbol&asc=1&node=hs_a&symbol=&_s_r_a=page')
-    }
-    for(var pj=1;pj<=5;pj++){
-      sinaUrls.push('https://vip.stock.finance.sina.com.cn/quotes_service/api_json_v2.php/Market_Center.getHQNodeData?page='+pj+'&num=100&sort=symbol&asc=1&node=cyb&symbol=&_s_r_a=page')
-    }
-    var sinaResults=await Promise.all(sinaUrls.map(function(u){return jsonpFetch(u,'callback','callback',8000).catch(function(){return null})}))
-    var sinaOk=sinaResults.filter(function(r){return r&&r.data}).length
+    for(var pi=1;pi<=10;pi++){sinaUrls.push(sinaBase+'?page='+pi+'&num=100&sort=symbol&asc=1&node=sh_a')}
+    for(var pj=1;pj<=15;pj++){sinaUrls.push(sinaBase+'?page='+pj+'&num=100&sort=symbol&asc=1&node=sz_a')}
+    for(var pk=1;pk<=5;pk++){sinaUrls.push(sinaBase+'?page='+pk+'&num=100&sort=symbol&asc=1&node=cyb')}
+    var sinaResults=await Promise.all(sinaUrls.map(function(u){
+      return fetch(u,{mode:'cors'}).then(function(r){
+        return r.text().then(function(t){
+          try{t=t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'')}catch(e){}
+          return JSON.parse(t)
+        })
+      }).catch(function(e){console.log('新浪页失败:',u,e);return null})
+    }))
+    var sinaOk=sinaResults.filter(function(r){return r&&r.length>0}).length
     var sinaFail=sinaUrls.length-sinaOk
-    if(sinaFail>0)console.log('新浪JSONP失败页数:',sinaFail,'总页数:',sinaUrls.length,'结果:',JSON.stringify(sinaResults.filter(function(r){return !r})));
+    if(sinaFail>0)console.log('新浪fetch失败页数:',sinaFail,'总页数:',sinaUrls.length);
     
     // 2. 去重、过滤ST/价格<3
     var seenCodes={},stkList=[]
     sinaResults.forEach(function(page){
-      if(!page||!page.data||!page.data.length)return
-      page.data.forEach(function(item){
+      if(!page||!page.length)return
+      page.forEach(function(item){
         var raw=item.symbol||item.code||''
         var code=raw.replace(/^(sz|sh|bj)/,'')
         if(!code||!item.name)return
@@ -620,7 +606,7 @@ async function doScan(){
         stkList.push({code:code,name:item.name,currentPrice:price,changePercent:parseFloat(item.changePercent||item.chg||'')||0})
       })
     })
-    if(stkList.length<50){setStatus('❌ 数据不足',true);loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
+    if(stkList.length<50){setStatus('❌ 数据不足('+stkList.length+'只)，新浪API可能被限制，尝试重试...',true);loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
     setStatus('🔄 已获取 '+stkList.length+' 只股票 并行拉取K线...',true)
     
     // 3. 带并发控制的K线拉取+主力资金
