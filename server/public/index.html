@@ -1053,17 +1053,24 @@ setInterval(function(){
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-  // 交易时段自动触发扫描（页面打开后，如果没有今日缓存数据则开始）
-  if(isTH() && !loading){
-    var hasFreshData=false
-    try{
-      var ls=localStorage.getItem('lastStocks')
-      if(ls){
-        var c=JSON.parse(ls)
-        if(c.date===new Date().toISOString().slice(0,10) && c.length>0){hasFreshData=true}
+  // 交易时段自动触发扫描；收盘后（15:00-17:00）补充一次最终扫描
+  if(!loading){
+    var now=getBJ(),isTradingDay=now.getDay()>0&&now.getDay()<6
+    if(isTradingDay){
+      var m=now.getHours()*60+now.getMinutes()
+      // 交易时段 OR 收盘后1小时内（补扫15:00收盘数据）
+      if(isTH() || (m>=900&&m<1020)){
+        var hasFreshData=false
+        try{
+          var ls=localStorage.getItem('lastStocks')
+          if(ls){
+            var c=JSON.parse(ls)
+            if(c.date===new Date().toISOString().slice(0,10) && c.length>0){hasFreshData=true}
+          }
+        }catch(e){}
+        if(!hasFreshData){doScan()}
       }
-    }catch(e){}
-    if(!hasFreshData){doScan()}
+    }
   }
 },3000)
 
