@@ -591,11 +591,17 @@ async function doScan(){
   
   if(!rawStocks.length){setStatus('❌ 未获取到数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
   
-  // 3. 取涨幅前60只 → 并行拉K线(浏览器直接调东方财富K线API)
-  setStatus('🔄 拉取60只备选股K线数据（并行）...')
-  rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
-  var topForAnalysis=rawStocks.slice(0,60)
-  await Promise.all(topForAnalysis.map(function(stock){
+  // 3. 拉取全部K线（并发20限制，浏览器直调东方财富K线API）
+  var klineCount=rawStocks.length
+  setStatus('🔄 拉取'+klineCount+'只股票K线数据（并发20）...')
+  async function mapConcurrent(items,limit,fn){
+    var idx=0,results=[]
+    async function worker(){
+      while(idx<items.length){var i=idx++;try{results[i]=await fn(items[i])}catch(e){}}
+    }
+    var ws=[];for(var w=0;w<limit;w++)ws.push(worker());await Promise.all(ws);return results
+  }
+  await mapConcurrent(rawStocks,20,function(stock){
     var em2=(stock.code.startsWith('6')?'1.':'0.')+stock.code
     return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
       .then(function(r){return r.json()})
@@ -604,32 +610,39 @@ async function doScan(){
           stock.klines=d.data.klines.map(function(l){var p=l.split(',');return{open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
         }
       }).catch(function(){})
-  }))
+  })
   
-  // 4. 分批发送到后端(带K线) → 后端分析(信号/评分/入场时机)
-  setStatus('🔄 发送到后端分析（60只带K线数据）...')
+  // 4. 分批每批50只发送到后端分析(带K线)
+  var batchSize=50,totalBatches=Math.ceil(klineCount/batchSize)
+  setStatus('🔄 分批发送后端分析（每批50只，共'+totalBatches+'批）...')
   var analyzed=[]
-  try{
-    var refreshRes=await fetch(API+'/gem/refresh-all',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({stocks:topForAnalysis}),
-      signal:timeoutSignal(30000)
-    })
-    var refreshData=await refreshRes.json()
-    if(refreshData.code===200&&refreshData.data?.opportunities?.length){
-      analyzed=refreshData.data.opportunities
+  for(var bi=0;bi<klineCount;bi+=batchSize){
+    var batch=rawStocks.slice(bi,bi+batchSize)
+    try{
+      var rr=await fetch(API+'/gem/refresh-all',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({stocks:batch}),
+        signal:timeoutSignal(30000)
+      })
+      var rd=await rr.json()
+      if(rd.code===200&&rd.data?.opportunities?.length){
+        analyzed=analyzed.concat(rd.data.opportunities)
+      }
+      setStatus('📊 第'+(Math.floor(bi/batchSize)+1)+'/'+totalBatches+'批分析完成，累计'+analyzed.length+'只机会股')
+    }catch(e){
+      console.error('第'+(Math.floor(bi/batchSize)+1)+'批分析失败:',e)
     }
-  }catch(e){
-    console.error('后端分析请求失败:',e)
   }
   
-  // 5. 使用后端分析结果，不足则降级为按涨跌幅排
+  // 5. 按得分排序取Top20
   if(analyzed.length>=5){
+    analyzed.sort(function(a,b){return(b.score||0)-(a.score||0)})
     stocks=analyzed.slice(0,20)
-    setStatus('✅ 后端分析完成 - Top20 已更新')
+    setStatus('✅ 后端分析完成 - 累计'+analyzed.length+'只机会股，Top20 已更新')
   }else{
+    rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
     stocks=rawStocks.slice(0,20)
-    setStatus('⚠️ 后端分析未返回足够结果，降级为按涨跌幅展示 Top20')
+    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，降级为按涨跌幅展示 Top20')
   }
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
   
