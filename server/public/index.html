@@ -563,10 +563,11 @@ async function doScan(){
         return {code:s.code,name:s.name,currentPrice:s.currentPrice,changePercent:s.changePercent,kline:kl?kl:[],fundFlow:fundFlowData[s.code]||[]}
       })
       try{
-        var resp=await fetch(API+'/gem-screener/refresh-all',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':STATE.deviceId},body:JSON.stringify({list:payload})})
+        var resp=await fetch(API+'/gem/refresh-all',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':STATE.deviceId},body:JSON.stringify({stocks:payload})})
         var data=await resp.json()
         if(data.code===200&&data.data){
-          results=results.concat(data.data)
+          var batchResults = data.data.opportunities || data.data
+          results=results.concat(batchResults)
         }else{
           console.log('批'+bi+'返回异常:',data)
         }
@@ -774,10 +775,10 @@ async function loadDetailData(code){
   var el=$('detailContent')
   if(!el)return
   try{
-    var r=await fetch(API+'/gem-screener/analyze?code='+code,{headers:{'X-Device-Id':STATE.deviceId}})
+    var r=await fetch(API+'/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':STATE.deviceId},body:JSON.stringify({code:code,name:'',kline:[]})})
     var d=await r.json()
     if(d.code!==200){el.innerHTML='<div style="text-align:center;padding:40px;color:#f85149">加载失败</div>';return}
-    var info=d.data
+    var info=Array.isArray(d.data)?d.data[0]:d.data
     if(!info){el.innerHTML='<div style="text-align:center;padding:40px;color:#8b949e">暂无数据</div>';return}
     
     var html=''
