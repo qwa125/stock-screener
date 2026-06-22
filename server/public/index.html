@@ -262,17 +262,15 @@ async function handleScanClick(){
       showBlocked(false)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描
+    // 设备注册成功 → 隐藏毛玻璃，立即扫描（缓存同时展示）
     hideBlocked()
-    if(!restoreCachedStocks()){
-      loading=false;doScan()
-    }
+    restoreCachedStocks()
+    loading=false;doScan()
   }catch(e){
     // 网络错误时放行（后端不可用时允许访问）
     hideBlocked()
-    if(!restoreCachedStocks()){
-      loading=false;doScan()
-    }
+    restoreCachedStocks()
+    loading=false;doScan()
   }
 }
 function $(id){return document.getElementById(id)}
@@ -797,6 +795,7 @@ async function doSearch(){
   try{
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
+    if(_reg.status===200){hideBlocked();loading=false;doScan()}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none'
 
