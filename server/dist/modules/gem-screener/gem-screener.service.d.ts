@@ -146,8 +146,11 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private enrichWithMainForceFlow;
     private calcMultiScore;
     private scoreToSuggestion;
+    private scoreToSuggestionRelaxed;
+    private getBaiXiaoSuggestion;
     checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
+    private buildResult;
     private calcEntryTiming;
     private calcSafetyScore;
     private applySignalContinuity;

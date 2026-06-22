@@ -1044,8 +1044,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ---------- 14项因子判定 ----------
     const factors: { name: string; met: boolean; points: number }[] = [];
 
-    // F1: 白消买点 (3分)
-    const f1 = hasBaiXiaoSignal && bxDays >= 4;
+    // F1: 白消买点 (3分) — 有信号即可，不限天数（主升/回踩都算）
+    const f1 = hasBaiXiaoSignal;
     factors.push({ name: '白消买点', met: f1, points: f1 ? 3 : 0 });
 
     // F2: 集中度90<40% (1分)
@@ -1130,18 +1130,44 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   /**
-   * 将多因子评分映射为建议标签
+   * ═══ 多因子 → 建议标签 (仅用于无BaiXiao信号的股票) ═══
    */
-  private scoreToSuggestion(score: number, baiXiaoBoost: boolean): string {
-    // 白消信号有额外权重 → 升级
-    if (baiXiaoBoost && score >= 10) return '重仓买入';
-    if (baiXiaoBoost && score >= 7) return '买入';
-    if (score >= 12) return '重仓买入';
+  private scoreToSuggestion(score: number): string {
     if (score >= 9) return '买入';
     if (score >= 6) return '轻仓买入';
-    if (score >= 4) return '持有';
-    if (score >= 2) return '观望';
+    if (score >= 3) return '持有';
     return '不要介入';
+  }
+
+  /**
+   * ═══ 宽松版多因子 → 建议标签 ═══
+   */
+  private scoreToSuggestionRelaxed(score: number): string {
+    if (score >= 7) return '买入';
+    if (score >= 4) return '轻仓买入';
+    if (score >= 2) return '持有';
+    return '不要介入';
+  }
+
+  /**
+   * ═══ BaiXiao 窗口判断 ═══
+   * 白消买点出现后3-4个交易日内都算"重仓买入"窗口
+   */
+  private getBaiXiaoSuggestion(bxDays: number, trendState: number, hasQSHC: boolean): string | null {
+    // 信号当天 → 重仓买入
+    if (bxDays <= 1) return '重仓买入';
+    // 第2-3天 → 有强趋势或强势回踩 → 重仓买入
+    if (bxDays >= 2 && bxDays <= 3) {
+      if (trendState >= 2 || hasQSHC) return '重仓买入';
+      return '买入'; // 没有强信号也给"买入"
+    }
+    // 第4天及以上 → 趋势仍强 → 重仓买入
+    if (bxDays >= 4) {
+      if (trendState >= 2) return '重仓买入';
+      if (trendState >= 1) return '买入';
+      return '轻仓买入'; // 就算趋势一般，白消信号余温也给轻仓
+    }
+    return null;
   }
 
   async checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
@@ -1149,31 +1175,116 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (!kline || kline.length < 20) return null;
 
     const result = this.calcMultiScore(s, kline);
-    if (!result || result.score < 4) return null; // 至少持有以上
+    if (!result) return null;
 
-    // MACD 严格检查: 必须多头
-    if (!(result.macd.currentDiff > result.macd.currentDea)) return null;
+    const {
+      bx, bxDays, macd, score, pricePosition, priceIncrease,
+      trendState, buySignal, detail,
+    } = result;
+    const hasBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
+    const hasQSHC = !!bx.qiangShiHuiCai;
 
-    // 限制涨幅过大
-    if (result.isGoldenCross && result.priceIncrease > 25) return null;
-    if (result.priceIncrease > 40) return null; // 涨幅超过40%一律过滤
+    // ═══════════════════════════════════════
+    // 一级决策: BaiXiao 驱动
+    // ═══════════════════════════════════════
+    if (hasBaiXiaoBuy || hasQSHC || bxDays >= 1) {
+      const baiXiaoSug = this.getBaiXiaoSuggestion(bxDays, trendState, hasQSHC);
+      if (baiXiaoSug) {
+        // 限制: BaiXiao窗口内也做简单安全过滤
+        if (priceIncrease > 50) return null;      // 涨幅太大
+        if (pricePosition >= 95) return null;     // 位置太高
+        return this.buildResult(s, kline, result, baiXiaoSug);
+      }
+    }
 
-    // 价格位置检查(高位不追)
-    if (result.pricePosition >= 92 && result.score < 10) return null;
+    // ═══════════════════════════════════════
+    // 二级决策: 多因子评分 (无BaiXiao)
+    // ═══════════════════════════════════════
+    // 过滤明显不利的
+    if (priceIncrease > 40) return null;
+    if (pricePosition >= 92 && score < 10) return null;
 
-    // 卖出信号过滤
-    const hasSell = !!(result.bx.gaoKaiDiZouQingCang || result.bx.baoLiangFuGaiQingCang ||
-      result.bx.po5RiXian || result.bx.yinDiePoWei);
-    if (result.bx.baiBu && hasSell) return null;
+    // 卖出信号
+    const hasSell = !!(bx.gaoKaiDiZouQingCang || bx.baoLiangFuGaiQingCang ||
+      bx.po5RiXian || bx.yinDiePoWei);
+    if (bx.baiBu && hasSell) return null;
 
-    // 评分映射
-    const suggestion = this.scoreToSuggestion(result.score, !!(result.bxDays >= 4 && (result.bx.baiXiaoBuy1 || result.bx.baiXiaoBuy2)));
-    const NOT_BUY = ['观望', '不要介入'];
-    if (NOT_BUY.includes(suggestion)) return null;
+    const suggestion = this.scoreToSuggestion(score);
+    if (suggestion === '不要介入') return null;
 
-    const entryTiming = this.calcEntryTiming(result.pricePosition, result.trendState, kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low), kline.map(k=>k.volume || 0), result.isGoldenCross);
-    const safetyScore = this.calcSafetyScore(kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low), kline.map(k=>k.volume || 0), result.pricePosition, result.trendState);
+    return this.buildResult(s, kline, result, suggestion);
+  }
 
+  async checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
+    const kline = await this.dataFetcher.getKLineData(s.code);
+    if (!kline || kline.length < 20) return null;
+
+    const result = this.calcMultiScore(s, kline);
+    if (!result) return null;
+
+    const {
+      bx, bxDays, score, priceIncrease, pricePosition,
+      trendState, buySignal, detail,
+    } = result;
+    const hasBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
+    const hasQSHC = !!bx.qiangShiHuiCai;
+
+    // ═══ BaiXiao 窗口(与标准模式相同) ═══
+    if (hasBaiXiaoBuy || hasQSHC || bxDays >= 1) {
+      const baiXiaoSug = this.getBaiXiaoSuggestion(bxDays, trendState, hasQSHC);
+      if (baiXiaoSug) {
+        if (priceIncrease > 55) return null;
+        if (pricePosition >= 97) return null;
+        return this.buildResult(s, kline, result, baiXiaoSug);
+      }
+    }
+
+    // ═══ 多因子宽松模式 ═══
+    if (priceIncrease > 50) return null;
+    if (pricePosition >= 95 && score < 8) return null;
+
+    const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
+    if (bx.baiBu && hasStrongSell) return null;
+
+    const suggestion = this.scoreToSuggestionRelaxed(score);
+    if (suggestion === '不要介入') return null;
+
+    // 筹码修正: 分散+高位筹码 → 降一级
+    const chip = this.calcChipAnalysis(
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume||0), kline[kline.length-1].close
+    );
+    let finalSuggestion = suggestion;
+    let finalComb = detail;
+    if (chip.pattern === 'dispersed' && chip.peakPosition === 'high' && result.pricePosition < 30 && score >= 6) {
+      const downgrade: Record<string,string> = { '重仓买入':'买入', '买入':'轻仓买入', '轻仓买入':'持有' };
+      finalSuggestion = downgrade[finalSuggestion] || finalSuggestion;
+      finalComb += '|筹码承压降级';
+    }
+
+    // 信号延续
+    if (prevSuggestion) {
+      const cont = this.applySignalContinuity(finalSuggestion, prevSuggestion, result.pricePosition, result.trendState);
+      if (cont.changed) { finalSuggestion = cont.suggestion; finalComb += '|信号延续:'+finalSuggestion; }
+    }
+
+    return this.buildResult(s, kline, result, finalSuggestion, finalComb);
+  }
+
+  /** 统一构建结果对象 */
+  private buildResult(
+    s: StockCandidate, kline: KLine[], result: any,
+    suggestion: string, signalCombination?: string
+  ): OpportunityStock | null {
+    const entryTiming = this.calcEntryTiming(
+      result.pricePosition, result.trendState,
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume || 0), result.isGoldenCross
+    );
+    const safetyScore = this.calcSafetyScore(
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume || 0), result.pricePosition, result.trendState
+    );
     return {
       capitalRank: 0,
       entryTiming: Math.round(entryTiming * 100) / 100,
@@ -1190,96 +1301,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
       dea: Math.round(result.macd.currentDea * 10000) / 10000,
       isGoldenCross: result.isGoldenCross,
       suggestion,
-      signalCombination: result.detail,
+      signalCombination: signalCombination || result.detail,
       jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
     };
   }
-  async checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
-    const kline = await this.dataFetcher.getKLineData(s.code);
-    if (!kline || kline.length < 20) return null;
-
-    const result = this.calcMultiScore(s, kline);
-    if (!result) return null;
-
-    // ═══ Relaxed: 更宽松的过滤条件 ═══
-    // 不需要MACD多头(MACD接近金叉即可)
-    const macdOk = result.macd.currentDiff > result.macd.currentDea * 0.9;
-    if (!macdOk) return null;
-
-    // 价格位置检查(放宽到95%)
-    if (result.pricePosition >= 95 && result.score < 8) return null;
-
-    // 涨幅过滤(放宽到50%)
-    if (result.priceIncrease > 50) return null;
-
-    // 卖出信号过滤(白布区域且明确卖出信号才过滤)
-    const hasStrongSell = !!(result.bx.baoLiangFuGaiQingCang || result.bx.po5RiXian);
-    if (result.bx.baiBu && hasStrongSell) return null;
-
-    // K线不够放量但其他参数好也行 - 暂不限制
-
-    // 评分映射 → 更宽松: score >= 3 就有机会
-    const suggestion = this.scoreToSuggestion(result.score, !!(result.bxDays >= 4 && (result.bx.baiXiaoBuy1 || result.bx.baiXiaoBuy2)));
-
-    // 宽松模式只过滤"不要介入"
-    if (suggestion === '不要介入') return null;
-
-    // ---------- 筹码修正 ----------
-    const chip = this.calcChipAnalysis(
-      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
-      kline.map(k=>k.volume||0), kline[kline.length-1].close
-    );
-
-    let finalSuggestion = suggestion;
-    let finalComb = result.detail;
-
-    if (chip.pattern === 'dispersed' && chip.peakPosition === 'high' && result.pricePosition < 30 && result.score >= 6) {
-      // 筹码风险降一级
-      const downgrade: Record<string,string> = { '重仓买入':'买入', '买入':'轻仓买入', '轻仓买入':'持有' };
-      finalSuggestion = downgrade[finalSuggestion] || finalSuggestion;
-      finalComb += '|筹码承压降级';
-    }
-
-    // 信号连续性
-    if (prevSuggestion) {
-      const cont = this.applySignalContinuity(finalSuggestion, prevSuggestion, result.pricePosition, result.trendState);
-      if (cont.changed) { finalSuggestion = cont.suggestion; finalComb += '|信号延续:'+finalSuggestion; }
-    }
-
-    // 入场时机
-    const entryTiming = this.calcEntryTiming(
-      result.pricePosition, result.trendState,
-      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
-      kline.map(k=>k.volume||0), result.isGoldenCross
-    );
-    const safetyScore = this.calcSafetyScore(
-      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
-      kline.map(k=>k.volume||0), result.pricePosition, result.trendState
-    );
-
-    return {
-      capitalRank: 0,
-      entryTiming: Math.round(entryTiming * 100) / 100,
-      safetyScore: Math.round(safetyScore * 100) / 100,
-      code: s.code, name: s.name,
-      mainForceInflow: s.inflow,
-      baiXiaoDays: result.bxDays,
-      buySignal: result.buySignal,
-      currentPrice: s.currentPrice, changePercent: s.changePercent,
-      pricePosition: Math.round(result.pricePosition * 100) / 100,
-      priceIncrease: Math.round(result.priceIncrease * 100) / 100,
-      score: result.score,
-      diff: Math.round(result.macd.currentDiff * 10000) / 10000,
-      dea: Math.round(result.macd.currentDea * 10000) / 10000,
-      isGoldenCross: result.isGoldenCross,
-      suggestion: finalSuggestion,
-      signalCombination: finalComb,
-      jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
-      chipConcentration90: chip.concentration90,
-      chipPeakPosition: chip.peakPosition,
-      chipPattern: chip.pattern,
-    };
-  }
+  
 
   // ===========================================================================
   // 最佳介入时机评分（Level 2 排序）
