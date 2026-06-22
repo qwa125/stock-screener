@@ -97,7 +97,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
 	/* 全页毛玻璃遮罩 - 保留扫描按钮 */
-	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.87)}
+	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 	.page-blur.hidden{display:none}
 	.page-blur .blur-btn{font-size:18px;padding:16px 40px;border-radius:14px;border:none;background:#1890ff;color:#fff;font-weight:600;box-shadow:0 4px 20px rgba(24,144,255,0.4);cursor:pointer}
 	.page-blur .blur-msg{margin-top:16px;font-size:13px;color:#555;text-align:center;line-height:1.6;padding:0 20px}
@@ -721,6 +721,9 @@ async function doScan(){
         body:JSON.stringify({stocks:batch}),
         signal:timeoutSignal(30000)
       })
+      if(rr.status===429){
+        throw new Error('QUOTA_EXCEEDED')
+      }
       var rd=await rr.json()
       if(rd.code===200&&rd.data?.opportunities?.length){
         analyzed=analyzed.concat(rd.data.opportunities)
@@ -778,6 +781,11 @@ async function doScan(){
   }catch(e){}
   }catch(e){
     console.error('doScan error:',e)
+    if(e.message==='QUOTA_EXCEEDED'){
+      showBlocked(true)
+      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+      return
+    }
     setStatus('⛔ 扫描失败，请稍后重试')
   }
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -1125,15 +1133,31 @@ setInterval(function(){
   }
 },60000)
 
-// 页面加载时先读取缓存
+// 页面加载时先读取缓存（毛玻璃已盖住，缓存内容不显示）
 restoreCachedStocks()
-setTimeout(function(){
+setTimeout(async function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   // 如果缓存中有股票，启动实时行情刷新（仅交易时段运行）
   if(stocks.length>0)startPriceRefresh(stocks.map(function(s){return s.code}))
-  // 首次访问 → 自动扫描+毛玻璃保护
-  if(true){showBlocked(false,'scanning');doScan()}
+  // 自动检查设备配额 → 通过则扫描，不通过则玻璃挡住
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      showBlocked(true) // 名额不足 → 玻璃永久挡住
+      return
+    }
+    // 设备配额通过 → 显示扫描毛玻璃 + 自动扫描
+    showBlocked(false,'scanning')
+    doScan()
+  }catch(e){
+    // 网络异常时放行（后端不可用时仍然可访问）
+    showBlocked(false,'scanning')
+    doScan()
+  }
 },1000)
 
 // ========== Admin Panel ==========
