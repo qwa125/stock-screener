@@ -236,8 +236,11 @@ function getCachedStocks(){
     var c=JSON.parse(ls)
     // 新格式：{date:'2026-06-22',stocks:[...]}，仅当天有效
     if(c.date&&c.date===new Date().toISOString().slice(0,10)&&Array.isArray(c.stocks))return c.stocks
-    // 旧格式缓存（非当天数据）→ 清除
-    if(Array.isArray(c)||c.date){localStorage.removeItem('lastStocks')}
+    // 旧格式缓存（非当天数据）→ 清除，显示加载中
+    if(Array.isArray(c)||c.date){
+      localStorage.removeItem('lastStocks')
+      if(isTH()).textContent='🔄 正在获取最新数据...'
+    }
   }catch(e){}
   return null
 }
@@ -1023,10 +1026,13 @@ setTimeout(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },3000)
 
-// 交易时段页面加载后自动扫描（覆盖缓存旧数据）
+// 交易时段页面加载后立即扫描（覆盖缓存旧数据）
 setTimeout(function(){
-  if(isTH()&&!loading){doScan()}
-},5000)
+  if(isTH()&&!loading){
+    setStatus('🔄 正在获取最新数据...')
+    doScan()
+  }
+},100)
 
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
