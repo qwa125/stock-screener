@@ -167,7 +167,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={}
+var stocks=[],loading=false,realtimePrices={},_lastScanTime=0
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -226,7 +226,8 @@ function restoreCachedStocks(){
           setStatus('📊 已冻结 (非交易时间)')
           $('scanBtn').textContent='📊 已冻结'
         }
-        $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
+        var scanTime=localStorage.getItem('lastScanTime')
+        $('footer').textContent='✅ Top'+cached.length+(scanTime?' | 扫描 '+scanTime:'')
         return true
       }
     }
@@ -575,6 +576,7 @@ async function doScan(){
       var item=arr[ii], rawCode=item.symbol||item.code||'', code=cleanCode(rawCode)
       var name=item.name||''
       if(!code||!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N'))continue
+      // hs_a 已改为纯主板(m:0+t:6)，但仍需二次确认
       if(isHsPage && !isMainBoard(rawCode)) continue
       if(!isHsPage && !isGEM(rawCode)) continue
       if(isHsPage && mainBoardCount>=600) continue
@@ -608,7 +610,7 @@ async function doScan(){
       .then(function(r){return r.json()})
       .then(function(d){
         if(d&&d.data&&d.data.klines&&d.data.klines.length>=20){
-          stock.klines=d.data.klines.map(function(l){var p=l.split(',');return{open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
+          stock.klines=d.data.klines.map(function(l){var p=l.split(',');return{open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
         }
       }).catch(function(){})
   })
@@ -640,12 +642,28 @@ async function doScan(){
     analyzed.sort(function(a,b){return(b.score||0)-(a.score||0)})
     stocks=analyzed.slice(0,20)
     setStatus('✅ 后端分析完成 - 累计'+analyzed.length+'只机会股，Top20 已更新')
-  }else{
+  }else if(rawStocks.length>0){
+    // 降级：按涨幅排序，但给每个股票补一个基本评分标签
     rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
     stocks=rawStocks.slice(0,20)
-    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，降级为按涨跌幅展示 Top20')
+    // 给降级的股票添加基本标签（根据涨幅和筹码估算）
+    stocks.forEach(function(s,idx){
+      var cp=s.changePercent||0
+      if(cp>=5) s.suggestion='短线机会'
+      else if(cp>=3) s.suggestion='关注'
+      else if(cp>=1) s.suggestion='小幅上涨'
+      else if(cp>=-1) s.suggestion='横盘'
+      else s.suggestion='弱势'
+      s.score=Math.max(0,(cp+10)/20*50)
+    })
+    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨跌幅展示 Top20（标记为估算信号）')
   }
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
+  try{localStorage.setItem('lastScanTime',timeStr)}catch(e){}
+  
+  // 显示扫描时间
+  var timeStr=new Date().toLocaleString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  $('footer').textContent='✅ Top'+stocks.length+' | 扫描 '+timeStr+' | 涨跌幅榜'
   
   setStatus('🔄 获取实时行情...')
   try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
@@ -1016,6 +1034,18 @@ setInterval(function(){
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  // 交易时段自动触发扫描（页面打开后，如果没有今日缓存数据则开始）
+  if(isTH() && !loading){
+    var hasFreshData=false
+    try{
+      var ls=localStorage.getItem('lastStocks')
+      if(ls){
+        var c=JSON.parse(ls)
+        if(c.date===new Date().toISOString().slice(0,10) && c.length>0){hasFreshData=true}
+      }
+    }catch(e){}
+    if(!hasFreshData){doScan()}
+  }
 },3000)
 
 // ========== Admin Panel ==========
