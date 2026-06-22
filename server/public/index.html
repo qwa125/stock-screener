@@ -529,7 +529,10 @@ async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   setStatus('🔄 获取分析数据...')
   try{
-    var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
+    var ac=new AbortController()
+    var to=setTimeout(function(){ac.abort()},30000)
+    var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now(),{signal:ac.signal})
+    clearTimeout(to)
     var d=await r.json()
     if(d.code!==200||!d.data||!d.data.opportunities){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
