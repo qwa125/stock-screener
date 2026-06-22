@@ -546,7 +546,7 @@ function renderList(){
   })
 }
 
-// JSONP 加载（绕过 CORS 限制，东方财富 API 支持 cb 参数）
+// JSONP 加载（绕过 CORS 限制，通过 script 标签注入）
 function jsonpFetch(url,cbParam,timeout){
   return new Promise(function(resolve,reject){
     var cbName='_jsonp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)
@@ -560,30 +560,23 @@ function jsonpFetch(url,cbParam,timeout){
   })
 }
 
-// 浏览器直调东方财富股票列表API（用 JSONP 绕过 CORS）
+// 通过新浪 JSONP 接口获取股票列表（浏览器直调，无 CORS 限制，中国 IP 无地理封锁）
 function tryDirectEastMoney(node,page){
-  var fs=node==='cyb'?'m:0+t:80':'m:0+t:6'
-  var url='https://push2.eastmoney.com/api/qt/clist/get?cb=CALLBACK&pn='+page+'&pz=100&po=1&np=1'+
-    '&fields=f12,f14,f13,f2,f3,f62,f20&fid=f3&fs='+encodeURIComponent(fs)+'&ut=bd1d9ddb04089700cf9c27f6f7426281'
-  // 纯代码转带交易所前缀格式（如'000751'→'sz000751'）
-  function toExSymbol(code,f13){
-    if(f13==1||/^6\d{5}$/.test(code)||/^688\d{3}$/.test(code))return'sh'+code
-    return'sz'+code
-  }
+  var sinaNode=node==='cyb'?'cyb':'hs_a'
+  var url='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData'+
+    '?page='+page+'&num=100&sort=changepercent&asc=0&node='+sinaNode+'&symbol=&_s_r_a=page&callback=CALLBACK'
   return jsonpFetch(url,'CALLBACK').then(function(d){
-    var items=d&&d.data&&d.data.diff
-    if(!items||!items.length)return[]
-    return items.map(function(itm){
-      var rawCode=itm.f12||''
+    if(!d||!d.length)return[]
+    return d.map(function(itm){
       return{
-        symbol:toExSymbol(rawCode,itm.f13),
-        name:itm.f14||'',
-        price:itm.f2||0,
-        changePercent:itm.f3||0,
-        inflow:itm.f62||0,
-        marketCap:itm.f20||0
+        symbol:itm.symbol||'',
+        name:itm.name||'',
+        price:parseFloat(itm.trade)||0,
+        changePercent:parseFloat(itm.changepercent)||0,
+        inflow:0,
+        marketCap:parseFloat(itm.mktcap)||0
       }
-    })
+    }).filter(function(s){return s.symbol&&s.name})
   })
 }
 
