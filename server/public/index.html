@@ -265,10 +265,33 @@ var isFrozen=false
 var scanCount=0
 var scheduleTimers=[]
 
-function initApp(){
+async function initApp(){
   STATE.initialized=true
   renderApp()
   initSchedule()
+  
+  // 后台尝试从服务器获取全局缓存（所有用户共享）
+  // 如果本地没有缓存，但服务器有，则显示服务器缓存
+  if(STATE.stocks.length===0){
+    try{
+      var backendCache=await loadBackendCache()
+      if(backendCache&&backendCache.length>0){
+        STATE.stocks=backendCache
+        saveCache(backendCache)
+        renderList()
+        var isRunning=isScanInProgress()
+        setStatus(isRunning?'🔄 扫描正在进行中... 显示上次缓存 ('+backendCache.length+'只)':'📋 已恢复全局缓存 ('+backendCache.length+'只) '+new Date().toLocaleTimeString(),isRunning)
+        if(!isRunning)startPriceRefresh()
+        return
+      }
+    }catch(e){}
+  }
+  
+  // 没有缓存 - 检查是否有扫描正在后台进行
+  if(isScanInProgress()){
+    setStatus('⏳ 上次扫描尚未完成，请稍后点击"立即扫描"重新扫描',false)
+    setScanInProgress(false)
+  }
 }
 
 function renderApp(){
@@ -427,7 +450,23 @@ function updateFreezeOverlay(){
 
 /* ===== 数据管理 ===== */
 var CACHE_KEY='stock_screener_data'
-var CACHE_TIME=30*60*1000
+var SCAN_IN_PROGRESS_KEY='stock_scanner_scanning'
+
+// 缓存过期时间：到明天9:30（开盘前最新缓存一直有效）
+function getCacheExpireMs(){
+  var now=new Date()
+  var target=new Date(now.getFullYear(),now.getMonth(),now.getDate(),9,30,0,0)
+  if(now>=target)target.setDate(target.getDate()+1)
+  return target.getTime()-now.getTime()
+}
+
+function setScanInProgress(yes){
+  try{if(yes)localStorage.setItem(SCAN_IN_PROGRESS_KEY,'1');else localStorage.removeItem(SCAN_IN_PROGRESS_KEY)}catch(e){}
+}
+
+function isScanInProgress(){
+  return localStorage.getItem(SCAN_IN_PROGRESS_KEY)==='1'
+}
 
 function saveCache(data){
   try{
@@ -441,10 +480,22 @@ function loadCache(){
     var raw=localStorage.getItem(CACHE_KEY)
     if(!raw)return null
     var obj=JSON.parse(raw)
-    if(Date.now()-obj.time>CACHE_TIME){localStorage.removeItem(CACHE_KEY);return null}
+    if(Date.now()-obj.time>getCacheExpireMs()){localStorage.removeItem(CACHE_KEY);return null}
     STATE.cache=obj.data
     return obj.data
   }catch(e){return null}
+}
+
+// 从后端获取全局缓存（所有用户共享）
+async function loadBackendCache(){
+  try{
+    var r=await fetch(API+'/gem/opportunities',{headers:{'X-Device-Id':STATE.deviceId}})
+    var d=await r.json()
+    if(d.code===200&&d.data&&d.data.opportunities&&d.data.opportunities.length>0){
+      return d.data.opportunities
+    }
+  }catch(e){}
+  return null
 }
 
 function tryRestoreCache(){
@@ -452,7 +503,7 @@ function tryRestoreCache(){
   if(cache&&cache.length>0){
     STATE.stocks=cache
     renderList()
-    setStatus('📋 已恢复缓存数据 ('+cache.length+'只) '+new Date(STATE.lastRefreshTime||Date.now()).toLocaleTimeString(),false)
+    setStatus('📋 已恢复本地缓存 ('+cache.length+'只) '+new Date(STATE.lastRefreshTime||Date.now()).toLocaleTimeString(),false)
     startPriceRefresh()
     return true
   }
@@ -462,6 +513,7 @@ function tryRestoreCache(){
 function handleClearCache(){
   if(!confirm('确定清除缓存?'))return
   localStorage.removeItem(CACHE_KEY)
+  localStorage.removeItem(SCAN_IN_PROGRESS_KEY)
   STATE.cache=null
   STATE.stocks=[]
   renderList()
@@ -470,14 +522,14 @@ function handleClearCache(){
 
 /* ===== 核心扫描 ===== */
 async function doScan(){
-  if(loading)return;loading=true;$('scanBtn')&&($('scanBtn').disabled=true);$('scanBtn')&&($('scanBtn').textContent='扫描中...')
+  if(loading)return;loading=true;setScanInProgress(true);$('scanBtn')&&($('scanBtn').disabled=true);$('scanBtn')&&($('scanBtn').textContent='扫描中...')
   setStatus('🔄 获取股票列表...',true)
   try{
     // 1. 从东方财富获取全部A股列表(一次请求，与K线API同域名，CORS兼容)
     var emUrl='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'
     var emResp=await fetch(emUrl,{headers:{'Referer':'https://quote.eastmoney.com/'}}).then(function(r){return r.json()}).catch(function(e){console.log('东方财富请求失败:',e);return null})
     var emList=emResp&&emResp.data&&emResp.data.diff
-    if(!emList||!emList.length){setStatus('❌ 获取股票列表失败('+(emList?emList.length:0)+'只)，East Money API可能受限',true);loading=false;$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
+    if(!emList||!emList.length){setStatus('❌ 获取股票列表失败('+(emList?emList.length:0)+'只)，East Money API可能受限',true);loading=false;setScanInProgress(false);$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
     setStatus('🔄 获取 '+emList.length+' 只股票 处理中...',true)
     
     // 2. 过滤：主板(600,601,603,605,000,001,002) + 创业板(300,301)，排除ST/价格<3
@@ -495,7 +547,7 @@ async function doScan(){
       seenCodes[code]=1
       stkList.push({code:code,name:name,currentPrice:price,changePercent:parseFloat(item.f3)||0})
     })
-    if(stkList.length<50){setStatus('❌ 数据不足('+stkList.length+'只)，East Money返回数据不足，尝试重试...',true);loading=false;$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
+    if(stkList.length<50){setStatus('❌ 数据不足('+stkList.length+'只)，East Money返回数据不足，尝试重试...',true);loading=false;setScanInProgress(false);$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
     setStatus('🔄 已获取 '+stkList.length+' 只股票 并行拉取K线...',true)
     
     // 3. 带并发控制的K线拉取+主力资金
@@ -551,7 +603,7 @@ async function doScan(){
     for(var wi=0;wi<CONCURRENCY;wi++)workers.push(_worker())
     await Promise.all(workers)
     
-    if(klineOk<50){setStatus('❌ K线数据不足('+klineOk+'只OK/'+klineFail+'失败)，重试',true);loading=false;$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
+    if(klineOk<50){setStatus('❌ K线数据不足('+klineOk+'只OK/'+klineFail+'失败)，重试',true);loading=false;setScanInProgress(false);$('scanBtn')&&($('scanBtn').disabled=false);$('scanBtn')&&($('scanBtn').textContent='🔄 立即扫描');return}
     setStatus('🔄 K线获取完成 ('+klineOk+'/'+stkList.length+') 推送到后端分析...',true)
     
     // 4. 分批推送到后端分析
@@ -593,6 +645,7 @@ async function doScan(){
     setStatus('❌ 扫描异常: '+e.message,false)
   }finally{
     loading=false
+    setScanInProgress(false)
     $('scanBtn')&&($('scanBtn').disabled=isFrozen)
     $('scanBtn')&&($('scanBtn').textContent=isFrozen?'🔒 已冻结':'🔄 立即扫描')
   }

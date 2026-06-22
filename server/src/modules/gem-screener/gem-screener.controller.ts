@@ -65,6 +65,7 @@ export class GemScreenerController {
     }
   }
   @Get('opportunities')
+  @SkipAccessLimit()
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
     return { code: 200, msg: 'success', data: { opportunities, timestamp } };
