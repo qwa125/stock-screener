@@ -167,7 +167,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={},_lastScanTime=0,_priceRefreshTimer=null
+var stocks=[],loading=false,_scanComplete=false,realtimePrices={},_lastScanTime=0,_priceRefreshTimer=null
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -202,9 +202,17 @@ window.fetch=function(u,o){
     return r
   })
 }
-function showBlocked(isLimited){
+function showBlocked(isLimited, mode){
   $("pageBlur").classList.remove("hidden")
-  if(isLimited){
+  if(mode==='scanning'){
+    $("blurMsg").innerHTML="🔍 正在扫描分析股票数据..."
+    $("scanBtn").textContent="扫描中..."
+    $("scanBtn").disabled=true
+  } else if(mode==='done'){
+    $("blurMsg").innerHTML="📊 最新分析已就绪"
+    $("scanBtn").textContent="点击查看结果"
+    $("scanBtn").disabled=false
+  } else if(isLimited){
     $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
   } else {
     $("blurMsg").innerHTML="首次访问请点击上方扫描按钮以注册设备"
@@ -243,6 +251,8 @@ try{
 
 // 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
 async function handleScanClick(){
+  // 扫描完成→直接隐藏毛玻璃查看结果
+  if(_scanComplete){ hideBlocked(); _scanComplete=false; return }
   try{
     var regRes=await fetch("/api/device/register",{
       method:"POST",
@@ -771,6 +781,7 @@ async function doScan(){
     setStatus('⛔ 扫描失败，请稍后重试')
   }
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  _scanComplete=true;if(!$("pageBlur").classList.contains("hidden")){$("blurMsg").innerHTML="📊 最新分析已就绪";$("scanBtn").textContent="点击查看结果"}
 }
 
 // ---------- 全市场手动重扫（复用 doScan） ----------
@@ -1121,8 +1132,8 @@ setTimeout(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   // 如果缓存中有股票，启动实时行情刷新（仅交易时段运行）
   if(stocks.length>0)startPriceRefresh(stocks.map(function(s){return s.code}))
-  // 无缓存且今天是交易日 → 触发一次初始扫描（首次部署或清缓存）
-  if(stocks.length===0 && new Date().getDay()%6!==0)doScan()
+  // 首次访问 → 自动扫描+毛玻璃保护
+  if(true){showBlocked(false,'scanning');doScan()}
 },1000)
 
 // ========== Admin Panel ==========
