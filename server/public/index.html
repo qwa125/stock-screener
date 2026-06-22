@@ -1008,6 +1008,7 @@ function startPriceRefresh(stks){
   if(stks&&stks.length>0){
     stopPriceRefresh()
     priceTimer=setInterval(function(){
+      if(!isTH()){stopPriceRefresh();return}
       if(stocks.length>0){
         var codes=stocks.map(function(s){return s.code})
         fetchRealtime(codes).then(function(rt){
