@@ -546,17 +546,31 @@ function renderList(){
   })
 }
 
-// 浏览器直调东方财富股票列表API（不走后端代理，解决Render美国IP被封问题）
+// JSONP 加载（绕过 CORS 限制，东方财富 API 支持 cb 参数）
+function jsonpFetch(url,cbParam,timeout){
+  return new Promise(function(resolve,reject){
+    var cbName='_jsonp_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)
+    window[cbName]=function(data){resolve(data);try{delete window[cbName]}catch(e){window[cbName]=undefined}}
+    var s=document.createElement('script')
+    s.src=url.replace(cbParam||'CALLBACK',cbName)
+    s.onerror=function(e){reject(e);try{delete window[cbName]}catch(e){}}
+    var t=setTimeout(function(){if(window[cbName]){try{delete window[cbName]}catch(e){};reject(new Error('timeout'))}},timeout||8000)
+    s.onload=function(){clearTimeout(t)}
+    document.head.appendChild(s)
+  })
+}
+
+// 浏览器直调东方财富股票列表API（用 JSONP 绕过 CORS）
 function tryDirectEastMoney(node,page){
   var fs=node==='cyb'?'m:0+t:80':'m:0+t:6'
-  var url='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn='+page+'&pz=100&po=1&np=1'+
+  var url='https://push2.eastmoney.com/api/qt/clist/get?cb=CALLBACK&pn='+page+'&pz=100&po=1&np=1'+
     '&fields=f12,f14,f13,f2,f3,f62,f20&fid=f3&fs='+encodeURIComponent(fs)+'&ut=bd1d9ddb04089700cf9c27f6f7426281'
   // 纯代码转带交易所前缀格式（如'000751'→'sz000751'）
   function toExSymbol(code,f13){
     if(f13==1||/^6\d{5}$/.test(code)||/^688\d{3}$/.test(code))return'sh'+code
     return'sz'+code
   }
-  return fetch(url,{mode:'cors'}).then(function(r){return r.json()}).then(function(d){
+  return jsonpFetch(url,'CALLBACK').then(function(d){
     var items=d&&d.data&&d.data.diff
     if(!items||!items.length)return[]
     return items.map(function(itm){
