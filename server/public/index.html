@@ -222,8 +222,10 @@ function restoreCachedStocks(){
       if(cached.length>0){
         stocks=cached
         renderList()
-        setStatus('📊 已冻结 (非交易时间)')
-        $('scanBtn').textContent='📊 已冻结'
+        if(!isTH()){
+          setStatus('📊 已冻结 (非交易时间)')
+          $('scanBtn').textContent='📊 已冻结'
+        }
         $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
         return true
       }
