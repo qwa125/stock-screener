@@ -49,8 +49,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.MAX_MARKET_CAP = 500_0000_0000;
         this.MIN_MARKET_CAP = 20_0000_0000;
         this.SUGGESTION_PRIORITY = {
-            '重仓买入': 1, '买入🏆': 2, '轻仓买入': 3, '准备买入': 4,
-            '持有': 5, '减仓': 6, '观望': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
+            '重仓买入': 1, '买入': 2, '轻仓买入': 3,
+            '持有': 5, '卖出': 6, '不要介入': 7,
         };
         this.cache = null;
         this.refreshPromise = null;
@@ -952,9 +952,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const hasStrongSell = result.hasStrongSell;
         const hasChuHuo = result.hasChuHuo;
         if (baiBu && hasStrongSell)
-            return null;
+            return { suggestion: '卖出', signalComb: '白布+清仓' };
         if (hasChuHuo && pricePosition > 70)
-            return null;
+            return { suggestion: '卖出', signalComb: '高位+出货' };
         if (priceIncrease > 60)
             return null;
         const cnb = [];
@@ -1059,7 +1059,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (pricePosition >= 92 && score < 10)
             return null;
         if (bx.baiBu && result.hasStrongSell)
-            return null;
+            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
         const suggestion = this.scoreToSuggestion(score);
         if (suggestion === '不要介入')
             return null;
@@ -1085,7 +1085,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
         if (bx.baiBu && hasStrongSell)
-            return null;
+            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
         const suggestion = this.scoreToSuggestionRelaxed(score);
         if (suggestion === '不要介入')
             return null;
@@ -1239,7 +1239,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!prevSuggestion || prevSuggestion === '观望' || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
             return { suggestion: currentSuggestion, changed: false };
         }
-        const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入', '减仓', '卖出', '清仓'];
+        const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
         const prevIdx = PRIORITY.indexOf(prevSuggestion);
         const curIdx = PRIORITY.indexOf(currentSuggestion);
         if (prevIdx === -1 || curIdx === -1)
@@ -1694,7 +1694,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const cfsResult = (0, trading_suggestion_1.getTradingSuggestion)(cfsInput);
             const suggestion = cfsResult.action;
             const BASE = {
-                '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+                '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
             };
             let score = BASE[suggestion] ?? 30;
             if (pricePos < 30)
@@ -1741,8 +1741,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const main = await this.scanTopMainBoard(force);
         const combined = [...gem.opportunities, ...main.opportunities];
         const ORDER = {
-            '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-            '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+            '重仓买入': 0, '买入': 1, '轻仓买入': 2,
+            '持有': 4, '卖出': 5, '不要介入': 6,
         };
         combined.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
@@ -1781,8 +1781,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }));
         }
         const ORDER = {
-            '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-            '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+            '重仓买入': 0, '买入': 1, '轻仓买入': 2,
+            '持有': 4, '卖出': 5, '不要介入': 6,
         };
         results.sort((a, b) => {
             const pa = ORDER[a.suggestion ?? ''] ?? 99;
@@ -2039,7 +2039,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const suggestion = result.action;
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
-        const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
+        const NEGATIVE = ['卖出', '不要介入'];
         if (!keepAll && NEGATIVE.includes(suggestion))
             return null;
         const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
@@ -2089,13 +2089,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
         const crossSuggestion = crossResult.action;
-        const NEGATIVE_CROSS = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+        const NEGATIVE_CROSS = ['卖出', '不要介入'];
         if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion))
             return null;
         const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
         const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
         const BASE = {
-            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
         };
         let score = BASE[suggestion] ?? 30;
         if (pricePos < 30)
@@ -2307,7 +2307,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         newSuggestion = PRIORITY[sugIdx2 + 1];
                     }
                     const BASE = {
-                        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40, '观望': 25,
+                        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
                     };
                     let newScore = BASE[newSuggestion] ?? 30;
                     if (pp < 30)

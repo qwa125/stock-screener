@@ -96,8 +96,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly MIN_MARKET_CAP = 20_0000_0000;  // 20亿, 排除小盘庄股
   /** 建议优先级: 越小越优先 */
   private readonly SUGGESTION_PRIORITY: Record<string, number> = {
-    '重仓买入': 1, '买入🏆': 2, '轻仓买入': 3, '准备买入': 4,
-    '持有': 5, '减仓': 6, '观望': 7, '卖出': 8, '清仓': 9, '不要介入': 10,
+    '重仓买入': 1, '买入': 2, '轻仓买入': 3,
+    '持有': 5, '卖出': 6, '不要介入': 7,
   };
 
   private cache: CacheEntry | null = null;
@@ -1205,11 +1205,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const pricePosition = result.pricePosition;
 
     // ============= 安全过滤 =============
-    // 卖出信号优先: 白布状态下出现清仓信号 → 直接过滤
+    // 卖出信号优先
     const hasStrongSell = result.hasStrongSell;
     const hasChuHuo = result.hasChuHuo;
-    if (baiBu && hasStrongSell) return null;         // 白布+清仓信号 → 不介入
-    if (hasChuHuo && pricePosition > 70) return null;  // 出货+高位 → 不介入
+    if (baiBu && hasStrongSell) return { suggestion: '卖出', signalComb: '白布+清仓' };
+    if (hasChuHuo && pricePosition > 70) return { suggestion: '卖出', signalComb: '高位+出货' };
     if (priceIncrease > 60) return null;               // 涨幅过大
 
     // ============= 一级: 重仓买入规则 =============
@@ -1337,8 +1337,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (priceIncrease > 40) return null;
     if (pricePosition >= 92 && score < 10) return null;
 
-    // 卖出信号过滤
-    if (bx.baiBu && result.hasStrongSell) return null;
+    // 卖出信号 → 统一返回卖出
+    if (bx.baiBu && result.hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
 
     const suggestion = this.scoreToSuggestion(score);
     if (suggestion === '不要介入') return null;
@@ -1367,7 +1367,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (pricePosition >= 95 && score < 8) return null;
 
     const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
-    if (bx.baiBu && hasStrongSell) return null;
+    if (bx.baiBu && hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
 
     const suggestion = this.scoreToSuggestionRelaxed(score);
     if (suggestion === '不要介入') return null;
@@ -1593,7 +1593,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       return { suggestion: currentSuggestion, changed: false };
     }
 
-    const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入', '减仓', '卖出', '清仓'];
+    const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
     const prevIdx = PRIORITY.indexOf(prevSuggestion);
     const curIdx = PRIORITY.indexOf(currentSuggestion);
     if (prevIdx === -1 || curIdx === -1) return { suggestion: currentSuggestion, changed: false };
@@ -2113,7 +2113,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const suggestion = cfsResult.action;
 
       const BASE: Record<string, number> = {
-        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
       };
       let score = BASE[suggestion] ?? 30;
       if (pricePos < 30) score += 15;
@@ -2188,8 +2188,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const main = await this.scanTopMainBoard(force);
     const combined = [...gem.opportunities, ...main.opportunities];
     const ORDER: Record<string, number> = {
-      '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-      '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+      '重仓买入': 0, '买入': 1, '轻仓买入': 2,
+      '持有': 4, '卖出': 5, '不要介入': 6,
     };
     combined.sort((a, b) => {
       const pa = ORDER[a.suggestion ?? ''] ?? 99;
@@ -2225,8 +2225,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
 
     const ORDER: Record<string, number> = {
-      '重仓买入': 0, '买入': 1, '轻仓买入': 2, '准备买入': 3,
-      '持有': 4, '观望': 5, '减仓': 6, '卖出': 7, '清仓': 8,
+      '重仓买入': 0, '买入': 1, '轻仓买入': 2,
+      '持有': 4, '卖出': 5, '不要介入': 6,
     };
     results.sort((a, b) => {
       const pa = ORDER[a.suggestion ?? ''] ?? 99;
@@ -2529,7 +2529,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const predictionText = result.prediction || '';
     const reasonText = result.reason || '';
 
-    const NEGATIVE = ['减仓', '卖出', '清仓', '不要介入', '观望'];
+    const NEGATIVE = ['卖出', '不要介入'];
     if (!keepAll && NEGATIVE.includes(suggestion)) return null;
 
     // 排除预测文本严重负面关键词的
@@ -2590,16 +2590,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const crossResult = getTradingSuggestion(crossInput);
     const crossSuggestion = crossResult.action;
 
-    // 交叉验证：只排除结果明确为负面的（观望/减仓/卖出/清仓/不要介入）
-    // "持有"不排除（用户: "选出来是买入，进去是持有也是可以的"）
-    const NEGATIVE_CROSS = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+    // 交叉验证：只排除明确负面的（卖出/不要介入）
+    const NEGATIVE_CROSS = ['卖出', '不要介入'];
     if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion)) return null;
 
     const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
     const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
 
     const BASE: Record<string, number> = {
-      '重仓买入': 100, '买入': 80, '轻仓买入': 65, '准备买入': 55, '持有': 40,
+      '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
     };
     let score = BASE[suggestion] ?? 30;
     if (pricePos < 30) score += 15;
@@ -2819,7 +2818,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
           // 更新评分
           const BASE: Record<string, number> = {
-            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40, '观望': 25,
+            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
           };
           let newScore = BASE[newSuggestion] ?? 30;
           if (pp < 30) newScore += 15;
