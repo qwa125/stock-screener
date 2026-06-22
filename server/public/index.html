@@ -589,37 +589,18 @@ async function doScan(){
   }
   
   if(!rawStocks.length){setStatus('❌ 未获取到数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
-  setStatus('🔄 共 '+rawStocks.length+' 只，分批送后端分析中...')
   
-  // 3. 分批传送到后端分析（每批300只）
-  var allAnalyzed=[]
-  var BATCH=300
-  for(var b=0;b<rawStocks.length;b+=BATCH){
-    var batch=rawStocks.slice(b,Math.min(b+BATCH,rawStocks.length))
-    try{
-      var rr=await fetch(API+'/gem/refresh-all',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({stocks:batch})
-      })
-      var rd=await rr.json()
-      if(rd.code===200&&rd.data&&rd.data.opportunities){
-        allAnalyzed=allAnalyzed.concat(rd.data.opportunities)
-      }
-    }catch(e){}
-    setStatus('🔄 后端分析中... '+(Math.min(b+BATCH,rawStocks.length))+'/'+rawStocks.length)
-  }
+  // 3. 异步送后端分析（不阻塞展示），后端能分析则更新缓存
+  try{
+    fetch(API+'/gem/refresh-all',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stocks:rawStocks})
+    }).catch(function(){})
+  }catch(e){}
   
-  // 4. 排序取Top20
-  if(!allAnalyzed.length){setStatus('❌ 后端分析失败');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
-  var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
-  allAnalyzed.sort(function(a,b){
-    var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
-    if(pa!==pb) return pa-pb
-    var ea=a.entryTiming||0, eb=b.entryTiming||0
-    if(eb!==ea) return eb-ea
-    return (b.score||0)-(a.score||0)
-  })
-  stocks=allAnalyzed.slice(0,20)
+  // 4. 前端直接按涨跌幅排序取Top20（后端分析异步进行，不影响展示）
+  rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
+  stocks=rawStocks.slice(0,20)
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
   
   setStatus('🔄 获取实时行情...')
