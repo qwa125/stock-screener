@@ -550,13 +550,19 @@ function renderList(){
 function tryDirectEastMoney(node,page){
   var fs=node==='cyb'?'m:0+t:80':'m:0+t:6'
   var url='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn='+page+'&pz=100&po=1&np=1'+
-    '&fields=f12,f14,f2,f3,f62,f20&fid=f3&fs='+encodeURIComponent(fs)+'&ut=bd1d9ddb04089700cf9c27f6f7426281'
+    '&fields=f12,f14,f13,f2,f3,f62,f20&fid=f3&fs='+encodeURIComponent(fs)+'&ut=bd1d9ddb04089700cf9c27f6f7426281'
+  // 纯代码转带交易所前缀格式（如'000751'→'sz000751'）
+  function toExSymbol(code,f13){
+    if(f13==1||/^6\d{5}$/.test(code)||/^688\d{3}$/.test(code))return'sh'+code
+    return'sz'+code
+  }
   return fetch(url,{mode:'cors'}).then(function(r){return r.json()}).then(function(d){
     var items=d&&d.data&&d.data.diff
     if(!items||!items.length)return[]
     return items.map(function(itm){
+      var rawCode=itm.f12||''
       return{
-        symbol:itm.f12||'',
+        symbol:toExSymbol(rawCode,itm.f13),
         name:itm.f14||'',
         price:itm.f2||0,
         changePercent:itm.f3||0,
