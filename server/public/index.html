@@ -164,8 +164,8 @@ var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04'
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
-function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=540&&m<900}
-function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
+function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=555&&m<=690)||(m>=780&&m<=900)}
+function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:00';if((m>=555&&m<=690)||(m>=780&&m<=900))return'';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:00':'收盘已冻结，明早 9:00 恢复';if(m<540)return'盘前已冻结，9:00 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
 
