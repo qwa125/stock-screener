@@ -54,6 +54,7 @@ export class AccessControlController {
       return { code: 400, msg: '无效名额数，请传入整数，如 ?maxSlots=30' };
     }
     await this.service.setMaxSlots(maxSlots);
+    await this.deviceRegistry.setMaxSlots(maxSlots);
     return { code: 200, msg: `名额已设为 ${maxSlots}` };
   }
 
