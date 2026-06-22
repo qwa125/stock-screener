@@ -256,7 +256,9 @@ async function handleScanClick(){
     }
     // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描
     hideBlocked()
-    if(!restoreCachedStocks()){
+    var hasCache=restoreCachedStocks()
+    if(!hasCache||(isTH()&&!loading)){
+      // 有缓存但已过9:30开盘 → 强制刷新（缓存可能是周五数据）
       doScan()
     }
   }catch(e){
@@ -988,7 +990,7 @@ async function doSearch(){
 // 四个固定扫描点：9:30（开盘）、11:30（收早盘）、13:00（开盘）、15:00（收盘）
 [['9:30',9,30],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(function(){if(isTH()&&!loading)doScan()},t.getTime()-n.getTime());
+  if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动刷新
