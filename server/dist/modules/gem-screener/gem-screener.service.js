@@ -59,6 +59,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.sectorCache = null;
         this.MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
         this.BUNDLED_MAIN_BOARD_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
+        this.soldOutStocks = new Set();
         this.SECTOR_CACHE = '/tmp/sector-opportunities-cache.json';
         this.BUNDLED_SECTOR_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'sector-cache.json');
         this.prevGEMResults = [];
@@ -2288,6 +2289,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '持有';
                         }
                     }
+                    if (['卖出', '减仓', '不要介入'].includes(oldSug || '') &&
+                        !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+                        newSuggestion = '不要介入';
+                    }
                     const entry = s.entryTiming ?? 50;
                     const sugIdx2 = PRIORITY.indexOf(newSuggestion);
                     if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
@@ -2575,6 +2580,22 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
+        const SELL_LOCK = ['卖出', '减仓'];
+        const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
+        for (const r of results) {
+            const code = r.code;
+            if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
+                this.soldOutStocks.delete(code);
+            }
+            else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
+                this.soldOutStocks.add(code);
+            }
+            else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
+                if (this.soldOutStocks.has(code)) {
+                    r.suggestion = '不要介入';
+                }
+            }
+        }
         const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
         const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
         const finalResults = buyResults.slice(0, 20);

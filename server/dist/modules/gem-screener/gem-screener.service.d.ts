@@ -61,6 +61,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private sectorCache;
     private readonly MAIN_BOARD_CACHE;
     private readonly BUNDLED_MAIN_BOARD_CACHE;
+    private soldOutStocks;
     private readonly SECTOR_CACHE;
     private readonly BUNDLED_SECTOR_CACHE;
     private prevGEMResults;

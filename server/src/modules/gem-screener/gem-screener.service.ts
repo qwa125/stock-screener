@@ -107,6 +107,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private sectorCache: CacheEntry | null = null;
   private readonly MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
   private readonly BUNDLED_MAIN_BOARD_CACHE = join(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
+  private soldOutStocks = new Set<string>();
   private readonly SECTOR_CACHE = '/tmp/sector-opportunities-cache.json';
   private readonly BUNDLED_SECTOR_CACHE = join(__dirname, '..', '..', '..', 'assets', 'sector-cache.json');
 
@@ -2779,6 +2780,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
             else if (oldIdx === 2 && newIdx > 3) { newSuggestion = '持有'; }
           }
 
+          // ─── 卖出锁定规则：卖出/减仓后→不要介入，直到新买入信号 ───
+          if (['卖出', '减仓', '不要介入'].includes(oldSug || '') &&
+              !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+            newSuggestion = '不要介入';
+          }
+
           // ─── 入场时机与买卖信号对齐 ───
           const entry = s.entryTiming ?? 50;
           const sugIdx2 = PRIORITY.indexOf(newSuggestion);
@@ -3100,6 +3107,24 @@ export class GemScreenerService implements OnApplicationBootstrap {
         : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
+    // 卖出锁定状态机: 卖出后保持不要介入直到出现买入信号
+    const SELL_LOCK = ['卖出', '减仓'];
+    const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
+    for (const r of results) {
+      const code = r.code;
+      if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
+        // 出现买入信号 → 解除锁定
+        this.soldOutStocks.delete(code);
+      } else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
+        // 卖出/减仓 → 加入锁定
+        this.soldOutStocks.add(code);
+      } else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
+        // 非买入信号 → 检查是否在锁定中
+        if (this.soldOutStocks.has(code)) {
+          r.suggestion = '不要介入';
+        }
+      }
+    }
     const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
     const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
     const finalResults = buyResults.slice(0, 20);
