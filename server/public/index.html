@@ -655,7 +655,28 @@ async function doScan(){
   
   if(!rawStocks.length){setStatus('❌ 未获取到数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
   
-  // 3. 拉取全部K线（并发20限制，浏览器直调东方财富K线API）
+  // 3. 用东方财富批量补充主力资金（inflow）字段——JSONP绕过CORS
+  setStatus('🔄 补充主力资金数据...')
+  try{
+    var batchSecids=rawStocks.map(function(s){
+      var mkt=/^sh/.test(s.code)?'1.':'0.'
+      return mkt+cleanCode(s.code)
+    })
+    for(var bi=0;bi<batchSecids.length;bi+=50){
+      var chunk=batchSecids.slice(bi,bi+50)
+      var emUrl='https://push2.eastmoney.com/api/qt/ulist.np/get?cb=CALLBACK&fields=f12,f2,f3,f62,f20&secids='+chunk.join(',')
+      var emData=await jsonpFetch(emUrl,'CALLBACK',6000).catch(function(){return null})
+      if(emData&&emData.data&&emData.data.diff){
+        emData.data.diff.forEach(function(itm){
+          var rawCode=itm.f12||''
+          var found=rawStocks.find(function(s){return cleanCode(s.code)===rawCode})
+          if(found&&itm.f62)found.inflow=itm.f62
+        })
+      }
+    }
+  }catch(e){}
+  
+  // 4. 拉取全部K线（并发20限制，浏览器直调东方财富K线API）
   var klineCount=rawStocks.length
   setStatus('🔄 拉取'+klineCount+'只股票K线数据（并发20）...')
   async function mapConcurrent(items,limit,fn){
