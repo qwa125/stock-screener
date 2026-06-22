@@ -826,6 +826,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const volatility20d = Math.sqrt(variance20) * 100 * Math.sqrt(252);
         const engine = new formula_engine_1.FormulaEngine({ open: openArr, close: closeArr, high: highArr, low: lowArr, volume: volArr, amount: amtArr });
         const bx = (0, bai_xing_1.calcBaiXing)(engine);
+        const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
+        const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
         const bxDays = bx.baiXiaoDays || 0;
         const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
         const hasBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai || bx.diBuBuy || bx.zhuLiShiPan || bx.jiaCang);
@@ -866,25 +868,61 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (macd.isGoldenCross && priceIncrease > 25)
             totalScore = Math.min(totalScore, 3);
         let buySignal = '';
-        if (isBaiXiaoBuy && !!bx.qiangShiHuiCai)
-            buySignal = '白消启动回踩';
-        else if (isBaiXiaoBuy)
-            buySignal = '白消启动突破';
-        else if (!!bx.qiangShiHuiCai)
-            buySignal = '强势回踩';
-        else if ((bx.baiXiao || bx.baiBu) && bxDays >= 3)
-            buySignal = '白消蓄力';
-        else if (f4)
-            buySignal = 'MACD多头';
-        else if (trendState >= 2)
-            buySignal = '上升趋势';
-        else
-            buySignal = '技术面观察';
+        const hasMainRise = trendState >= 2 || (sanJiao.bestBuyPoints || []).some(p => p.includes('主升'));
+        const hasZhenDang = (sanJiao.bestBuyPoints || []).includes('震荡买点');
+        const hengPo = !!bx.baiXiaoBuy2;
+        const hasJiGouActive = bx.jiGouHuoYueDu >= 12;
+        const firstBreakMA5 = currentClose > ma5 && (len >= 2 ? closeArr[len - 2] <= (len >= 6 ? closeArr.slice(len - 6, len - 1).reduce((a, b) => a + b, 0) / 5 : ma5) : true);
+        const ma5NotDown = ma5 >= (len >= 6 ? closeArr.slice(len - 6, len - 1).reduce((a, b) => a + b, 0) / 5 : ma5);
+        const ma10NotDown = ma10 >= (len >= 11 ? closeArr.slice(len - 11, len - 1).reduce((a, b) => a + b, 0) / 10 : ma10);
+        const hasStrongSell = !!(bx.gaoKaiDiZouQingCang || bx.baoLiangFuGaiQingCang || bx.po5RiXian || bx.yinDiePoWei);
+        const hasChuHuo = !!(sanJiao.zhuLiChuHuo || lingXing.zhuShengZhongWeiChuHuo || lingXing.zhenShiChuHuo);
+        const signals = {
+            baiXiaoStart: !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2),
+            qiangShiHuiCai: !!bx.qiangShiHuiCai,
+            jiaCang: !!bx.jiaCang,
+            diBuBuy: !!bx.diBuBuy,
+            zhuLiShiPan: !!bx.zhuLiShiPan,
+            gaoWeiHuiDiao: !!bx.gaoWeiHuiDiaoBuy,
+            hengPo, hasMainRise, hasZhenDang,
+            baiXiaoDays: bxDays, baiXiao: !!bx.baiXiao, baiBu: !!bx.baiBu,
+            jiGouActive: hasJiGouActive, jiGouHuoYueDu: bx.jiGouHuoYueDu || 0,
+            firstBreakMA5, ma5NotDown, ma10NotDown,
+            lingXingBuy: !!lingXing.buySignalDiamond,
+            xiPanFanZhuan: !!lingXing.xiPanFanZhuanBuy,
+        };
+        const signalParts = [];
+        if (signals.baiXiaoStart)
+            signalParts.push('白消启动');
+        if (signals.qiangShiHuiCai)
+            signalParts.push('强势回踩');
+        if (signals.jiaCang)
+            signalParts.push('★加仓');
+        if (signals.hengPo)
+            signalParts.push('横盘突破');
+        if (signals.diBuBuy)
+            signalParts.push('主力建仓');
+        if (signals.zhuLiShiPan)
+            signalParts.push('主力试盘');
+        if (signals.gaoWeiHuiDiao)
+            signalParts.push('企稳');
+        if (signals.hasMainRise)
+            signalParts.push('主升');
+        if (signals.hasZhenDang)
+            signalParts.push('震荡买点');
+        if (signals.jiGouActive)
+            signalParts.push('机构活跃');
+        if (signals.lingXingBuy)
+            signalParts.push('菱形买入');
+        if (signals.xiPanFanZhuan)
+            signalParts.push('洗盘反转');
+        buySignal = signalParts.length > 0 ? signalParts.join('+') : '技术面观察';
         const detail = factors.filter(f => f.met).map(f => f.name).join('+');
         return {
             score: totalScore, factorCount: factors.filter(f => f.met).length, maxScore, detail,
             factors, trendState, pricePosition, priceIncrease, isGoldenCross: macd.isGoldenCross,
-            bxDays, bx, buySignal,
+            bxDays, bx, buySignal, signals, sanJiao, lingXing, engine,
+            hasStrongSell, hasChuHuo,
             ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip,
         };
     }
@@ -906,20 +944,99 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return '持有';
         return '不要介入';
     }
-    getBaiXiaoSuggestion(bxDays, trendState, hasQSHC) {
-        if (bxDays <= 1)
-            return '重仓买入';
-        if (bxDays >= 2 && bxDays <= 3) {
-            if (trendState >= 2 || hasQSHC)
-                return '重仓买入';
-            return '买入';
+    determineBySignalRule(signals, bx, result) {
+        const { baiXiaoStart, qiangShiHuiCai, jiaCang, diBuBuy, zhuLiShiPan, gaoWeiHuiDiao, hengPo, hasMainRise, hasZhenDang, baiXiaoDays, baiXiao, baiBu, jiGouActive, firstBreakMA5, ma5NotDown, ma10NotDown, lingXingBuy, xiPanFanZhuan, } = signals;
+        const trendState = result.trendState;
+        const priceIncrease = result.priceIncrease;
+        const pricePosition = result.pricePosition;
+        const hasStrongSell = result.hasStrongSell;
+        const hasChuHuo = result.hasChuHuo;
+        if (baiBu && hasStrongSell)
+            return null;
+        if (hasChuHuo && pricePosition > 70)
+            return null;
+        if (priceIncrease > 60)
+            return null;
+        const cnb = [];
+        if (baiXiaoStart) {
+            cnb.push('白消启动');
+            if (hasMainRise) {
+                cnb.push('+主升');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            if (qiangShiHuiCai) {
+                cnb.push('+强势回踩');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            if (hasZhenDang) {
+                cnb.push('+震荡买点');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            if (jiaCang) {
+                cnb.push('+★加仓');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
         }
-        if (bxDays >= 4) {
-            if (trendState >= 2)
-                return '重仓买入';
-            if (trendState >= 1)
-                return '买入';
-            return '轻仓买入';
+        if (qiangShiHuiCai) {
+            cnb.push('强势回踩');
+            if (hasMainRise) {
+                cnb.push('+主升');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            if (jiaCang) {
+                cnb.push('+★加仓');
+                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            }
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (hasMainRise) {
+            cnb.push('主升');
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
+            cnb.push('机构活跃+突破MA5');
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (hengPo) {
+            cnb.push('横盘突破');
+            if (hasMainRise)
+                cnb.push('+主升');
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (baiXiaoDays >= 4 && baiXiaoDays <= 6) {
+            cnb.push(`白消第${baiXiaoDays}天`);
+            return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (baiXiaoDays >= 7) {
+            cnb.push(`白消第${baiXiaoDays}天`);
+            return { suggestion: '买入', signalComb: cnb.join('') };
+        }
+        if (baiBu && qiangShiHuiCai && hasMainRise) {
+            cnb.push('白布+回踩+主升');
+            return { suggestion: '轻仓买入', signalComb: cnb.join('') };
+        }
+        if (baiBu && jiGouActive && firstBreakMA5) {
+            cnb.push('白布+机构活跃+突破MA5');
+            return { suggestion: '轻仓买入', signalComb: cnb.join('') };
+        }
+        const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
+            lingXingBuy || xiPanFanZhuan;
+        if (baiBu && hasRedArrow) {
+            const parts = ['白布'];
+            if (diBuBuy)
+                parts.push('主力建仓');
+            if (zhuLiShiPan)
+                parts.push('主力试盘');
+            if (gaoWeiHuiDiao)
+                parts.push('企稳');
+            if (jiaCang)
+                parts.push('★加仓');
+            if (lingXingBuy)
+                parts.push('菱形买入');
+            if (xiPanFanZhuan)
+                parts.push('洗盘反转');
+            return { suggestion: '轻仓买入', signalComb: parts.join('+') };
         }
         return null;
     }
@@ -930,31 +1047,23 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const result = this.calcMultiScore(s, kline);
         if (!result)
             return null;
-        const { bx, bxDays, macd, score, pricePosition, priceIncrease, trendState, buySignal, detail, } = result;
-        const hasBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
-        const hasQSHC = !!bx.qiangShiHuiCai;
-        if (hasBaiXiaoBuy || hasQSHC || bxDays >= 1) {
-            const baiXiaoSug = this.getBaiXiaoSuggestion(bxDays, trendState, hasQSHC);
-            if (baiXiaoSug) {
-                if (priceIncrease > 50)
-                    return null;
-                if (pricePosition >= 95)
-                    return null;
-                return this.buildResult(s, kline, result, baiXiaoSug);
-            }
+        const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
+        const ruleResult = this.determineBySignalRule(signals, bx, result);
+        if (ruleResult) {
+            if (pricePosition >= 95)
+                return null;
+            return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
         }
         if (priceIncrease > 40)
             return null;
         if (pricePosition >= 92 && score < 10)
             return null;
-        const hasSell = !!(bx.gaoKaiDiZouQingCang || bx.baoLiangFuGaiQingCang ||
-            bx.po5RiXian || bx.yinDiePoWei);
-        if (bx.baiBu && hasSell)
+        if (bx.baiBu && result.hasStrongSell)
             return null;
         const suggestion = this.scoreToSuggestion(score);
         if (suggestion === '不要介入')
             return null;
-        return this.buildResult(s, kline, result, suggestion);
+        return this.buildResult(s, kline, result, suggestion, detail);
     }
     async checkOpportunityRelaxed(s, prevSuggestion) {
         const kline = await this.dataFetcher.getKLineData(s.code);
@@ -963,18 +1072,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const result = this.calcMultiScore(s, kline);
         if (!result)
             return null;
-        const { bx, bxDays, score, priceIncrease, pricePosition, trendState, buySignal, detail, } = result;
-        const hasBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
-        const hasQSHC = !!bx.qiangShiHuiCai;
-        if (hasBaiXiaoBuy || hasQSHC || bxDays >= 1) {
-            const baiXiaoSug = this.getBaiXiaoSuggestion(bxDays, trendState, hasQSHC);
-            if (baiXiaoSug) {
-                if (priceIncrease > 55)
-                    return null;
-                if (pricePosition >= 97)
-                    return null;
-                return this.buildResult(s, kline, result, baiXiaoSug);
-            }
+        const { signals, bx, score, priceIncrease, pricePosition, detail } = result;
+        const ruleResult = this.determineBySignalRule(signals, bx, result);
+        if (ruleResult) {
+            if (pricePosition >= 97)
+                return null;
+            return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
         }
         if (priceIncrease > 50)
             return null;

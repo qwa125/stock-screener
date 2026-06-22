@@ -147,7 +147,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private calcMultiScore;
     private scoreToSuggestion;
     private scoreToSuggestionRelaxed;
-    private getBaiXiaoSuggestion;
+    private determineBySignalRule;
     checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     private buildResult;
