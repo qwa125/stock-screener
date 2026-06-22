@@ -923,7 +923,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             factors, trendState, pricePosition, priceIncrease, isGoldenCross: macd.isGoldenCross,
             bxDays, bx, buySignal, signals, sanJiao, lingXing, engine,
             hasStrongSell, hasChuHuo,
-            ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip,
+            ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip, closeArr, openArr,
         };
     }
     scoreToSuggestion(score) {
@@ -949,94 +949,94 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const trendState = result.trendState;
         const priceIncrease = result.priceIncrease;
         const pricePosition = result.pricePosition;
+        const closeArr = result.closeArr;
+        const ma20 = result.ma20;
+        const ma60 = result.ma60;
         const hasStrongSell = result.hasStrongSell;
         const hasChuHuo = result.hasChuHuo;
+        const prevClose0 = closeArr?.[closeArr.length - 2] ?? 0;
+        const prevClose1 = closeArr?.[closeArr.length - 3] ?? 0;
+        const prevDayGain = prevClose1 > 0 ? (prevClose0 - prevClose1) / prevClose1 * 100 : 0;
         if (baiBu && hasStrongSell)
             return { suggestion: '卖出', signalComb: '白布+清仓' };
         if (hasChuHuo && pricePosition > 70)
             return { suggestion: '卖出', signalComb: '高位+出货' };
         if (priceIncrease > 60)
             return null;
+        const currentPrice = closeArr?.[closeArr.length - 1] ?? 0;
+        if (trendState < 1 && ma20 > 0 && currentPrice < ma20) {
+            return { suggestion: '卖出', signalComb: '趋势弱+破成本线' };
+        }
+        if (prevDayGain > 3 && closeArr?.[closeArr.length - 2]) {
+            const todayOpen = result.openArr?.[result.openArr.length - 1] ?? 0;
+            const todayClose = currentPrice;
+            const yestClose = prevClose0;
+            if (todayOpen > yestClose && todayClose < todayOpen) {
+                return null;
+            }
+        }
         const cnb = [];
-        if (baiXiaoStart) {
-            cnb.push('白消启动');
-            if (hasMainRise) {
-                cnb.push('+主升');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        if (baiXiao) {
+            const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
+            if (baiXiaoDays <= 6) {
+                if (baiXiaoStart && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
+                if (baiXiaoStart && qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
+                if (baiXiaoStart && hasZhenDang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点' };
+                if (qiangShiHuiCai && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩+主升' };
+                if (baiXiaoStart)
+                    return { suggestion: '重仓买入', signalComb: '白消启动' };
+                if (qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩' };
+                if (qiangShiHuiCai && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
+                if (baiXiaoStart && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
+                if (hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '主升' };
+                if (jiGouActiveBreak)
+                    return { suggestion: '重仓买入', signalComb: '机构活跃+突破MA5' };
+                if (baiXiaoDays >= 4)
+                    return { suggestion: '重仓买入', signalComb: `白消第${baiXiaoDays}天` };
+                return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
             }
-            if (qiangShiHuiCai) {
-                cnb.push('+强势回踩');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            if (baiXiaoDays >= 7) {
+                if (hengPo && hasMainRise)
+                    return { suggestion: '买入', signalComb: '横盘突破+主升' };
+                if (hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破' };
+                if (qiangShiHuiCai && hasMainRise)
+                    return { suggestion: '买入', signalComb: '强势回踩+主升' };
+                if (jiGouActiveBreak)
+                    return { suggestion: '买入', signalComb: '机构活跃+突破MA5' };
+                return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
             }
-            if (hasZhenDang) {
-                cnb.push('+震荡买点');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+        }
+        if (baiBu) {
+            if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
+                return { suggestion: '轻仓买入', signalComb: '白布+机构+突破MA5' };
             }
-            if (jiaCang) {
-                cnb.push('+★加仓');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
+            const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
+                lingXingBuy || xiPanFanZhuan;
+            if (hasRedArrow) {
+                const parts = ['白布'];
+                if (diBuBuy)
+                    parts.push('主力建仓');
+                if (zhuLiShiPan)
+                    parts.push('主力试盘');
+                if (gaoWeiHuiDiao)
+                    parts.push('企稳');
+                if (jiaCang)
+                    parts.push('★加仓');
+                if (lingXingBuy)
+                    parts.push('菱形买入');
+                if (xiPanFanZhuan)
+                    parts.push('洗盘反转');
+                return { suggestion: '轻仓买入', signalComb: parts.join('+') };
             }
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (qiangShiHuiCai) {
-            cnb.push('强势回踩');
-            if (hasMainRise) {
-                cnb.push('+主升');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
-            }
-            if (jiaCang) {
-                cnb.push('+★加仓');
-                return { suggestion: '重仓买入', signalComb: cnb.join('') };
-            }
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (hasMainRise) {
-            cnb.push('主升');
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
-            cnb.push('机构活跃+突破MA5');
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (hengPo) {
-            cnb.push('横盘突破');
-            if (hasMainRise)
-                cnb.push('+主升');
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (baiXiaoDays >= 4 && baiXiaoDays <= 6) {
-            cnb.push(`白消第${baiXiaoDays}天`);
-            return { suggestion: '重仓买入', signalComb: cnb.join('') };
-        }
-        if (baiXiaoDays >= 7) {
-            cnb.push(`白消第${baiXiaoDays}天`);
-            return { suggestion: '买入', signalComb: cnb.join('') };
-        }
-        if (baiBu && qiangShiHuiCai && hasMainRise) {
-            cnb.push('白布+回踩+主升');
-            return { suggestion: '轻仓买入', signalComb: cnb.join('') };
-        }
-        if (baiBu && jiGouActive && firstBreakMA5) {
-            cnb.push('白布+机构活跃+突破MA5');
-            return { suggestion: '轻仓买入', signalComb: cnb.join('') };
-        }
-        const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
-            lingXingBuy || xiPanFanZhuan;
-        if (baiBu && hasRedArrow) {
-            const parts = ['白布'];
-            if (diBuBuy)
-                parts.push('主力建仓');
-            if (zhuLiShiPan)
-                parts.push('主力试盘');
-            if (gaoWeiHuiDiao)
-                parts.push('企稳');
-            if (jiaCang)
-                parts.push('★加仓');
-            if (lingXingBuy)
-                parts.push('菱形买入');
-            if (xiPanFanZhuan)
-                parts.push('洗盘反转');
-            return { suggestion: '轻仓买入', signalComb: parts.join('+') };
         }
         return null;
     }

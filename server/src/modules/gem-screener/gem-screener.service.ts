@@ -970,7 +970,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     hasStrongSell: boolean; hasChuHuo: boolean;
     ma5: number; ma10: number; ma20: number; ma60: number;
     macd: any; kdj: any; volumeRatio: number; volatility20d: number;
-    chip: any;
+    chip: any; closeArr: number[]; openArr: number[];
   } | null {
     const closeArr = kline.map(k => k.close);
     const len = closeArr.length;
@@ -1164,7 +1164,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       factors, trendState, pricePosition, priceIncrease, isGoldenCross: macd.isGoldenCross,
       bxDays, bx, buySignal, signals, sanJiao, lingXing, engine,
       hasStrongSell, hasChuHuo,
-      ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip,
+      ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip, closeArr, openArr,
     };
   }
 
@@ -1203,115 +1203,101 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const trendState = result.trendState;
     const priceIncrease = result.priceIncrease;
     const pricePosition = result.pricePosition;
+    const closeArr = result.closeArr;
+    const ma20 = result.ma20;
+    const ma60 = result.ma60;
 
     // ============= 安全过滤 =============
-    // 卖出信号优先
     const hasStrongSell = result.hasStrongSell;
     const hasChuHuo = result.hasChuHuo;
+    const prevClose0 = closeArr?.[closeArr.length-2] ?? 0;
+    const prevClose1 = closeArr?.[closeArr.length-3] ?? 0;
+    const prevDayGain = prevClose1 > 0 ? (prevClose0 - prevClose1) / prevClose1 * 100 : 0;
+
     if (baiBu && hasStrongSell) return { suggestion: '卖出', signalComb: '白布+清仓' };
     if (hasChuHuo && pricePosition > 70) return { suggestion: '卖出', signalComb: '高位+出货' };
-    if (priceIncrease > 60) return null;               // 涨幅过大
+    if (priceIncrease > 60) return null; // 涨幅过大过滤
 
-    // ============= 一级: 重仓买入规则 =============
-    const cnb: string[] = []; // combo names for trace
+    // 趋势走弱 + 跌破成本线(MA20) → 卖出
+    const currentPrice = closeArr?.[closeArr.length-1] ?? 0;
+    if (trendState < 1 && ma20 > 0 && currentPrice < ma20) {
+      return { suggestion: '卖出', signalComb: '趋势弱+破成本线' };
+    }
 
-    // R1: 白消启动单独出现
-    if (baiXiaoStart) {
-      cnb.push('白消启动');
-      // R2: 白消启动 + 任意主升 (间隔<3天)
-      if (hasMainRise) {
-        cnb.push('+主升');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
+    // 次日涨幅>3% + 高开低走 → 不介入
+    if (prevDayGain > 3 && closeArr?.[closeArr.length-2]) {
+      const todayOpen = result.openArr?.[result.openArr.length-1] ?? 0;
+      const todayClose = currentPrice;
+      const yestClose = prevClose0;
+      if (todayOpen > yestClose && todayClose < todayOpen) {
+        return null; // 不介入
       }
-      // R3/4: 白消启动 + 强势回踩 / +震荡买点 (间隔<3天)
-      if (qiangShiHuiCai) {
-        cnb.push('+强势回踩');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
+    }
+
+    // ============= 信号分组（按白消状态层级） =============
+    const cnb: string[] = [];
+
+    // ═══ 白消状态 → 重仓买入 / 买入 ═══
+    if (baiXiao) {
+      const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
+
+      if (baiXiaoDays <= 6) {
+        // ─── 重仓买入信号组 ───
+        // R1-2: 白消启动 + 任意主升
+        if (baiXiaoStart && hasMainRise) return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
+        // R3: 白消启动 + 强势回踩
+        if (baiXiaoStart && qiangShiHuiCai) return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
+        // R4: 白消启动 + 震荡买点
+        if (baiXiaoStart && hasZhenDang) return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点' };
+        // R5: 强势回踩 + 任意主升
+        if (qiangShiHuiCai && hasMainRise) return { suggestion: '重仓买入', signalComb: '强势回踩+主升' };
+        // R6: 白消启动单独
+        if (baiXiaoStart) return { suggestion: '重仓买入', signalComb: '白消启动' };
+        // R7: 强势回踩单独
+        if (qiangShiHuiCai) return { suggestion: '重仓买入', signalComb: '强势回踩' };
+        // R8: 强势回踩 + 加仓 同时
+        if (qiangShiHuiCai && jiaCang) return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
+        // R9: 白消启动 + 加仓
+        if (baiXiaoStart && jiaCang) return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
+        // R10: 任意主升单独
+        if (hasMainRise) return { suggestion: '重仓买入', signalComb: '主升' };
+        // R11: 机构活跃12+ 首次突破MA5 均线不下
+        if (jiGouActiveBreak) return { suggestion: '重仓买入', signalComb: '机构活跃+突破MA5' };
+        // 白消第4-6天本身
+        if (baiXiaoDays >= 4) return { suggestion: '重仓买入', signalComb: `白消第${baiXiaoDays}天` };
+        // 白消1-3天即使无信号也至少给持有
+        return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
       }
-      if (hasZhenDang) {
-        cnb.push('+震荡买点');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
+
+      // ─── 买入信号组 (白消第7天+) ───
+      if (baiXiaoDays >= 7) {
+        if (hengPo && hasMainRise) return { suggestion: '买入', signalComb: '横盘突破+主升' };
+        if (hengPo)                return { suggestion: '买入', signalComb: '横盘突破' };
+        if (qiangShiHuiCai && hasMainRise) return { suggestion: '买入', signalComb: '强势回踩+主升' };
+        if (jiGouActiveBreak)     return { suggestion: '买入', signalComb: '机构活跃+突破MA5' };
+        return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
       }
-      // R9: 白消启动 + 加仓 (间隔<3天)
-      if (jiaCang) {
-        cnb.push('+★加仓');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
+    }
+
+    // ═══ 白布状态 → 轻仓买入 ═══
+    if (baiBu) {
+      // 白布 + 机构活跃12+ 突破MA5 + 均线不下
+      if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
+        return { suggestion: '轻仓买入', signalComb: '白布+机构+突破MA5' };
       }
-      // R6: 白消启动单独 → 重仓买入
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // R7: 强势回踩单独出现
-    if (qiangShiHuiCai) {
-      cnb.push('强势回踩');
-      // R5: 强势回踩 + 任意主升
-      if (hasMainRise) {
-        cnb.push('+主升');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
+      // 白布 + 红色箭头 (建仓/企稳/试盘/加仓)
+      const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
+        lingXingBuy || xiPanFanZhuan;
+      if (hasRedArrow) {
+        const parts: string[] = ['白布'];
+        if (diBuBuy)      parts.push('主力建仓');
+        if (zhuLiShiPan)  parts.push('主力试盘');
+        if (gaoWeiHuiDiao) parts.push('企稳');
+        if (jiaCang)      parts.push('★加仓');
+        if (lingXingBuy)  parts.push('菱形买入');
+        if (xiPanFanZhuan) parts.push('洗盘反转');
+        return { suggestion: '轻仓买入', signalComb: parts.join('+') };
       }
-      // R8: 强势回踩 + 加仓 同时
-      if (jiaCang) {
-        cnb.push('+★加仓');
-        return { suggestion: '重仓买入', signalComb: cnb.join('') };
-      }
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // R10: 任意主升信号单独出现
-    if (hasMainRise) {
-      cnb.push('主升');
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // R11: 机构活跃度12+ 首次突破MA5 均线不下
-    if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
-      cnb.push('机构活跃+突破MA5');
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // R12/13: 横盘突破 + 主升 / 单独
-    if (hengPo) {
-      cnb.push('横盘突破');
-      if (hasMainRise) cnb.push('+主升');
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // R1-alt: 白消第4-6天 → 重仓买入
-    if (baiXiaoDays >= 4 && baiXiaoDays <= 6) {
-      cnb.push(`白消第${baiXiaoDays}天`);
-      return { suggestion: '重仓买入', signalComb: cnb.join('') };
-    }
-
-    // ============= 二级: 买入规则 =============
-    // R14: 白消第7天+ → 买入
-    if (baiXiaoDays >= 7) {
-      cnb.push(`白消第${baiXiaoDays}天`);
-      return { suggestion: '买入', signalComb: cnb.join('') };
-    }
-
-    // ============= 三级: 轻仓买入 (白布状态) =============
-    // R15: 白布 + 强势回踩 + 主升
-    if (baiBu && qiangShiHuiCai && hasMainRise) {
-      cnb.push('白布+回踩+主升');
-      return { suggestion: '轻仓买入', signalComb: cnb.join('') };
-    }
-    // R16: 白布 + 机构活跃12+ 突破MA5
-    if (baiBu && jiGouActive && firstBreakMA5) {
-      cnb.push('白布+机构活跃+突破MA5');
-      return { suggestion: '轻仓买入', signalComb: cnb.join('') };
-    }
-    // R17: 白布 + 红色箭头 (建仓/企稳/试盘/加仓)
-    const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
-      lingXingBuy || xiPanFanZhuan;
-    if (baiBu && hasRedArrow) {
-      const parts: string[] = ['白布'];
-      if (diBuBuy) parts.push('主力建仓');
-      if (zhuLiShiPan) parts.push('主力试盘');
-      if (gaoWeiHuiDiao) parts.push('企稳');
-      if (jiaCang) parts.push('★加仓');
-      if (lingXingBuy) parts.push('菱形买入');
-      if (xiPanFanZhuan) parts.push('洗盘反转');
-      return { suggestion: '轻仓买入', signalComb: parts.join('+') };
     }
 
     return null; // 无匹配规则
