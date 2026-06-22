@@ -167,7 +167,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={},_lastScanTime=0
+var stocks=[],loading=false,realtimePrices={},_lastScanTime=0,_priceRefreshTimer=null
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -222,6 +222,7 @@ function restoreCachedStocks(){
       if(cached.length>0){
         stocks=cached
         renderList()
+        startPriceRefresh(cached.map(function(s){return s.code}))
         if(!isTH()){
           setStatus('📊 已冻结 (非交易时间)')
           $('scanBtn').textContent='📊 已冻结'
@@ -430,6 +431,23 @@ async function fetchRealtime(codes){
     }catch(e){}
   }
   return r
+}
+
+// ---------- 2秒实时行情刷新：仅交易时段运行 ----------
+var _priceRefreshTimer2=null
+function startPriceRefresh(codes){
+  if(_priceRefreshTimer2){clearInterval(_priceRefreshTimer2);_priceRefreshTimer2=null}
+  if(!codes||!codes.length)return
+  // 如果当前不在交易时段，不启动刷新
+  if(!isTH())return
+  // 立即刷新一次
+  fetchRealtime(codes).then(function(r){realtimePrices=r;renderList()})
+  _priceRefreshTimer2=setInterval(function(){
+    if(loading)return
+    // 非交易时段停止刷新
+    if(!isTH()){clearInterval(_priceRefreshTimer2);_priceRefreshTimer2=null;return}
+    fetchRealtime(codes).then(function(r){realtimePrices=r;renderList()})
+  },2000)
 }
 
 // ---------- 构建分析详情HTML（仿旧版模板） ----------
@@ -689,6 +707,7 @@ async function doScan(){
   selectedIdx=-1;$('detailArea').style.display='none'
   setStatus('✅ Top20 已更新 - 后端分析→信号排序')
   renderList()
+  startPriceRefresh(stocks.map(function(s){return s.code}))
   setStatus('🔄 计算筹码集中度...')
   try{
     stocks.forEach(function(s,idx){
@@ -1040,6 +1059,10 @@ var _lastBoundaryMinute=0
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  // 交易时段则确保实时行情刷新运行中
+  if(isTH() && stocks.length>0 && !_priceRefreshTimer2){
+    startPriceRefresh(stocks.map(function(s){return s.code}))
+  }
   // 关键时间点触发扫描：9:30/11:30/13:00/15:00
   var now=new Date(),m=now.getHours()*60+now.getMinutes()
   // ±1分钟窗口内触发（避免精确到秒的偏差）
@@ -1049,30 +1072,12 @@ setInterval(function(){
   }
 },60000)
 
-// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-  // 交易时段自动触发扫描；收盘后（15:00-17:00）补充一次最终扫描
-  if(!loading){
-    var now=getBJ(),isTradingDay=now.getDay()>0&&now.getDay()<6
-    if(isTradingDay){
-      var m=now.getHours()*60+now.getMinutes()
-      // 交易时段 OR 收盘后1小时内（补扫15:00收盘数据）
-      if(isTH() || (m>=900&&m<1020)){
-        var hasFreshData=false
-        try{
-          var ls=localStorage.getItem('lastStocks')
-          if(ls){
-            var c=JSON.parse(ls)
-            if(c.date===new Date().toISOString().slice(0,10) && c.length>0){hasFreshData=true}
-          }
-        }catch(e){}
-        if(!hasFreshData){doScan()}
-      }
-    }
-  }
-},3000)
+  // 如果缓存中有股票，启动实时行情刷新（仅交易时段运行）
+  if(stocks.length>0)startPriceRefresh(stocks.map(function(s){return s.code}))
+},1000)
 
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
