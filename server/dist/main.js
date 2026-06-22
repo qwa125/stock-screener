@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+require("reflect-metadata");
 const core_1 = require("@nestjs/core");
 const app_module_1 = require("./app.module");
 const express = require("express");
