@@ -189,6 +189,11 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    proxyEastMoneyList(node: string, page: string, num: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    }>;
     proxySearch(query: string): Promise<{
         code: number;
         msg: string;

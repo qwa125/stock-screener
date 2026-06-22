@@ -545,6 +545,16 @@ async function doScan(){
         .then(function(r){return r.json()})
         .then(function(d){return d.code===200?d.data||[]:[]})
         .catch(function(){return[]})
+        .then(function(sinaData){
+          if(!sinaData||sinaData.length===0){
+            // 新浪失败 → 东方财富兜底
+            return fetch(API+'/gem/proxy/eastmoney-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
+              .then(function(r2){return r2.json()})
+              .then(function(d2){return d2.code===200?d2.data||[]:[]})
+              .catch(function(){return[]})
+          }
+          return sinaData
+        })
     )
   }
   
