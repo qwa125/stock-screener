@@ -223,6 +223,11 @@ function restoreCachedStocks(){
       if(cached.length>0){
         stocks=cached
         renderList()
+        // 立即拉取最新价格
+        fetchRealtime(stocks.map(function(s){return s.code})).then(function(prices){
+          realtimePrices=prices
+          renderList()
+        }).catch(function(){})
         if(!isTH()){
           setStatus('📊 非交易时间，点击扫描查看')
           $('scanBtn').textContent='🔄 立即扫描'
@@ -587,6 +592,8 @@ async function doScan(){
       sinaUrls.push('http://vip.stock.finance.sina.com.cn/quotes_service/api_json_v2.php/Market_Center.getHQNodeData?page='+pj+'&num=100&sort=symbol&asc=1&node=cyb&symbol=&_s_r_a=page')
     }
     var sinaResults=await Promise.all(sinaUrls.map(function(u){return jsonpFetch(u,'callback','callback',8000).catch(function(){return null})}))
+    var sinaOk=sinaResults.filter(function(r){return r&&r.data}).length
+    var sinaFail=sinaUrls.length-sinaOk
     
     // 2. 去重、过滤ST/价格<3
     var seenCodes={},stkList=[]
@@ -609,10 +616,10 @@ async function doScan(){
       })
     })
     if(stkList.length<50){setStatus('❌ 数据不足');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
-    setStatus('🔄 已获取 '+stkList.length+' 只股票，并行拉取K线(限10并发)...')
+    setStatus('🔄 已获取 '+stkList.length+' 只股票(共'+sinaUrls.length+'页,成功'+sinaOk+'页,失败'+sinaFail+'页)，并行拉取K线(限10并发)...')
     
     // 3. 带并发控制的K线拉取+主力资金
-    var klineData={},fundFlowData={}
+    var klineData={},fundFlowData={},klineOk=0,klineFail=0
     var q=stkList.slice(),fetchedCount=0
     var CONCURRENCY=10
     
@@ -620,8 +627,11 @@ async function doScan(){
       var em=(code.startsWith('6')?'1.':'0.')+code
       return fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=252')
         .then(function(r){return r.json()})
-        .then(function(d){klineData[code]=d&&d.data&&d.data.klines?d.data.klines:null})
-        .catch(function(){klineData[code]=null})
+        .then(function(d){
+          klineData[code]=d&&d.data&&d.data.klines?d.data.klines:null
+          if(klineData[code])klineOk++;else klineFail++
+        })
+        .catch(function(){klineData[code]=null;klineFail++})
     }
     function _fetchFundFlow(code){
       var em=(code.startsWith('6')?'1.':'0.')+code
@@ -644,10 +654,10 @@ async function doScan(){
     for(var wi=0;wi<CONCURRENCY;wi++){workers.push(_worker())}
     await Promise.all(workers)
     
-    setStatus('🔄 数据获取完毕('+fetchedCount+'只)，分批发送后端分析(每批50只)...')
+    setStatus('🔄 数据获取完毕(K线成功'+klineOk+'只，失败'+klineFail+'只)，分批发送后端分析...')
     
     // 4. 分批POST到后端分析（每批50只）
-    var allResults=[],BATCH=50
+    var allResults=[],BATCH=50,failCount=0
     for(var bi=0;bi<stkList.length;bi+=BATCH){
       var batch=stkList.slice(bi,bi+BATCH).map(function(s){
         return{
@@ -660,22 +670,32 @@ async function doScan(){
       var batchIdx=Math.floor(bi/BATCH)+1
       var totalBatches=Math.ceil(stkList.length/BATCH)
       setStatus('🔄 分析第'+batchIdx+'/'+totalBatches+'批...')
-      var rr=await fetch(API+'/gem/refresh-all',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},
-        body:JSON.stringify({stocks:batch})
-      })
-      var rd=await rr.json()
-      if(rd.code===200&&rd.data){
-        var batchResults=rd.data.opportunities||rd.data
-        if(Array.isArray(batchResults)){
-          batchResults.forEach(function(r){allResults.push(r)})
+      try{
+        var rr=await fetch(API+'/gem/refresh-all',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},
+          body:JSON.stringify({stocks:batch})
+        })
+        var rd=await rr.json()
+        if(rd.code===200&&rd.data){
+          var batchResults=rd.data.opportunities||rd.data
+          if(Array.isArray(batchResults)){
+            batchResults.forEach(function(r){allResults.push(r)})
+          }
+        }else{
+          failCount++
+          setStatus('⚠️ 第'+batchIdx+'批返回异常(code='+rd.code+')，继续下一批...')
         }
+      }catch(e){
+        failCount++
+        setStatus('⚠️ 第'+batchIdx+'批请求失败: '+e.message+'，继续下一批...')
       }
     }
     
+    if(failCount>0)setStatus('⚠️ 分析完成('+totalBatches+'批中'+failCount+'批失败)，共获取'+allResults.length+'只结果')
+    
     if(allResults.length===0){
-      setStatus('❌ 分析无结果');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
+      setStatus('❌ 分析无结果，请检查后端');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
       return
     }
     
