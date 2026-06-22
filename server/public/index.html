@@ -73,6 +73,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .detail-list{padding:0 12px 10px}
 .footer{background:#fff;padding:10px 16px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}
 .loading{text-align:center;padding:40px 16px;font-size:14px;color:#999}
+.scanning-anim{animation:pulse-text 1s ease-in-out infinite}
+@keyframes pulse-text{0%,100%{opacity:1}50%{opacity:.5}}
 .empty{text-align:center;padding:48px 16px;font-size:14px;color:#999}
 
 /* Admin panel overlay */
@@ -260,11 +262,9 @@ async function handleScanClick(){
       showBlocked(false)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描
+    // 设备注册成功 → 隐藏毛玻璃，立即全量扫描
     hideBlocked()
-    if(!restoreCachedStocks()){
-      doScan()
-    }
+    doScan()
   }catch(e){
     // 网络错误时放行（后端不可用时允许访问）
     hideBlocked()
@@ -272,7 +272,11 @@ async function handleScanClick(){
   }
 }
 function $(id){return document.getElementById(id)}
-function setStatus(s){$('status').textContent=s}
+function setStatus(s,isScan){
+  $('status').textContent=s
+  $('status').className=isScan?'scanning-anim':''
+  if(isScan){$('footer').textContent='🔄 | '+s.replace('🔄 ','')}
+}
 var selectedIdx=-1
 
 function posLabel(p){
@@ -581,7 +585,7 @@ function jsonpFetch(url,paramName,callbackName,timeout){
 // ---------- 扫描（浏览器端拉~1400只+分批POST后端分析） ----------
 async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
-  setStatus('🔄 获取股票列表...')
+  setStatus('🔄 获取股票列表...',true)
   try{
     // 1. 并行拉主板(hs_a)9页 + 创业板(cyb)5页 = ~1400只
     var sinaUrls=[]
@@ -615,8 +619,8 @@ async function doScan(){
         stkList.push({code:code,name:item.name,currentPrice:price,changePercent:parseFloat(item.changePercent||item.chg||'')||0})
       })
     })
-    if(stkList.length<50){setStatus('❌ 数据不足');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
-    setStatus('🔄 已获取 '+stkList.length+' 只股票(共'+sinaUrls.length+'页,成功'+sinaOk+'页,失败'+sinaFail+'页)，并行拉取K线(限10并发)...')
+    if(stkList.length<50){setStatus('❌ 数据不足',true);loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
+    setStatus('🔄 已获取 '+stkList.length+' 只股票 并行拉取K线...',true)
     
     // 3. 带并发控制的K线拉取+主力资金
     var klineData={},fundFlowData={},klineOk=0,klineFail=0
@@ -646,7 +650,7 @@ async function doScan(){
         await Promise.all([_fetchKline(s.code),_fetchFundFlow(s.code)])
         fetchedCount++
         if(fetchedCount%100===0||fetchedCount===stkList.length){
-          setStatus('🔄 获取数据中 '+fetchedCount+'/'+stkList.length)
+          setStatus('🔄 获取数据中 '+fetchedCount+'/'+stkList.length,true)
         }
       }
     }
@@ -654,7 +658,7 @@ async function doScan(){
     for(var wi=0;wi<CONCURRENCY;wi++){workers.push(_worker())}
     await Promise.all(workers)
     
-    setStatus('🔄 数据获取完毕(K线成功'+klineOk+'只，失败'+klineFail+'只)，分批发送后端分析...')
+    setStatus('🔄 数据获取完毕(K线成功'+klineOk+'只，失败'+klineFail+'只)，分批发送后端分析...',true)
     
     // 4. 分批POST到后端分析（每批50只）
     var allResults=[],BATCH=50,failCount=0
@@ -669,7 +673,7 @@ async function doScan(){
       })
       var batchIdx=Math.floor(bi/BATCH)+1
       var totalBatches=Math.ceil(stkList.length/BATCH)
-      setStatus('🔄 分析第'+batchIdx+'/'+totalBatches+'批...')
+      setStatus('🔄 分析第'+batchIdx+'/'+totalBatches+'批...',true)
       try{
         var rr=await fetch(API+'/gem/refresh-all',{
           method:'POST',
@@ -684,18 +688,18 @@ async function doScan(){
           }
         }else{
           failCount++
-          setStatus('⚠️ 第'+batchIdx+'批返回异常(code='+rd.code+')，继续下一批...')
+          setStatus('⚠️ 第'+batchIdx+'批返回异常(code='+rd.code+')，继续下一批...',true)
         }
       }catch(e){
         failCount++
-        setStatus('⚠️ 第'+batchIdx+'批请求失败: '+e.message+'，继续下一批...')
+        setStatus('⚠️ 第'+batchIdx+'批请求失败: '+e.message+'，继续下一批...',true)
       }
     }
     
-    if(failCount>0)setStatus('⚠️ 分析完成('+totalBatches+'批中'+failCount+'批失败)，共获取'+allResults.length+'只结果')
+    if(failCount>0)setStatus('⚠️ 分析完成('+totalBatches+'批中'+failCount+'批失败)，共获取'+allResults.length+'只结果',true)
     
     if(allResults.length===0){
-      setStatus('❌ 分析无结果，请检查后端');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
+      setStatus('❌ 分析无结果，请检查后端',true);loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
       return
     }
     
@@ -705,11 +709,11 @@ async function doScan(){
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     
     // 6. 获取实时行情
-    setStatus('🔄 获取实时行情...')
+    setStatus('🔄 获取实时行情...',true)
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none'
     renderList()
-    setStatus('✅ Top '+stocks.length+' 已更新 | '+new Date().toLocaleTimeString())
+    setStatus('✅ Top '+stocks.length+' 已更新 | '+new Date().toLocaleTimeString(),true)
     
     // 7. 启动2秒价格刷新
     startPriceRefresh()
@@ -729,7 +733,7 @@ async function doScan(){
         }).catch(function(){})
     })
   }catch(e){
-    setStatus('❌ 扫描失败: '+e.message)
+    setStatus('❌ 扫描失败: '+e.message,true)
   }
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
