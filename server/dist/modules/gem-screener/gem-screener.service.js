@@ -1238,6 +1238,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     signalCombination = '白消信号';
                 }
             }
+            if (suggestionR === '观望' && trendStateR >= 2 && macdBullishR) {
+                suggestionR = '轻仓买入';
+                signalCombination = '趋势向上+金叉';
+            }
+            if (suggestionR === '观望' && trendStateR >= 2 && volumeBullishR) {
+                suggestionR = '轻仓买入';
+                signalCombination = '趋势向上+放量';
+            }
+            if (suggestionR === '观望' && trendStateR >= 2 && pricePosition < 55) {
+                const zoneR = pricePosition < 25 ? '低位' : pricePosition < 45 ? '中低位' : '中位';
+                suggestionR = '买入';
+                signalCombination = '趋势向上+' + zoneR;
+            }
             if (suggestionR === '观望') {
                 if (trendStateR >= 2 && ma5 > ma10) {
                     suggestionR = '持有';

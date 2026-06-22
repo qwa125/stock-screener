@@ -1388,7 +1388,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
-      // 兜底：有主动买信号但未匹配规则
+      // 兜底1：有主动买信号但未匹配规则
       if (suggestionR === '观望' && (hasBaiXiaoBuy || hasQSHC || hasZhenDang)) {
         const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
         if (zoneR.includes('低位') && trendStateR >= 1) {
@@ -1400,6 +1400,18 @@ export class GemScreenerService implements OnApplicationBootstrap {
         } else {
           suggestionR = '轻仓买入'; signalCombination = '白消信号';
         }
+      }
+
+      // 兜底2：无白消信号但趋势强劲 → 也出轻仓买入
+      if (suggestionR === '观望' && trendStateR >= 2 && macdBullishR) {
+        suggestionR = '轻仓买入'; signalCombination = '趋势向上+金叉';
+      }
+      if (suggestionR === '观望' && trendStateR >= 2 && volumeBullishR) {
+        suggestionR = '轻仓买入'; signalCombination = '趋势向上+放量';
+      }
+      if (suggestionR === '观望' && trendStateR >= 2 && pricePosition < 55) {
+        const zoneR = pricePosition < 25 ? '低位' : pricePosition < 45 ? '中低位' : '中位';
+        suggestionR = '买入'; signalCombination = '趋势向上+'+zoneR;
       }
 
       // ─── 持有/不要介入判断（无买入/卖出信号时）───
