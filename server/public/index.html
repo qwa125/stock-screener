@@ -249,6 +249,12 @@ try{var cached=getCachedStocks();if(cached)stocks=cached}catch(e){}
 
 // 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
 async function handleScanClick(){
+  var btn=document.querySelector('.blur-btn')
+  var msg=$('blurMsg')
+  // 立即视觉反馈：按钮变化
+  btn.textContent='⏳ 验证设备...'
+  btn.style.opacity='0.6'
+  btn.disabled=true
   try{
     var regRes=await fetch("/api/device/register",{
       method:"POST",
@@ -256,11 +262,17 @@ async function handleScanClick(){
     })
     var regData=await regRes.json()
     if(regData.code===429){
-      showBlocked(true)
+      msg.innerHTML='<span style="color:#e74c3c;font-weight:bold;">⛔ 设备名额不足</span><br><span style="font-size:12px;">请联系管理员增加设备访问名额</span>'
+      btn.textContent='📊 点击扫描解锁'
+      btn.style.opacity='1'
+      btn.disabled=false
       return
     }
     if(regData.code!==200){
-      showBlocked(false)
+      msg.innerHTML='<span style="color:#e67e22;">⚠️ 注册异常，点击重试</span>'
+      btn.textContent='📊 点击扫描解锁'
+      btn.style.opacity='1'
+      btn.disabled=false
       return
     }
     // 设备注册成功 → 隐藏毛玻璃，立即扫描（缓存同时展示）
