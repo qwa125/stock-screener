@@ -1077,6 +1077,8 @@ setTimeout(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   // 如果缓存中有股票，启动实时行情刷新（仅交易时段运行）
   if(stocks.length>0)startPriceRefresh(stocks.map(function(s){return s.code}))
+  // 无缓存且今天是交易日 → 触发一次初始扫描（首次部署或清缓存）
+  if(stocks.length===0 && new Date().getDay()%6!==0)doScan()
 },1000)
 
 // ========== Admin Panel ==========
