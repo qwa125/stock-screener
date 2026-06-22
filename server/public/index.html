@@ -531,6 +531,7 @@ function renderList(){
 async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   setStatus('🔄 按涨幅排行抓取中（主板×9页+创业板×5页并行）...')
+  try{
   
   // 1. 并行抓取多页（按涨幅降序排序）
   var pageTasks=[]
@@ -579,11 +580,11 @@ async function doScan(){
       if(isHsPage && mainBoardCount>=600) continue
       if(!isHsPage && gemCount>=500) continue
       if(seen[code])continue
-      var price=parseFloat(item.trade)||0
+      var price=parseFloat(item.trade||item.price||0)||0
       if(price<3)continue
       seen[code]=1;isHsPage?mainBoardCount++:gemCount++
       rawStocks.push({code:code,name:name,price:price,
-        changePercent:parseFloat(item.changePercent||item.chg||'')||0,
+        changePercent:parseFloat(item.changepercent||item.changePercent||item.chg||item.pctChg||'')||0,
         inflow:parseFloat(item.inflow||0)})
     }
   }
@@ -623,6 +624,10 @@ async function doScan(){
         }).catch(function(){})
     })
   }catch(e){}
+  }catch(e){
+    console.error('doScan error:',e)
+    setStatus('⛔ 扫描失败，请稍后重试')
+  }
   setStatus('✅ Top20 已更新 - 东方财富→后端分析→信号排序')
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
