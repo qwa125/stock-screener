@@ -170,7 +170,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={}
+var stocks=[],loading=false,realtimePrices={},_scanComplete=false,_scanComplete=false
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -228,8 +228,8 @@ function restoreCachedStocks(){
         renderList()
         startPriceRefresh(cached.stocks.map(function(s){return s.code}))
         if(!isTH()){
-          setStatus('📊 已冻结 (非交易时间)')
-          $('scanBtn').textContent='📊 已冻结'
+          setStatus('📊 非交易时间，点击扫描按钮查看')
+          $('scanBtn').textContent='🔄 立即扫描'
         }
         var scanTime=localStorage.getItem('lastScanTime')
         $('footer').textContent='✅ Top'+cached.stocks.length+(scanTime?' | 扫描 '+scanTime:'')
@@ -245,8 +245,16 @@ try{
   if(ls){try{stocks=JSON.parse(ls).stocks||[]}catch(e){stocks=[]}}
 }catch(e){}
 
-// 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
+// 点击毛玻璃按钮：扫描完成则隐藏玻璃，否则检查设备权限
 async function handleScanClick(){
+  if(_scanComplete){
+    hideBlocked()
+    return
+  }
+  if(loading){
+    $("blurMsg").innerHTML="⏳ 扫描中，请稍候..."
+    return
+  }
   try{
     var regRes=await fetch("/api/device/register",{
       method:"POST",
@@ -263,7 +271,6 @@ async function handleScanClick(){
     // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描
     hideBlocked()
     if(!restoreCachedStocks()){
-      // 先显示扫描中状态，再执行扫描
       $("stockList").innerHTML='<div class="loading-tip"><div class="spinner"></div><div class="mt-2">正在扫描分析全部1400余只股票...<br/><span class="text-xs text-gray-400">预计耗时30-60秒</span></div></div>';
       await doScan()
     }
@@ -583,7 +590,7 @@ async function doScan(){
     var sinaUrl='https://vip.stock.finance.sina.com.cn/quotes_service/api_json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=changepercent&asc=0&node=hs_a&symbol=&_s_r_a=init'
     var sinaData=await jsonpFetch(sinaUrl,'var',10000).catch(function(){return null})
     if(!sinaData||!sinaData.length){
-      setStatus('❌ 新浪数据获取失败');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
+      setStatus('❌ 新浪数据获取失败');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return
     }
     setStatus('🔄 解析个股列表...')
     rawStocks=sinaData.map(function(item){
@@ -701,10 +708,16 @@ async function doScan(){
     // 6. 启动实时行情刷新
     startPriceRefresh(stocks.map(function(s){return s.code}))
     
+    // 标记扫描完成，更新玻璃
+    _scanComplete=true
+    if(!$("pageBlur").classList.contains("hidden")){
+      $("blurMsg").innerHTML="📊 扫描完成，点击查看结果"
+    }
+    
   }catch(e){
     setStatus('❌ '+e.message)
   }
-  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
 
 // ---------- 全市场重扫（按涨幅排序抓取主板前500+创业板前500） ----------
@@ -1018,18 +1031,30 @@ async function doSearch(){
 setInterval(function(){
   if(isTH()&&!loading){doScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
 },600000)
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
 },60000)
 
-// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
-setTimeout(function(){
-  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-},3000)
+// 自动注册设备+扫描（保留设备配额控制）
+setTimeout(async function(){
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
+      return
+    }
+    if(regRes.status!==200) return
+    $("blurMsg").innerHTML="🔍 正在扫描分析全部1400余只股票..."
+    _scanComplete=false
+    doScan()
+  }catch(e){}
+},500)
 
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
