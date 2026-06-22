@@ -528,7 +528,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
 
     // 如果结果太少 (<=3), 放宽位置门槛再扫一轮
-    if (results.length <= 3) {
+    if (results.length <= 10) {
       this.logger.log(`  📊 结果较少(${results.length}), 放宽位置阈值至 ${this.RELAXED_POSITION} 再扫...`);
       for (let i = 0; i < combined.length; i += this.BATCH_SIZE) {
         const batch = combined.slice(i, i + this.BATCH_SIZE);
@@ -1415,7 +1415,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
-      const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+      const NOT_BUY = ['观望', '不要介入'];
       if (NOT_BUY.includes(suggestionR)) return null;
       if (sellSignal) return null;
 

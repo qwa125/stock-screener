@@ -726,7 +726,13 @@ async function doScan(){
     setStatus('✅ 后端分析完成 - 累计'+analyzed.length+'只机会股，Top20 已更新')
   }else if(rawStocks.length>0){
     rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
-    stocks=rawStocks.slice(0,20)
+    stocks=rawStocks.slice(0,20).map(function(s){
+      if(!s.suggestion){
+        var cp=s.changePercent||0
+        s.suggestion=cp>7?'重仓买入':cp>4?'买入':cp>2?'轻仓买入':cp>0?'持有':cp>-3?'观望':cp>-5?'减仓':'卖出'
+      }
+      return s
+    })
     setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨跌幅展示 Top20')
   }
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}

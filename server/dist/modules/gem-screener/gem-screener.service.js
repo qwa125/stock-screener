@@ -395,7 +395,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`  ✓ 已检查 ${Math.min(i + this.BATCH_SIZE, combined.length)}/${combined.length}`);
             }
         }
-        if (results.length <= 3) {
+        if (results.length <= 10) {
             this.logger.log(`  📊 结果较少(${results.length}), 放宽位置阈值至 ${this.RELAXED_POSITION} 再扫...`);
             for (let i = 0; i < combined.length; i += this.BATCH_SIZE) {
                 const batch = combined.slice(i, i + this.BATCH_SIZE);
@@ -1248,7 +1248,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     signalCombination = '趋势向下';
                 }
             }
-            const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
+            const NOT_BUY = ['观望', '不要介入'];
             if (NOT_BUY.includes(suggestionR))
                 return null;
             if (sellSignal)
