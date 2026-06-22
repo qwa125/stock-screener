@@ -97,7 +97,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
 	/* 全页毛玻璃遮罩 - 保留扫描按钮 */
-	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.87);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 	.page-blur.hidden{display:none}
 	.page-blur .blur-btn{font-size:18px;padding:16px 40px;border-radius:14px;border:none;background:#1890ff;color:#fff;font-weight:600;box-shadow:0 4px 20px rgba(24,144,255,0.4);cursor:pointer}
 	.page-blur .blur-msg{margin-top:16px;font-size:13px;color:#555;text-align:center;line-height:1.6;padding:0 20px}
@@ -221,14 +221,15 @@ function showBlocked(isLimited, mode){
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
 }
-// 从本地缓存恢复上次扫描结果（已冻结时也展示）
+// 从本地缓存恢复上次扫描结果（仅恢复买入信号）
 function restoreCachedStocks(){
   try{
     var ls=localStorage.getItem('lastStocks')
     if(ls){
       var cached=JSON.parse(ls)
       if(cached&&cached.stocks&&cached.stocks.length>0){
-        stocks=cached.stocks
+        var buyOnly=['重仓买入','买入','轻仓买入']
+        stocks=cached.stocks.filter(function(s){return buyOnly.indexOf(s.suggestion||'')>=0}).slice(0,20)
         renderList()
         startPriceRefresh(cached.stocks.map(function(s){return s.code}))
         if(!isTH()){
@@ -734,22 +735,27 @@ async function doScan(){
     }
   }
   
-  // 5. 按得分排序取Top20
+  // 5. 按得分排序取Top20（仅买入信号）
+  const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
   if(analyzed.length>=5){
     analyzed.sort(function(a,b){return(b.score||0)-(a.score||0)})
     stocks=analyzed.slice(0,20)
     setStatus('✅ 后端分析完成 - 累计'+analyzed.length+'只机会股，Top20 已更新')
   }else if(rawStocks.length>0){
     rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
-    stocks=rawStocks.slice(0,20).map(function(s){
-      if(!s.suggestion){
-        var cp=s.changePercent||0
-        s.suggestion=cp>7?'重仓买入':cp>4?'买入':cp>2?'轻仓买入':cp>0?'持有':cp>-3?'观望':cp>-5?'减仓':'卖出'
-      }
+    var buySignals=rawStocks.filter(function(s){
+      var cp=s.changePercent||0
+      return cp>2 // 涨幅>2%才有机会进入买入范围
+    })
+    stocks=buySignals.slice(0,20).map(function(s){
+      var cp=s.changePercent||0
+      s.suggestion=cp>7?'重仓买入':cp>4?'买入':'轻仓买入'
       return s
     })
-    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨跌幅展示 Top20')
+    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨幅取 Top20 买入信号')
   }
+  // 安全兜底：确保机会区只显示买入信号
+  stocks=stocks.filter(function(s){return BUY_ONLY.indexOf(s.suggestion||'')>=0}).slice(0,20)
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
   try{localStorage.setItem('lastScanTime',timeStr)}catch(e){}
   
