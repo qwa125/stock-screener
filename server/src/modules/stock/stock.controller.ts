@@ -35,6 +35,42 @@ export class StockController {
     }
   }
 
+  @SkipAccessLimit()
+  @Get('sina-list')
+  async sinaList(
+    @Query('page') page: string = '1',
+    @Query('num') num: string = '100',
+    @Query('node') node: string = 'sh_a',
+  ) {
+    try {
+      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=${num}&sort=symbol&asc=1&node=${node}`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Referer: 'https://finance.sina.com.cn/',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        return { code: 500, msg: `新浪API返回HTTP ${res.status}`, data: [] };
+      }
+      const text = await res.text();
+      // 兼容可能的GBK编码
+      let data;
+      try { data = JSON.parse(text); } catch (e) {
+        try {
+          const iconv = require('iconv-lite');
+          const buf = Buffer.from(text, 'binary');
+          data = JSON.parse(iconv.decode(buf, 'gbk'));
+        } catch { return { code: 500, msg: '解析新浪数据失败', data: [] }; }
+      }
+      return { code: 200, msg: 'success', data: Array.isArray(data) ? data : [] };
+    } catch (e: any) {
+      this.logger.error(`获取新浪股票列表失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: [] };
+    }
+  }
+
   @Get('search')
   async search(@Query('q') query: string) {
     if (!query || query.trim().length < 1) {

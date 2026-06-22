@@ -41,6 +41,41 @@ let StockController = StockController_1 = class StockController {
             res.status(404).json({ code: 404, msg: '小程序包不存在，请重新生成' });
         }
     }
+    async sinaList(page = '1', num = '100', node = 'sh_a') {
+        try {
+            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=${num}&sort=symbol&asc=1&node=${node}`;
+            const res = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    Referer: 'https://finance.sina.com.cn/',
+                },
+                signal: AbortSignal.timeout(15000),
+            });
+            if (!res.ok) {
+                return { code: 500, msg: `新浪API返回HTTP ${res.status}`, data: [] };
+            }
+            const text = await res.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            }
+            catch (e) {
+                try {
+                    const iconv = require('iconv-lite');
+                    const buf = Buffer.from(text, 'binary');
+                    data = JSON.parse(iconv.decode(buf, 'gbk'));
+                }
+                catch {
+                    return { code: 500, msg: '解析新浪数据失败', data: [] };
+                }
+            }
+            return { code: 200, msg: 'success', data: Array.isArray(data) ? data : [] };
+        }
+        catch (e) {
+            this.logger.error(`获取新浪股票列表失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: [] };
+        }
+    }
     async search(query) {
         if (!query || query.trim().length < 1) {
             return { code: 200, msg: 'success', data: [] };
@@ -109,6 +144,16 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], StockController.prototype, "downloadMiniapp", null);
+__decorate([
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    (0, common_1.Get)('sina-list'),
+    __param(0, (0, common_1.Query)('page')),
+    __param(1, (0, common_1.Query)('num')),
+    __param(2, (0, common_1.Query)('node')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], StockController.prototype, "sinaList", null);
 __decorate([
     (0, common_1.Get)('search'),
     __param(0, (0, common_1.Query)('q')),
