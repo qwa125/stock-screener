@@ -528,6 +528,27 @@ function renderList(){
   })
 }
 
+// 浏览器直调东方财富股票列表API（不走后端代理，解决Render美国IP被封问题）
+function tryDirectEastMoney(node,page){
+  var fs=node==='cyb'?'m:0+t:80':'m:0+t:6'
+  var url='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn='+page+'&pz=100&po=1&np=1'+
+    '&fields=f12,f14,f2,f3,f62,f20&fid=f3&fs='+encodeURIComponent(fs)+'&ut=bd1d9ddb04089700cf9c27f6f7426281'
+  return fetch(url,{mode:'cors'}).then(function(r){return r.json()}).then(function(d){
+    var items=d&&d.data&&d.data.diff
+    if(!items||!items.length)return[]
+    return items.map(function(itm){
+      return{
+        symbol:itm.f12||'',
+        name:itm.f14||'',
+        price:itm.f2||0,
+        changePercent:itm.f3||0,
+        inflow:itm.f62||0,
+        marketCap:itm.f20||0
+      }
+    })
+  })
+}
+
 // ---------- 全市场扫描（东方财富→分批送后端分析→展示Top20） ----------
 async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
@@ -543,19 +564,28 @@ async function doScan(){
   for(var ci=0;ci<configs.length;ci++){
     var cfg=configs[ci]
     pageTasks.push(
-      fetch(API+'/gem/proxy/eastmoney-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
-        .then(function(r){return r.json()})
-        .then(function(d){return d.code===200?d.data||[]:[]})
+      // 浏览器直接请求东方财富API（浏览器在中国，无地理封锁；K线直调也是同样的方式）
+      tryDirectEastMoney(cfg.node,cfg.page)
         .catch(function(){return[]})
-        .then(function(emData){
-          if(!emData||emData.length===0){
-            // 东方财富失败 → 新浪兜底
+        .then(function(dirData){
+          if(!dirData||dirData.length===0){
+            // 直调失败 → 后端代理兜底
+            return fetch(API+'/gem/proxy/eastmoney-list?node='+cfg.node+'&page='+cfg.page+'&num=100')
+              .then(function(r){return r.json()})
+              .then(function(d){return d.code===200?d.data||[]:[]})
+              .catch(function(){return[]})
+          }
+          return dirData
+        })
+        .then(function(dirData2){
+          if(!dirData2||dirData2.length===0){
+            // 后端代理也失败 → 新浪兜底
             return fetch(API+'/gem/proxy/stock-list?node='+cfg.node+'&page='+cfg.page+'&num=100&sort=changepercent&asc=0')
               .then(function(r2){return r2.json()})
               .then(function(d2){return d2.code===200?d2.data||[]:[]})
               .catch(function(){return[]})
           }
-          return emData
+          return dirData2
         })
     )
   }
