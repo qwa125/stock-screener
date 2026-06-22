@@ -219,16 +219,16 @@ function restoreCachedStocks(){
     var ls=localStorage.getItem('lastStocks')
     if(ls){
       var cached=JSON.parse(ls)
-      if(cached.length>0){
-        stocks=cached
+      if(cached&&cached.stocks&&cached.stocks.length>0){
+        stocks=cached.stocks
         renderList()
-        startPriceRefresh(cached.map(function(s){return s.code}))
+        startPriceRefresh(cached.stocks.map(function(s){return s.code}))
         if(!isTH()){
           setStatus('📊 已冻结 (非交易时间)')
           $('scanBtn').textContent='📊 已冻结'
         }
         var scanTime=localStorage.getItem('lastScanTime')
-        $('footer').textContent='✅ Top'+cached.length+(scanTime?' | 扫描 '+scanTime:'')
+        $('footer').textContent='✅ Top'+cached.stocks.length+(scanTime?' | 扫描 '+scanTime:'')
         return true
       }
     }
@@ -238,7 +238,7 @@ function restoreCachedStocks(){
 // 恢复上次扫描结果（冻结时也展示，预加载到内存供点击扫描后展示）
 try{
   var ls=localStorage.getItem('lastStocks')
-  if(ls){stocks=JSON.parse(ls)}
+  if(ls){try{stocks=JSON.parse(ls).stocks||[]}catch(e){stocks=[]}}
 }catch(e){}
 
 // 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
@@ -1106,6 +1106,8 @@ setInterval(function(){
   }
 },60000)
 
+// 页面加载时先读取缓存
+restoreCachedStocks()
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
