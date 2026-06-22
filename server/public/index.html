@@ -254,11 +254,12 @@ async function handleScanClick(){
       method:"POST",
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
-    if(regRes.status===429){
+    var regData=await regRes.json()
+    if(regData.code===429){
       showBlocked(true)
       return
     }
-    if(regRes.status!==200){
+    if(regData.code!==200){
       showBlocked(false)
       return
     }
@@ -794,8 +795,9 @@ async function doSearch(){
   // 先检查设备权限：搜股票也要经过后端 guard 验证
   try{
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
-    if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
-    if(_reg.status===200){hideBlocked();loading=false;doScan()}
+    var _regD=await _reg.json()
+    if(_regD.code===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
+    if(_regD.code!==200){showBlocked(false);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none'
 
