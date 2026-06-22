@@ -1010,11 +1010,15 @@ setInterval(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },60000)
 
-// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },3000)
+
+// 交易时段页面加载后自动扫描（覆盖缓存旧数据）
+setTimeout(function(){
+  if(isTH()&&!loading){doScan()}
+},5000)
 
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
