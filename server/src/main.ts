@@ -3,6 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app.module';
 import * as express from 'express';
 import * as path from 'path';
+import * as https from 'https';
+import * as http from 'http';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 
 function parsePort(): number {
@@ -47,6 +49,31 @@ async function bootstrap() {
   app.enableCors({
     origin: true,
     credentials: true,
+  });
+  // ══════════════════════════════════════════════
+  // 新浪股票列表代理中间件 (绕过 NestJS 全局守卫)
+  // 浏览器无法直接调用 Sina API (无 CORS), 通过后端中转
+  // ══════════════════════════════════════════════
+  app.use('/api/stock/sina-list', (req, res) => {
+    const page = (req.query.page as string) || '1';
+    const num = (req.query.num as string) || '100';
+    const node = (req.query.node as string) || 'sh_a';
+    const sinaUrl =
+      `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=${num}&sort=symbol&asc=1&node=${node}`;
+    https.get(sinaUrl, { timeout: 15000 }, (sinaRes) => {
+      let body = '';
+      sinaRes.on('data', (chunk) => (body += chunk));
+      sinaRes.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          res.json({ code: 200, data, msg: 'ok' });
+        } catch {
+          res.status(502).json({ code: 502, data: null, msg: '解析新浪API返回数据失败' });
+        }
+      });
+    }).on('error', (err) => {
+      res.status(502).json({ code: 502, data: null, msg: '请求新浪API失败: ' + err.message });
+    });
   });
   app.setGlobalPrefix('api');
   // 托管 H5 前端页面
