@@ -216,28 +216,33 @@ function hideBlocked(){
 // 从本地缓存恢复上次扫描结果（已冻结时也展示）
 function restoreCachedStocks(){
   try{
-    var ls=localStorage.getItem('lastStocks')
-    if(ls){
-      var cached=JSON.parse(ls)
-      if(cached.length>0){
-        stocks=cached
-        renderList()
-        if(!isTH()){
-          setStatus('📊 已冻结 (非交易时间)')
-          $('scanBtn').textContent='📊 已冻结'
-        }
-        $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
-        return true
+    var cached=getCachedStocks()
+    if(cached&&cached.length>0){
+      stocks=cached;renderList()
+      if(!isTH()){
+        setStatus('📊 已冻结 (非交易时间)')
+        $('scanBtn').textContent='📊 已冻结'
       }
+      $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
+      return true
     }
   }catch(e){}
   return false
 }
-// 恢复上次扫描结果（冻结时也展示，预加载到内存供点击扫描后展示）
-try{
-  var ls=localStorage.getItem('lastStocks')
-  if(ls){stocks=JSON.parse(ls)}
-}catch(e){}
+function getCachedStocks(){
+  try{
+    var ls=localStorage.getItem('lastStocks')
+    if(!ls)return null
+    var c=JSON.parse(ls)
+    // 新格式：{date:'2026-06-22',stocks:[...]}，仅当天有效
+    if(c.date&&c.date===new Date().toISOString().slice(0,10)&&Array.isArray(c.stocks))return c.stocks
+    // 旧格式：数组（兼容旧缓存，允许显示但下次保存会覆盖）
+    if(Array.isArray(c)&&c.length>0)return c
+  }catch(e){}
+  return null
+}
+// 预加载到内存（只有当天缓存生效）
+try{var cached=getCachedStocks();if(cached)stocks=cached}catch(e){}
 
 // 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
 async function handleScanClick(){
@@ -538,7 +543,7 @@ async function doScan(){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
     }
     stocks=d.data.opportunities
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks}))}catch(e){}
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none'
@@ -653,7 +658,7 @@ async function doFullRescan(){
   if(newStocks.length){
     setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只+缓存'+(newStocks.length-mainBoardCount-gemCount)+'只），排序中...')
     stocks=newStocks
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks}))}catch(e){}
     // 排序：信号优先级优先，再按涨幅降序
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
@@ -668,7 +673,7 @@ async function doFullRescan(){
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
     // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks}))}catch(e){}
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
