@@ -168,7 +168,7 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
-var _pageNo=0,_priceRefreshTimer=null
+_priceRefreshTimer=null
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -504,10 +504,6 @@ function buildDetail(s,rt){
 }
 
 // ---------- 翻页 ----------
-function pagePrev(){_pageNo--;renderList()}
-function pageNext(){_pageNo++;renderList()}
-
-// ---------- 2秒刷新实时价格 ----------
 function startPriceRefresh(){
   if(_priceRefreshTimer)clearInterval(_priceRefreshTimer)
   if(stocks.length<1)return
@@ -537,15 +533,10 @@ function startPriceRefresh(){
 function renderList(){
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
-  // 整10分页
   var total=stocks.length
-  var pages=Math.ceil(total/10)
-  if(_pageNo<0)_pageNo=0
-  if(_pageNo>=pages)_pageNo=pages-1
-  var start=_pageNo*10,end=Math.min(start+10,total)
-  setStatus('✅ Top '+total+' 已更新 | 第'+(start+1)+'-'+end+'只')
-  $('footer').textContent='✅ Top'+total+' | 第'+(start+1)+'-'+end+'只 | '+(new Date().toLocaleTimeString())
-  for(var i=start;i<end;i++){
+  setStatus('✅ Top '+total+' 已更新')
+  $('footer').textContent='✅ Top'+total+' | '+(new Date().toLocaleTimeString())
+  for(var i=0;i<total;i++){
     var s=stocks[i],rt=realtimePrices[s.code]||{}
     var price=rt.price||s.currentPrice||0
     var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
@@ -559,12 +550,6 @@ function renderList(){
     card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
   }
-  // 翻页按钮
-  var nav=document.createElement('div');nav.className='page-nav'
-  nav.innerHTML=(_pageNo>0?'<button class="page-btn" onclick="pagePrev()">‹ 上一页</button>':'<span></span>')+
-    '<span class="page-info">'+(start+1)+'-'+end+'/'+total+'</span>'+
-    (_pageNo<pages-1?'<button class="page-btn" onclick="pageNext()">下一页 ›</button>':'<span></span>')
-  list.appendChild(nav)
 }
 
 // ---------- JSONP 辅助（新浪接口跨域用） ----------
@@ -703,7 +688,7 @@ async function doScan(){
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none'
-    _pageNo=0;renderList()
+    renderList()
     setStatus('✅ Top '+stocks.length+' 已更新 | '+new Date().toLocaleTimeString())
     
     // 7. 启动2秒价格刷新
