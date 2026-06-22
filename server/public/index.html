@@ -664,13 +664,15 @@ async function doScan(){
     })
     for(var bi=0;bi<batchSecids.length;bi+=50){
       var chunk=batchSecids.slice(bi,bi+50)
-      var emUrl='https://push2.eastmoney.com/api/qt/ulist.np/get?cb=CALLBACK&fields=f12,f2,f3,f62,f20&secids='+chunk.join(',')
+      var emUrl='https://push2.eastmoney.com/api/qt/ulist.np/get?cb=CALLBACK&fields=f12,f2,f3,f62,f20,f168,f43&secids='+chunk.join(',')
       var emData=await jsonpFetch(emUrl,'CALLBACK',6000).catch(function(){return null})
       if(emData&&emData.data&&emData.data.diff){
         emData.data.diff.forEach(function(itm){
           var rawCode=itm.f12||''
           var found=rawStocks.find(function(s){return cleanCode(s.code)===rawCode})
           if(found&&itm.f62)found.inflow=itm.f62
+          if(found&&itm.f168)found.turnoverRate=itm.f168
+          if(found&&itm.f43)found.volumeRatio=itm.f43
         })
       }
     }

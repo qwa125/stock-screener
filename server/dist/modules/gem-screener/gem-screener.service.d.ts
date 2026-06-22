@@ -9,6 +9,8 @@ export interface StockCandidate {
     changePercent: number;
     currentPrice: number;
     marketCap?: number;
+    turnoverRate?: number;
+    volumeRatio?: number;
 }
 export interface OpportunityStock {
     capitalRank: number;
@@ -81,6 +83,14 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private triggerRefresh;
     private refreshCache;
     onApplicationBootstrap(): Promise<void>;
+    calcKDJ(kline: KLine[]): {
+        k: number;
+        d: number;
+        j: number;
+        trend: 'up' | 'down' | 'flat';
+        prevJ: number;
+        jUp: boolean;
+    };
     calcCustomMACD(kline: KLine[]): {
         diff: number[];
         dea: number[];
@@ -134,6 +144,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         files?: undefined;
     }>;
     private enrichWithMainForceFlow;
+    private calcMultiScore;
+    private scoreToSuggestion;
     checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     private calcEntryTiming;

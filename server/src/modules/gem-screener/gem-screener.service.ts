@@ -39,6 +39,8 @@ export interface StockCandidate {
   changePercent: number;
   currentPrice: number;
   marketCap?: number;
+  turnoverRate?: number;
+  volumeRatio?: number;
 }
 
 export interface OpportunityStock {
@@ -359,6 +361,46 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     // Render海外服务器上不启动预缓存分析（跳过腾讯API调用避免超时/崩溃）
     // 由用户前端页面访问时触发
+  }
+
+  // ---------------------------------------------------------------------------
+  // KDJ 计算 (RSV=9日, K/D平滑3, J=3K-2D)
+  // ---------------------------------------------------------------------------
+  calcKDJ(kline: KLine[]): { k: number; d: number; j: number; trend: 'up' | 'down' | 'flat'; prevJ: number; jUp: boolean } {
+    const high = kline.map(k => k.high);
+    const low = kline.map(k => k.low);
+    const close = kline.map(k => k.close);
+    const len = close.length;
+    if (len < 15) return { k: 50, d: 50, j: 50, trend: 'flat', prevJ: 50, jUp: false };
+
+    const rsvArr: number[] = [];
+    for (let i = 8; i < len; i++) {
+      const h9 = Math.max(...high.slice(i - 8, i + 1));
+      const l9 = Math.min(...low.slice(i - 8, i + 1));
+      const rsv = h9 > l9 ? ((close[i] - l9) / (h9 - l9)) * 100 : 50;
+      rsvArr.push(rsv);
+    }
+
+    // K/D smoothing
+    const kArr: number[] = [50];
+    const dArr: number[] = [50];
+    for (let i = 0; i < rsvArr.length; i++) {
+      const kVal = (2 / 3) * (kArr[i] || 50) + (1 / 3) * rsvArr[i];
+      const dVal = (2 / 3) * (dArr[i] || 50) + (1 / 3) * kVal;
+      kArr.push(kVal);
+      dArr.push(dVal);
+    }
+    const k = kArr[kArr.length - 1];
+    const d = dArr[dArr.length - 1];
+    const j = 3 * k - 2 * d;
+    const prevK = kArr.length > 2 ? kArr[kArr.length - 2] : 50;
+    const prevD = dArr.length > 2 ? dArr[dArr.length - 2] : 50;
+    const prevJ = 3 * prevK - 2 * prevD;
+    const jUp = j > prevJ;
+    let trend: 'up' | 'down' | 'flat' = 'flat';
+    if (jUp && k > d) trend = 'up';
+    else if (!jUp && k < d) trend = 'down';
+    return { k, d, j, trend, prevJ, jUp };
   }
 
   // ---------------------------------------------------------------------------
@@ -916,607 +958,327 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // 个股检查 (严格)
   // ---------------------------------------------------------------------------
-  async checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
-    const kline = await this.dataFetcher.getKLineData(s.code);
-    if (!kline || kline.length < 20) return null;
-
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 多因子评分引擎：14项因子综合评分 → 映射标签
+  // ═══════════════════════════════════════════════════════════════════════════
+  private calcMultiScore(s: StockCandidate, kline: KLine[]): {
+    score: number; factorCount: number; maxScore: number; detail: string;
+    factors: { name: string; met: boolean; points: number }[];
+    trendState: number; pricePosition: number; priceIncrease: number; isGoldenCross: boolean;
+    bxDays: number; bx: any; buySignal: string;
+    ma5: number; ma10: number; ma20: number; ma60: number;
+    macd: any; kdj: any; volumeRatio: number; volatility20d: number;
+    chip: any;
+  } | null {
     const closeArr = kline.map(k => k.close);
     const len = closeArr.length;
     if (len < 20) return null;
 
-    // ---------- 白消启动检测 ----------
-    const klineO = kline.map(k => k.open);
-    const klineH = kline.map(k => k.high);
-    const klineL = kline.map(k => k.low);
-    const klineV = kline.map(k => k.volume || 0);
-    const klineAmt = kline.map(k => k.amount || 0);
-    const engine = new FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: klineV, amount: klineAmt });
+    const highArr = kline.map(k => k.high);
+    const lowArr = kline.map(k => k.low);
+    const volArr = kline.map(k => k.volume || 0);
+    const amtArr = kline.map(k => k.amount || 0);
+    const openArr = kline.map(k => k.open);
+    const currentClose = closeArr[len - 1];
+
+    // 排除ST/银行保险
+    if (/^(\*)?ST/.test(s.name)) return null;
+    const excludeKeywords = ['银行', '保险', '农商', '兴业银', '中国人寿', '中国平安', '中国人保', '中国太保', '新华保险'];
+    for (const kw of excludeKeywords) { if (s.name.includes(kw)) return null; }
+
+    // ---------- 计算所有指标 ----------
+    // 1. MACD
+    const macd = this.calcCustomMACD(kline);
+    // 2. KDJ
+    const kdj = this.calcKDJ(kline);
+    // 3. 均线
+    const ma5 = len >= 5 ? closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5 : closeArr.reduce((a, b) => a + b, 0) / len;
+    const ma10 = len >= 10 ? closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10 : closeArr.reduce((a, b) => a + b, 0) / len;
+    const ma20 = len >= 20 ? closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : ma10;
+    const ma60 = len >= 60 ? closeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 : ma20;
+    // 4. BOLL
+    const bollMid = ma20;
+    const bollStd = len >= 20 ? Math.sqrt(closeArr.slice(-20).reduce((s, c) => s + (c - bollMid) ** 2, 0) / 20) : 0;
+    const bollUpper = bollMid + 2 * bollStd;
+    const bollLower = bollMid - 2 * bollStd;
+    // 5. 趋势状态
+    let trendState = 1;
+    if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01) trendState = 3;
+    else if (ma5 > ma10 && ma10 > ma20) trendState = 2;
+    else if (ma5 <= ma10) trendState = 0;
+    // 6. 价格位置（60日）
+    const periodHigh = Math.max(...highArr.slice(-60));
+    const periodLow = Math.min(...lowArr.slice(-60));
+    const pricePosition = periodHigh > periodLow ? ((currentClose - periodLow) / (periodHigh - periodLow)) * 100 : 50;
+    // 7. 涨幅检查
+    const goldenCrossDays = macd.goldenCrossDays || 15;
+    const lookbackDays = Math.max(1, goldenCrossDays);
+    const triggerIdx = len - 1 - lookbackDays;
+    const triggerClose = triggerIdx >= 0 ? kline[triggerIdx].close : kline[0].close;
+    const priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
+    // 8. 量比
+    const avgVol30 = volArr.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, volArr.length);
+    const avgVol5 = volArr.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, volArr.length);
+    const volumeRatio = avgVol30 > 0 ? avgVol5 / avgVol30 : 1;
+    // 9. 3日涨幅
+    const close3dAgo = len >= 4 ? closeArr[len - 4] : closeArr[0];
+    const chg3d = ((currentClose - close3dAgo) / close3dAgo) * 100;
+    // 10. 20日波动率
+    const returns20: number[] = [];
+    for (let i = len - 20; i < len && i > 0; i++) {
+      returns20.push((closeArr[i] - closeArr[i - 1]) / closeArr[i - 1]);
+    }
+    const meanR = returns20.length > 0 ? returns20.reduce((a, b) => a + b, 0) / returns20.length : 0;
+    const variance20 = returns20.length > 0 ? returns20.reduce((s, r) => s + (r - meanR) ** 2, 0) / returns20.length : 0;
+    const volatility20d = Math.sqrt(variance20) * 100 * Math.sqrt(252); // 年化波动率%
+    // 11. 白消
+    const engine = new FormulaEngine({ open: openArr, close: closeArr, high: highArr, low: lowArr, volume: volArr, amount: amtArr });
     const bx = calcBaiXing(engine);
-    const isBaiXiaoActive = bx.baiXiao || bx.baiBu || false;
     const bxDays = bx.baiXiaoDays || 0;
     const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
-    const hasQiangShiHuiCai = !!bx.qiangShiHuiCai;
+    const hasBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai || bx.diBuBuy || bx.zhuLiShiPan || bx.jiaCang);
+    // 12. 筹码分析
+    const chip = this.calcChipAnalysis(closeArr, highArr, lowArr, volArr, currentClose);
+    const chipConcentration90 = chip.concentration90;
 
-    // ---------- MACD 检查: DIFF >= DEA（金叉/接近金叉/已金叉均放行）----------
-    const macdResult = this.calcCustomMACD(kline);
-    const isGoldenCross = macdResult.isGoldenCross;
-    if (macdResult.currentDiff < macdResult.currentDea) return null;
+    // ---------- 14项因子判定 ----------
+    const factors: { name: string; met: boolean; points: number }[] = [];
 
-    // 排除银行保险股
-    const excludeKeywords = ['银行', '保险', '农商', '兴业银', '中国人寿', '中国平安', '中国人保', '中国太保', '新华保险'];
-    for (const kw of excludeKeywords) {
-      if (s.name.includes(kw)) return null;
-    }
+    // F1: 白消买点 (3分)
+    const f1 = hasBaiXiaoSignal && bxDays >= 4;
+    factors.push({ name: '白消买点', met: f1, points: f1 ? 3 : 0 });
 
-    // 排除ST股
-    if (/^(\*)?ST/.test(s.name)) return null;
+    // F2: 集中度90<40% (1分)
+    const f2 = chipConcentration90 < 40;
+    factors.push({ name: '集中度<40%', met: f2, points: f2 ? 1 : 0 });
 
-    const goldenCrossDays = macdResult.goldenCrossDays || 15;
+    // F3: KDJ上移 (1分)
+    const f3 = kdj.jUp && kdj.j > kdj.k;
+    factors.push({ name: 'KDJ上移', met: f3, points: f3 ? 1 : 0 });
 
-    // ---------- 白消买点信号筛选 ----------
-    const hasAnyBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai ||
-      bx.diBuBuy || bx.gaoWeiHuiDiaoBuy || bx.zhuLiShiPan || bx.jiaCang);
+    // F4: MACD金叉/多头 (1分)
+    const f4 = macd.currentDiff > macd.currentDea;
+    factors.push({ name: 'MACD多头', met: f4, points: f4 ? 1 : 0 });
 
-    if (!hasAnyBaiXiaoSignal) return null;
+    // F5: DEA>0 (1分)
+    const f5 = macd.currentDea > 0;
+    factors.push({ name: 'DEA>0', met: f5, points: f5 ? 1 : 0 });
 
-    // ---------- 价格位置 ----------
-    const highs = kline.map(k => k.high);
-    const lows = kline.map(k => k.low);
-    const periodHigh = Math.max(...highs.slice(-60));
-    const periodLow = Math.min(...lows.slice(-60));
-    const pricePosition = periodHigh > periodLow
-      ? ((closeArr[len - 1] - periodLow) / (periodHigh - periodLow)) * 100
-      : 50;
+    // F6: 股价>MA20 (1分)
+    const f6 = currentClose > ma20;
+    factors.push({ name: '站上MA20', met: f6, points: f6 ? 1 : 0 });
 
-    const isLowPosition = pricePosition < 25;
-    const hasStrongSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.jiaCang);
-    if (pricePosition >= this.POSITION_THRESHOLD && !isLowPosition && !hasStrongSignal) return null;
+    // F7: 距MA60涨幅<25% (1分)
+    const distMa60 = ma60 > 0 ? ((currentClose - ma60) / ma60) * 100 : 0;
+    const f7 = distMa60 < 25;
+    factors.push({ name: '距MA60<25%', met: f7, points: f7 ? 1 : 0 });
 
-    // ---------- 涨幅检查 (仅金叉股限制涨幅过快) ----------
-    const closeIdx = len - 1;
-    const lookbackDays = Math.max(1, goldenCrossDays || 15);
-    const triggerIdx = closeIdx - lookbackDays;
-    const triggerClose = triggerIdx >= 0 ? kline[triggerIdx].close : kline[0].close;
-    const currentClose = kline[closeIdx].close;
-    const priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
-    if (isGoldenCross && priceIncrease > 25) return null;
+    // F8: BOLL高于中轨 (1分)
+    const f8 = currentClose > bollMid;
+    factors.push({ name: 'BOLL中轨上', met: f8, points: f8 ? 1 : 0 });
 
-    // ---------- 计算均线(用于评分/建议) ----------
-    const ma5  = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-    const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+    // F9: 主力资金净流入≥2000万 (1分)
+    const f9 = s.inflow >= 20_000_000;
+    factors.push({ name: '主力流入≥2000万', met: f9, points: f9 ? 1 : 0 });
 
-    // ---------- 综合得分(按优先级: 活跃度 > 涨幅 > 最佳介入点) ----------
-    const inflowScore = Math.min(s.inflow / 100000000, 1);
-    const incScore = priceIncrease > 0 ? Math.min(priceIncrease / 15, 1) : 0;
-    const positionScore = 1 - pricePosition / 100;
-    const gcScore = isGoldenCross ? 0.4 : 0.15;
-    const capScore = s.marketCap ? Math.max(0, 1 - Math.max(0, s.marketCap - 5_000_000_000) / 45_000_000_000) : 0.3;
-    const score = inflowScore * 0.35 + incScore * 0.25 + positionScore * 0.20 + gcScore * 0.10 + capScore * 0.10;
+    // F10: 3日涨幅>0%且<10% (1分)
+    const f10 = chg3d > 0 && chg3d < 10;
+    factors.push({ name: '3日涨幅0-10%', met: f10, points: f10 ? 1 : 0 });
 
-    // ---------- 买点信号类型 ----------
+    // F11: 20日波动率>25% (年化, 1分)
+    const f11 = volatility20d > 25;
+    factors.push({ name: '20日波动率>25%', met: f11, points: f11 ? 1 : 0 });
+
+    // F12: 换手率>1% (来自前端, 1分)
+    const f12 = (s as any).turnoverRate > 1;
+    factors.push({ name: '换手率>1%', met: f12, points: f12 ? 1 : 0 });
+
+    // F13: 量比>0.8 (来自成交量估算, 1分)
+    const f13 = volumeRatio > 0.8;
+    factors.push({ name: '量比>0.8', met: f13, points: f13 ? 1 : 0 });
+
+    // F14: 均线多头排列MA5>MA10>MA20 (2分)
+    const f14 = ma5 > ma10 && ma10 > ma20;
+    factors.push({ name: '均线多头', met: f14, points: f14 ? 2 : 0 });
+
+    // 统计总分
+    let totalScore = factors.reduce((s, f) => s + f.points, 0);
+    const maxScore = 3 + 1*11 + 2; // 16
+
+    // 限制涨幅过快的金叉股
+    if (macd.isGoldenCross && priceIncrease > 25) totalScore = Math.min(totalScore, 3);
+
+    // 买点信号
     let buySignal = '';
-    if (isBaiXiaoBuy && hasQiangShiHuiCai) {
-      buySignal = '白消启动回踩';
-    } else if (isBaiXiaoBuy) {
-      buySignal = '白消启动突破';
-    } else if (hasQiangShiHuiCai) {
-      buySignal = '强势回踩';
-    } else if (isBaiXiaoActive && bxDays >= 3) {
-      buySignal = '白消蓄力';
-    } else {
-      buySignal = '突破上涨';
-    }
+    if (isBaiXiaoBuy && !!bx.qiangShiHuiCai) buySignal = '白消启动回踩';
+    else if (isBaiXiaoBuy) buySignal = '白消启动突破';
+    else if (!!bx.qiangShiHuiCai) buySignal = '强势回踩';
+    else if ((bx.baiXiao || bx.baiBu) && bxDays >= 3) buySignal = '白消蓄力';
+    else if (f4) buySignal = 'MACD多头';
+    else if (trendState >= 2) buySignal = '上升趋势';
+    else buySignal = '技术面观察';
 
-    // ---------- 白消白布规则系统 ----------
-    const macdBullishR = macdResult.currentDiff > macdResult.currentDea;
-    let trendStateR = 1;
-    if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01) {
-      trendStateR = 3;
-    } else if (ma5 > ma10 && ma10 > ma20) {
-      trendStateR = 2;
-    } else if (ma5 <= ma10) {
-      trendStateR = 0;
-    }
-    const trendStrengthR = ((ma5 / ma10 - 1) * 100);
-    const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
-    const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const volumeRatio = recentVolR / avgVolR;
-    const volumeBullishR = volumeRatio > 1.1;
+    // 详细信息
+    const detail = factors.filter(f => f.met).map(f => f.name).join('+');
 
-    // ─── 新信号检测 ───
-    // 主升信号: 均线多头排列 + MACD金叉/接近金叉
-    const zhuShengSignal = trendStateR >= 2 && macdBullishR;
-    // 横盘突破: 20日内振幅<12% + 收盘突破20日高点 + 放量
-    const recent20High = Math.max(...highs.slice(-20));
-    const recent20Low = Math.min(...lows.slice(-20));
-    const rangePct = (recent20High - recent20Low) / (recent20Low || 1) * 100;
-    const isSideways = rangePct < 12;
-    const hengPanBreakout = isSideways && closeArr[len - 1] >= recent20High * 0.995 && volumeRatio > 1.3;
-    // 震荡买点: 白消状态下的买点1/2
-    const zhenDangBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
-    // 机构活跃度 (0-20)
-    const jiGouActive = Math.min(volumeRatio * 6, 20);
-    // 首次突破5日均线: 前一日收盘<=MA5且今日收盘>MA5
-    const prevClose = len > 1 ? closeArr[len - 2] : closeArr[0];
-    const firstBreakMA5 = prevClose <= ma5 * 1.005 && closeArr[len - 1] > ma5;
-    // 卖出信号检测
-    const baiBuSellSignals: string[] = [];
-    if (bx.gaoKaiDiZouQingCang) baiBuSellSignals.push('高开低走清仓');
-    if (bx.baoLiangFuGaiQingCang) baiBuSellSignals.push('爆量覆盖清仓');
-    if (bx.po5RiXian) baiBuSellSignals.push('破5日线');
-    if (bx.yinDiePoWei) baiBuSellSignals.push('阴跌破位');
-    const hasSellSignal = baiBuSellSignals.length > 0;
+    return {
+      score: totalScore, factorCount: factors.filter(f => f.met).length, maxScore, detail,
+      factors, trendState, pricePosition, priceIncrease, isGoldenCross: macd.isGoldenCross,
+      bxDays, bx, buySignal,
+      ma5, ma10, ma20, ma60, macd, kdj, volumeRatio, volatility20d, chip,
+    };
+  }
 
-    // ─── 白布卖出规则 ───
-    let sellSignal = '';
-    let suggestionR = '观望';
-    let signalCombination = '';
-    const isBaiBu = !!bx.baiBu;
+  /**
+   * 将多因子评分映射为建议标签
+   */
+  private scoreToSuggestion(score: number, baiXiaoBoost: boolean): string {
+    // 白消信号有额外权重 → 升级
+    if (baiXiaoBoost && score >= 10) return '重仓买入';
+    if (baiXiaoBoost && score >= 7) return '买入';
+    if (score >= 12) return '重仓买入';
+    if (score >= 9) return '买入';
+    if (score >= 6) return '轻仓买入';
+    if (score >= 4) return '持有';
+    if (score >= 2) return '观望';
+    return '不要介入';
+  }
 
-    if (isBaiBu && hasSellSignal && jiGouActive >= 12 && firstBreakMA5) {
-      suggestionR = '卖出';
-      sellSignal = baiBuSellSignals.join('+');
-      signalCombination = '白布区域:' + sellSignal;
-    }
+  async checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
+    const kline = await this.dataFetcher.getKLineData(s.code);
+    if (!kline || kline.length < 20) return null;
 
-    // ─── 白消买入规则（仅非白布卖出时执行）───
-    if (!sellSignal) {
-      const hasBaiXiaoBuy = isBaiXiaoBuy;
-      const hasQSHC = hasQiangShiHuiCai;
-      const hasJiaCang = !!bx.jiaCang;
-      const hasZhuSheng = zhuShengSignal;
-      const hasZhenDang = zhenDangBuy;
-      const hasHengPan = hengPanBreakout;
-        const activeHigh = jiGouActive >= 12;
+    const result = this.calcMultiScore(s, kline);
+    if (!result || result.score < 4) return null; // 至少持有以上
 
-        // ── 级别1: 重仓买入（白消4-6天+机构活跃度高=最佳买点）──
-        if (bxDays >= 4 && bxDays <= 6 && activeHigh && hasBaiXiaoBuy && (hasZhuSheng || hasQSHC || hasJiaCang)) {
-          suggestionR = '重仓买入'; signalCombination = '白消4-6天+机构活跃+主升';
-        } else if (bxDays >= 4 && bxDays <= 6 && activeHigh && (hasBaiXiaoBuy || (hasQSHC && hasJiaCang))) {
-          suggestionR = '重仓买入'; signalCombination = '白消4-6天+机构活跃';
-        } else if (bxDays >= 4 && bxDays <= 6 && hasBaiXiaoBuy && hasZhuSheng && hasJiaCang) {
-          suggestionR = '重仓买入'; signalCombination = '白消启动+主升+加仓';
+    // MACD 严格检查: 必须多头
+    if (!(result.macd.currentDiff > result.macd.currentDea)) return null;
 
-        // ── 级别2: 买入（白消6天+/横盘突破买点）──
-        } else if (bxDays > 6 && activeHigh && hasHengPan && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破+主升';
-        } else if (bxDays > 6 && hasHengPan) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破';
-        } else if (bxDays > 6 && hasQSHC && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消6天+强势回踩+主升';
-        } else if (bxDays > 6 && activeHigh && hasBaiXiaoBuy) {
-          suggestionR = '买入'; signalCombination = '白消6天+机构活跃';
-        } else if (bxDays >= 4 && bxDays <= 6 && hasBaiXiaoBuy && hasZhenDang) {
-          suggestionR = '买入'; signalCombination = '白消启动+震荡买点';
-        } else if (bxDays >= 4 && bxDays <= 6 && hasQSHC && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消启动+强势回踩+主升';
+    // 限制涨幅过大
+    if (result.isGoldenCross && result.priceIncrease > 25) return null;
+    if (result.priceIncrease > 40) return null; // 涨幅超过40%一律过滤
 
-        // ── 级别3: 轻仓买入（强势回踩+主升/普通回调）──
-        } else if (hasQSHC && hasZhuSheng) {
-          suggestionR = '轻仓买入'; signalCombination = '强势回踩+主升';
-        } else if (hasQSHC) {
-          suggestionR = '轻仓买入'; signalCombination = '强势回踩';
-        } else if (hasBaiXiaoBuy) {
-          suggestionR = '轻仓买入'; signalCombination = '白消启动';
-        } else if (hasZhuSheng) {
-          suggestionR = '轻仓买入'; signalCombination = '主升信号';
-        } else if (hasZhenDang) {
-          suggestionR = '轻仓买入'; signalCombination = '震荡买点';
-        } else if (bxDays >= 4 && hasBaiXiaoBuy) {
-          suggestionR = '轻仓买入'; signalCombination = '白消信号';
-        }
-      }
+    // 价格位置检查(高位不追)
+    if (result.pricePosition >= 92 && result.score < 10) return null;
 
-      // ─── 白布卖出规则（按风险分级：清仓/卖出/减仓）───
-      if (isBaiBu && hasSellSignal) {
-        if (bx.baoLiangFuGaiQingCang || bx.po5RiXian) {
-          suggestionR = '清仓'; sellSignal = baiBuSellSignals.join('+'); signalCombination = '白布:' + sellSignal;
-        } else if (bx.gaoKaiDiZouQingCang || bx.yinDiePoWei) {
-          suggestionR = '卖出'; sellSignal = baiBuSellSignals.join('+'); signalCombination = '白布:' + sellSignal;
-        } else {
-          suggestionR = '减仓'; sellSignal = baiBuSellSignals.join('+'); signalCombination = '白布:' + sellSignal;
-        }
-      }
+    // 卖出信号过滤
+    const hasSell = !!(result.bx.gaoKaiDiZouQingCang || result.bx.baoLiangFuGaiQingCang ||
+      result.bx.po5RiXian || result.bx.yinDiePoWei);
+    if (result.bx.baiBu && hasSell) return null;
 
-      // ─── 持有/不要介入判断（无买入/卖出信号时）───
-      if (suggestionR === '观望') {
-        if (trendStateR >= 2 && ma5 > ma10) {
-          // 上涨趋势中，无买点但均线多头 → 持有
-          suggestionR = '持有';
-          signalCombination = '趋势向上+均线多头';
-        } else if (trendStateR === 0 || (ma5 < ma10 && !macdBullishR)) {
-          // 下跌趋势中，无买点、无企稳 → 不要介入
-          suggestionR = '不要介入';
-          signalCombination = '趋势向下';
-        }
-      }
+    // 评分映射
+    const suggestion = this.scoreToSuggestion(result.score, !!(result.bxDays >= 4 && (result.bx.baiXiaoBuy1 || result.bx.baiXiaoBuy2)));
+    const NOT_BUY = ['观望', '不要介入'];
+    if (NOT_BUY.includes(suggestion)) return null;
 
-      // 排除非买入信号
-    const NOT_BUY = ['观望', '减仓', '卖出', '清仓', '不要介入'];
-    if (NOT_BUY.includes(suggestionR)) return null;
-
-    // 处理卖出信号的返回
-    if (sellSignal) return null; // 卖出的不入机会区
-
-    // ---------- 最佳介入时机评分 (entryTiming) ----------
-    const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
-    // ---------- 安全系数评分 (safetyScore) ----------
-    const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
+    const entryTiming = this.calcEntryTiming(result.pricePosition, result.trendState, kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low), kline.map(k=>k.volume || 0), result.isGoldenCross);
+    const safetyScore = this.calcSafetyScore(kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low), kline.map(k=>k.volume || 0), result.pricePosition, result.trendState);
 
     return {
       capitalRank: 0,
       entryTiming: Math.round(entryTiming * 100) / 100,
       safetyScore: Math.round(safetyScore * 100) / 100,
-      code: s.code,
-      name: s.name,
+      code: s.code, name: s.name,
       mainForceInflow: s.inflow,
-      baiXiaoDays: bxDays,
-      buySignal,
-      currentPrice: s.currentPrice,
-      changePercent: s.changePercent,
-      pricePosition: Math.round(pricePosition * 100) / 100,
-      priceIncrease: Math.round(priceIncrease * 100) / 100,
-      score: Math.round(score * 100) / 100,
-      diff: Math.round(macdResult.currentDiff * 10000) / 10000,
-      dea: Math.round(macdResult.currentDea * 10000) / 10000,
-      isGoldenCross,
-      suggestion: suggestionR,
-      signalCombination,
-      jiGouActiveScore: Math.round(jiGouActive * 100) / 100,
+      baiXiaoDays: result.bxDays,
+      buySignal: result.buySignal,
+      currentPrice: s.currentPrice, changePercent: s.changePercent,
+      pricePosition: Math.round(result.pricePosition * 100) / 100,
+      priceIncrease: Math.round(result.priceIncrease * 100) / 100,
+      score: result.score,
+      diff: Math.round(result.macd.currentDiff * 10000) / 10000,
+      dea: Math.round(result.macd.currentDea * 10000) / 10000,
+      isGoldenCross: result.isGoldenCross,
+      suggestion,
+      signalCombination: result.detail,
+      jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
     };
   }
   async checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
     const kline = await this.dataFetcher.getKLineData(s.code);
     if (!kline || kline.length < 20) return null;
 
-    const closeArr = kline.map(k => k.close);
-    const len = closeArr.length;
-    if (len < 20) return null;
+    const result = this.calcMultiScore(s, kline);
+    if (!result) return null;
 
-    // ---------- 白消启动检测 ----------
-    const klineO = kline.map(k => k.open);
-    const klineH = kline.map(k => k.high);
-    const klineL = kline.map(k => k.low);
-    const klineV = kline.map(k => k.volume || 0);
-    const klineAmt = kline.map(k => k.amount || 0);
-    const engine = new FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: klineV, amount: klineAmt });
-    const bx = calcBaiXing(engine);
-    const isBaiXiaoActive = bx.baiXiao || bx.baiBu || false;
-    const bxDays = bx.baiXiaoDays || 0;
-    const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
-    const hasQiangShiHuiCai = !!bx.qiangShiHuiCai;
+    // ═══ Relaxed: 更宽松的过滤条件 ═══
+    // 不需要MACD多头(MACD接近金叉即可)
+    const macdOk = result.macd.currentDiff > result.macd.currentDea * 0.9;
+    if (!macdOk) return null;
 
-    // ---------- MACD 检查 (用户自定义公式) ----------
-    const macdResult = this.calcCustomMACD(kline);
+    // 价格位置检查(放宽到95%)
+    if (result.pricePosition >= 95 && result.score < 8) return null;
 
-    const isGoldenCross = macdResult.isGoldenCross;
-    const isApproaching = !isGoldenCross && macdResult.currentDiff > macdResult.currentDea * 0.95;
-    if (!isGoldenCross && !isApproaching) return null;
+    // 涨幅过滤(放宽到50%)
+    if (result.priceIncrease > 50) return null;
 
-    // 排除银行保险股
-    const excludeKeywords = ['银行', '保险', '农商', '兴业银', '中国人寿', '中国平安', '中国人保', '中国太保', '新华保险'];
-    for (const kw of excludeKeywords) {
-      if (s.name.includes(kw)) return null;
+    // 卖出信号过滤(白布区域且明确卖出信号才过滤)
+    const hasStrongSell = !!(result.bx.baoLiangFuGaiQingCang || result.bx.po5RiXian);
+    if (result.bx.baiBu && hasStrongSell) return null;
+
+    // K线不够放量但其他参数好也行 - 暂不限制
+
+    // 评分映射 → 更宽松: score >= 3 就有机会
+    const suggestion = this.scoreToSuggestion(result.score, !!(result.bxDays >= 4 && (result.bx.baiXiaoBuy1 || result.bx.baiXiaoBuy2)));
+
+    // 宽松模式只过滤"不要介入"
+    if (suggestion === '不要介入') return null;
+
+    // ---------- 筹码修正 ----------
+    const chip = this.calcChipAnalysis(
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume||0), kline[kline.length-1].close
+    );
+
+    let finalSuggestion = suggestion;
+    let finalComb = result.detail;
+
+    if (chip.pattern === 'dispersed' && chip.peakPosition === 'high' && result.pricePosition < 30 && result.score >= 6) {
+      // 筹码风险降一级
+      const downgrade: Record<string,string> = { '重仓买入':'买入', '买入':'轻仓买入', '轻仓买入':'持有' };
+      finalSuggestion = downgrade[finalSuggestion] || finalSuggestion;
+      finalComb += '|筹码承压降级';
     }
 
-    // 排除ST股
-    if (/^(\*)?ST/.test(s.name)) return null;
-
-    const goldenCrossDays = isGoldenCross ? macdResult.goldenCrossDays : 1;
-
-    // ---------- 趋势二次确认 ----------
-    const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-    const ma20 = len >= 20 ? closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : ma10;
-
-    if (ma5 <= ma10 * 1.001) return null;
-
-    if (len >= 8) {
-      const ma5_3d = closeArr.slice(-8, -3).reduce((a, b) => a + b, 0) / 5;
-      if (ma5 < ma5_3d) return null;
+    // 信号连续性
+    if (prevSuggestion) {
+      const cont = this.applySignalContinuity(finalSuggestion, prevSuggestion, result.pricePosition, result.trendState);
+      if (cont.changed) { finalSuggestion = cont.suggestion; finalComb += '|信号延续:'+finalSuggestion; }
     }
 
-    // MA10 斜率向上或走平
-    if (len >= 15) {
-      const ma10_5d = closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10;
-      if (ma10 <= ma10_5d) return null;
-    }
+    // 入场时机
+    const entryTiming = this.calcEntryTiming(
+      result.pricePosition, result.trendState,
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume||0), result.isGoldenCross
+    );
+    const safetyScore = this.calcSafetyScore(
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume||0), result.pricePosition, result.trendState
+    );
 
-    if (closeArr[len - 1] <= ma10) return null;
-
-    // MA20 走平或向上
-    if (len >= 30) {
-      const ma20_10d = closeArr.slice(-30, -10).reduce((a, b) => a + b, 0) / 20;
-      if (ma20 < ma20_10d) return null;
-    }
-
-    // ---------- 价格位置 (放宽) ----------
-    const highs = kline.map(k => k.high);
-    const lows = kline.map(k => k.low);
-    const periodHigh = Math.max(...highs.slice(-60));
-    const periodLow = Math.min(...lows.slice(-60));
-    const pricePosition = periodHigh > periodLow
-      ? ((closeArr[len - 1] - periodLow) / (periodHigh - periodLow)) * 100
-      : 50;
-
-    if (pricePosition >= this.RELAXED_POSITION) return null;
-
-    // ---------- 涨幅检查 (对所有通过股票都计算, 仅金叉股限制涨幅过快) ----------
-    let priceIncrease = 0;
-    const lookbackDays = Math.max(1, isGoldenCross && goldenCrossDays > 1 ? goldenCrossDays : 15);
-    const closeIdx = len - 1;
-    const triggerIdx = closeIdx - lookbackDays;
-    const triggerClose = triggerIdx >= 0 ? kline[triggerIdx].close : kline[0].close;
-    const currentClose = kline[closeIdx].close;
-    priceIncrease = ((currentClose - triggerClose) / triggerClose) * 100;
-    if (isGoldenCross && priceIncrease > 25) return null;
-
-    // ---------- 综合得分(按优先级: 活跃度 > 涨幅 > 最佳介入点) ----------
-    const inflowScore = Math.min(s.inflow / 100000000, 1);
-    const incScore = priceIncrease > 0 ? Math.min(priceIncrease / 15, 1) : 0;
-    const positionScore = 1 - pricePosition / 100;
-    const gcScore = isGoldenCross ? 0.4 : 0.15;
-    const capScore = s.marketCap ? Math.max(0, 1 - Math.max(0, s.marketCap - 5_000_000_000) / 45_000_000_000) : 0.3;
-    const score = inflowScore * 0.35 + incScore * 0.25 + positionScore * 0.20 + gcScore * 0.10 + capScore * 0.10;
-
-    // ---------- 买点信号类型 ----------
-    let buySignal = '';
-    if (isBaiXiaoBuy && hasQiangShiHuiCai) {
-      buySignal = '白消启动回踩';
-    } else if (isBaiXiaoBuy) {
-      buySignal = '白消启动';
-    } else if (hasQiangShiHuiCai) {
-      buySignal = '强势回踩';
-    } else if (isBaiXiaoActive && bxDays >= 3) {
-      buySignal = '白消蓄力';
-    } else {
-      buySignal = '突破上涨';
-    }
-
-    // ---------- 白消白布规则系统 (Relaxed) ----------
-    const macdBullishR = macdResult.currentDiff > macdResult.currentDea;
-
-    let trendStateR = 1;
-    if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01) {
-      trendStateR = 3;
-    } else if (ma5 > ma10 && ma10 > ma20) {
-      trendStateR = 2;
-    }
-
-    const trendStrengthR = ((ma5 / ma10 - 1) * 100);
-    const avgVolR = klineV.slice(-30).reduce((a, b) => a + b, 0) / 30;
-    const recentVolR = klineV.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const volumeRatio = recentVolR / avgVolR;
-    const volumeBullishR = volumeRatio > 1.1;
-
-    // ─── 新信号检测 ───
-    const zhuShengSignal = trendStateR >= 2 && macdBullishR;
-    const recent20High = Math.max(...highs.slice(-20));
-    const recent20Low = Math.min(...lows.slice(-20));
-    const rangePct = (recent20High - recent20Low) / (recent20Low || 1) * 100;
-    const isSideways = rangePct < 12;
-    const hengPanBreakout = isSideways && closeArr[len - 1] >= recent20High * 0.995 && volumeRatio > 1.3;
-    const zhenDangBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2);
-    const jiGouActive = Math.min(volumeRatio * 6, 20);
-    const prevClose = len > 1 ? closeArr[len - 2] : closeArr[0];
-    const firstBreakMA5 = prevClose <= ma5 * 1.005 && closeArr[len - 1] > ma5;
-    const baiBuSellSignals: string[] = [];
-    if (bx.gaoKaiDiZouQingCang) baiBuSellSignals.push('高开低走清仓');
-    if (bx.baoLiangFuGaiQingCang) baiBuSellSignals.push('爆量覆盖清仓');
-    if (bx.po5RiXian) baiBuSellSignals.push('破5日线');
-    if (bx.yinDiePoWei) baiBuSellSignals.push('阴跌破位');
-    const hasSellSignal = baiBuSellSignals.length > 0;
-
-    let sellSignal = '';
-    let suggestionR = '观望';
-    let signalCombination = '';
-    const isBaiBu = !!bx.baiBu;
-
-    // 白布卖出（按风险分级）
-    if (isBaiBu && hasSellSignal && jiGouActive >= 12 && firstBreakMA5) {
-      if (bx.baoLiangFuGaiQingCang || bx.po5RiXian) {
-        suggestionR = '清仓';
-        sellSignal = baiBuSellSignals.join('+');
-        signalCombination = '白布清仓:' + sellSignal;
-      } else if (bx.gaoKaiDiZouQingCang || bx.yinDiePoWei) {
-        suggestionR = '卖出';
-        sellSignal = baiBuSellSignals.join('+');
-        signalCombination = '白布卖出:' + sellSignal;
-      } else {
-        suggestionR = '减仓';
-        sellSignal = baiBuSellSignals.join('+');
-        signalCombination = '白布减仓:' + sellSignal;
-      }
-    }
-
-    // 白消买入
-    if (!sellSignal) {
-      const hasBaiXiaoBuy = isBaiXiaoBuy;
-      const hasQSHC = hasQiangShiHuiCai;
-      const hasJiaCang = !!bx.jiaCang;
-      const hasZhuSheng = zhuShengSignal;
-      const hasZhenDang = zhenDangBuy;
-      const hasHengPan = hengPanBreakout;
-
-      if (bxDays >= 4 && bxDays <= 6) {
-        const activeHigh = jiGouActive >= 12;
-        // ⭐级别1: 重仓买入（白消4-6天+机构活跃）
-        if (activeHigh && hasBaiXiaoBuy && (hasZhuSheng || hasQSHC || hasJiaCang)) {
-          suggestionR = '重仓买入'; signalCombination = '白消4-6天+机构活跃+主升';
-        } else if (activeHigh && (hasBaiXiaoBuy || (hasQSHC && hasJiaCang))) {
-          suggestionR = '重仓买入'; signalCombination = '白消4-6天+机构活跃';
-        } else if (hasBaiXiaoBuy && hasZhuSheng && hasJiaCang) {
-          suggestionR = '重仓买入'; signalCombination = '白消启动+主升+加仓';
-        // 📌级别2: 买入（白消6天+/横盘）
-        } else if (bxDays > 6 && activeHigh && hasHengPan && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破+主升';
-        } else if (bxDays > 6 && hasHengPan) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破';
-        } else if (bxDays > 6 && hasQSHC && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消6天+强势回踩+主升';
-        } else if (bxDays > 6 && activeHigh && hasBaiXiaoBuy) {
-          suggestionR = '买入'; signalCombination = '白消6天+机构活跃';
-        } else if (hasBaiXiaoBuy && hasZhenDang) {
-          suggestionR = '买入'; signalCombination = '白消启动+震荡买点';
-        } else if (hasQSHC && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '强势回踩+主升';
-        } else if (hasBaiXiaoBuy && hasQSHC) {
-          suggestionR = '买入'; signalCombination = '白消启动+强势回踩';
-        } else if (hasQSHC && hasJiaCang) {
-          suggestionR = '买入'; signalCombination = '强势回踩+加仓';
-        } else if (hasBaiXiaoBuy && hasJiaCang) {
-          suggestionR = '买入'; signalCombination = '白消启动+加仓';
-        // 📌级别3: 轻仓买入
-        } else if (hasBaiXiaoBuy) {
-          suggestionR = '轻仓买入'; signalCombination = '白消启动';
-        } else if (hasQSHC) {
-          suggestionR = '轻仓买入'; signalCombination = '强势回踩';
-        } else if (hasZhuSheng) {
-          suggestionR = '轻仓买入'; signalCombination = '主升信号';
-        } else if (hasZhenDang) {
-          suggestionR = '轻仓买入'; signalCombination = '震荡买点';
-        }
-      } else if (bxDays > 6) {
-        const activeHigh = jiGouActive >= 12;
-        if (activeHigh && hasHengPan && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破+主升';
-        } else if (hasHengPan) {
-          suggestionR = '买入'; signalCombination = '白消6天+横盘突破';
-        } else if (hasQSHC && hasZhuSheng) {
-          suggestionR = '买入'; signalCombination = '强势回踩+主升';
-        }
-      }
-
-      // 兜底1：有主动买信号但未匹配规则
-      if (suggestionR === '观望' && (hasBaiXiaoBuy || hasQSHC || hasZhenDang)) {
-        const zoneR = pricePosition < 25 ? '低位区' : pricePosition < 45 ? '中低位区' : pricePosition < 55 ? '中位区' : pricePosition < 75 ? '中高位区' : '高位区';
-        if (zoneR.includes('低位') && trendStateR >= 1) {
-          suggestionR = '重仓买入'; signalCombination = '白消信号+低位';
-        } else if (zoneR.includes('低位') || zoneR.includes('中低位')) {
-          suggestionR = '买入'; signalCombination = '白消信号+中低位';
-        } else if (trendStateR >= 2) {
-          suggestionR = '轻仓买入'; signalCombination = '白消信号+趋势';
-        } else {
-          suggestionR = '轻仓买入'; signalCombination = '白消信号';
-        }
-      }
-
-      // 兜底2：无白消信号但趋势强劲 → 也出轻仓买入
-      if (suggestionR === '观望' && trendStateR >= 2 && macdBullishR) {
-        suggestionR = '轻仓买入'; signalCombination = '趋势向上+金叉';
-      }
-      if (suggestionR === '观望' && trendStateR >= 2 && volumeBullishR) {
-        suggestionR = '轻仓买入'; signalCombination = '趋势向上+放量';
-      }
-      if (suggestionR === '观望' && trendStateR >= 2 && pricePosition < 55) {
-        const zoneR = pricePosition < 25 ? '低位' : pricePosition < 45 ? '中低位' : '中位';
-        suggestionR = '买入'; signalCombination = '趋势向上+'+zoneR;
-      }
-
-      // ─── 持有/不要介入判断（无买入/卖出信号时）───
-      if (suggestionR === '观望') {
-        if (trendStateR >= 2 && ma5 > ma10) {
-          // 上涨趋势中，无买点但均线多头 → 持有
-          suggestionR = '持有';
-          signalCombination = '趋势向上+均线多头';
-        } else if (ma5 < ma10 && !macdBullishR) {
-          // 下跌趋势中，无买点、无企稳 → 不要介入
-          suggestionR = '不要介入';
-          signalCombination = '趋势向下';
-        }
-      }
-
-      const NOT_BUY = ['观望', '不要介入'];
-      if (NOT_BUY.includes(suggestionR)) return null;
-      if (sellSignal) return null;
-
-      // ---------- 筹码分布分析（用量价估算） ----------
-      const chip = this.calcChipAnalysis(closeArr, klineH, klineL, klineV, currentClose);
-      const chipConcentration90 = chip.concentration90;
-      const chipPeakPosition = chip.peakPosition;
-      const chipPattern = chip.pattern;
-
-      // ─── 筹码数据修正买卖信号 ───
-      // 筹码分散+峰在高位(上方压力)+低位未企稳 → 降级或过滤
-      const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePosition < 30;
-      const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePosition < 25;
-
-      if (chipDowngrade || chipRisk) {
-        if (suggestionR === '重仓买入') {
-          suggestionR = '买入';
-          signalCombination = (signalCombination || '') + '|筹码分散降级';
-        } else if (suggestionR === '买入') {
-          suggestionR = '轻仓买入';
-          signalCombination = (signalCombination || '') + '|筹码承压降级';
-        } else if (suggestionR === '轻仓买入') {
-          suggestionR = '不要介入';
-          signalCombination = (signalCombination || '') + '|筹码结构差';
-        }
-      }
-      // 筹码集中+峰在下方(支撑)+低位企稳 → 加分
-      if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePosition > 15 && pricePosition < 45 && trendStateR >= 1) {
-        if (suggestionR === '买入') {
-          suggestionR = '重仓买入';
-          signalCombination = (signalCombination || '') + '|筹码集中支撑';
-        } else if (suggestionR === '轻仓买入') {
-          suggestionR = '买入';
-          signalCombination = (signalCombination || '') + '|筹码集中支撑';
-        }
-      }
-
-      // ---------- 信号连续性规则（买入必须维持，不能隔夜变卖出） ----------
-      const contResult = this.applySignalContinuity(suggestionR, prevSuggestion, pricePosition, trendStateR);
-      if (contResult.changed) {
-        suggestionR = contResult.suggestion;
-        signalCombination = (signalCombination || '') + '|信号延续:' + suggestionR;
-      }
-
-      // ---------- 最佳介入时机 + 安全系数 ----------
-      const entryTiming = this.calcEntryTiming(pricePosition, trendStateR, closeArr, klineH, klineL, klineV, isGoldenCross);
-      const safetyScore = this.calcSafetyScore(closeArr, klineH, klineL, klineV, pricePosition, trendStateR);
-
-      // ---------- 入场时机与买卖信号对齐：⭐最佳→升级，❌不能→降级 ----------
-      const TIMING_ORDER = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
-      const sugIdx = TIMING_ORDER.indexOf(suggestionR);
-      if (sugIdx >= 0 && entryTiming >= 65 && sugIdx > 1) {
-        const upgrade = sugIdx <= 2 ? TIMING_ORDER[sugIdx - 1] : '轻仓买入';
-        if (upgrade !== suggestionR) {
-          suggestionR = upgrade;
-          signalCombination = (signalCombination || '') + '|入场对齐↑' + suggestionR;
-        }
-      } else if (sugIdx >= 0 && entryTiming < 35 && sugIdx <= 1) {
-        suggestionR = TIMING_ORDER[sugIdx + 1];
-        signalCombination = (signalCombination || '') + '|入场对齐↓' + suggestionR;
-      }
-
-      return {
-        capitalRank: 0,
-        entryTiming: Math.round(entryTiming * 100) / 100,
-        safetyScore: Math.round(safetyScore * 100) / 100,
-        code: s.code,
-        name: s.name,
-        mainForceInflow: s.inflow,
-        baiXiaoDays: bxDays,
-        buySignal,
-        currentPrice: s.currentPrice,
-        changePercent: s.changePercent,
-        pricePosition: Math.round(pricePosition * 100) / 100,
-        priceIncrease: Math.round(priceIncrease * 100) / 100,
-        score: Math.round(score * 100) / 100,
-        diff: Math.round(macdResult.currentDiff * 10000) / 10000,
-        dea: Math.round(macdResult.currentDea * 10000) / 10000,
-        isGoldenCross,
-        suggestion: suggestionR,
-        signalCombination,
-        jiGouActiveScore: 0,
-        chipConcentration90,
-        chipPeakPosition,
-        chipPattern,
-      };
-    }
-
-    return null;
+    return {
+      capitalRank: 0,
+      entryTiming: Math.round(entryTiming * 100) / 100,
+      safetyScore: Math.round(safetyScore * 100) / 100,
+      code: s.code, name: s.name,
+      mainForceInflow: s.inflow,
+      baiXiaoDays: result.bxDays,
+      buySignal: result.buySignal,
+      currentPrice: s.currentPrice, changePercent: s.changePercent,
+      pricePosition: Math.round(result.pricePosition * 100) / 100,
+      priceIncrease: Math.round(result.priceIncrease * 100) / 100,
+      score: result.score,
+      diff: Math.round(result.macd.currentDiff * 10000) / 10000,
+      dea: Math.round(result.macd.currentDea * 10000) / 10000,
+      isGoldenCross: result.isGoldenCross,
+      suggestion: finalSuggestion,
+      signalCombination: finalComb,
+      jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+      chipConcentration90: chip.concentration90,
+      chipPeakPosition: chip.peakPosition,
+      chipPattern: chip.pattern,
+    };
   }
 
   // ===========================================================================
