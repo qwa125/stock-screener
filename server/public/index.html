@@ -673,20 +673,9 @@ async function doScan(){
     stocks=analyzed.slice(0,20)
     setStatus('✅ 后端分析完成 - 累计'+analyzed.length+'只机会股，Top20 已更新')
   }else if(rawStocks.length>0){
-    // 降级：按涨幅排序，但给每个股票补一个基本评分标签
     rawStocks.sort(function(a,b){return b.changePercent-a.changePercent})
     stocks=rawStocks.slice(0,20)
-    // 给降级的股票添加基本标签（根据涨幅和筹码估算）
-    stocks.forEach(function(s,idx){
-      var cp=s.changePercent||0
-      if(cp>=5) s.suggestion='短线机会'
-      else if(cp>=3) s.suggestion='关注'
-      else if(cp>=1) s.suggestion='小幅上涨'
-      else if(cp>=-1) s.suggestion='横盘'
-      else s.suggestion='弱势'
-      s.score=Math.max(0,(cp+10)/20*50)
-    })
-    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨跌幅展示 Top20（标记为估算信号）')
+    setStatus('⚠️ 后端分析不足'+analyzed.length+'只，按涨跌幅展示 Top20')
   }
   try{localStorage.setItem('lastStocks',JSON.stringify({date:new Date().toISOString().slice(0,10),stocks:stocks}))}catch(e){}
   try{localStorage.setItem('lastScanTime',timeStr)}catch(e){}
