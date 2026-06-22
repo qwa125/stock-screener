@@ -527,6 +527,7 @@ function renderList(){
 // ---------- 扫描 ----------
 async function doScan(){
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
+  stopPriceRefresh()
   setStatus('🔄 获取分析数据...')
   try{
     var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
@@ -557,6 +558,7 @@ async function doScan(){
       })
     }catch(e){}
     setStatus('✅ 实时数据已更新')
+    startPriceRefresh(stocks)
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
@@ -980,10 +982,13 @@ async function doSearch(){
   }
 }
 
-// 9:30 开盘强制扫描一次（到次日9:30自动触发）
-(function(){var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),9,30,0,0);if(n>=t)t.setDate(t.getDate()+1);setTimeout(function(){if(isTH()&&!loading)doScan()},t.getTime()-n.getTime())})();
+// 四个固定扫描点：9:30（开盘）、11:30（收早盘）、13:00（开盘）、15:00（收盘）
+[['9:30',9,30],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
+  var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
+  if(n<t)setTimeout(function(){if(isTH()&&!loading)doScan()},t.getTime()-n.getTime());
+});
 
-// Auto refresh
+// 每10分钟交易时段自动刷新
 setInterval(function(){
   if(isTH()&&!loading){doScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
@@ -994,7 +999,41 @@ setInterval(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },60000)
 
-// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
+// 个股股价每2秒刷新
+var priceTimer=null
+function startPriceRefresh(stks){
+  if(stks&&stks.length>0){
+    stopPriceRefresh()
+    priceTimer=setInterval(function(){
+      if(stocks.length>0){
+        var codes=stocks.map(function(s){return s.code})
+        fetchRealtime(codes).then(function(rt){
+          realtimePrices=rt
+          // 重新渲染股价
+          $('list').querySelectorAll('.stock-row').forEach(function(row,i){
+            if(i>=stocks.length)return
+            var s=stocks[i],rt=realtimePrices[s.code]||{}
+            var price=rt.price||rt.currentPrice||s.currentPrice||s.price||0
+            var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
+            var chgClr=chg>0?'#f23645':chg<0?'#00c853':'#999'
+            var priceEl=row.querySelector('.price')
+            var chgEl=row.querySelector('.chg')
+            if(priceEl)priceEl.textContent=price.toFixed(2)
+            if(chgEl){
+              chgEl.textContent=(chg>0?'+':'')+chg.toFixed(2)+'%'
+              chgEl.style.color=chgClr
+            }
+          })
+        }).catch(function(){})
+      }
+    },2000)
+  }
+}
+function stopPriceRefresh(){
+  if(priceTimer){clearInterval(priceTimer);priceTimer=null}
+}
+
+// 仅更新冻结横幅
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
