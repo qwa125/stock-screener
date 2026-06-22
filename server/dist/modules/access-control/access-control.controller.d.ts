@@ -42,20 +42,6 @@ export declare class AccessControlController {
         code: number;
         msg: string;
     }>;
-    listDeviceRegistry(): Promise<{
-        code: number;
-        data: {
-            maxSlots: number;
-            usedSlots: number;
-            devices: {
-                index: number;
-                fingerprint: string;
-                displayName: string | undefined;
-                firstSeen: string;
-                lastSeen: string;
-            }[];
-        };
-    }>;
     exportRegistry(): Promise<{
         code: number;
         data: {

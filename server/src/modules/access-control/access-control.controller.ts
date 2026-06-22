@@ -54,36 +54,14 @@ export class AccessControlController {
       return { code: 400, msg: '无效名额数，请传入整数，如 ?maxSlots=30' };
     }
     await this.service.setMaxSlots(maxSlots);
-    await this.deviceRegistry.setMaxSlots(maxSlots);
     return { code: 200, msg: `名额已设为 ${maxSlots}` };
   }
 
-  /** (管理员) 重置注册表（同时清除 DeviceRegistry 和 AccessControl 两个注册表） */
+  /** (管理员) 重置注册表 */
   @Get('reset')
   async reset() {
     await this.service.resetRegistry();
-    await this.deviceRegistry.removeAllDevices();
     return { code: 200, msg: '注册表已清空，所有设备需重新注册' };
-  }
-
-  /** (管理员) 查看 DeviceRegistry 中的设备列表 */
-  @Get('device-registry')
-  async listDeviceRegistry() {
-    const devices = await this.deviceRegistry.getDevices();
-    return {
-      code: 200,
-      data: {
-        maxSlots: this.deviceRegistry.maxAllowed,
-        usedSlots: devices.length,
-        devices: devices.map((d, i) => ({
-          index: i,
-          fingerprint: d.fingerprint.slice(0, 20) + '...',
-          displayName: d.displayName,
-          firstSeen: new Date(d.firstSeen).toLocaleString(),
-          lastSeen: new Date(d.lastSeen).toLocaleString(),
-        })),
-      },
-    };
   }
 
   /** 导出注册表为 base64（部署迁移用：粘贴到 cloudbaserc.json 的 DEVICE_REGISTRY 环境变量） */

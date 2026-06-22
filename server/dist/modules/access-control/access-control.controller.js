@@ -52,30 +52,11 @@ let AccessControlController = class AccessControlController {
             return { code: 400, msg: '无效名额数，请传入整数，如 ?maxSlots=30' };
         }
         await this.service.setMaxSlots(maxSlots);
-        await this.deviceRegistry.setMaxSlots(maxSlots);
         return { code: 200, msg: `名额已设为 ${maxSlots}` };
     }
     async reset() {
         await this.service.resetRegistry();
-        await this.deviceRegistry.removeAllDevices();
         return { code: 200, msg: '注册表已清空，所有设备需重新注册' };
-    }
-    async listDeviceRegistry() {
-        const devices = await this.deviceRegistry.getDevices();
-        return {
-            code: 200,
-            data: {
-                maxSlots: this.deviceRegistry.maxAllowed,
-                usedSlots: devices.length,
-                devices: devices.map((d, i) => ({
-                    index: i,
-                    fingerprint: d.fingerprint.slice(0, 20) + '...',
-                    displayName: d.displayName,
-                    firstSeen: new Date(d.firstSeen).toLocaleString(),
-                    lastSeen: new Date(d.lastSeen).toLocaleString(),
-                })),
-            },
-        };
     }
     async exportRegistry() {
         const base64 = this.service.exportRegistryAsBase64();
@@ -143,12 +124,6 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AccessControlController.prototype, "reset", null);
-__decorate([
-    (0, common_1.Get)('device-registry'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], AccessControlController.prototype, "listDeviceRegistry", null);
 __decorate([
     (0, common_1.Get)('export'),
     __metadata("design:type", Function),
