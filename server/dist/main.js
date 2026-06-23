@@ -8,6 +8,7 @@ const path = require("path");
 const https = require("https");
 const http_status_interceptor_1 = require("./interceptors/http-status.interceptor");
 const gem_screener_service_1 = require("./modules/gem-screener/gem-screener.service");
+const iconv = require("iconv-lite");
 let sinaCache = [];
 let sinaCacheReady = false;
 async function refreshSinaCache() {
@@ -186,12 +187,58 @@ async function bootstrap() {
                     break;
             }
         }
-        if (sinaCache.length > 0) {
-            res.json({ code: 200, msg: 'success', data: sinaCache });
+        if (sinaCache.length === 0) {
+            res.json({ code: 200, msg: '股票代码列表加载中', data: [] });
+            return;
         }
-        else {
-            res.json({ code: 200, msg: '缓存尚在加载', data: [] });
+        const start = Date.now();
+        const codes = sinaCache;
+        const BATCH = 200;
+        const results = [];
+        for (let i = 0; i < codes.length; i += BATCH) {
+            const batch = codes.slice(i, i + BATCH);
+            const q = batch.map((s) => {
+                const code = String(s.code || '');
+                return code.startsWith('6') ? 'sh' + code : 'sz' + code;
+            }).join(',');
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
+                const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(q);
+                const resp = await fetch(url, { signal: controller.signal });
+                clearTimeout(timer);
+                const buf = Buffer.from(await resp.arrayBuffer());
+                const txt = iconv.decode(buf, 'gbk');
+                const lines = txt.split(';').filter((l) => l.trim());
+                for (const line of lines) {
+                    const eqIdx = line.indexOf('=');
+                    if (eqIdx < 0)
+                        continue;
+                    const val = line.substring(eqIdx + 1).replace(/^"|"$/g, '');
+                    const p = val.split('~');
+                    if (p.length < 40 || !p[1] || p[1] === '-')
+                        continue;
+                    results.push({
+                        code: p[2] || '',
+                        name: p[1] || '',
+                        trade: parseFloat(p[3]) || 0,
+                        changepercent: parseFloat(p[32]) || 0,
+                        change: parseFloat(p[31]) || 0,
+                        open: parseFloat(p[5]) || 0,
+                        high: parseFloat(p[33]) || 0,
+                        low: parseFloat(p[34]) || 0,
+                        volume: parseFloat(p[6]) || 0,
+                        amount: parseFloat(p[37]) || 0,
+                    });
+                }
+            }
+            catch (e) {
+                console.warn(`[TencentBatch][${i / BATCH}] 批次失败: ${e.message}`);
+            }
         }
+        results.sort((a, b) => (b.changepercent || 0) - (a.changepercent || 0));
+        console.log(`[TencentMarket] ${results.length} stocks in ${Date.now() - start}ms`);
+        res.json({ code: 200, msg: '腾讯实时 ' + results.length + ' 只', data: results });
     });
     const gemSvc = app.get(gem_screener_service_1.GemScreenerService);
     app.use('/api/gem/rescan', async (req, res, next) => {

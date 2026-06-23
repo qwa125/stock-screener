@@ -7,6 +7,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
 import { GemScreenerService } from '@/modules/gem-screener/gem-screener.service';
+import * as iconv from 'iconv-lite';
 
 // ═════════════════════════════════════════════════
 // 全市场Sina数据缓存（后台定时刷新）
@@ -201,10 +202,11 @@ async function bootstrap() {
       res.status(502).json({ code: 502, data: null, msg: '请求新浪API失败: ' + err.message });
     });
   });
-  // ══════════════════════════════════════════════
-  // 全市场Sina扫描聚合端点 (绕过全局守卫)
-  // 后端内部并行抓取21页数据，前端只需1次请求
-  // ══════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  // 全市场扫描端点（腾讯实时行情，绕过全局守卫）
+  // 使用sinaCache作为股票代码列表来源（轻量，仅code+name），
+  // 然后分批调用腾讯实时API获取最新行情，确保数据实时完整
+  // ═══════════════════════════════════════════════════════════
   app.use('/api/gem/full-sina-scan', async (req, res) => {
     if (!sinaCacheReady || sinaCache.length === 0) {
       // 缓存未就绪，尝试等待一轮刷新（最多10秒）
@@ -213,11 +215,65 @@ async function bootstrap() {
         if (sinaCacheReady && sinaCache.length > 0) break;
       }
     }
-    if (sinaCache.length > 0) {
-      res.json({ code: 200, msg: 'success', data: sinaCache });
-    } else {
-      res.json({ code: 200, msg: '缓存尚在加载', data: [] });
+    if (sinaCache.length === 0) {
+      res.json({ code: 200, msg: '股票代码列表加载中', data: [] });
+      return;
     }
+
+    const start = Date.now();
+    const codes = sinaCache;
+    const BATCH = 200; // 每批200个代码（防止URL超长）
+    const results: any[] = [];
+
+    // 分批并行查询腾讯实时行情
+    for (let i = 0; i < codes.length; i += BATCH) {
+      const batch = codes.slice(i, i + BATCH);
+      const q = batch.map((s: any) => {
+        const code = String(s.code || '');
+        return code.startsWith('6') ? 'sh' + code : 'sz' + code;
+      }).join(',');
+
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20000);
+        const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(q);
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        const buf = Buffer.from(await resp.arrayBuffer());
+        const txt = iconv.decode(buf, 'gbk');
+
+        // 解析腾讯管道符格式
+        const lines = txt.split(';').filter((l: string) => l.trim());
+        for (const line of lines) {
+          const eqIdx = line.indexOf('=');
+          if (eqIdx < 0) continue;
+          const val = line.substring(eqIdx + 1).replace(/^"|"$/g, '');
+          const p = val.split('~');
+          if (p.length < 40 || !p[1] || p[1] === '-') continue;
+          results.push({
+            code: p[2] || '',
+            name: p[1] || '',
+            trade: parseFloat(p[3]) || 0,
+            changepercent: parseFloat(p[32]) || 0,
+            change: parseFloat(p[31]) || 0,
+            open: parseFloat(p[5]) || 0,
+            high: parseFloat(p[33]) || 0,
+            low: parseFloat(p[34]) || 0,
+            volume: parseFloat(p[6]) || 0,
+            amount: parseFloat(p[37]) || 0,
+          });
+        }
+      } catch (e) {
+        // 单批失败跳过，不影响其他批次
+        console.warn(`[TencentBatch][${i / BATCH}] 批次失败: ${(e as Error).message}`);
+      }
+    }
+
+    // 按涨跌幅降序排列（与前端期望一致）
+    results.sort((a, b) => (b.changepercent || 0) - (a.changepercent || 0));
+
+    console.log(`[TencentMarket] ${results.length} stocks in ${Date.now() - start}ms`);
+    res.json({ code: 200, msg: '腾讯实时 ' + results.length + ' 只', data: results });
   });
   // ══════════════════════════════════════════════
   // 缓存重分析端点 (绕过全局守卫)
