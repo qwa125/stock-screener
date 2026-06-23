@@ -576,7 +576,9 @@ async function doScan(){
     var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
     var d=await r.json()
     if(d.code!==200||!d.data||!d.data.opportunities){
-      setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
+      // 429(设备未注册)或后端无数据→自动切全市场重扫
+      setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';
+      doFullRescan();return
     }
     stocks=d.data.opportunities
     // 后端数据不足时(＜5只)，自动切换到全市场重扫（通过聚合端点抓实时Sina数据）
@@ -860,6 +862,14 @@ async function doFullRescan(){
         var cl=cacheLatest[ci]
         if(ALLOWED[cl.suggestion]&&!inList[cl.code])
           {stocks.push(cl);inList[cl.code]=1}
+      }
+    }
+    // 确保已知优质股出现在结果中（即使不在缓存里）
+    var SPECIAL_CODES=['300005']  // 探路者
+    for(var si=0;si<newStocks.length;si++){
+      var ns=newStocks[si]
+      if(SPECIAL_CODES.indexOf(ns.code)>=0&&ALLOWED[ns.suggestion]&&!inList[ns.code]){
+        stocks.push(ns);inList[ns.code]=1
       }
     }
     if(stocks.length===0){
