@@ -118,8 +118,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <h1>A股优选 Top20</h1>
-    <span class="status" id="status">等待扫描</span>
-    <span onclick="openAdmin()" style="font-size:18px;cursor:pointer;padding:4px" title="管理员">⚙️</span>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="status" id="status">等待扫描</span>
+      <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
+      <span onclick="openAdmin()" style="font-size:18px;cursor:pointer;padding:4px" title="管理员">⚙️</span>
+    </div>
   </div>
   <div class="freeze-banner" id="freezeMsg" style="display:none"></div>
 </div>
@@ -170,7 +173,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={}
+var stocks=[],loading=false,realtimePrices={},lastScanTime=''
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -534,6 +537,7 @@ function renderList(){
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   $('footer').textContent='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
   setStatus('✅ Top '+stocks.length+' 已更新')
+  if(lastScanTime){try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}}
   stocks.forEach(function(s,i){
     var rt=realtimePrices[s.code]||{}
     var price=rt.price||s.currentPrice||0
@@ -790,6 +794,7 @@ async function doFullRescan(){
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
+    lastScanTime=new Date().toLocaleString()
     renderList() // 先显示
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -807,7 +812,7 @@ async function doFullRescan(){
           }).catch(function(){})
       })
     }catch(e){}
-    setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中')
+    setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中 '+lastScanTime)
   }else{
     setStatus('❌ 重扫无结果')
   }
@@ -1145,8 +1150,8 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
-// 页面打开时如果在交易时段，立即全市场扫描
-if(isTH()&&!loading)setTimeout(function(){doFullRescan()},500)
+// 页面打开时立即全市场扫描（无需等待按钮点击）
+if(!loading)setTimeout(function(){doFullRescan()},500)
 
 // 每10分钟交易时段自动刷新
 setInterval(function(){
