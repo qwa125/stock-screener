@@ -689,6 +689,7 @@ async function doFullRescan(){
   
   var seen={}
   for(var si2=0;si2<newStocks.length;si2++)if(newStocks[si2].code)seen[newStocks[si2].code]=1
+  var seenInSina={}  // 跟踪哪些缓存股在Sina中被找到
   
   var mainBoardCount=0,gemCount=0
   
@@ -734,6 +735,7 @@ async function doFullRescan(){
           break
         }
       }
+      seenInSina[code]=1  // 标记该缓存股在Sina中被找到
       continue
     }
     
@@ -752,6 +754,19 @@ async function doFullRescan(){
       chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
       isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
   }
+  
+  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占Top20）
+  var deprioritized=0
+  for(var di=0;di<newStocks.length;di++){
+    var ds=newStocks[di]
+    if(ds.code&&!seenInSina[ds.code]&&(ds.suggestion==='买入'||ds.suggestion==='重仓买入'||ds.suggestion==='轻仓买入'||ds.score>30)){
+      ds.suggestion='观望'
+      ds.score=20
+      ds.entryTiming=0
+      deprioritized++
+    }
+  }
+  if(deprioritized>0)setStatus('⚠️ 清除了 '+deprioritized+' 只停在历史数据的缓存股（Sina中已无该股）')
   
   if(newStocks.length){
     setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
