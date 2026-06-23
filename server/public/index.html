@@ -949,7 +949,8 @@ async function doFullRescan(){
       })
     }catch(e){}
     // 顶部已解锁，此处不再重复调用
-    setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中 '+lastScanTime)
+    var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终Top20:',_sp2.join(' | '))
+    setStatus('✅ Top20: '+_sp2.join(' | ')+' | '+lastScanTime)
   }else{
     setStatus('❌ 重扫无结果')
   }
