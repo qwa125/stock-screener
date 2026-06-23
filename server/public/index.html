@@ -34,7 +34,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .col-chg{flex:1;text-align:center}
 .col-pos{flex:1.1;text-align:right}
 .stock-list{flex:1;overflow-y:auto;padding:0 12px 8px;display:flex;flex-direction:column;gap:6px}
-.header{flex-shrink:0}.search-bar{flex-shrink:0}#detailArea{flex-shrink:0}.btn-scan-wrapper{flex-shrink:0}.list-header{flex-shrink:0}.footer{flex-shrink:0}#debugPanel{flex-shrink:0}
+.header{flex-shrink:0}.search-bar{flex-shrink:0}#detailArea{flex-shrink:0}.btn-scan-wrapper{flex-shrink:0}.list-header{flex-shrink:0}.footer{flex-shrink:0}
 .stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
 .stock-card:active{transform:scale(.98)}
 .stock-row{display:flex;align-items:center}
@@ -157,11 +157,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
 <div class="footer" id="footer">⏸️ 等待扫描</div>
-<!-- 调试面板：每次扫描后显示信号分布，完全独立于列表渲染 -->
-<div id="debugPanel" style="margin:8px 12px;padding:10px 12px;background:#f0f9ff;border:2px solid #38bdf8;border-radius:10px;font-size:12px;color:#1e293b;display:none">
-  <div style="font-weight:700;margin-bottom:6px;color:#0284c7">📊 调试-信号分布</div>
-  <div id="debugContent" style="line-height:1.7">加载中...</div>
-</div>
+
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -253,12 +249,7 @@ function restoreCachedStocks(){
           $('scanBtn').textContent='📊 已冻结'
         }
         $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
-  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票'
-        // 缓存恢复时也更新调试面板
-        try{
-          var _dbg=$('debugPanel'),_dbc=$('debugContent')
-          if(_dbg&&_dbc){
-            var _sig={};cached.forEach(function(s){var sg=s.suggestion||'未知';_sig[sg]=(_sig[sg]||0)+1})
+  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票';cached.forEach(function(s){var sg=s.suggestion||'未知';_sig[sg]=(_sig[sg]||0)+1})
             var _sp=[]
             if(_sig['重仓买入']){_sp.push('🔥重仓买入'+_sig['重仓买入']+'只')}
             if(_sig['买入']){_sp.push('✅买入'+_sig['买入']+'只')}
@@ -996,60 +987,6 @@ async function doFullRescan(){
     // 顶部已解锁，此处不再重复调用
     var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终信号:',_sp2.join(' | '))
     setStatus('✅ '+_sp2.join(' | ')+' | '+lastScanTime)
-    // ====== 更新调试面板（完全独立于列表渲染） ======
-    try{
-      var _dbg=$('debugPanel'),_dbc=$('debugContent')
-      if(_dbg&&_dbc){
-        _dbg.style.display='block'
-        // newStocks全量信号分布（观察处理后的所有信号）
-        var _nsSigs={};newStocks.forEach(function(s){var sg=s.suggestion||'未知';_nsSigs[sg]=(_nsSigs[sg]||0)+1})
-        var _nsParts=[]
-        if(_nsSigs['重仓买入']){_nsParts.push('🔥重仓买入'+_nsSigs['重仓买入']+'只')}
-        if(_nsSigs['买入']){_nsParts.push('✅买入'+_nsSigs['买入']+'只')}
-        if(_nsSigs['轻仓买入']){_nsParts.push('⚪轻仓买入'+_nsSigs['轻仓买入']+'只')}
-        if(_nsSigs['持有']){_nsParts.push('持有'+_nsSigs['持有']+'只')}
-        if(_nsSigs['观望']){_nsParts.push('观望'+_nsSigs['观望']+'只')}
-        if(_nsSigs['不要介入']){_nsParts.push('❌不要介入'+_nsSigs['不要介入']+'只')}
-        var _h='<b>newStocks信号分布:</b> '+_nsParts.join(' | ')+'<br>'
-        _h+='<b>newStocks总数:</b> '+newStocks.length+' 只<br>'
-        _h+='<b>当前列表信号分布:</b> '+_sp2.join(' | ')+' ('+stocks.length+'只)<br>'
-        _h+='<b>--- 独立重算（绕过主流程） ---</b><br>'
-        try{
-          var _ind_stocks=newStocks.slice()
-          var _ind_PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
-          _ind_stocks.sort(function(a,b){
-            var pa=_ind_PRI[a.suggestion||'观望']??9,pb=_ind_PRI[b.suggestion||'观望']??9
-            if(pa!==pb)return pa-pb
-            var ea=a.entryTiming||0,eb=b.entryTiming||0
-            if(eb!==ea)return eb-ea
-            if((b.score||0)!==(a.score||0))return(b.score||0)-(a.score||0)
-            return(b.changePercent||0)-(a.changePercent||0)
-          })
-          var _ind_ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
-          _ind_stocks=_ind_stocks.filter(function(s){return _ind_ALLOWED[s.suggestion]?1:0})
-          
-          var _ind_sigs={};_ind_stocks.forEach(function(s){var sg=s.suggestion||'未知';_ind_sigs[sg]=(_ind_sigs[sg]||0)+1})
-          var _ind_parts=[]
-          if(_ind_sigs['重仓买入']){_ind_parts.push('🔥重仓买入'+_ind_sigs['重仓买入']+'只')}
-          if(_ind_sigs['买入']){_ind_parts.push('✅买入'+_ind_sigs['买入']+'只')}
-          _h+='<b>独立重算结果:</b> '+_ind_parts.join(' | ')+'<br>'
-          _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
-          _ind_stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
-          _h+='</div>'
-        }catch(e2){_h+='<div>独立重算出错: '+e2.message+'</div>'}
-        _h+='<b>--- 主流程 ---</b><br>'
-        _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
-        stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
-        _h+='</div>'
-        _dbc.innerHTML=_h
-      }
-    }catch(e){}
-  }else{
-    setStatus('❌ 重扫无结果')
-  }
-  loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
-  // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
-}
 
 // ---------- 搜索缓存（东方财富全量） ----------
 var SEARCH_CACHE=null
