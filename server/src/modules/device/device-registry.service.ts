@@ -9,7 +9,7 @@ import type { DeviceRegistryEntry } from './device-registry.types'
 export class DeviceRegistryService {
   private readonly logger = new Logger(DeviceRegistryService.name)
   private registry: DeviceRegistryEntry[] = []
-  private maxSlots = 50
+  private maxSlots = 3
   private registryLoaded = false
   private supabase = this.initSupabase()
   private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
