@@ -11,7 +11,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:#f5f5f5;color:#333;display:flex;flex-direction:column;min-height:100vh}
-.header{position:sticky;top:0;background:#fff;z-index:10;padding:12px 16px 8px;border-bottom:1px solid #eee}
+.header{position:sticky;top:0;background:#fff;z-index:10;padding:12px 16px 8px;border-bottom:1px solid #eee;flex-shrink:0}
 .header h1{font-size:18px;font-weight:700}
 .header .status{font-size:11px;color:#999;margin-top:2px}
 .freeze-banner{margin-top:6px;padding:6px 10px;background:#fefce8;border-radius:8px;border:1px solid #fde68a;font-size:12px;color:#a16207}
@@ -34,7 +34,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .col-chg{flex:1;text-align:center}
 .col-pos{flex:1.1;text-align:right}
 .stock-list{flex:1;overflow-y:auto;padding:0 12px 8px;display:flex;flex-direction:column;gap:6px}
-.header{flex-shrink:0}.search-bar{flex-shrink:0}#detailArea{flex-shrink:0}.btn-scan-wrapper{flex-shrink:0}.list-header{flex-shrink:0}.footer{flex-shrink:0}
+.search-bar{flex-shrink:0}.btn-scan-wrapper{flex-shrink:0}.list-header{flex-shrink:0}.footer{flex-shrink:0}
 .stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
 .stock-card:active{transform:scale(.98)}
 .stock-row{display:flex;align-items:center}
@@ -157,7 +157,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
 <div class="footer" id="footer">⏸️ 等待扫描</div>
-
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -248,19 +247,13 @@ function restoreCachedStocks(){
           setStatus('📊 已冻结 (非交易时间)')
           $('scanBtn').textContent='📊 已冻结'
         }
-        $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
-  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票';cached.forEach(function(s){var sg=s.suggestion||'未知';_sig[sg]=(_sig[sg]||0)+1})
+        $('footer').textContent='✅ '+cached.length+' 只 | 实时行情 | 10分钟自动刷新'
+  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票';var _sig={};cached.forEach(function(s){var sg=s.suggestion||'未知';_sig[sg]=(_sig[sg]||0)+1})
             var _sp=[]
             if(_sig['重仓买入']){_sp.push('🔥重仓买入'+_sig['重仓买入']+'只')}
             if(_sig['买入']){_sp.push('✅买入'+_sig['买入']+'只')}
             if(_sig['轻仓买入']){_sp.push('⚪轻仓买入'+_sig['轻仓买入']+'只')}
-            _dbg.style.display='block'
-            _dbc.innerHTML='<b>信号(缓存):</b> '+_sp.join(' | ')+'<br><b>总数:</b> '+cached.length+' 只<br>'
-              +'<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
-              +cached.map(function(s,i){return '<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'}).join('')
-              +'</div>'
-          }
-        }catch(e){}
+            setStatus('📊 '+_sp.join(' | ')+' (缓存)')
         return true
       }
     }
@@ -574,14 +567,14 @@ function renderList(){
   if(isBlurred&&stocks.length){try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
-  var scanSummary='✅ 重仓买入'+_sigC['重仓买入']+'只 | ✅买入'+_sigC['买入']+'只 | 实时行情'
-  if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
-  $('footer').textContent=scanSummary
-  // 计算信号分布显示在状态栏
+  // 计算信号分布
   var _sigC={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigC[sg]=(_sigC[sg]||0)+1});var _sigS=[];
   if(_sigC['重仓买入']){_sigS.push('🔥重仓买入'+_sigC['重仓买入']+'只')}
   if(_sigC['买入']){_sigS.push('✅买入'+_sigC['买入']+'只')}
   if(_sigC['轻仓买入']){_sigS.push('⚪轻仓买入'+_sigC['轻仓买入']+'只')}
+  var scanSummary='✅ '+_sigS.join(' | ')+' | 实时行情'
+  if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
+  $('footer').textContent=scanSummary
   setStatus('✅ '+_sigS.join(' | ')+' | '+lastScanTime)
   if(lastScanTime){try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}}
   stocks.forEach(function(s,i){
@@ -862,7 +855,7 @@ async function doFullRescan(){
     console.log('🔍 DEBUG: Tencent处理后重仓买入共 '+_debug_heavy.length+' 只:', _debug_heavy.join(' | '))
   }catch(e){}
   
-  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占列表）
+  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占Top20）
   var deprioritized=0
   for(var di=0;di<newStocks.length;di++){
     var ds=newStocks[di]
@@ -906,9 +899,7 @@ async function doFullRescan(){
       // 第四排序：今日涨幅(高→低)，让强势股浮上来
       return (b.changePercent||0)-(a.changePercent||0)
     })
-    // 信号筛选
-    
-    // 只保留重仓买入/买入/轻仓买入的股票
+    // 只保留重仓买入/买入的股票
     var ALLOWED={'重仓买入':1,'买入':1}
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
@@ -940,7 +931,7 @@ async function doFullRescan(){
       if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
       return (b.changePercent||0)-(a.changePercent||0)
     })
-    // 追加缓存股后重新排序
+    // 再次收窄（追加的缓存股可能超出）
     // ====== DEBUG: final排序后/收窄前 ======
     try{
       var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
@@ -948,7 +939,6 @@ async function doFullRescan(){
       console.log('🔍 DEBUG: 最终排序后共有 '+stocks.length+' 只: '+_spD.join(' | '))
       stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
     }catch(e){}
-    
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
@@ -958,7 +948,7 @@ async function doFullRescan(){
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
-    // 日志输出信号分布，方便排查
+    // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
     renderList() // 先显示
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
@@ -987,6 +977,12 @@ async function doFullRescan(){
     // 顶部已解锁，此处不再重复调用
     var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终信号:',_sp2.join(' | '))
     setStatus('✅ '+_sp2.join(' | ')+' | '+lastScanTime)
+    }else{
+    setStatus('❌ 重扫无结果')
+  }
+  loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+  // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
+}
 
 // ---------- 搜索缓存（东方财富全量） ----------
 var SEARCH_CACHE=null
