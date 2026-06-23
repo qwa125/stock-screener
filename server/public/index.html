@@ -506,6 +506,9 @@ function buildDetail(s,rt){
 
 // ---------- 渲染列表 ----------
 function renderList(){
+  // 毛玻璃可见时只缓存不渲染UI
+  var isBlurred=!$('pageBlur').classList.contains('hidden')
+  if(isBlurred&&stocks.length){try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   $('footer').textContent='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
@@ -576,6 +579,9 @@ async function doScan(){
 // ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
+  // 毛玻璃可见时只缓存数据不更新UI
+  var isBlurred=!$('pageBlur').classList.contains('hidden')
+  if(isBlurred&&loading)return
   loading=true;btn.disabled=true;btn.textContent='重扫中...'
   stopPriceRefresh()
   setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')
@@ -1049,12 +1055,12 @@ async function doSearch(){
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
+  if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动刷新
 setInterval(function(){
-  if(isTH()&&!loading){doScan()}
+  if(isTH()&&!loading){doFullRescan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },600000)
