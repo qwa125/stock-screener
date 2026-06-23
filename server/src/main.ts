@@ -125,7 +125,9 @@ async function bootstrap() {
   // 用 Express 中间件直接处理，避免被 NestJS AccessLimitGuard 拦截
   // ══════════════════════════════════════════════
   const gemSvc = app.get(GemScreenerService);
-  app.use('/api/gem/rescan', async (req, res) => {
+  app.use('/api/gem/rescan', async (req, res, next) => {
+    // 只处理精确的 /api/gem/rescan 路径，避免误拦截 /api/gem/rescan-batch 等
+    if (req.path !== '/api/gem/rescan') return next();
     try {
       const results = await gemSvc.rescanMarket();
       res.json({ code: 200, msg: 'ok', data: results });

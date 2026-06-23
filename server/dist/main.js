@@ -112,7 +112,9 @@ async function bootstrap() {
         }
     });
     const gemSvc = app.get(gem_screener_service_1.GemScreenerService);
-    app.use('/api/gem/rescan', async (req, res) => {
+    app.use('/api/gem/rescan', async (req, res, next) => {
+        if (req.path !== '/api/gem/rescan')
+            return next();
         try {
             const results = await gemSvc.rescanMarket();
             res.json({ code: 200, msg: 'ok', data: results });
