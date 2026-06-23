@@ -100,7 +100,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-device-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
 .admin-device-item .dev-info{flex:1;min-width:0}
 	/* 全页毛玻璃遮罩 - 保留扫描按钮 */
-	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.87)}
+	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 	.page-blur.hidden{display:none}
 	.page-blur .blur-btn{font-size:18px;padding:16px 40px;border-radius:14px;border:none;background:#1890ff;color:#fff;font-weight:600;box-shadow:0 4px 20px rgba(24,144,255,0.4);cursor:pointer}
 	.page-blur .blur-msg{margin-top:16px;font-size:13px;color:#555;text-align:center;line-height:1.6;padding:0 20px}
@@ -1396,7 +1396,7 @@ function changeAdminPwd(){
 }
 // ========== End Admin Panel ==========
 </script>
-<div class="page-blur" id="pageBlur">
+<div class="page-blur" id="pageBlur" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;display:flex;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)">
   <div class="blur-btn-wrap">
     <button class="blur-btn" onclick="handleScanClick()">📊 点击扫描解锁</button>
   </div>
