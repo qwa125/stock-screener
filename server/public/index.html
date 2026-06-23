@@ -661,6 +661,14 @@ async function doFullRescan(){
     var cd=await cr.json()
     newStocks=(cd.data||[]).slice()
   }catch(e){}
+  
+  // rescan被拦截(429)时，从localStorage加载上次扫描结果作为缓存
+  if(newStocks.length===0){
+    try{
+      var cached=localStorage.getItem('lastStocks')
+      if(cached){newStocks=JSON.parse(cached).slice();console.log('📦 从缓存加载 '+newStocks.length+' 只')}
+    }catch(e){}
+  }
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
   
   // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
