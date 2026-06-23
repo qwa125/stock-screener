@@ -655,26 +655,21 @@ async function doFullRescan(){
     }
   }catch(e){setStatus('⚠️ 后端东方财富代理失败: '+e.message)}
   
-  // 备用：Sina代理多页分片
+  // 备用：Sina代理多页分片（并行抓取，从30秒降到2秒）
   if(emData.length<500){
-    setStatus('⚠️ 东方财富代理不可用，改用Sina代理分页抓取'+(isTH()?'...':' 已冻结数据...'))
+    setStatus('⚠️ 东方财富代理不可用，改用Sina代理并行抓取'+(isTH()?'...':' 已冻结数据...'))
     try{
+      // 并行抓取所有页面
+      var hsPages=[];for(var sp=1;sp<=15;sp++){hsPages.push(sp)}
+      var cybPages=[];for(var sp=1;sp<=6;sp++){cybPages.push(sp)}
+      var allResults=await Promise.all([
+        ...hsPages.map(function(p){return fetchWithRetry(API+'/gem/proxy/stock-list?node=hs_a&page='+p+'&num=100&sort=changepercent&asc=0',3).then(function(r){if(!r)return null;return r.json()}).catch(function(){return null})}),
+        ...cybPages.map(function(p){return fetchWithRetry(API+'/gem/proxy/stock-list?node=cyb&page='+p+'&num=100&sort=changepercent&asc=0',3).then(function(r){if(!r)return null;return r.json()}).catch(function(){return null})})
+      ])
       var sinaAll=[]
-      for(var sp=1;sp<=15;sp++){
-        var sr=await fetchWithRetry(API+'/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0',3)
-        if(!sr){break}
-        var sj=await sr.json()
-        if(sj.code!==200||!sj.data||!sj.data.length)break
-        sinaAll.push(...sj.data)
-        if(sj.data.length<100)break
-      }
-      for(var sp=1;sp<=6;sp++){
-        var sr=await fetchWithRetry(API+'/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0',3)
-        if(!sr){break}
-        var sj=await sr.json()
-        if(sj.code!==200||!sj.data||!sj.data.length)break
-        sinaAll.push(...sj.data)
-        if(sj.data.length<100)break
+      for(var ri=0;ri<allResults.length;ri++){
+        var sj=allResults[ri]
+        if(sj&&sj.code===200&&sj.data&&sj.data.length){sinaAll.push(...sj.data)}
       }
       var seenCodes={}
       emData=[]
@@ -684,9 +679,13 @@ async function doFullRescan(){
         seenCodes[c]=1
         emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0})
       }
-      setStatus('✅ Sina代理获取 '+emData.length+' 只股票')
+      setStatus('✅ Sina代理并行获取 '+emData.length+' 只股票')
     }catch(e){setStatus('⚠️ Sina代理也失败: '+e.message)}
   }
+  
+  // 报告扫描的股票数量
+  var scanCount=emData.length
+  setStatus('🔄 共 '+newStocks.length+' 只缓存 + '+scanCount+' 只扫描 = 全市场扫描完成，按信号+评分排序中...')
   
   var seen={}
   for(var si2=0;si2<newStocks.length;si2++)if(newStocks[si2].code)seen[newStocks[si2].code]=1
@@ -713,15 +712,21 @@ async function doFullRescan(){
     else if(chg>=1)liveSuggestion='持有'
     var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
     
+    // 判断市场是否有真实波动：交易时段且有实际涨跌
+    var hasLiveData = isTH() && Math.abs(chg)>0.01
+    
     // 已缓存个股：用实时数据更新价格/涨幅，同时重算信号/评分（让今日跌的让位）
     if(seen[code]){
       for(var si3=0;si3<newStocks.length;si3++){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
-          newStocks[si3].suggestion=liveSuggestion
-          newStocks[si3].score=liveScore
-          newStocks[si3].entryTiming=liveEntryTiming
+          // 仅市场有实际波动时才重算信号/评分（收盘后保留缓存分析结果，避免全部归零排序失效）
+          if(hasLiveData){
+            newStocks[si3].suggestion=liveSuggestion
+            newStocks[si3].score=liveScore
+            newStocks[si3].entryTiming=liveEntryTiming
+          }
           break
         }
       }
@@ -734,7 +739,10 @@ async function doFullRescan(){
     seen[code]=1
     
     newStocks.push({code:code,name:name,currentPrice:price,
-      pricePosition:50,suggestion:liveSuggestion,score:liveScore,
+      pricePosition:50,
+      // 市场关闭时新面孔直接给低分，不挤占缓存分析结果
+      suggestion:hasLiveData?liveSuggestion:'观望',
+      score:hasLiveData?liveScore:10,
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
       chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
