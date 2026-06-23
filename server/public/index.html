@@ -1,9 +1,12 @@
-<!-- BSE support update -->
+<!-- Core v20241218 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>A股优选 Top20</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -795,6 +798,8 @@ async function doFullRescan(){
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
+    // 扫描完成先解锁页面，renderList才能显示数据（不会被blur挡住）
+    hideBlocked()
     renderList() // 先显示
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -812,6 +817,7 @@ async function doFullRescan(){
           }).catch(function(){})
       })
     }catch(e){}
+    // 顶部已解锁，此处不再重复调用
     setStatus('✅ Top20 已更新 - 信号排序→入场时机→筹码集中 '+lastScanTime)
   }else{
     setStatus('❌ 重扫无结果')
