@@ -564,7 +564,12 @@ function renderList(){
   var scanSummary='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
   if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
   $('footer').textContent=scanSummary
-  setStatus('✅ Top '+stocks.length+' 已更新')
+  // 计算信号分布显示在状态栏
+  var _sigC={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigC[sg]=(_sigC[sg]||0)+1});var _sigS=[];
+  if(_sigC['重仓买入']){_sigS.push('🔥重仓买入'+_sigC['重仓买入']+'只')}
+  if(_sigC['买入']){_sigS.push('✅买入'+_sigC['买入']+'只')}
+  if(_sigC['轻仓买入']){_sigS.push('⚪轻仓买入'+_sigC['轻仓买入']+'只')}
+  setStatus('✅ Top'+stocks.length+': '+_sigS.join(' | ')+' | '+lastScanTime)
   if(lastScanTime){try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}}
   stocks.forEach(function(s,i){
     var rt=realtimePrices[s.code]||{}
