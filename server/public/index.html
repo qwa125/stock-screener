@@ -627,11 +627,10 @@ async function doFullRescan(){
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
-  // 通过后端代理获取东方财富全量数据（绕开生产环境CORS）
-  // EastMoney在Render US被限流，直接跳过（不浪费5秒），走Sina代理
+  // 跳过东方财富（Render US被限流），直接并行抓取Sina全市场（21页约2-3秒）
   var emData=[]
+  try{
   setStatus('🔄 并行抓取Sina全市场数据 (21页，约2-3秒)...')
-    try{
       // 并行抓取所有页面
       var hsPages=[];for(var sp=1;sp<=15;sp++){hsPages.push(sp)}
       var cybPages=[];for(var sp=1;sp<=6;sp++){cybPages.push(sp)}
