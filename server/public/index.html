@@ -178,6 +178,16 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
+// localStorage 版本检查：清空过期缓存
+try{
+  var STORAGE_VER='v2'
+  var storedVer=localStorage.getItem('cacheVer')
+  if(storedVer!==STORAGE_VER){
+    localStorage.removeItem('lastStocks')
+    localStorage.setItem('cacheVer',STORAGE_VER)
+    console.log('🧹 缓存版本更新，已清空旧数据')
+  }
+}catch(e){}
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -247,7 +257,13 @@ function restoreCachedStocks(){
 // 恢复上次扫描结果（冻结时也展示，预加载到内存供点击扫描后展示）
 try{
   var ls=localStorage.getItem('lastStocks')
-  if(ls){stocks=JSON.parse(ls)}
+  if(ls){
+    stocks=JSON.parse(ls)
+    console.log('📦 从localStorage预加载 '+stocks.length+' 只（版本 '+localStorage.getItem('cacheVer')+'）')
+    if(stocks.length>0) console.log('  首只:', stocks[0].code, stocks[0].name, stocks[0].suggestion, 'entryTiming='+stocks[0].entryTiming)
+  }else{
+    console.log('📦 localStorage无缓存数据')
+  }
 }catch(e){}
 
 // 点击扫描按钮：先检查设备权限（2dfdbc9访问模式），通过后隐藏毛玻璃并全市场扫描
@@ -266,12 +282,14 @@ async function handleScanClick(){
       return
     }
     // 设备注册成功 → 隐藏毛玻璃，全市场重扫（确保完整正确的排序和300005探路者）
+    console.log('✅ 设备注册成功，开始全市场重扫(doFullRescan)')
     hideBlocked()
     doFullRescan()  // 腾讯实时1617只全市场扫描，覆盖300005
   }catch(e){
-    // 网络错误时放行（后端不可用时允许访问，2dfdbc9访问模式）
+    // 网络错误时放行：直接全市场重扫（不恢复旧缓存导致看到过时数据）
+    console.log('⚠️ 设备注册失败，直接全市场重扫:', e.message)
     hideBlocked()
-    restoreCachedStocks()
+    doFullRescan()
   }
 }
 function $(id){return document.getElementById(id)}
@@ -904,6 +922,8 @@ async function doFullRescan(){
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
+    // 日志输出Top20信号分布，方便排查
+    console.log('📊 Top20信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
     renderList() // 先显示
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
     setStatus('🔄 计算筹码集中度...')
