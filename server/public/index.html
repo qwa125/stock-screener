@@ -669,6 +669,7 @@ async function doFullRescan(){
       if(cached){newStocks=JSON.parse(cached).slice();console.log('📦 从缓存加载 '+newStocks.length+' 只')}
     }catch(e){}
   }
+  var cacheCount=newStocks.length  // 记录缓存股数量，用于后续追加
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
   
   // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
@@ -832,6 +833,9 @@ async function doFullRescan(){
     stocks=newStocks
     // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
+    // 保存缓存股最新数据（排序会打乱位置）
+    var cacheLatest=[]
+    for(var ci=0;ci<cacheCount;ci++){cacheLatest.push(newStocks[ci])}
     stocks.sort(function(a,b){
       var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
       if(pa!==pb) return pa-pb
@@ -848,6 +852,16 @@ async function doFullRescan(){
     // 只保留重仓买入/买入/轻仓买入的股票
     var ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+    // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
+    if(cacheCount>0){
+      var inList={};stocks.forEach(function(s){inList[s.code]=1})
+      for(var ci=0;ci<cacheCount;ci++){
+        // 使用更新后的数据('cacheLatest')而非原始'cacheStocks'
+        var cl=cacheLatest[ci]
+        if(ALLOWED[cl.suggestion]&&!inList[cl.code])
+          {stocks.push(cl);inList[cl.code]=1}
+      }
+    }
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
