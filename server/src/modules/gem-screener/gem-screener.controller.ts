@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
+@SkipAccessLimit()
 @Controller('gem')
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);

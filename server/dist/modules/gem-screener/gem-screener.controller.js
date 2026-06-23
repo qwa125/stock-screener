@@ -592,6 +592,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
 ], GemScreenerController);
