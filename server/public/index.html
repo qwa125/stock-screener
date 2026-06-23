@@ -729,7 +729,7 @@ async function doFullRescan(){
     
     // 判断市场是否有真实波动：交易时段且有实际涨跌
     // 有真实涨跌幅则使用实时评分（Sina返回最后交易时段数据，非交易时段也有效）
-    var hasLiveData = Math.abs(chg) > 0.01
+    var hasLiveData = true  // Sina返回的都有实时行情，chg=0说明真没涨跌
     
     // 已缓存个股：用实时数据更新价格/涨幅，同时重算信号/评分（让今日跌的让位）
     if(seen[code]){
