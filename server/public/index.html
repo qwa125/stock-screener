@@ -707,7 +707,10 @@ async function doFullRescan(){
     // 基于今日涨幅计算实时信号/评分（缓存股和新股都用这个）
     var liveScore=Math.round(30+Math.abs(chg)*2)
     var liveSuggestion='观望'
-    if(chg>=6)liveSuggestion='买入'
+    // 涨停风险控制：10cm主板涨超4%(距涨停<6%)不推荐追高，20cm创业板涨超5%(距涨停<15%)不推荐
+    if(isMainBoard(code)&&chg>4)liveSuggestion='持有'
+    else if(isGEM(code)&&chg>5)liveSuggestion='持有'
+    else if(chg>=6)liveSuggestion='买入'
     else if(chg>=3)liveSuggestion='轻仓买入'
     else if(chg>=1)liveSuggestion='持有'
     var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
