@@ -360,6 +360,63 @@ export class GemScreenerController {
    * sort: changepercent(涨跌幅) / amount(成交额) / price(股价) / turnover(换手率) — 默认 amount
    * asc: 0(降序) / 1(升序) — 默认 0(降序)
    */
+  /**
+   * 全市场Sina扫描（后端并行抓21页，前端只需调1次）
+   * GET /api/gem/full-sina-scan
+   * 返回: { code: 200, data: [{ code, name, trade, changepercent, ... }] }
+   */
+  @SkipAccessLimit()
+  @Get('full-sina-scan')
+  async fullSinaScan() {
+    const nodes = [
+      { node: 'hs_a', pages: 15 },
+      { node: 'cyb', pages: 6 },
+    ];
+    const seenCodes = new Set<string>();
+    const allData: any[] = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const { node, pages } of nodes) {
+      const pagePromises: Promise<any[]>[] = [];
+      for (let p = 1; p <= pages; p++) {
+        pagePromises.push(
+          (async () => {
+            try {
+              const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${p}&num=100&sort=changepercent&asc=0&node=${node}`;
+              const resp = await fetch(url, { signal: AbortSignal.timeout(20000) });
+              if (!resp.ok) return [];
+              const text = await resp.text();
+              const data = JSON.parse(text);
+              return Array.isArray(data) ? data : [];
+            } catch {
+              return [];
+            }
+          })()
+        );
+      }
+
+      const results = await Promise.allSettled(pagePromises);
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.length > 0) {
+          successCount++;
+          for (const stock of result.value) {
+            const code = String(stock.code || '');
+            if (code && !seenCodes.has(code)) {
+              seenCodes.add(code);
+              allData.push(stock);
+            }
+          }
+        } else {
+          failCount++;
+        }
+      }
+    }
+
+    this.logger.log(`全市场扫描完成: 成功${successCount}页/失败${failCount}页, 去重后${allData.length}只`);
+    return { code: 200, msg: 'success', data: allData };
+  }
+
   @Get('proxy/stock-list')
   async proxyStockList(
     @Query('node') node: string,

@@ -280,6 +280,53 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
         return { code: 200, msg: 'ok', data: results.slice(0, 20) };
     }
+    async fullSinaScan() {
+        const nodes = [
+            { node: 'hs_a', pages: 15 },
+            { node: 'cyb', pages: 6 },
+        ];
+        const seenCodes = new Set();
+        const allData = [];
+        let successCount = 0;
+        let failCount = 0;
+        for (const { node, pages } of nodes) {
+            const pagePromises = [];
+            for (let p = 1; p <= pages; p++) {
+                pagePromises.push((async () => {
+                    try {
+                        const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${p}&num=100&sort=changepercent&asc=0&node=${node}`;
+                        const resp = await fetch(url, { signal: AbortSignal.timeout(20000) });
+                        if (!resp.ok)
+                            return [];
+                        const text = await resp.text();
+                        const data = JSON.parse(text);
+                        return Array.isArray(data) ? data : [];
+                    }
+                    catch {
+                        return [];
+                    }
+                })());
+            }
+            const results = await Promise.allSettled(pagePromises);
+            for (const result of results) {
+                if (result.status === 'fulfilled' && result.value.length > 0) {
+                    successCount++;
+                    for (const stock of result.value) {
+                        const code = String(stock.code || '');
+                        if (code && !seenCodes.has(code)) {
+                            seenCodes.add(code);
+                            allData.push(stock);
+                        }
+                    }
+                }
+                else {
+                    failCount++;
+                }
+            }
+        }
+        this.logger.log(`全市场扫描完成: 成功${successCount}页/失败${failCount}页, 去重后${allData.length}只`);
+        return { code: 200, msg: 'success', data: allData };
+    }
     async proxyStockList(node, page, num, sort, asc) {
         try {
             const nodes = ['hs_a', 'cyb', 'gem'];
@@ -546,6 +593,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanBatch", null);
+__decorate([
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    (0, common_1.Get)('full-sina-scan'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "fullSinaScan", null);
 __decorate([
     (0, common_1.Get)('proxy/stock-list'),
     __param(0, (0, common_1.Query)('node')),
