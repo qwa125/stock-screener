@@ -305,6 +305,7 @@ export class GemScreenerController {
   }
 
   @Get('rescan')
+  @SkipAccessLimit()
   async rescanMarket() {
     try {
       const results = await this.gemScreener.rescanMarket();
@@ -362,6 +363,7 @@ export class GemScreenerController {
    * asc: 0(降序) / 1(升序) — 默认 0(降序)
    */
   @Get('proxy/stock-list')
+  @SkipAccessLimit()
   async proxyStockList(
     @Query('node') node: string,
     @Query('page') page: string,
@@ -394,6 +396,7 @@ export class GemScreenerController {
    * node: hs_a(主板) / cyb(创业板) / gem(创业板)
    */
   @Get('proxy/eastmoney-list')
+  @SkipAccessLimit()
   async proxyEastMoneyList(
     @Query('node') node: string,
     @Query('page') page: string,
@@ -404,7 +407,7 @@ export class GemScreenerController {
         hs_a: 'm:0+t:6',       // 纯沪深主板（不再混创业板）
         cyb: 'm:0+t:80',       // 创业板+科创板
         gem: 'm:0+t:80',
-        all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048', // 全市场（主板+中小板+创业板+科创板）
+        all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81', // 全市场（沪主板+科创板+深主板+中小板+创业板）
       };
       const safeNode = node && fsMap[node] ? node : 'hs_a';
       const safePage = parseInt(page || '1', 10);

@@ -311,7 +311,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 hs_a: 'm:0+t:6',
                 cyb: 'm:0+t:80',
                 gem: 'm:0+t:80',
-                all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048',
+                all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81',
             };
             const safeNode = node && fsMap[node] ? node : 'hs_a';
             const safePage = parseInt(page || '1', 10);
@@ -527,6 +527,7 @@ __decorate([
 ], GemScreenerController.prototype, "searchStock", null);
 __decorate([
     (0, common_1.Get)('rescan'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -549,6 +550,7 @@ __decorate([
 ], GemScreenerController.prototype, "rescanBatch", null);
 __decorate([
     (0, common_1.Get)('proxy/stock-list'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
@@ -560,6 +562,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxyStockList", null);
 __decorate([
     (0, common_1.Get)('proxy/eastmoney-list'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
