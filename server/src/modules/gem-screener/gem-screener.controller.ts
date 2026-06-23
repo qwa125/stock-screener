@@ -404,10 +404,11 @@ export class GemScreenerController {
         hs_a: 'm:0+t:6',       // 纯沪深主板（不再混创业板）
         cyb: 'm:0+t:80',       // 创业板+科创板
         gem: 'm:0+t:80',
+        all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048', // 全市场（主板+中小板+创业板+科创板）
       };
       const safeNode = node && fsMap[node] ? node : 'hs_a';
       const safePage = parseInt(page || '1', 10);
-      const safeNum = Math.min(parseInt(num || '100', 10), 200);
+      const safeNum = Math.min(parseInt(num || '100', 10), safeNode === 'all' ? 5000 : 200);
       const url = `https://push2.eastmoney.com/api/qt/clist/get?fltt=2&fields=f12,f14,f2,f3,f62,f184,f15,f16,f17,f18,f20&pn=${safePage}&pz=${safeNum}&po=1&np=1&fid=f3&fs=${fsMap[safeNode]}&ut=bd1d9ddb04089700cf9c27f6f7426281`;
       const resp = await fetch(url, {
         signal: AbortSignal.timeout(15000),

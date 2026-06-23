@@ -604,20 +604,26 @@ async function doFullRescan(){
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
-  var emUrl='https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048'
+  // 通过后端代理获取东方财富全量数据（绕开生产环境CORS）
   var emData=[]
   try{
-    var emResp=await fetch(emUrl,{headers:{'Referer':'https://quote.eastmoney.com/'}})
+    var emResp=await fetch(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000')
     var emJson=await emResp.json()
-    if(emJson&&emJson.data&&emJson.data.diff) emData=emJson.data.diff
-  }catch(e){setStatus('⚠️ 东方财富加载失败: '+e.message+'，尝试备用Sina代理...')}
+    if(emJson.code===200&&emJson.data&&emJson.data.length){
+      // 映射为统一字段名
+      emData=emJson.data.map(function(x){return{
+        f12:x.symbol, f14:x.name,
+        f2:x.trade, f3:x.changePercent
+      }})
+      setStatus('✅ 后端代理获取 '+emData.length+' 只股票')
+    }
+  }catch(e){setStatus('⚠️ 后端东方财富代理失败: '+e.message)}
   
-  // 备用：Sina代理多页分片（当前端East Money失败时）
+  // 备用：Sina代理多页分片
   if(!emData.length){
-    setStatus('⚠️ 东方财富不可用，改用Sina代理分页抓取'+(isTH()?'...':' 已冻结数据...'))
+    setStatus('⚠️ 东方财富代理不可用，改用Sina代理分页抓取'+(isTH()?'...':' 已冻结数据...'))
     try{
       var sinaAll=[]
-      // 沪深A股(主板为主)：每页100只，最多抓15页 ≈ 1500只
       for(var sp=1;sp<=15;sp++){
         var sr=await fetch(API+'/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0')
         var sj=await sr.json()
@@ -625,7 +631,6 @@ async function doFullRescan(){
         sinaAll.push(...sj.data)
         if(sj.data.length<100)break
       }
-      // 创业板(补充)：最多抓6页
       for(var sp=1;sp<=6;sp++){
         var sr=await fetch(API+'/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0')
         var sj=await sr.json()
@@ -633,19 +638,13 @@ async function doFullRescan(){
         sinaAll.push(...sj.data)
         if(sj.data.length<100)break
       }
-      // 去重 + 映射为东方财富字段名
       var seenCodes={}
       emData=[]
       for(var si=0;si<sinaAll.length;si++){
         var sc=sinaAll[si],c=String(sc.code||'')
         if(!c||seenCodes[c])continue
         seenCodes[c]=1
-        emData.push({
-          f12:c,
-          f14:sc.name||'',
-          f2:parseFloat(sc.trade)||0,
-          f3:parseFloat(sc.changepercent)||0
-        })
+        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0})
       }
       setStatus('✅ Sina代理获取 '+emData.length+' 只股票')
     }catch(e){setStatus('⚠️ Sina代理也失败: '+e.message)}
@@ -664,29 +663,46 @@ async function doFullRescan(){
     
     if(!isMainBoard(code)&&!isGEM(code))continue
     
-    // 控制数量
-    if(isMainBoard(code)&&mainBoardCount>=600)continue
-    if(isGEM(code)&&gemCount>=500)continue
-    
     var price=parseFloat(item.f2)||0
     if(price<3)continue
-    if(seen[code])continue
-    seen[code]=1
-    if(isMainBoard(code))mainBoardCount++
-    else if(isGEM(code))gemCount++
-    
     var chg=parseFloat(item.f3)||0
-    newStocks.push({code:code,name:name,currentPrice:price,pricePosition:50,suggestion:'持有',score:30,
+    
+    // 已缓存个股：用实时数据更新价格/涨幅（旧数据不会变top20）
+    if(seen[code]){
+      for(var si3=0;si3<newStocks.length;si3++){
+        if(newStocks[si3].code===code){
+          newStocks[si3].currentPrice=price
+          newStocks[si3].changePercent=chg
+          break
+        }
+      }
+      continue
+    }
+    
+    // 新增个股数量控制（非缓存的分析新面孔）
+    if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
+    else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
+    seen[code]=1
+    
+    // 无缓存分析的新股：基于涨幅给实时评分，有机会进top20
+    var liveScore=Math.round(30+Math.abs(chg)*2)
+    var liveSuggestion='观望'
+    if(chg>=6)liveSuggestion='买入'
+    else if(chg>=3)liveSuggestion='轻仓买入'
+    else if(chg>=1)liveSuggestion='持有'
+    
+    newStocks.push({code:code,name:name,currentPrice:price,
+      pricePosition:50,suggestion:liveSuggestion,score:liveScore,
+      entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
       chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
       isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
   }
   
   if(newStocks.length){
-    setStatus('🔄 共 '+newStocks.length+' 只（主板'+mainBoardCount+'只+创业板'+gemCount+'只），排序中...')
+    setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
     stocks=newStocks
-    // doScan会保存最新分析结果到缓存，这里不保存原始数据
-    // 排序：信号优先级优先，再按涨幅降序
+    // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
     stocks.sort(function(a,b){
       var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
@@ -695,7 +711,9 @@ async function doFullRescan(){
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
       // 第三排序：综合评分(高→低)
-      return (b.score||0)-(a.score||0)
+      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
+      // 第四排序：今日涨幅(高→低)，让强势股浮上来
+      return (b.changePercent||0)-(a.changePercent||0)
     })
     // 只保留 Top20
     if(stocks.length>20) stocks=stocks.slice(0,20)
@@ -726,8 +744,7 @@ async function doFullRescan(){
     setStatus('❌ 重扫无结果')
   }
   loading=false;btn.disabled=false;btn.textContent='🌐 全市场重扫'
-  // 全市场重扫完成后，调doScan保存最新分析结果的缓存
-  setTimeout(function(){if(!loading)doScan()},500)
+  // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
 }
 
 // ---------- 搜索缓存（东方财富全量） ----------
