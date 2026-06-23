@@ -1,4 +1,4 @@
-<!-- Core v20241218 -->
+<!-- Core v20250120 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -236,6 +236,7 @@ function restoreCachedStocks(){
           $('scanBtn').textContent='📊 已冻结'
         }
         $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
+  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票'
         return true
       }
     }
@@ -538,7 +539,9 @@ function renderList(){
   if(isBlurred&&stocks.length){try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
-  $('footer').textContent='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
+  var scanSummary='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
+  if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
+  $('footer').textContent=scanSummary
   setStatus('✅ Top '+stocks.length+' 已更新')
   if(lastScanTime){try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}}
   stocks.forEach(function(s,i){
@@ -604,15 +607,24 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
-/** 带重试的fetch，处理部署滚动更新时的429 */
+/** 带重试的fetch，处理429限流+502偶尔打不开+网络闪断 */
 async function fetchWithRetry(url,retries){
   for(var r=0;r<retries;r++){
-    var fResp=await fetch(url)
-    if(fResp.status===429&&r<retries-1){
-      await new Promise(ok=>setTimeout(ok,2000))
-      continue
+    try{
+      var fResp=await fetch(url,{signal:timeoutSignal(20000)})
+      if(fResp.ok) return fResp
+      if(r<retries-1){
+        await new Promise(ok=>setTimeout(ok,2000))
+        continue
+      }
+      return fResp
+    }catch(e){
+      if(r<retries-1){
+        await new Promise(ok=>setTimeout(ok,2000))
+        continue
+      }
+      return null
     }
-    return fResp
   }
   return null
 }
@@ -648,9 +660,10 @@ async function doFullRescan(){
   function isGEM(c){return /^30/.test(c)}
   
   // 通过后端代理获取东方财富全量数据（绕开生产环境CORS）
+  // 注意：东方财富从Render US会被限流，最快只有1次尝试，失败就秒切Sina代理
   var emData=[]
   try{
-    var emResp=await fetchWithRetry(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000',3)
+    var emResp=await fetch(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000',{signal:timeoutSignal(10000)})
     var emJson=await emResp.json()
     if(emJson.code===200&&emJson.data&&emJson.data.length){
       // 映射为统一字段名
@@ -660,7 +673,7 @@ async function doFullRescan(){
       }})
       setStatus('✅ 后端代理获取 '+emData.length+' 只股票')
     }
-  }catch(e){setStatus('⚠️ 后端东方财富代理失败: '+e.message)}
+  }catch(e){/* EastMoney从Render US不可达，静默切Sina */}
   
   // 备用：Sina代理多页分片（并行抓取，从30秒降到2秒）
   if(emData.length<500){
@@ -692,6 +705,7 @@ async function doFullRescan(){
   
   // 报告扫描的股票数量
   var scanCount=emData.length
+  window._lastScanCount=scanCount  // 保存到全局供footer显示
   setStatus('🔄 共 '+newStocks.length+' 只缓存 + '+scanCount+' 只扫描 = 全市场扫描完成，按信号+评分排序中...')
   
   var seen={}
