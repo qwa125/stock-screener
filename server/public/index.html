@@ -1177,12 +1177,9 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
-// 页面打开时立即全市场扫描（缓存数据到内存，但保持毛玻璃遮挡，不自动解锁）
-if(!loading)setTimeout(function(){doFullRescan()},500)
-
-// 每10分钟交易时段自动刷新
+// 每10分钟交易时段自动刷新缓存（不自动解锁毛玻璃）
 setInterval(function(){
-  if(isTH()&&!loading){doFullRescan()}
+  if(isTH()&&!loading){doScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },600000)
@@ -1190,6 +1187,12 @@ setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },60000)
+
+// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
+setTimeout(function(){
+  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+},3000)
 
 // 个股股价每2秒刷新
 var priceTimer=null
