@@ -452,7 +452,6 @@ __decorate([
 ], GemScreenerController.prototype, "refreshHeavyBuy", null);
 __decorate([
     (0, common_1.Get)('opportunities'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -527,7 +526,6 @@ __decorate([
 ], GemScreenerController.prototype, "searchStock", null);
 __decorate([
     (0, common_1.Get)('rescan'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -550,7 +548,6 @@ __decorate([
 ], GemScreenerController.prototype, "rescanBatch", null);
 __decorate([
     (0, common_1.Get)('proxy/stock-list'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
@@ -562,7 +559,6 @@ __decorate([
 ], GemScreenerController.prototype, "proxyStockList", null);
 __decorate([
     (0, common_1.Get)('proxy/eastmoney-list'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
@@ -592,7 +588,6 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
 ], GemScreenerController);
