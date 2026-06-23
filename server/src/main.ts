@@ -76,19 +76,8 @@ async function bootstrap() {
     });
   });
   app.setGlobalPrefix('api');
-  // 托管 H5 前端页面（强制不缓存，用户每次都拿到最新版）
-  app.use(express.static(path.join(__dirname, '..', 'public'), {
-    maxAge: 0,
-    etag: false,
-    lastModified: false,
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.html')) {
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-      }
-    },
-  }));
+  // 托管 H5 前端静态文件
+  app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 

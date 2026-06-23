@@ -6,7 +6,6 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
-@SkipAccessLimit()
 @Controller('gem')
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
@@ -66,7 +65,6 @@ export class GemScreenerController {
     }
   }
   @Get('opportunities')
-  @SkipAccessLimit()
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
     return { code: 200, msg: 'success', data: { opportunities, timestamp } };
@@ -306,7 +304,6 @@ export class GemScreenerController {
   }
 
   @Get('rescan')
-  @SkipAccessLimit()
   async rescanMarket() {
     try {
       const results = await this.gemScreener.rescanMarket();
@@ -364,7 +361,6 @@ export class GemScreenerController {
    * asc: 0(降序) / 1(升序) — 默认 0(降序)
    */
   @Get('proxy/stock-list')
-  @SkipAccessLimit()
   async proxyStockList(
     @Query('node') node: string,
     @Query('page') page: string,
@@ -397,7 +393,6 @@ export class GemScreenerController {
    * node: hs_a(主板) / cyb(创业板) / gem(创业板)
    */
   @Get('proxy/eastmoney-list')
-  @SkipAccessLimit()
   async proxyEastMoneyList(
     @Query('node') node: string,
     @Query('page') page: string,
