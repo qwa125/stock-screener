@@ -779,6 +779,7 @@ async function doFullRescan(){
     if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
     else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
     seen[code]=1
+    seenInSina[code]=1  // 标记新股也在Sina中找到，避免被降级
     
     newStocks.push({code:code,name:name,currentPrice:price,
       pricePosition:50,
