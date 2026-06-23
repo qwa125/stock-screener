@@ -88,19 +88,21 @@ async function bootstrap() {
       for (let p = 1; p <= MAX_PAGES; p++) allPages.push({ node: 'hs_a', page: p });
       for (let p = 1; p <= CYB_PAGES; p++) allPages.push({ node: 'cyb', page: p });
 
+      const FETCH_TIMEOUT = 15000; // 15s per page (connection + response)
+
       const results = await Promise.all(allPages.map(({ node, page }) => {
         return new Promise<any[]>((resolve) => {
           const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=100&sort=changepercent&asc=0&node=${node}`;
-          const req2 = https.get(url, { timeout: 20000 }, (sinaRes) => {
-            let body = '';
-            sinaRes.on('data', (chunk) => (body += chunk));
-            sinaRes.on('end', () => {
-              try { resolve(JSON.parse(body)); }
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+          fetch(url, { signal: controller.signal })
+            .then(async (resp) => {
+              clearTimeout(timer);
+              const text = await resp.text();
+              try { resolve(JSON.parse(text)); }
               catch { resolve([]); }
-            });
-          });
-          req2.on('error', () => resolve([]));
-          req2.setTimeout(20000, () => { req2.destroy(); resolve([]); });
+            })
+            .catch(() => { clearTimeout(timer); resolve([]); });
         });
       }));
 
