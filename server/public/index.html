@@ -156,6 +156,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
 <div class="footer" id="footer">⏸️ 等待扫描</div>
+<!-- 调试面板：每次扫描后显示信号分布，完全独立于列表渲染 -->
+<div id="debugPanel" style="margin:8px 12px;padding:10px 12px;background:#f0f9ff;border:2px solid #38bdf8;border-radius:10px;font-size:12px;color:#1e293b;display:none">
+  <div style="font-weight:700;margin-bottom:6px;color:#0284c7">📊 调试-信号分布</div>
+  <div id="debugContent" style="line-height:1.7">加载中...</div>
+</div>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -248,6 +253,22 @@ function restoreCachedStocks(){
         }
         $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
   if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票'
+        // 缓存恢复时也更新调试面板
+        try{
+          var _dbg=$('debugPanel'),_dbc=$('debugContent')
+          if(_dbg&&_dbc){
+            var _sig={};cached.forEach(function(s){var sg=s.suggestion||'未知';_sig[sg]=(_sig[sg]||0)+1})
+            var _sp=[]
+            if(_sig['重仓买入']){_sp.push('🔥重仓买入'+_sig['重仓买入']+'只')}
+            if(_sig['买入']){_sp.push('✅买入'+_sig['买入']+'只')}
+            if(_sig['轻仓买入']){_sp.push('⚪轻仓买入'+_sig['轻仓买入']+'只')}
+            _dbg.style.display='block'
+            _dbc.innerHTML='<b>信号(缓存):</b> '+_sp.join(' | ')+'<br><b>总数:</b> '+cached.length+' 只<br>'
+              +'<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
+              +cached.map(function(s,i){return '<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'}).join('')
+              +'</div>'
+          }
+        }catch(e){}
         return true
       }
     }
@@ -956,6 +977,20 @@ async function doFullRescan(){
     // 顶部已解锁，此处不再重复调用
     var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终Top20:',_sp2.join(' | '))
     setStatus('✅ Top20: '+_sp2.join(' | ')+' | '+lastScanTime)
+    // ====== 更新调试面板（完全独立于列表渲染） ======
+    try{
+      var _dbg=$('debugPanel'),_dbc=$('debugContent')
+      if(_dbg&&_dbc){
+        _dbg.style.display='block'
+        var _h='<b>信号分布:</b> '+_sp2.join(' | ')+'<br>'
+        _h+='<b>newStocks总数:</b> '+newStocks.length+' 只<br>'
+        _h+='<b>Top20:</b> '+stocks.length+' 只<br>'
+        _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
+        stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
+        _h+='</div>'
+        _dbc.innerHTML=_h
+      }
+    }catch(e){}
   }else{
     setStatus('❌ 重扫无结果')
   }
