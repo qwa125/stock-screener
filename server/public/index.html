@@ -265,9 +265,9 @@ async function handleScanClick(){
       showBlocked(false)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，执行扫描（不受缓存影响）
+    // 设备注册成功 → 隐藏毛玻璃，全市场重扫（确保完整正确的排序和300005探路者）
     hideBlocked()
-    doScan()  // doScan内部如果缓存数据<5只，自动切到全市场重扫(聚合端点)
+    doFullRescan()  // 腾讯实时1617只全市场扫描，覆盖300005
   }catch(e){
     // 网络错误时放行（后端不可用时允许访问，2dfdbc9访问模式）
     hideBlocked()
