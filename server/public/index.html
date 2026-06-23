@@ -528,6 +528,9 @@ function renderList(){
 
 // ---------- 扫描 ----------
 async function doScan(){
+  // 毛玻璃可见时（未注册），仅缓存数据不更新界面
+  var isBlurred=!$('pageBlur').classList.contains('hidden')
+  if(isBlurred&&loading)return
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   stopPriceRefresh()
   setStatus('🔄 获取分析数据...')
@@ -539,6 +542,11 @@ async function doScan(){
     }
     stocks=d.data.opportunities
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    // 毛玻璃可见时不显示结果，只缓存
+    if(isBlurred){
+      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+      return
+    }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;$('detailArea').style.display='none'
@@ -1039,33 +1047,17 @@ async function doSearch(){
 }
 
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
-// 如果在目标点之前加载 → 延时到点触发；如果在之后10分钟内 → 立即触发
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t){
-    setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
-  }else if(n.getTime()-t.getTime()<600000&&!loading){
-    // 页面在固定点之后10分钟内加载 → 立即扫描（比如9:25:30进页面）
-    setTimeout(function(){if(!loading)doScan()},500);
-  }
+  if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动刷新（对齐到整钟点，9:25开盘扫描后首次周期从9:40开始）
-(function(){
-  function doPeriodic(){
-    if(isTH()&&!loading){doScan()}
-    var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-    $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-  }
-  // 计算到下一个:00/:10/:20/:30/:40/:50的毫秒数
-  var n=new Date(),nextMin=Math.ceil(n.getMinutes()/10)*10
-  var nextTime=new Date(n);nextTime.setMinutes(nextMin===60?0:nextMin,0,0)
-  if(nextTime<=n)nextTime.setTime(nextTime.getTime()+600000)
-  // 9:25开盘扫描后，首个周期扫锚定9:40（跳过9:30）
-  if(nextTime.getHours()<9||(nextTime.getHours()===9&&nextTime.getMinutes()<40))
-    nextTime=new Date(n.getFullYear(),n.getMonth(),n.getDate(),9,40,0)
-  setTimeout(function(){doPeriodic();setInterval(doPeriodic,600000)},nextTime.getTime()-n.getTime())
-})()
+// 每10分钟交易时段自动刷新
+setInterval(function(){
+  if(isTH()&&!loading){doScan()}
+  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+},600000)
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
