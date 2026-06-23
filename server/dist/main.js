@@ -8,6 +8,61 @@ const path = require("path");
 const https = require("https");
 const http_status_interceptor_1 = require("./interceptors/http-status.interceptor");
 const gem_screener_service_1 = require("./modules/gem-screener/gem-screener.service");
+let sinaCache = [];
+let sinaCacheReady = false;
+async function refreshSinaCache() {
+    const MAX_PAGES = 15;
+    const CYB_PAGES = 6;
+    const FETCH_TIMEOUT = 15000;
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 2000;
+    const allPages = [];
+    for (let p = 1; p <= MAX_PAGES; p++)
+        allPages.push({ node: 'hs_a', page: p });
+    for (let p = 1; p <= CYB_PAGES; p++)
+        allPages.push({ node: 'cyb', page: p });
+    const results = await Promise.all(allPages.map(async ({ node, page }) => {
+        const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=100&sort=changepercent&asc=0&node=${node}`;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+                const resp = await fetch(url, { signal: controller.signal });
+                clearTimeout(timer);
+                const text = await resp.text();
+                const data = JSON.parse(text);
+                if (Array.isArray(data) && data.length > 0)
+                    return data;
+                return [];
+            }
+            catch {
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, RETRY_DELAY));
+                }
+            }
+        }
+        return [];
+    }));
+    const seenCodes = new Set();
+    const allData = [];
+    for (const arr of results) {
+        if (!Array.isArray(arr))
+            continue;
+        for (const item of arr) {
+            const code = String(item.code || '');
+            if (!code || seenCodes.has(code))
+                continue;
+            seenCodes.add(code);
+            allData.push(item);
+        }
+    }
+    sinaCache = allData;
+    sinaCacheReady = true;
+}
+setTimeout(() => {
+    refreshSinaCache();
+    setInterval(refreshSinaCache, 300000);
+}, 500);
 function parsePort() {
     if (process.env.SERVER_PORT) {
         const port = parseInt(process.env.SERVER_PORT, 10);
@@ -37,6 +92,65 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     console.error(`[FATAL] unhandledRejection:`, reason);
 });
+let sinaMarketCache = [];
+let sinaMarketLoading = false;
+let sinaMarketLastFetch = 0;
+const SINA_CACHE_TTL = 3 * 60 * 1000;
+async function fetchSinaPage(node, page) {
+    const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=100&sort=changepercent&asc=0&node=${node}`;
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        const text = await resp.text();
+        const arr = JSON.parse(text);
+        return Array.isArray(arr) ? arr : [];
+    }
+    catch {
+        return [];
+    }
+}
+async function refreshSinaMarketCache() {
+    if (sinaMarketLoading)
+        return;
+    sinaMarketLoading = true;
+    const start = Date.now();
+    try {
+        const allPages = [];
+        for (let p = 1; p <= 15; p++)
+            allPages.push({ node: 'hs_a', page: p });
+        for (let p = 1; p <= 6; p++)
+            allPages.push({ node: 'cyb', page: p });
+        const results = await Promise.all(allPages.map(({ node, page }) => fetchSinaPage(node, page)));
+        const seenCodes = new Set();
+        const merged = [];
+        for (const arr of results) {
+            for (const item of arr) {
+                const code = String(item.code || '');
+                if (!code || seenCodes.has(code))
+                    continue;
+                seenCodes.add(code);
+                merged.push(item);
+            }
+        }
+        if (merged.length > 0) {
+            merged.sort((a, b) => (b.changepercent || 0) - (a.changepercent || 0));
+            sinaMarketCache = merged;
+            sinaMarketLastFetch = Date.now();
+            console.log(`[SinaCache] ${merged.length} stocks (${Date.now() - start}ms)`);
+        }
+        else {
+            console.warn(`[SinaCache] empty result, cache preserved (${sinaMarketCache.length} stocks)`);
+        }
+    }
+    catch (e) {
+        console.error(`[SinaCache] refresh error: ${e.message}`);
+    }
+    finally {
+        sinaMarketLoading = false;
+    }
+}
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.enableCors({
@@ -65,51 +179,18 @@ async function bootstrap() {
         });
     });
     app.use('/api/gem/full-sina-scan', async (req, res) => {
-        try {
-            const MAX_PAGES = 15;
-            const CYB_PAGES = 6;
-            const allPages = [];
-            for (let p = 1; p <= MAX_PAGES; p++)
-                allPages.push({ node: 'hs_a', page: p });
-            for (let p = 1; p <= CYB_PAGES; p++)
-                allPages.push({ node: 'cyb', page: p });
-            const FETCH_TIMEOUT = 15000;
-            const results = await Promise.all(allPages.map(({ node, page }) => {
-                return new Promise((resolve) => {
-                    const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=100&sort=changepercent&asc=0&node=${node}`;
-                    const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-                    fetch(url, { signal: controller.signal })
-                        .then(async (resp) => {
-                        clearTimeout(timer);
-                        const text = await resp.text();
-                        try {
-                            resolve(JSON.parse(text));
-                        }
-                        catch {
-                            resolve([]);
-                        }
-                    })
-                        .catch(() => { clearTimeout(timer); resolve([]); });
-                });
-            }));
-            const seenCodes = new Set();
-            const allData = [];
-            for (const arr of results) {
-                if (!Array.isArray(arr))
-                    continue;
-                for (const item of arr) {
-                    const code = String(item.code || '');
-                    if (!code || seenCodes.has(code))
-                        continue;
-                    seenCodes.add(code);
-                    allData.push(item);
-                }
+        if (!sinaCacheReady || sinaCache.length === 0) {
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                if (sinaCacheReady && sinaCache.length > 0)
+                    break;
             }
-            res.json({ code: 200, msg: 'success', data: allData });
         }
-        catch (e) {
-            res.status(500).json({ code: 500, msg: '全市场扫描失败: ' + (e.message || e), data: [] });
+        if (sinaCache.length > 0) {
+            res.json({ code: 200, msg: 'success', data: sinaCache });
+        }
+        else {
+            res.json({ code: 200, msg: '缓存尚在加载', data: [] });
         }
     });
     const gemSvc = app.get(gem_screener_service_1.GemScreenerService);
