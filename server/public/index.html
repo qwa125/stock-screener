@@ -859,6 +859,17 @@ async function doFullRescan(){
       isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
   }
   
+  // ====== DEBUG: 记录Tencent处理后所有重仓买入股 ======
+  try{
+    var _debug_heavy = []
+    for(var _di=0;_di<newStocks.length;_di++){
+      if(newStocks[_di].suggestion==='重仓买入'){
+        _debug_heavy.push(newStocks[_di].code+' '+newStocks[_di].name+' chg='+newStocks[_di].changePercent+'%')
+      }
+    }
+    console.log('🔍 DEBUG: Tencent处理后重仓买入共 '+_debug_heavy.length+' 只:', _debug_heavy.join(' | '))
+  }catch(e){}
+  
   // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占Top20）
   var deprioritized=0
   for(var di=0;di<newStocks.length;di++){
@@ -938,6 +949,13 @@ async function doFullRescan(){
       return (b.changePercent||0)-(a.changePercent||0)
     })
     // 再次收窄到Top20（追加的缓存股可能超出20只）
+    // ====== DEBUG: final排序后/收窄前 ======
+    try{
+      var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
+      var _spD=[];if(_sigD['重仓买入']){_spD.push('🔥重仓买入'+_sigD['重仓买入']+'只')}if(_sigD['买入']){_spD.push('✅买入'+_sigD['买入']+'只')}if(_sigD['轻仓买入']){_spD.push('⚪轻仓买入'+_sigD['轻仓买入']+'只')}
+      console.log('🔍 DEBUG: 最终排序后共有 '+stocks.length+' 只: '+_spD.join(' | '))
+      stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
+    }catch(e){}
     if(stocks.length>20) stocks=stocks.slice(0,20)
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
