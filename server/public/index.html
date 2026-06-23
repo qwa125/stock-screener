@@ -7,10 +7,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>A股优选 Top20</title>
+<title>A股优选</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:#f5f5f5;color:#333}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:#f5f5f5;color:#333;display:flex;flex-direction:column;min-height:100vh}
 .header{position:sticky;top:0;background:#fff;z-index:10;padding:12px 16px 8px;border-bottom:1px solid #eee}
 .header h1{font-size:18px;font-weight:700}
 .header .status{font-size:11px;color:#999;margin-top:2px}
@@ -33,7 +33,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .col-price{flex:1;text-align:center}
 .col-chg{flex:1;text-align:center}
 .col-pos{flex:1.1;text-align:right}
-.stock-list{padding:0 12px 8px;display:flex;flex-direction:column;gap:6px}
+.stock-list{flex:1;overflow-y:auto;padding:0 12px 8px;display:flex;flex-direction:column;gap:6px}
+.header{flex-shrink:0}.search-bar{flex-shrink:0}#detailArea{flex-shrink:0}.btn-scan-wrapper{flex-shrink:0}.list-header{flex-shrink:0}.footer{flex-shrink:0}#debugPanel{flex-shrink:0}
 .stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
 .stock-card:active{transform:scale(.98)}
 .stock-row{display:flex;align-items:center}
@@ -120,7 +121,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 Top20 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v2</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v2</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <span class="status" id="status">等待扫描</span>
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
@@ -582,7 +583,7 @@ function renderList(){
   if(isBlurred&&stocks.length){try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
-  var scanSummary='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
+  var scanSummary='✅ 重仓买入'+_sigC['重仓买入']+'只 | ✅买入'+_sigC['买入']+'只 | 实时行情'
   if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
   $('footer').textContent=scanSummary
   // 计算信号分布显示在状态栏
@@ -590,7 +591,7 @@ function renderList(){
   if(_sigC['重仓买入']){_sigS.push('🔥重仓买入'+_sigC['重仓买入']+'只')}
   if(_sigC['买入']){_sigS.push('✅买入'+_sigC['买入']+'只')}
   if(_sigC['轻仓买入']){_sigS.push('⚪轻仓买入'+_sigC['轻仓买入']+'只')}
-  setStatus('✅ Top'+stocks.length+': '+_sigS.join(' | ')+' | '+lastScanTime)
+  setStatus('✅ '+_sigS.join(' | ')+' | '+lastScanTime)
   if(lastScanTime){try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}}
   stocks.forEach(function(s,i){
     var rt=realtimePrices[s.code]||{}
@@ -808,7 +809,7 @@ async function doFullRescan(){
     var liveScore=Math.round(30+Math.abs(chg)*2)
     var liveSuggestion='观望'
     // 涨停风险控制：10cm主板涨超6%不推荐追高；20cm创业板涨超15%同理
-    if((isMainBoard(code)&&chg>6)||(isGEM(code)&&chg>15))continue
+    if((isMainBoard(code)&&chg>9)||(isGEM(code)&&chg>15))continue
     if(chg>=9)liveSuggestion='重仓买入'
     else if(chg>=6)liveSuggestion='买入'
     else if(chg>=3)liveSuggestion='轻仓买入'
@@ -870,7 +871,7 @@ async function doFullRescan(){
     console.log('🔍 DEBUG: Tencent处理后重仓买入共 '+_debug_heavy.length+' 只:', _debug_heavy.join(' | '))
   }catch(e){}
   
-  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占Top20）
+  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占列表）
   var deprioritized=0
   for(var di=0;di<newStocks.length;di++){
     var ds=newStocks[di]
@@ -914,10 +915,10 @@ async function doFullRescan(){
       // 第四排序：今日涨幅(高→低)，让强势股浮上来
       return (b.changePercent||0)-(a.changePercent||0)
     })
-    // 只保留 Top20
-    if(stocks.length>20) stocks=stocks.slice(0,20)
+    // 信号筛选
+    
     // 只保留重仓买入/买入/轻仓买入的股票
-    var ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
+    var ALLOWED={'重仓买入':1,'买入':1}
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
     if(cacheCount>0){
@@ -948,7 +949,7 @@ async function doFullRescan(){
       if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
       return (b.changePercent||0)-(a.changePercent||0)
     })
-    // 再次收窄到Top20（追加的缓存股可能超出20只）
+    // 追加缓存股后重新排序
     // ====== DEBUG: final排序后/收窄前 ======
     try{
       var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
@@ -956,7 +957,7 @@ async function doFullRescan(){
       console.log('🔍 DEBUG: 最终排序后共有 '+stocks.length+' 只: '+_spD.join(' | '))
       stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
     }catch(e){}
-    if(stocks.length>20) stocks=stocks.slice(0,20)
+    
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
@@ -966,8 +967,8 @@ async function doFullRescan(){
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
-    // 日志输出Top20信号分布，方便排查
-    console.log('📊 Top20信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
+    // 日志输出信号分布，方便排查
+    console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
     renderList() // 先显示
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
     // ====== 状态栏显示信号分布摘要 ======
@@ -976,7 +977,7 @@ async function doFullRescan(){
     if(sigSummary['重仓买入']){sigParts.push('🔥重仓买入'+sigSummary['重仓买入']+'只')}
     if(sigSummary['买入']){sigParts.push('✅买入'+sigSummary['买入']+'只')}
     if(sigSummary['轻仓买入']){sigParts.push('⚪轻仓买入'+sigSummary['轻仓买入']+'只')}
-    setStatus('📊 Top20: '+sigParts.join(' | ')+' (腾讯实时)')
+    setStatus('📊 '+sigParts.join(' | ')+' (腾讯实时)')
     try{
       stocks.forEach(function(s,idx){
         var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
@@ -993,8 +994,8 @@ async function doFullRescan(){
       })
     }catch(e){}
     // 顶部已解锁，此处不再重复调用
-    var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终Top20:',_sp2.join(' | '))
-    setStatus('✅ Top20: '+_sp2.join(' | ')+' | '+lastScanTime)
+    var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终信号:',_sp2.join(' | '))
+    setStatus('✅ '+_sp2.join(' | ')+' | '+lastScanTime)
     // ====== 更新调试面板（完全独立于列表渲染） ======
     try{
       var _dbg=$('debugPanel'),_dbc=$('debugContent')
@@ -1011,8 +1012,8 @@ async function doFullRescan(){
         if(_nsSigs['不要介入']){_nsParts.push('❌不要介入'+_nsSigs['不要介入']+'只')}
         var _h='<b>newStocks信号分布:</b> '+_nsParts.join(' | ')+'<br>'
         _h+='<b>newStocks总数:</b> '+newStocks.length+' 只<br>'
-        _h+='<b>Top20信号分布:</b> '+_sp2.join(' | ')+' ('+stocks.length+'只)<br>'
-        _h+='<b>--- 独立重算 Top20（绕过主流程） ---</b><br>'
+        _h+='<b>当前列表信号分布:</b> '+_sp2.join(' | ')+' ('+stocks.length+'只)<br>'
+        _h+='<b>--- 独立重算（绕过主流程） ---</b><br>'
         try{
           var _ind_stocks=newStocks.slice()
           var _ind_PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
@@ -1026,7 +1027,7 @@ async function doFullRescan(){
           })
           var _ind_ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
           _ind_stocks=_ind_stocks.filter(function(s){return _ind_ALLOWED[s.suggestion]?1:0})
-          if(_ind_stocks.length>20)_ind_stocks=_ind_stocks.slice(0,20)
+          
           var _ind_sigs={};_ind_stocks.forEach(function(s){var sg=s.suggestion||'未知';_ind_sigs[sg]=(_ind_sigs[sg]||0)+1})
           var _ind_parts=[]
           if(_ind_sigs['重仓买入']){_ind_parts.push('🔥重仓买入'+_ind_sigs['重仓买入']+'只')}
@@ -1036,7 +1037,7 @@ async function doFullRescan(){
           _ind_stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
           _h+='</div>'
         }catch(e2){_h+='<div>独立重算出错: '+e2.message+'</div>'}
-        _h+='<b>--- 主流程 Top20 ---</b><br>'
+        _h+='<b>--- 主流程 ---</b><br>'
         _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
         stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
         _h+='</div>'
