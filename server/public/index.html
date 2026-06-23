@@ -633,7 +633,7 @@ async function doFullRescan(){
   }catch(e){setStatus('⚠️ 后端东方财富代理失败: '+e.message)}
   
   // 备用：Sina代理多页分片
-  if(!emData.length){
+  if(emData.length<500){
     setStatus('⚠️ 东方财富代理不可用，改用Sina代理分页抓取'+(isTH()?'...':' 已冻结数据...'))
     try{
       var sinaAll=[]

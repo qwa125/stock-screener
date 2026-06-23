@@ -1,7 +1,9 @@
 import { Controller, Post, Headers, Logger } from '@nestjs/common'
 import { DeviceRegistryService } from './device-registry.service'
+import { SkipAccessLimit } from '../guards/access-limit.guard'
 
 @Controller('device')
+@SkipAccessLimit()
 export class DeviceController {
   private readonly logger = new Logger(DeviceController.name)
 
