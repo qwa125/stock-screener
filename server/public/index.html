@@ -554,7 +554,8 @@ function buildDetail(s,rt){
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
   var nameHtml='<div style="font-size:15px;font-weight:700;color:#1f2937;padding:8px 12px 2px">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></div>'
-  return nameHtml+tags+action+future+grid+detailList
+  var backBtn='<div style="padding:6px 12px 0;display:flex;align-items:center;gap:6px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;color:#6b7280;cursor:pointer">← 返回列表</button></div>'
+  return backBtn+nameHtml+tags+action+future+grid+detailList
 }
 
 // ---------- 渲染列表 ----------
