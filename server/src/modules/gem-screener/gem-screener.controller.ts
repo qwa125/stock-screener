@@ -304,6 +304,7 @@ export class GemScreenerController {
   }
 
   @Get('rescan')
+  @SkipAccessLimit()
   async rescanMarket() {
     try {
       const results = await this.gemScreener.rescanMarket();
