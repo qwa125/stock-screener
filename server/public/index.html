@@ -581,6 +581,15 @@ async function doScan(){
       setStatus('❌ 后端无数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return
     }
     stocks=d.data.opportunities
+    // 后端数据不足时(＜5只)，自动切换到全市场重扫（通过聚合端点抓实时Sina数据）
+    if(stocks&&stocks.length<5){
+      console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
+      setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
+      try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+      doFullRescan()
+      return
+    }
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
     // 毛玻璃可见时不显示结果，只缓存
     if(isBlurred){
