@@ -713,7 +713,8 @@ async function doFullRescan(){
     var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
     
     // 判断市场是否有真实波动：交易时段且有实际涨跌
-    var hasLiveData = isTH() && Math.abs(chg)>0.01
+    // 有真实涨跌幅则使用实时评分（Sina返回最后交易时段数据，非交易时段也有效）
+    var hasLiveData = Math.abs(chg) > 0.01
     
     // 已缓存个股：用实时数据更新价格/涨幅，同时重算信号/评分（让今日跌的让位）
     if(seen[code]){
@@ -740,9 +741,9 @@ async function doFullRescan(){
     
     newStocks.push({code:code,name:name,currentPrice:price,
       pricePosition:50,
-      // 市场关闭时新面孔直接给低分，不挤占缓存分析结果
+      // 新股按涨跌幅给基础评分（即使非交易时段也有排序依据）
       suggestion:hasLiveData?liveSuggestion:'观望',
-      score:hasLiveData?liveScore:10,
+      score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
       chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
