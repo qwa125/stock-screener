@@ -1058,6 +1058,9 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
+// 页面打开时如果在交易时段，立即全市场扫描
+if(isTH()&&!loading)setTimeout(function(){doFullRescan()},500)
+
 // 每10分钟交易时段自动刷新
 setInterval(function(){
   if(isTH()&&!loading){doFullRescan()}
