@@ -1000,9 +1000,18 @@ async function doFullRescan(){
       var _dbg=$('debugPanel'),_dbc=$('debugContent')
       if(_dbg&&_dbc){
         _dbg.style.display='block'
-        var _h='<b>信号分布:</b> '+_sp2.join(' | ')+'<br>'
+        // newStocks全量信号分布（观察处理后的所有信号）
+        var _nsSigs={};newStocks.forEach(function(s){var sg=s.suggestion||'未知';_nsSigs[sg]=(_nsSigs[sg]||0)+1})
+        var _nsParts=[]
+        if(_nsSigs['重仓买入']){_nsParts.push('🔥重仓买入'+_nsSigs['重仓买入']+'只')}
+        if(_nsSigs['买入']){_nsParts.push('✅买入'+_nsSigs['买入']+'只')}
+        if(_nsSigs['轻仓买入']){_nsParts.push('⚪轻仓买入'+_nsSigs['轻仓买入']+'只')}
+        if(_nsSigs['持有']){_nsParts.push('持有'+_nsSigs['持有']+'只')}
+        if(_nsSigs['观望']){_nsParts.push('观望'+_nsSigs['观望']+'只')}
+        if(_nsSigs['不要介入']){_nsParts.push('❌不要介入'+_nsSigs['不要介入']+'只')}
+        var _h='<b>newStocks信号分布:</b> '+_nsParts.join(' | ')+'<br>'
         _h+='<b>newStocks总数:</b> '+newStocks.length+' 只<br>'
-        _h+='<b>Top20:</b> '+stocks.length+' 只<br>'
+        _h+='<b>Top20信号分布:</b> '+_sp2.join(' | ')+' ('+stocks.length+'只)<br>'
         _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
         stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
         _h+='</div>'
