@@ -92,7 +92,7 @@ let AuthController = class AuthController {
         };
     }
     async setMaxSlots(body) {
-        const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
+        const slots = Math.max(1, Math.min(10000, Math.round(body.maxSlots)));
         await this.deviceRegistry.setMaxSlots(slots);
         return { ok: true, maxSlots: slots };
     }

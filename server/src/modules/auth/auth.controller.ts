@@ -98,7 +98,7 @@ export class AuthController {
   /** 设置设备限额（立即生效，无需重启） */
   @Put('max-slots')
   async setMaxSlots(@Body() body: { maxSlots: number }): Promise<{ ok: boolean; maxSlots: number }> {
-    const slots = Math.max(1, Math.min(100, Math.round(body.maxSlots)));
+    const slots = Math.max(1, Math.min(10000, Math.round(body.maxSlots)));
     await this.deviceRegistry.setMaxSlots(slots);
     return { ok: true, maxSlots: slots };
   }
