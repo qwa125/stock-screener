@@ -164,7 +164,7 @@ var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04'
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
-function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
+function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
@@ -1039,9 +1039,15 @@ async function doSearch(){
 }
 
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
+// 如果在目标点之前加载 → 延时到点触发；如果在之后10分钟内 → 立即触发
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
+  if(n<t){
+    setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
+  }else if(n.getTime()-t.getTime()<600000&&!loading){
+    // 页面在固定点之后10分钟内加载 → 立即扫描（比如9:25:30进页面）
+    setTimeout(function(){if(!loading)doScan()},500);
+  }
 });
 
 // 每10分钟交易时段自动刷新（对齐到整钟点，9:25开盘扫描后首次周期从9:40开始）
