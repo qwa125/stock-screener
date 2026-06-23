@@ -135,7 +135,7 @@ export class GemScreenerController {
         const mfB = b.mainForceInflow ?? 0;
         return mfB - mfA;
       })
-      .slice(0, 20);
+      .slice(0, 30);
     // 给每只个股补充筹码字段（兼容旧缓存缺失场景）
     for (const s of sorted) {
       if (s.chipConcentration90 === undefined) {
@@ -351,7 +351,7 @@ export class GemScreenerController {
       return (b.score || 0) - (a.score || 0);
     });
     this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
-    return { code: 200, msg: 'ok', data: results.slice(0, 20) };
+    return { code: 200, msg: 'ok', data: results.slice(0, 30) };
   }
 
   /**

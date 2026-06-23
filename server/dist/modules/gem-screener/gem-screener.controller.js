@@ -110,7 +110,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             const mfB = b.mainForceInflow ?? 0;
             return mfB - mfA;
         })
-            .slice(0, 20);
+            .slice(0, 30);
         for (const s of sorted) {
             if (s.chipConcentration90 === undefined) {
                 s.chipConcentration90 = 50;
@@ -278,7 +278,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return (b.score || 0) - (a.score || 0);
         });
         this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
-        return { code: 200, msg: 'ok', data: results.slice(0, 20) };
+        return { code: 200, msg: 'ok', data: results.slice(0, 30) };
     }
     async proxyStockList(node, page, num, sort, asc) {
         try {

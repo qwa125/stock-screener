@@ -95,7 +95,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const raw = (0, fs_1.readFileSync)(this.CACHE_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                const limitedData = parsed.data.slice(0, 10);
+                const limitedData = parsed.data.slice(0, 30);
                 this.cache = { ...parsed, data: limitedData };
                 this.logger.log(`📦 创业板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
                 return;
@@ -109,7 +109,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const raw = (0, fs_1.readFileSync)(this.BUNDLED_GEM_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                    const limitedData = parsed.data.slice(0, 10);
+                    const limitedData = parsed.data.slice(0, 30);
                     this.cache = { ...parsed, data: limitedData };
                     this.logger.log(`📦 从部署包恢复创业板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
                 }
@@ -124,7 +124,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const raw = (0, fs_1.readFileSync)(this.MAIN_BOARD_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                const limitedData = parsed.data.slice(0, 10);
+                const limitedData = parsed.data.slice(0, 30);
                 this.mainBoardCache = { ...parsed, data: limitedData };
                 this.logger.log(`📦 主板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
                 return;
@@ -138,7 +138,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const raw = (0, fs_1.readFileSync)(this.BUNDLED_MAIN_BOARD_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                    const limitedData = parsed.data.slice(0, 10);
+                    const limitedData = parsed.data.slice(0, 30);
                     this.mainBoardCache = { ...parsed, data: limitedData };
                     this.logger.log(`📦 从部署包恢复主板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
                 }
@@ -153,7 +153,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const raw = (0, fs_1.readFileSync)(this.SECTOR_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                const limitedData = parsed.data.slice(0, 10);
+                const limitedData = parsed.data.slice(0, 30);
                 this.sectorCache = { ...parsed, data: limitedData };
                 this.logger.log(`📦 板块加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
                 return;
@@ -167,7 +167,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const raw = (0, fs_1.readFileSync)(this.BUNDLED_SECTOR_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
-                    const limitedData = parsed.data.slice(0, 10);
+                    const limitedData = parsed.data.slice(0, 30);
                     this.sectorCache = { ...parsed, data: limitedData };
                     this.logger.log(`📦 从部署包恢复板块缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
                 }
@@ -452,7 +452,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = results.slice(0, 10);
+        const finalResults = results.slice(0, 30);
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
         return finalResults;
     }
@@ -517,7 +517,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = deduped.slice(0, 10);
+        const finalResults = deduped.slice(0, 30);
         this.cache = { data: finalResults, timestamp: Date.now() };
         this.saveCacheToDisk();
         this.logger.log(`✅ 前端数据扫描完成, 累加合并后 ${finalResults.length} 只`);
@@ -577,7 +577,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = dedupedMain.slice(0, 10);
+        const finalResults = dedupedMain.slice(0, 30);
         this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
         this.saveMainBoardCacheToDisk();
         this.logger.log(`✅ 前端主板数据推送完成, 累加合并后 ${finalResults.length} 只`);
@@ -641,7 +641,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = dedupedSector.slice(0, 10);
+        const finalResults = dedupedSector.slice(0, 30);
         this.sectorCache = { data: finalResults, timestamp: Date.now() };
         try {
             await fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
@@ -1558,7 +1558,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
         this.logger.log(`✅ 主板扫描完成, 共 ${results.length} 只机会股`);
-        const finalResults = results.slice(0, 10);
+        const finalResults = results.slice(0, 30);
         this.stockService.preCacheAnalysisBatch(finalResults.map(s => s.code)).catch(() => { });
         return finalResults;
     }
@@ -2341,7 +2341,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             });
             const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
             const buyUpdated = updated.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-            const top20 = buyUpdated.slice(0, 20);
+            const top20 = buyUpdated.slice(0, 30);
             this.cache = { data: top20, timestamp: now };
             try {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
@@ -2353,7 +2353,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.error(`重新评估失败: ${e.message}`);
         }
         const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 20);
+        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 30);
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];
@@ -2600,7 +2600,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
         const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-        const finalResults = buyResults.slice(0, 20);
+        const finalResults = buyResults.slice(0, 30);
         this.cache = { data: finalResults, timestamp: Date.now() };
         this.saveCacheToDisk();
         this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
