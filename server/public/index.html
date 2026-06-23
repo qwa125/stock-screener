@@ -883,6 +883,16 @@ async function doFullRescan(){
         stocks.push(ns);inList[ns.code]=1
       }
     }
+    // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按信号→入场时机→评分→涨幅重整）
+    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
+    stocks.sort(function(a,b){
+      var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
+      if(pa!==pb) return pa-pb
+      var ea=a.entryTiming||0, eb=b.entryTiming||0
+      if(eb!==ea) return eb-ea
+      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
+      return (b.changePercent||0)-(a.changePercent||0)
+    })
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
