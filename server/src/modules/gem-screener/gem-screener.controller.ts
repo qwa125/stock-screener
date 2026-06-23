@@ -114,11 +114,14 @@ export class GemScreenerController {
     const heavyBuyAll = this.readHeavyBuyCache();
     const gemMerged = this.mergeWithHeavyBuy(gemResult.opportunities, heavyBuyAll.filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301'))));
     const mainMerged = this.mergeWithHeavyBuy(mainResult.opportunities, heavyBuyAll.filter(s => s.code && !s.code.startsWith('30')));
+    // 合并并去重（同一只股票可能同时出现在两个缓存中）
     const all = [...gemMerged, ...mainMerged];
+    const seen = new Set<string>();
+    const deduped = all.filter(s => { if (seen.has(s.code)) return false; seen.add(s.code); return true; });
     // 按信号排序: 重仓买入 > 买入 > 轻仓买入 > 持有 > 观望
     // 同信号内按入场时机(高→低)排序，再按主力资金流入(高→低)排序
     const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
-    const sorted = all
+    const sorted = deduped
       .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '观望'].includes(s.suggestion))
       .sort((a, b) => {
         const ao = signalOrder[a.suggestion] ?? 9;

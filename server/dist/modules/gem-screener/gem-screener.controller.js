@@ -91,8 +91,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const gemMerged = this.mergeWithHeavyBuy(gemResult.opportunities, heavyBuyAll.filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301'))));
         const mainMerged = this.mergeWithHeavyBuy(mainResult.opportunities, heavyBuyAll.filter(s => s.code && !s.code.startsWith('30')));
         const all = [...gemMerged, ...mainMerged];
+        const seen = new Set();
+        const deduped = all.filter(s => { if (seen.has(s.code))
+            return false; seen.add(s.code); return true; });
         const signalOrder = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
-        const sorted = all
+        const sorted = deduped
             .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '观望'].includes(s.suggestion))
             .sort((a, b) => {
             const ao = signalOrder[a.suggestion] ?? 9;
