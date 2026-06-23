@@ -598,13 +598,43 @@ async function doFullRescan(){
     if(emJson&&emJson.data&&emJson.data.diff) emData=emJson.data.diff
   }catch(e){setStatus('⚠️ 东方财富加载失败: '+e.message+'，尝试备用Sina代理...')}
   
-  // 备用：Sina代理（当前端East Money失败时）
+  // 备用：Sina代理多页分片（当前端East Money失败时）
   if(!emData.length){
+    setStatus('⚠️ 东方财富不可用，改用Sina代理分页抓取'+(isTH()?'...':' 已冻结数据...'))
     try{
-      var fbResp=await fetch(API+'/gem/proxy/stock-list?node=hs_a&page=1&num=100&sort=changepercent&asc=0')
-      var fbJson=await fbResp.json()
-      if(fbJson.code===200) emData=fbJson.data||[]
-    }catch(e){}
+      var sinaAll=[]
+      // 沪深A股(主板为主)：每页100只，最多抓15页 ≈ 1500只
+      for(var sp=1;sp<=15;sp++){
+        var sr=await fetch(API+'/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0')
+        var sj=await sr.json()
+        if(sj.code!==200||!sj.data||!sj.data.length)break
+        sinaAll.push(...sj.data)
+        if(sj.data.length<100)break
+      }
+      // 创业板(补充)：最多抓6页
+      for(var sp=1;sp<=6;sp++){
+        var sr=await fetch(API+'/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0')
+        var sj=await sr.json()
+        if(sj.code!==200||!sj.data||!sj.data.length)break
+        sinaAll.push(...sj.data)
+        if(sj.data.length<100)break
+      }
+      // 去重 + 映射为东方财富字段名
+      var seenCodes={}
+      emData=[]
+      for(var si=0;si<sinaAll.length;si++){
+        var sc=sinaAll[si],c=String(sc.code||'')
+        if(!c||seenCodes[c])continue
+        seenCodes[c]=1
+        emData.push({
+          f12:c,
+          f14:sc.name||'',
+          f2:parseFloat(sc.trade)||0,
+          f3:parseFloat(sc.changepercent)||0
+        })
+      }
+      setStatus('✅ Sina代理获取 '+emData.length+' 只股票')
+    }catch(e){setStatus('⚠️ Sina代理也失败: '+e.message)}
   }
   
   var seen={}
@@ -704,12 +734,33 @@ async function getSearchCache(){
         }).map(function(s){return{symbol:s.f12,name:s.f14}})
       }
     }catch(e){}
-    // 备用：后端代理
+    // 备用：后端代理多页分片
     if(!all.length){
       try{
-        var r=await fetch('/api/gem/proxy/stock-list?node=hs_a&page=1&num=500&sort=changepercent&asc=0')
-        var d=await r.json()
-        if(d.code===200&&d.data) all=d.data||[]
+        var sinaAll2=[]
+        for(var sp=1;sp<=15;sp++){
+          var r=await fetch('/api/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0')
+          var d=await r.json()
+          if(d.code!==200||!d.data||!d.data.length)break
+          sinaAll2.push(...d.data)
+          if(d.data.length<100)break
+        }
+        for(var sp=1;sp<=6;sp++){
+          var r=await fetch('/api/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0')
+          var d=await r.json()
+          if(d.code!==200||!d.data||!d.data.length)break
+          sinaAll2.push(...d.data)
+          if(d.data.length<100)break
+        }
+        var seen={}
+        all=[]
+        for(var si=0;si<sinaAll2.length;si++){
+          var sc=sinaAll2[si],c=String(sc.code||''),n=(sc.name||'').trim()
+          if(!c||!n||seen[c]||n.startsWith('*')||n.startsWith('ST')||n.startsWith('N'))continue
+          seen[c]=1
+          if(c.startsWith('688')||c.startsWith('689')||c.startsWith('4')||c.startsWith('8')||c.startsWith('920'))continue
+          all.push({symbol:c,name:n})
+        }
       }catch(e2){}
     }
     SEARCH_CACHE=all
