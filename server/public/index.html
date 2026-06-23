@@ -682,12 +682,23 @@ async function doFullRescan(){
     if(price<3)continue
     var chg=parseFloat(item.f3)||0
     
-    // 已缓存个股：用实时数据更新价格/涨幅（旧数据不会变top20）
+    // 基于今日涨幅计算实时信号/评分（缓存股和新股都用这个）
+    var liveScore=Math.round(30+Math.abs(chg)*2)
+    var liveSuggestion='观望'
+    if(chg>=6)liveSuggestion='买入'
+    else if(chg>=3)liveSuggestion='轻仓买入'
+    else if(chg>=1)liveSuggestion='持有'
+    var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
+    
+    // 已缓存个股：用实时数据更新价格/涨幅，同时重算信号/评分（让今日跌的让位）
     if(seen[code]){
       for(var si3=0;si3<newStocks.length;si3++){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
+          newStocks[si3].suggestion=liveSuggestion
+          newStocks[si3].score=liveScore
+          newStocks[si3].entryTiming=liveEntryTiming
           break
         }
       }
@@ -698,13 +709,6 @@ async function doFullRescan(){
     if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
     else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
     seen[code]=1
-    
-    // 无缓存分析的新股：基于涨幅给实时评分，有机会进top20
-    var liveScore=Math.round(30+Math.abs(chg)*2)
-    var liveSuggestion='观望'
-    if(chg>=6)liveSuggestion='买入'
-    else if(chg>=3)liveSuggestion='轻仓买入'
-    else if(chg>=1)liveSuggestion='持有'
     
     newStocks.push({code:code,name:name,currentPrice:price,
       pricePosition:50,suggestion:liveSuggestion,score:liveScore,
