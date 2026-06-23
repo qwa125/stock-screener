@@ -265,15 +265,15 @@ async function handleScanClick(){
       showBlocked(false)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，开始全市场扫描
+    // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描（完全2dfdbc9访问模式）
     hideBlocked()
-    if(loading)return
-    doFullRescan()
+    if(!restoreCachedStocks()){
+      doScan()
+    }
   }catch(e){
-    // 网络错误时放行（后端不可用时允许访问）
+    // 网络错误时放行（后端不可用时允许访问，2dfdbc9访问模式）
     hideBlocked()
-    if(loading)return
-    doFullRescan()
+    restoreCachedStocks()
   }
 }
 function $(id){return document.getElementById(id)}
