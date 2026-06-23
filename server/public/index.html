@@ -628,24 +628,9 @@ async function doFullRescan(){
   function isGEM(c){return /^30/.test(c)}
   
   // 通过后端代理获取东方财富全量数据（绕开生产环境CORS）
-  // 注意：东方财富从Render US会被限流，最快只有1次尝试，失败就秒切Sina代理
+  // EastMoney在Render US被限流，直接跳过（不浪费5秒），走Sina代理
   var emData=[]
-  try{
-    var emResp=await fetch(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000',{signal:timeoutSignal(10000)})
-    var emJson=await emResp.json()
-    if(emJson.code===200&&emJson.data&&emJson.data.length){
-      // 映射为统一字段名
-      emData=emJson.data.map(function(x){return{
-        f12:x.symbol, f14:x.name,
-        f2:x.trade, f3:x.changePercent
-      }})
-      setStatus('✅ 后端代理获取 '+emData.length+' 只股票')
-    }
-  }catch(e){/* EastMoney从Render US不可达，静默切Sina */}
-  
-  // 备用：Sina代理多页分片（并行抓取，从30秒降到2秒）
-  if(emData.length<500){
-    setStatus('⚠️ 东方财富代理不可用，改用Sina代理并行抓取'+(isTH()?'...':' 已冻结数据...'))
+  setStatus('🔄 并行抓取Sina全市场数据 (21页，约2-3秒)...')
     try{
       // 并行抓取所有页面
       var hsPages=[];for(var sp=1;sp<=15;sp++){hsPages.push(sp)}
