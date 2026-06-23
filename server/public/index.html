@@ -165,7 +165,7 @@ var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04
 
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=570&&m<690)||(m>=780&&m<900)}
-function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:30';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:30':'收盘已冻结，明早 9:30 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<570)return'盘前已冻结，9:30 恢复';return''}
+function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={}
 
@@ -258,7 +258,7 @@ async function handleScanClick(){
     hideBlocked()
     var hasCache=restoreCachedStocks()
     if(!hasCache||(isTH()&&!loading)){
-      // 有缓存但已过9:30开盘 → 强制刷新（缓存可能是周五数据）
+      // 有缓存但已过9:25开盘 → 强制刷新（缓存可能是周五数据）
       doScan()
     }
   }catch(e){
@@ -1038,8 +1038,8 @@ async function doSearch(){
   }
 }
 
-// 四个固定扫描点：9:30（开盘）、11:30（收早盘）、13:00（开盘）、15:00（收盘）
-[['9:30',9,30],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
+// 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
+[['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
   if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
 });
