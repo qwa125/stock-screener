@@ -184,11 +184,6 @@ export declare class GemScreenerController {
         msg: string;
         data: any[];
     }>;
-    fullSinaScan(): Promise<{
-        code: number;
-        msg: string;
-        data: any[];
-    }>;
     proxyStockList(node: string, page: string, num: string, sort?: string, asc?: string): Promise<{
         code: number;
         msg: string;

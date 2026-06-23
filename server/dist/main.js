@@ -63,6 +63,53 @@ async function bootstrap() {
             res.status(502).json({ code: 502, data: null, msg: '请求新浪API失败: ' + err.message });
         });
     });
+    app.use('/api/gem/full-sina-scan', async (req, res) => {
+        try {
+            const MAX_PAGES = 15;
+            const CYB_PAGES = 6;
+            const allPages = [];
+            for (let p = 1; p <= MAX_PAGES; p++)
+                allPages.push({ node: 'hs_a', page: p });
+            for (let p = 1; p <= CYB_PAGES; p++)
+                allPages.push({ node: 'cyb', page: p });
+            const results = await Promise.all(allPages.map(({ node, page }) => {
+                return new Promise((resolve) => {
+                    const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=100&sort=changepercent&asc=0&node=${node}`;
+                    const req2 = https.get(url, { timeout: 20000 }, (sinaRes) => {
+                        let body = '';
+                        sinaRes.on('data', (chunk) => (body += chunk));
+                        sinaRes.on('end', () => {
+                            try {
+                                resolve(JSON.parse(body));
+                            }
+                            catch {
+                                resolve([]);
+                            }
+                        });
+                    });
+                    req2.on('error', () => resolve([]));
+                    req2.setTimeout(20000, () => { req2.destroy(); resolve([]); });
+                });
+            }));
+            const seenCodes = new Set();
+            const allData = [];
+            for (const arr of results) {
+                if (!Array.isArray(arr))
+                    continue;
+                for (const item of arr) {
+                    const code = String(item.code || '');
+                    if (!code || seenCodes.has(code))
+                        continue;
+                    seenCodes.add(code);
+                    allData.push(item);
+                }
+            }
+            res.json({ code: 200, msg: 'success', data: allData });
+        }
+        catch (e) {
+            res.status(500).json({ code: 500, msg: '全市场扫描失败: ' + (e.message || e), data: [] });
+        }
+    });
     app.setGlobalPrefix('api');
     app.use(express.static(path.join(__dirname, '..', 'public')));
     app.use(express.json({ limit: '50mb' }));
