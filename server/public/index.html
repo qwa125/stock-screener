@@ -583,12 +583,12 @@ async function doScan(){
     if(stocks&&stocks.length<5){
       console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
       setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
-      try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+      // 不存2只到缓存（避免页面加载时显示过时数据）
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
       doFullRescan()
       return
     }
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}
+    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存供下次展示
     // 毛玻璃可见时不显示结果，只缓存
     if(isBlurred){
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -760,11 +760,15 @@ async function doFullRescan(){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
-          // 仅市场有实际波动时才重算信号/评分（收盘后保留缓存分析结果，避免全部归零排序失效）
+          // Sina实时数据：更新评分/入场时机；信号只升级不降级（保留后端多因子分析结果）
           if(hasLiveData){
-            newStocks[si3].suggestion=liveSuggestion
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
+            // 信号：只有Sina涨幅更高时才升级（不因实时涨幅低而把后端分析的买入信号覆盖成观望）
+            var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
+            if(PRI_ORDER.indexOf(liveSuggestion) < PRI_ORDER.indexOf(newStocks[si3].suggestion||'观望')){
+              newStocks[si3].suggestion=liveSuggestion
+            }
           }
           break
         }
