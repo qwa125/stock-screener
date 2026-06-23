@@ -16,7 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceController = void 0;
 const common_1 = require("@nestjs/common");
 const device_registry_service_1 = require("./device-registry.service");
-const access_limit_guard_1 = require("../guards/access-limit.guard");
+const access_limit_guard_1 = require("../../guards/access-limit.guard");
 let DeviceController = DeviceController_1 = class DeviceController {
     constructor(deviceRegistry) {
         this.deviceRegistry = deviceRegistry;

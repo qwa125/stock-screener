@@ -1,6 +1,6 @@
 import { Controller, Post, Headers, Logger } from '@nestjs/common'
 import { DeviceRegistryService } from './device-registry.service'
-import { SkipAccessLimit } from '../guards/access-limit.guard'
+import { SkipAccessLimit } from '@/guards/access-limit.guard'
 
 @Controller('device')
 @SkipAccessLimit()
