@@ -486,7 +486,7 @@ function buildDetail(s,rt){
   var price=rt.price||s.currentPrice||0
   var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
   var chgClr=chg>=0?'#ef4444':'#22c55e'
-  var p=s.pricePosition||0
+  var p=s.entryTiming||s.pricePosition||0
   var posTag=posLabel(p)
   var posTClr=TAG_COLORS[posTag]||'#6b7280'
   var entry=s.entryTiming||0
@@ -571,7 +571,7 @@ function renderList(){
     var price=rt.price||s.currentPrice||0
     var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
     var chgClr=chg>=0?'#ef4444':'#22c55e'
-    var p=s.pricePosition||0
+    var p=s.entryTiming||s.pricePosition||0
     var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
     var sg=sigColor(s)
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
