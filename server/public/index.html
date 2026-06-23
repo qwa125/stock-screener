@@ -654,7 +654,6 @@ async function doFullRescan(){
       }
       setStatus('✅ Sina代理并行获取 '+emData.length+' 只股票')
     }catch(e){setStatus('⚠️ Sina代理也失败: '+e.message)}
-  }
   
   // 报告扫描的股票数量
   var scanCount=emData.length
