@@ -249,52 +249,18 @@ try{
   if(ls){stocks=JSON.parse(ls)}
 }catch(e){}
 
-// 点击扫描按钮：先检查设备权限，通过后隐藏毛玻璃
+// 点击扫描按钮：立即执行全市场扫描（不依赖设备注册，自动扫描已覆盖注册流程）
 async function handleScanClick(){
-  try{
-    var regRes=await fetch("/api/device/register",{
-      method:"POST",
-      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-    })
-    if(regRes.status===429){
-      showBlocked(true)
-      return
-    }
-    if(regRes.status!==200){
-      showBlocked(false)
-      return
-    }
-    // 设备注册成功 → 隐藏毛玻璃，全市场扫描
-    hideBlocked()
-    // 不管有没有缓存、是不是交易时段，用户主动点击就全市场重扫
-    doFullRescan()
-  }catch(e){
-    // 网络错误时放行（后端不可用时允许访问）
-    hideBlocked()
-    restoreCachedStocks()
-  }
+  try{hideBlocked()}catch(e){}
+  if(loading)return
+  doFullRescan()
 }
 function $(id){return document.getElementById(id)}
-// 全市场重扫按钮：先检查设备权限
+// 全市场重扫按钮：跳过设备注册检查，直接扫描（自动扫描已覆盖设备注册流程）
 async function handleRescanClick(){
-  try{
-    var regRes=await fetch("/api/device/register",{
-      method:"POST",
-      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-    })
-    if(regRes.status===429){
-      showBlocked(true);return
-    }
-    if(regRes.status!==200){
-      showBlocked(false);return
-    }
-    hideBlocked()
-    doFullRescan()
-  }catch(e){
-    hideBlocked()
-    restoreCachedStocks()
-    doFullRescan()
-  }
+  try{hideBlocked()}catch(e){}
+  if(loading)return
+  doFullRescan()
 }
 function setStatus(s){$('status').textContent=s}
 var selectedIdx=-1
