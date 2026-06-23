@@ -1281,7 +1281,7 @@ async function doSearch(){
 
 // 每10分钟交易时段自动刷新缓存（不自动解锁毛玻璃）
 setInterval(function(){
-  if(isTH()&&!loading){doScan()}
+  if(isTH()&&!loading){doFullRescan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },600000)
