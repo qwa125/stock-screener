@@ -600,7 +600,7 @@ async function doFullRescan(){
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，从东方财富获取全量排序...')
   
   // 沪深主板代码前缀
-  function isMainBoard(c){return /^6/.test(c)||/^00/.test(c)||/^001/.test(c)||/^002/.test(c)}
+  function isMainBoard(c){return /^60[0-5]/.test(c)||/^00/.test(c)||/^001/.test(c)||/^002/.test(c)}
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
