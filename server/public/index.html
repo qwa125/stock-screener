@@ -581,6 +581,16 @@ async function doScan(){
       doFullRescan();return
     }
     stocks=d.data.opportunities
+    // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
+    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
+    stocks.sort(function(a,b){
+      var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
+      if(pa!==pb) return pa-pb
+      var ea=a.entryTiming||0, eb=b.entryTiming||0
+      if(eb!==ea) return eb-ea
+      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
+      return (b.changePercent||0)-(a.changePercent||0)
+    })
     // 后端数据不足时(＜5只)，自动切换到全市场重扫（通过聚合端点抓实时Sina数据）
     if(stocks&&stocks.length<5){
       console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
