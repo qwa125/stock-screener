@@ -893,6 +893,8 @@ async function doFullRescan(){
       if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
       return (b.changePercent||0)-(a.changePercent||0)
     })
+    // 再次收窄到Top20（追加的缓存股可能超出20只）
+    if(stocks.length>20) stocks=stocks.slice(0,20)
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
