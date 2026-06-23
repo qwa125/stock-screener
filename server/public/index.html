@@ -1044,12 +1044,22 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doScan()},t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动刷新
-setInterval(function(){
-  if(isTH()&&!loading){doScan()}
-  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
-},600000)
+// 每10分钟交易时段自动刷新（对齐到整钟点，9:25开盘扫描后首次周期从9:40开始）
+(function(){
+  function doPeriodic(){
+    if(isTH()&&!loading){doScan()}
+    var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+    $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  }
+  // 计算到下一个:00/:10/:20/:30/:40/:50的毫秒数
+  var n=new Date(),nextMin=Math.ceil(n.getMinutes()/10)*10
+  var nextTime=new Date(n);nextTime.setMinutes(nextMin===60?0:nextMin,0,0)
+  if(nextTime<=n)nextTime.setTime(nextTime.getTime()+600000)
+  // 9:25开盘扫描后，首个周期扫锚定9:40（跳过9:30）
+  if(nextTime.getHours()<9||(nextTime.getHours()===9&&nextTime.getMinutes()<40))
+    nextTime=new Date(n.getFullYear(),n.getMonth(),n.getDate(),9,40,0)
+  setTimeout(function(){doPeriodic();setInterval(doPeriodic,600000)},nextTime.getTime()-n.getTime())
+})()
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
