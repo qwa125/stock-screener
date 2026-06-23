@@ -576,6 +576,19 @@ async function doScan(){
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 }
 
+/** 带重试的fetch，处理部署滚动更新时的429 */
+async function fetchWithRetry(url,retries){
+  for(var r=0;r<retries;r++){
+    var fResp=await fetch(url)
+    if(fResp.status===429&&r<retries-1){
+      await new Promise(ok=>setTimeout(ok,2000))
+      continue
+    }
+    return fResp
+  }
+  return null
+}
+
 // ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');if(loading||btn.disabled)return
@@ -607,7 +620,7 @@ async function doFullRescan(){
   // 通过后端代理获取东方财富全量数据（绕开生产环境CORS）
   var emData=[]
   try{
-    var emResp=await fetch(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000')
+    var emResp=await fetchWithRetry(API+'/gem/proxy/eastmoney-list?node=all&page=1&num=5000',3)
     var emJson=await emResp.json()
     if(emJson.code===200&&emJson.data&&emJson.data.length){
       // 映射为统一字段名
@@ -625,14 +638,16 @@ async function doFullRescan(){
     try{
       var sinaAll=[]
       for(var sp=1;sp<=15;sp++){
-        var sr=await fetch(API+'/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0')
+        var sr=await fetchWithRetry(API+'/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0',3)
+        if(!sr){break}
         var sj=await sr.json()
         if(sj.code!==200||!sj.data||!sj.data.length)break
         sinaAll.push(...sj.data)
         if(sj.data.length<100)break
       }
       for(var sp=1;sp<=6;sp++){
-        var sr=await fetch(API+'/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0')
+        var sr=await fetchWithRetry(API+'/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0',3)
+        if(!sr){break}
         var sj=await sr.json()
         if(sj.code!==200||!sj.data||!sj.data.length)break
         sinaAll.push(...sj.data)
@@ -756,7 +771,7 @@ async function getSearchCache(){
   var prom=(async function(){
     var all=[]
     try{
-      var r=await fetch('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048',{headers:{'Referer':'https://quote.eastmoney.com/'}})
+      var r=await fetchWithRetry('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048',2)
       var d=await r.json()
       if(d&&d.data&&d.data.diff){
         all=d.data.diff.filter(function(s){
@@ -770,14 +785,16 @@ async function getSearchCache(){
       try{
         var sinaAll2=[]
         for(var sp=1;sp<=15;sp++){
-          var r=await fetch('/api/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0')
+          var r=await fetchWithRetry('/api/gem/proxy/stock-list?node=hs_a&page='+sp+'&num=100&sort=changepercent&asc=0',3)
+          if(!r)break
           var d=await r.json()
           if(d.code!==200||!d.data||!d.data.length)break
           sinaAll2.push(...d.data)
           if(d.data.length<100)break
         }
         for(var sp=1;sp<=6;sp++){
-          var r=await fetch('/api/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0')
+          var r=await fetchWithRetry('/api/gem/proxy/stock-list?node=cyb&page='+sp+'&num=100&sort=changepercent&asc=0',3)
+          if(!r)break
           var d=await r.json()
           if(d.code!==200||!d.data||!d.data.length)break
           sinaAll2.push(...d.data)
