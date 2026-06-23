@@ -250,18 +250,56 @@ try{
   if(ls){stocks=JSON.parse(ls)}
 }catch(e){}
 
-// 点击扫描按钮：立即执行全市场扫描（不依赖设备注册，自动扫描已覆盖注册流程）
+// 点击扫描按钮：先检查设备权限（2dfdbc9访问模式），通过后隐藏毛玻璃并全市场扫描
 async function handleScanClick(){
-  try{hideBlocked()}catch(e){}
-  if(loading)return
-  doFullRescan()
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      showBlocked(true)
+      return
+    }
+    if(regRes.status!==200){
+      showBlocked(false)
+      return
+    }
+    // 设备注册成功 → 隐藏毛玻璃，开始全市场扫描
+    hideBlocked()
+    if(loading)return
+    doFullRescan()
+  }catch(e){
+    // 网络错误时放行（后端不可用时允许访问）
+    hideBlocked()
+    if(loading)return
+    doFullRescan()
+  }
 }
 function $(id){return document.getElementById(id)}
-// 全市场重扫按钮：跳过设备注册检查，直接扫描（自动扫描已覆盖设备注册流程）
+// 全市场重扫按钮：同样先检查设备权限
 async function handleRescanClick(){
-  try{hideBlocked()}catch(e){}
-  if(loading)return
-  doFullRescan()
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      showBlocked(true)
+      return
+    }
+    if(regRes.status!==200){
+      showBlocked(false)
+      return
+    }
+    hideBlocked()
+    if(loading)return
+    doFullRescan()
+  }catch(e){
+    hideBlocked()
+    if(loading)return
+    doFullRescan()
+  }
 }
 function setStatus(s){$('status').textContent=s}
 function updateScanCount(n){var b=$('scanCountBadge');if(b){b.textContent=n>0?n+'只':'—'}}
@@ -681,9 +719,10 @@ async function doFullRescan(){
     // 基于今日涨幅计算实时信号/评分（缓存股和新股都用这个）
     var liveScore=Math.round(30+Math.abs(chg)*2)
     var liveSuggestion='观望'
-    // 涨停风险控制：10cm主板涨超4%(距涨停<6%)不推荐追高，直接排除；20cm创业板涨超5%(距涨停<15%)同理
-    if((isMainBoard(code)&&chg>4)||(isGEM(code)&&chg>5))continue
-    if(chg>=6)liveSuggestion='买入'
+    // 涨停风险控制：10cm主板涨超6%不推荐追高；20cm创业板涨超15%同理
+    if((isMainBoard(code)&&chg>6)||(isGEM(code)&&chg>15))continue
+    if(chg>=9)liveSuggestion='重仓买入'
+    else if(chg>=6)liveSuggestion='买入'
     else if(chg>=3)liveSuggestion='轻仓买入'
     else if(chg>=1)liveSuggestion='持有'
     var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
@@ -772,10 +811,9 @@ async function doFullRescan(){
     if(stocks.length>20) stocks=stocks.slice(0,20)
     // 只保留重仓买入/买入/轻仓买入的股票
     var ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
-    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]||ALLOWED[s.suggestion]})
+    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     if(stocks.length===0){
-      setStatus('❌ 信号过滤后无符合条件个股，尝试放宽筛选...')
-      stocks=newStocks
+      setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入/轻仓买入）')
     }
     // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
     // 不保存原始数据，后续由doScan保存最新分析结果
@@ -783,8 +821,6 @@ async function doFullRescan(){
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
-    // 扫描完成先解锁页面，renderList才能显示数据（不会被blur挡住）
-    hideBlocked()
     renderList() // 先显示
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1141,8 +1177,18 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
-// 页面打开时立即全市场扫描（无需等待按钮点击）
-if(!loading)setTimeout(function(){doFullRescan()},500)
+// 页面打开时立即全市场扫描（无需等待按钮点击），完成后检查设备注册状态决定是否解锁
+if(!loading)setTimeout(async function(){
+  doFullRescan()
+  // 扫描完成后检查设备是否已注册，已注册则自动解锁
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===200) hideBlocked()
+  }catch(e){}
+},500)
 
 // 每10分钟交易时段自动刷新
 setInterval(function(){
