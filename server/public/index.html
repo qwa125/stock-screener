@@ -1166,6 +1166,15 @@ async function doSearch(){
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
+        // 用实时涨幅修正信号（只升级不降级，与全市场重扫一致）
+        var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
+        var liveSug='观望'
+        if(stockChgP>=9)liveSug='重仓买入'
+        else if(stockChgP>=6)liveSug='买入'
+        else if(stockChgP>=3)liveSug='轻仓买入'
+        if(LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion||'观望')){
+          o.suggestion=liveSug
+        }
         da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
       }else{
         throw new Error('分析无结果')
@@ -1182,6 +1191,15 @@ async function doSearch(){
           if(jiGouFromKdata)o2.jiGouActiveScore=jiGouFromKdata
           o2.currentPrice=o2.currentPrice||stockPrice
           o2.changePercent=o2.changePercent||stockChgP
+          // 用实时涨幅修正信号（只升级不降级）
+          var liveSug2='观望'
+          if(stockChgP>=9)liveSug2='重仓买入'
+          else if(stockChgP>=6)liveSug2='买入'
+          else if(stockChgP>=3)liveSug2='轻仓买入'
+          var LP=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
+          if(LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'观望')){
+            o2.suggestion=liveSug2
+          }
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
