@@ -628,7 +628,7 @@ async function doScan(){
     // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
+      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
       if(pa!==pb) return pa-pb
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
@@ -904,7 +904,7 @@ async function doFullRescan(){
     var cacheLatest=[]
     for(var ci=0;ci<cacheCount;ci++){cacheLatest.push(newStocks[ci])}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
+      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
       if(pa!==pb) return pa-pb
       // 第二排序：入场时机(高→低)
       var ea=a.entryTiming||0, eb=b.entryTiming||0
@@ -941,7 +941,7 @@ async function doFullRescan(){
     // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按信号→入场时机→评分→涨幅重整）
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']||9,pb=PRI[b.suggestion||'观望']||9
+      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
       if(pa!==pb) return pa-pb
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
@@ -1017,7 +1017,7 @@ async function doFullRescan(){
           var _ind_stocks=newStocks.slice()
           var _ind_PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
           _ind_stocks.sort(function(a,b){
-            var pa=_ind_PRI[a.suggestion||'观望']||9,pb=_ind_PRI[b.suggestion||'观望']||9
+            var pa=_ind_PRI[a.suggestion||'观望']??9,pb=_ind_PRI[b.suggestion||'观望']??9
             if(pa!==pb)return pa-pb
             var ea=a.entryTiming||0,eb=b.entryTiming||0
             if(eb!==ea)return eb-ea
