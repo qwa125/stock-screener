@@ -116,6 +116,13 @@ async function bootstrap() {
         if (req.originalUrl !== '/api/gem/rescan')
             return next();
         try {
+            const curCache = gemSvc['cache']?.data || [];
+            const curMainCache = gemSvc['mainBoardCache']?.data || [];
+            if (curCache.length < 30 || curMainCache.length < 30) {
+                gemSvc['scanTopGem'](true).catch(() => { });
+                gemSvc['scanTopMainBoard'](true).catch(() => { });
+                console.log('rescan: cache too small, async refresh triggered');
+            }
             const results = await gemSvc.rescanMarket();
             res.json({ code: 200, msg: 'ok', data: results });
         }

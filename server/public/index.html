@@ -864,11 +864,12 @@ async function doFullRescan(){
           {stocks.push(cl);inList[cl.code]=1}
       }
     }
-    // 确保已知优质股出现在结果中（即使不在缓存里）
+    // 确保已知优质股出现在结果中（即使不在缓存里、即使当前涨幅低）
     var SPECIAL_CODES=['300005']  // 探路者
+    var SOFT_ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1,'持有':1}
     for(var si=0;si<newStocks.length;si++){
       var ns=newStocks[si]
-      if(SPECIAL_CODES.indexOf(ns.code)>=0&&ALLOWED[ns.suggestion]&&!inList[ns.code]){
+      if(SPECIAL_CODES.indexOf(ns.code)>=0&&SOFT_ALLOWED[ns.suggestion]&&!inList[ns.code]){
         stocks.push(ns);inList[ns.code]=1
       }
     }

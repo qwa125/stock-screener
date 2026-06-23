@@ -124,12 +124,20 @@ async function bootstrap() {
   // 缓存重分析端点 (绕过全局守卫)
   // 用 Express 中间件直接处理，避免被 NestJS AccessLimitGuard 拦截
   // ══════════════════════════════════════════════
-  const gemSvc = app.get(GemScreenerService);
+    const gemSvc = app.get(GemScreenerService);
   app.use('/api/gem/rescan', async (req, res, next) => {
     // Express 中间件挂载路径是前缀匹配，/api/gem/rescan 会匹配 /api/gem/rescan-batch
     // 用 req.originalUrl 做精确检查，确保只处理精确路径
     if (req.originalUrl !== '/api/gem/rescan') return next();
     try {
+      // 如果缓存数据太少（<30只），异步触发全量重新扫描
+      const curCache = gemSvc['cache']?.data || [];
+      const curMainCache = gemSvc['mainBoardCache']?.data || [];
+      if (curCache.length < 30 || curMainCache.length < 30) {
+        gemSvc['scanTopGem'](true).catch(() => {});
+        gemSvc['scanTopMainBoard'](true).catch(() => {});
+        console.log('rescan: cache too small, async refresh triggered');
+      }
       const results = await gemSvc.rescanMarket();
       res.json({ code: 200, msg: 'ok', data: results });
     } catch (e) {
