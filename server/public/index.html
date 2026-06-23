@@ -1012,6 +1012,31 @@ async function doFullRescan(){
         var _h='<b>newStocks信号分布:</b> '+_nsParts.join(' | ')+'<br>'
         _h+='<b>newStocks总数:</b> '+newStocks.length+' 只<br>'
         _h+='<b>Top20信号分布:</b> '+_sp2.join(' | ')+' ('+stocks.length+'只)<br>'
+        _h+='<b>--- 独立重算 Top20（绕过主流程） ---</b><br>'
+        try{
+          var _ind_stocks=newStocks.slice()
+          var _ind_PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
+          _ind_stocks.sort(function(a,b){
+            var pa=_ind_PRI[a.suggestion||'观望']||9,pb=_ind_PRI[b.suggestion||'观望']||9
+            if(pa!==pb)return pa-pb
+            var ea=a.entryTiming||0,eb=b.entryTiming||0
+            if(eb!==ea)return eb-ea
+            if((b.score||0)!==(a.score||0))return(b.score||0)-(a.score||0)
+            return(b.changePercent||0)-(a.changePercent||0)
+          })
+          var _ind_ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
+          _ind_stocks=_ind_stocks.filter(function(s){return _ind_ALLOWED[s.suggestion]?1:0})
+          if(_ind_stocks.length>20)_ind_stocks=_ind_stocks.slice(0,20)
+          var _ind_sigs={};_ind_stocks.forEach(function(s){var sg=s.suggestion||'未知';_ind_sigs[sg]=(_ind_sigs[sg]||0)+1})
+          var _ind_parts=[]
+          if(_ind_sigs['重仓买入']){_ind_parts.push('🔥重仓买入'+_ind_sigs['重仓买入']+'只')}
+          if(_ind_sigs['买入']){_ind_parts.push('✅买入'+_ind_sigs['买入']+'只')}
+          _h+='<b>独立重算结果:</b> '+_ind_parts.join(' | ')+'<br>'
+          _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
+          _ind_stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
+          _h+='</div>'
+        }catch(e2){_h+='<div>独立重算出错: '+e2.message+'</div>'}
+        _h+='<b>--- 主流程 Top20 ---</b><br>'
         _h+='<div style="margin-top:6px;font-size:11px;max-height:200px;overflow-y:auto">'
         stocks.forEach(function(s,i){_h+='<div>#'+(i+1)+' '+s.code+' '+s.name+' <b>'+s.suggestion+'</b> chg='+(s.changePercent||'')+'%</div>'})
         _h+='</div>'
