@@ -926,7 +926,13 @@ async function doFullRescan(){
     console.log('📊 Top20信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
     renderList() // 先显示
     try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
-    setStatus('🔄 计算筹码集中度...')
+    // ====== 状态栏显示信号分布摘要 ======
+    var sigSummary={};stocks.forEach(function(s){var sg=s.suggestion||'未知';sigSummary[sg]=(sigSummary[sg]||0)+1})
+    var sigParts=[]
+    if(sigSummary['重仓买入']){sigParts.push('🔥重仓买入'+sigSummary['重仓买入']+'只')}
+    if(sigSummary['买入']){sigParts.push('✅买入'+sigSummary['买入']+'只')}
+    if(sigSummary['轻仓买入']){sigParts.push('⚪轻仓买入'+sigSummary['轻仓买入']+'只')}
+    setStatus('📊 Top20: '+sigParts.join(' | ')+' (腾讯实时)')
     try{
       stocks.forEach(function(s,idx){
         var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
