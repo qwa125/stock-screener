@@ -265,11 +265,9 @@ async function handleScanClick(){
       showBlocked(false)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，显示缓存或扫描（完全2dfdbc9访问模式）
+    // 设备注册成功 → 隐藏毛玻璃，执行扫描（不受缓存影响）
     hideBlocked()
-    if(!restoreCachedStocks()){
-      doScan()
-    }
+    doScan()  // doScan内部如果缓存数据<5只，自动切到全市场重扫(聚合端点)
   }catch(e){
     // 网络错误时放行（后端不可用时允许访问，2dfdbc9访问模式）
     hideBlocked()
@@ -848,6 +846,7 @@ async function doFullRescan(){
     selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
     renderList() // 先显示
+    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
     setStatus('🔄 计算筹码集中度...')
     try{
       stocks.forEach(function(s,idx){
