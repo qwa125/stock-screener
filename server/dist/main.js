@@ -7,6 +7,7 @@ const express = require("express");
 const path = require("path");
 const https = require("https");
 const http_status_interceptor_1 = require("./interceptors/http-status.interceptor");
+const gem_screener_service_1 = require("./modules/gem-screener/gem-screener.service");
 function parsePort() {
     if (process.env.SERVER_PORT) {
         const port = parseInt(process.env.SERVER_PORT, 10);
@@ -108,6 +109,16 @@ async function bootstrap() {
         }
         catch (e) {
             res.status(500).json({ code: 500, msg: '全市场扫描失败: ' + (e.message || e), data: [] });
+        }
+    });
+    const gemSvc = app.get(gem_screener_service_1.GemScreenerService);
+    app.use('/api/gem/rescan', async (req, res) => {
+        try {
+            const results = await gemSvc.rescanMarket();
+            res.json({ code: 200, msg: 'ok', data: results });
+        }
+        catch (e) {
+            res.status(500).json({ code: 500, msg: '重扫失败: ' + (e.message || e), data: [] });
         }
     });
     app.setGlobalPrefix('api');

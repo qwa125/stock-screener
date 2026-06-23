@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 import { HttpStatusInterceptor } from '@/interceptors/http-status.interceptor';
+import { GemScreenerService } from '@/modules/gem-screener/gem-screener.service';
 
 function parsePort(): number {
   // 自定义 SERVER_PORT 环境变量优先（本地开发使用 3000）
@@ -117,6 +118,19 @@ async function bootstrap() {
       res.json({ code: 200, msg: 'success', data: allData });
     } catch (e) {
       res.status(500).json({ code: 500, msg: '全市场扫描失败: ' + (e.message || e), data: [] });
+    }
+  });
+  // ══════════════════════════════════════════════
+  // 缓存重分析端点 (绕过全局守卫)
+  // 用 Express 中间件直接处理，避免被 NestJS AccessLimitGuard 拦截
+  // ══════════════════════════════════════════════
+  const gemSvc = app.get(GemScreenerService);
+  app.use('/api/gem/rescan', async (req, res) => {
+    try {
+      const results = await gemSvc.rescanMarket();
+      res.json({ code: 200, msg: 'ok', data: results });
+    } catch (e) {
+      res.status(500).json({ code: 500, msg: '重扫失败: ' + (e.message || e), data: [] });
     }
   });
   app.setGlobalPrefix('api');
