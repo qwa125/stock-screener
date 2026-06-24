@@ -323,6 +323,7 @@ export class GemScreenerController {
   }
 
   @Post('sync-sell-state')
+  @SkipAccessLimit()
   @HttpCode(200)
   async syncSellState(@Body() body: { sellStates: { code: string; suggestion: string }[] }) {
     try {
