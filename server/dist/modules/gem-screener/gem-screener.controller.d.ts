@@ -1,8 +1,33 @@
 import { GemScreenerService } from './gem-screener.service';
+import { GemScreenerScheduler } from './gem-screener.scheduler';
+import { Response } from 'express';
 export declare class GemScreenerController {
     private readonly gemScreener;
+    private readonly scheduler;
     private readonly logger;
-    constructor(gemScreener: GemScreenerService);
+    constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler);
+    getMarketState(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            beijingTime: string;
+            lockUntilStr: string | null;
+            nextScanStr: string | null;
+            status: "premarket" | "trading" | "lunch" | "closed";
+            lastScanTime: number;
+            lastScanCount: number;
+            lockUntil: number;
+            nextScanTime: number;
+        };
+    }>;
+    priceStream(res: Response): Promise<void>;
+    getWatchedCodes(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            codes: string[];
+        };
+    }>;
     tencentProxy(body: {
         q: string;
     }): Promise<{
@@ -233,6 +258,19 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: import("./gem-screener.service").OpportunityStock[];
+        data: import("./gem-screener.service").OpportunityStock;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            code: string;
+            name: string;
+            suggestion: string;
+            score: number;
+        };
+    } | {
+        code: number;
+        msg: string;
+        data: null;
     }>;
 }

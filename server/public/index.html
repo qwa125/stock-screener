@@ -129,6 +129,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   </div>
   <div class="status" id="status">等待扫描</div>
   <div class="freeze-banner" id="freezeMsg" style="display:none"></div>
+  <div id="marketStateBar" style="margin-top:6px;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;display:none"></div>
   <div class="search-bar">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     <input id="searchInput" placeholder="输入代码搜索" onkeydown="if(event.key==='Enter')doSearch()">
@@ -154,7 +155,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描</div>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -1399,38 +1400,99 @@ setInterval(function(){
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  fetchMarketState() // 每分钟刷新市场状态
 },60000)
 
 // 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  fetchMarketState() // 首次加载市场状态
 },3000)
 
 // 个股股价每2秒刷新
-var priceTimer=null
+var priceTimer=null,marketTimer=null
+
+// ========== 市场状态 ==========
+async function fetchMarketState(){
+  try{
+    var r=await fetch(API+'/gem/market-state',{signal:timeoutSignal(5000)})
+    var d=await r.json()
+    if(d.code===200&&d.data){
+      var st=d.data
+      var bar=$('marketStateBar'),footerState=$('marketStateFooter')
+      var fm=$('freezeMsg'),statusEl=$('status')
+      
+      // 市场状态栏
+      var statusColors={trading:'#16a34a',lunch:'#ca8a04',closed:'#6b7280',premarket:'#2563eb'}
+      var statusLabels={trading:'📈 交易中',lunch:'☕ 午休中',closed:'🔒 已收盘',premarket:'⏳ 盘前准备'}
+      var statusColor=statusColors[st.status]||'#6b7280'
+      var statusLabel=statusLabels[st.status]||'未知'
+      
+      if(st.status==='closed'||st.status==='lunch'||st.status==='premarket'){
+        bar.style.display='block'
+        bar.style.background='#fefce8'
+        bar.style.border='1px solid #fde68a'
+        bar.style.color='#a16207'
+        bar.textContent=statusLabel+(st.lockUntilStr?' · 锁定至 '+st.lockUntilStr:'')
+        if(footerState) footerState.textContent='🔒 '+st.status
+      }else{
+        bar.style.display='block'
+        bar.style.background='#f0fdf4'
+        bar.style.border='1px solid #86efac'
+        bar.style.color='#166534'
+        bar.textContent=statusLabel+(st.nextScanStr?' · 下次扫描 '+st.nextScanStr:'')+' ｜ '+st.lastScanCount+'只缓存'
+        if(footerState) footerState.textContent='📈 '+st.beijingTime
+      }
+      
+      // 更新冻结横幅
+      var f=freezeMsg()
+      if(fm){
+        fm.style.display=f?'block':'none'
+        fm.textContent=f
+      }
+      
+      return st
+    }
+  }catch(e){}
+  return null
+}
+
 function startPriceRefresh(stks){
   if(stks&&stks.length>0){
     stopPriceRefresh()
+    // 市场状态轮询（每30秒）
+    marketTimer=setInterval(function(){fetchMarketState()},30000)
+    fetchMarketState() // 立即执行一次
+    
+    // 实时价格轮询（每2秒）
     priceTimer=setInterval(function(){
-      if(!isTH()){stopPriceRefresh();return}
+      if(!isTH()){
+        // 非交易时间停止价格刷新，但继续更新市场状态
+        $('scanBtn').textContent='📊 已冻结'
+        return
+      }
       if(stocks.length>0){
         var codes=stocks.map(function(s){return s.code})
         fetchRealtime(codes).then(function(rt){
           realtimePrices=rt
-          // 重新渲染股价
-          $('list').querySelectorAll('.stock-row').forEach(function(row,i){
+          // 直接在DOM上更新价格元素（不重绘整个列表）
+          var cards=$('stockList').querySelectorAll('.stock-card')
+          cards.forEach(function(card,i){
             if(i>=stocks.length)return
             var s=stocks[i],rt=realtimePrices[s.code]||{}
-            var price=rt.price||rt.currentPrice||s.currentPrice||s.price||0
+            var price=rt.price||s.currentPrice||0
             var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
-            var chgClr=chg>0?'#f23645':chg<0?'#00c853':'#999'
-            var priceEl=row.querySelector('.price')
-            var chgEl=row.querySelector('.chg')
-            if(priceEl)priceEl.textContent=price.toFixed(2)
-            if(chgEl){
-              chgEl.textContent=(chg>0?'+':'')+chg.toFixed(2)+'%'
-              chgEl.style.color=chgClr
+            var chgClr=chg>=0?'#ef4444':'#22c55e'
+            var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
+            // 查找价格和涨跌幅元素
+            var spans=card.querySelectorAll('.stock-row span')
+            // 结构: rank-badge | info | signal-badge | price | chg | pos
+            var priceSpan=spans[3],chgSpan=spans[4]
+            if(priceSpan) priceSpan.textContent=price.toFixed(2)
+            if(chgSpan){
+              chgSpan.textContent=chgT
+              chgSpan.style.color=chgClr
             }
           })
         }).catch(function(){})
@@ -1440,6 +1502,7 @@ function startPriceRefresh(stks){
 }
 function stopPriceRefresh(){
   if(priceTimer){clearInterval(priceTimer);priceTimer=null}
+  if(marketTimer){clearInterval(marketTimer);marketTimer=null}
 }
 
 // 仅更新冻结横幅

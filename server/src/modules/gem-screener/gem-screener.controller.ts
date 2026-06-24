@@ -1,19 +1,129 @@
-import { Controller, Get, Post, Body, Query, HttpCode, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, Logger, Res } from '@nestjs/common';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { GemScreenerService } from './gem-screener.service';
+import { GemScreenerScheduler } from './gem-screener.scheduler';
 import * as iconv from 'iconv-lite';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { Response } from 'express';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
 @Controller('gem')
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
-  constructor(private readonly gemScreener: GemScreenerService) {}
+  constructor(
+    private readonly gemScreener: GemScreenerService,
+    private readonly scheduler: GemScreenerScheduler,
+  ) {}
 
   /**
-   * 代理腾讯股票行情API（前端无法正确处理GBK编码，后端用iconv-lite解码）
-   * POST /api/gem/tencent-proxy body: { q: "sz300001,sh600001" }
+   * 市场状态（交易/午休/收盘/盘前）
+   * GET /api/gem/market-state
+   */
+  @Get('market-state')
+  @SkipAccessLimit()
+  async getMarketState() {
+    const state = this.scheduler.getState();
+    const bjNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const bjStr = bjNow.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return {
+      code: 200,
+      msg: 'success',
+      data: {
+        ...state,
+        beijingTime: bjStr,
+        lockUntilStr: state.lockUntil
+          ? new Date(state.lockUntil).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+          : null,
+        nextScanStr: state.nextScanTime
+          ? new Date(state.nextScanTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+          : null,
+      },
+    };
+  }
+
+  /**
+   * 实时股价流（SSE）：每秒推送关注股票的最新价/涨幅
+   * GET /api/gem/price-stream
+   */
+  @Get('price-stream')
+  @SkipAccessLimit()
+  async priceStream(@Res() res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const codes = this.scheduler.getWatchedCodes();
+    if (codes.length === 0) {
+      res.write(`data: ${JSON.stringify({ error: 'no watched stocks' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    this.logger.log(`📡 SSE 实时价格流开启: ${codes.length} 只关注股票`);
+
+    let closed = false;
+    res.on('close', () => { closed = true; });
+
+    setInterval(async () => {
+      if (closed) { return; }
+      const state = this.scheduler.getState();
+      if (state.status === 'closed' || state.status === 'premarket' || state.status === 'lunch') {
+        res.write(`data: ${JSON.stringify({ marketStatus: state.status, prices: [] })}\n\n`);
+        return;
+      }
+      try {
+        const BATCH = 30;
+        const allPrices: any[] = [];
+        const codeCopy = [...codes];
+        for (let i = 0; i < codeCopy.length; i += BATCH) {
+          const batch = codeCopy.slice(i, i + BATCH);
+          const q = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+          const url = `https://qt.gtimg.cn/q=${q}`;
+          const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          const buf = Buffer.from(await resp.arrayBuffer());
+          const txt = buf.toString('utf-8');
+          for (const line of txt.split(';')) {
+            if (!line.trim() || !line.includes('=')) continue;
+            const parts = line.split('~');
+            if (parts.length >= 7) {
+              const fullCode = line.match(/v_([a-z]+_\w+)/)?.[1] || '';
+              const shortCode = fullCode.replace(/^(sh|sz|sh)/, '');
+              allPrices.push({
+                code: shortCode,
+                name: parts[1] || '',
+                price: parseFloat(parts[3]) || 0,
+                changePercent: parseFloat(parts[parts.length < 10 ? 4 : 5]) || 0,
+                high: parseFloat(parts[33]) || 0,
+                low: parseFloat(parts[34]) || 0,
+                volume: parts[6] || '0',
+              });
+            }
+          }
+        }
+        if (!closed) {
+          res.write(`data: ${JSON.stringify({ marketStatus: 'trading', prices: allPrices, timestamp: Date.now() })}\n\n`);
+        }
+      } catch (e: any) {
+        if (!closed) {
+          res.write(`data: ${JSON.stringify({ marketStatus: 'error', error: e.message })}\n\n`);
+        }
+      }
+    }, 2000);
+  }
+
+  /**
+   * 获取当前关注的股票代码列表
+   */
+  @Get('watched-codes')
+  @SkipAccessLimit()
+  async getWatchedCodes() {
+    return { code: 200, msg: 'success', data: { codes: this.scheduler.getWatchedCodes() } };
+  }
+
+  /**
+   * 代理腾讯股票行情API
    */
   @Post('tencent-proxy')
   @SkipAccessLimit()
@@ -48,7 +158,6 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
   }
 
-
   @Post('refresh-heavy-buy')
   async refreshHeavyBuy(@Body() body: { stocks: any[] }): Promise<any> {
     try {
@@ -64,6 +173,7 @@ export class GemScreenerController {
       return { code: 500, msg: e.message, data: { opportunities: [] } };
     }
   }
+
   @Get('opportunities')
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
@@ -79,7 +189,6 @@ export class GemScreenerController {
   @Get('top/gem')
   async getTopGem(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopGem(force === 'true');
-    // 合并重仓买入中GEM股(300/301开头)，按评分排序，重仓买入排最前面
     const heavyBuyGEM = this.readHeavyBuyCache().filter(s =>
       s.code && (s.code.startsWith('300') || s.code.startsWith('301'))
     );
@@ -90,7 +199,6 @@ export class GemScreenerController {
   @Get('top/main-board')
   async getTopMainBoard(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopMainBoard(force === 'true');
-    // 合并重仓买入中主板股(非300/301开头)，按评分排序
     const heavyBuyMain = this.readHeavyBuyCache().filter(s =>
       s.code && !s.code.startsWith('30')
     );
@@ -98,27 +206,18 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
   }
 
-  
-  /**
-   * 合并主板+创业板最优前20: 按信号优先级(重仓买入>买入>轻仓买入)排序
-   * GET /api/gem/top/combined
-   */
   @Get('top/combined')
   async getCombinedTop(@Query('force') force?: string) {
     const [gemResult, mainResult] = await Promise.all([
       this.gemScreener.scanTopGem(force === 'true'),
       this.gemScreener.scanTopMainBoard(force === 'true'),
     ]);
-    // 合并并合并重仓买入
     const heavyBuyAll = this.readHeavyBuyCache();
     const gemMerged = this.mergeWithHeavyBuy(gemResult.opportunities, heavyBuyAll.filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301'))));
     const mainMerged = this.mergeWithHeavyBuy(mainResult.opportunities, heavyBuyAll.filter(s => s.code && !s.code.startsWith('30')));
-    // 合并并去重（同一只股票可能同时出现在两个缓存中）
     const all = [...gemMerged, ...mainMerged];
     const seen = new Set<string>();
     const deduped = all.filter(s => { if (seen.has(s.code)) return false; seen.add(s.code); return true; });
-    // 按信号排序: 重仓买入 > 买入 > 轻仓买入 > 持有 > 观望
-    // 同信号内按入场时机(高→低)排序，再按主力资金流入(高→低)排序
     const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
     const sorted = deduped
       .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '观望'].includes(s.suggestion))
@@ -126,17 +225,14 @@ export class GemScreenerController {
         const ao = signalOrder[a.suggestion] ?? 9;
         const bo = signalOrder[b.suggestion] ?? 9;
         if (ao !== bo) return ao - bo;
-        // 第二排序：入场时机(高→低)
         const entryA = a.entryTiming ?? 0;
         const entryB = b.entryTiming ?? 0;
         if (entryB !== entryA) return entryB - entryA;
-        // 第三排序：主力资金流入(高→低)
         const mfA = a.mainForceInflow ?? 0;
         const mfB = b.mainForceInflow ?? 0;
         return mfB - mfA;
       })
       .slice(0, 30);
-    // 给每只个股补充筹码字段（兼容旧缓存缺失场景）
     for (const s of sorted) {
       if (s.chipConcentration90 === undefined) {
         s.chipConcentration90 = 50;
@@ -161,20 +257,13 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
   }
 
-  /**
-   * 重仓买入专区: 从全市场(创业板+主板+热点板块)缓存 + 全局重仓买入扫描中筛选出 "重仓买入" 级别的股票
-   * GET /api/gem/top/heavy-buy
-   */
   @Get('top/heavy-buy')
   async getHeavyBuy() {
-    // 1. 先尝试从缓存获取
     const all = await this.gemScreener.getAllOpportunities();
     const cachedHeavyBuy = all.filter(s => s.suggestion === '重仓买入');
     if (cachedHeavyBuy.length >= 3) {
       return { code: 200, msg: 'success', data: { opportunities: cachedHeavyBuy.slice(0, 3), timestamp: Date.now() } };
     }
-
-    // 2. 优先读取种子缓存（快速响应，不从Render访问腾讯API）
     try {
       const paths = [
         join(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
@@ -194,19 +283,12 @@ export class GemScreenerController {
     } catch (e) {
       this.logger.warn('读取重仓买入种子缓存失败: ' + e.message);
     }
-
-    // 3. 后台异步触发全局扫描（不阻塞返回）
     this.gemScreener.scanGlobalHeavyBuy().catch(e => {
       this.logger.warn('后台全局重仓扫描失败: ' + e.message);
     });
-
     return { code: 200, msg: 'success', data: { opportunities: [], timestamp: Date.now() } };
   }
 
-  /**
-   * 动态行业板块热度排行Top10（基于实时成分股涨跌幅均值）
-   * GET /api/gem/industry-sectors/top10
-   */
   @Get('industry-sectors/top10')
   @HttpCode(200)
   async getIndustrySectorsTop10() {
@@ -218,7 +300,6 @@ export class GemScreenerController {
     } catch (e) {
       this.logger.warn('实时行业板块排行失败: ' + e.message);
     }
-    // 降级: 使用ALL_SECTORS内置数据（始终包含概念板块）
     try {
       const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
       const fallbackSectors = ALL_SECTORS.map((s, i) => ({
@@ -239,10 +320,6 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { sectors: [], timestamp: Date.now() } };
   }
 
-  /**
-   * 强制全量扫描并生成初始缓存种子文件
-   * POST /api/gem/seed-cache
-   */
   @Post('seed-cache')
   @HttpCode(200)
   async seedCache() {
@@ -250,14 +327,9 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: result };
   }
 
-  /**
-   * 读取重仓买入缓存
-   */
   private readHeavyBuyCache(): any[] {
     try {
-      const paths = [
-        join(process.cwd(), 'assets', 'heavy-buy-cache.json'),
-      ];
+      const paths = [join(process.cwd(), 'assets', 'heavy-buy-cache.json')];
       for (const p of paths) {
         if (existsSync(p)) {
           const raw = readFileSync(p, 'utf-8');
@@ -273,22 +345,13 @@ export class GemScreenerController {
     return [];
   }
 
-  /**
-   * 合并机会股与重仓买入，按评分排序（重仓买入排最前面）
-   */
   private mergeWithHeavyBuy(opportunities: any[], heavyBuy: any[]): any[] {
     const heavyCodes = new Set(heavyBuy.map(s => s.code));
-    // 从机会股中排除已出现在重仓买入的(避免重复)
     const uniqueOpps = opportunities.filter(s => !heavyCodes.has(s.code));
-    // 合并,按评分降序
     const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
     return merged;
   }
 
-  /**
-   * 全市场搜索(含股票/ETF/可转债)，实时获取K线分析
-   * GET /api/gem/search?q=300052 or ?q=中青宝
-   */
   @Get('search')
   async searchStock(@Query('q') keyword: string) {
     if (!keyword || keyword.trim().length === 0) {
@@ -342,7 +405,6 @@ export class GemScreenerController {
     }
     this.logger.log(`批量分析: ${body.codes.length} 只股票`);
     const results: any[] = [];
-    // 顺序分析，每只带超时（从Render到中国API不稳定，超时快速跳过）
     for (let i = 0; i < body.codes.length; i++) {
       const code = body.codes[i];
       const name = body.names?.[i] || '';
@@ -354,7 +416,6 @@ export class GemScreenerController {
         if (opp) results.push(opp);
       } catch {}
     }
-    // 按信号排序
     const PRIORITY: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
     results.sort((a, b) => {
       const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
@@ -366,13 +427,6 @@ export class GemScreenerController {
     return { code: 200, msg: 'ok', data: results.slice(0, 30) };
   }
 
-  /**
-   * 代理新浪全市场股票列表（解决前端跨域问题）
-   * GET /api/gem/proxy/stock-list?node=cyb&page=1&num=80&sort=changepercent
-   * node: cyb(创业板) / hs_a(沪深A股主板) / gem(创业板)
-   * sort: changepercent(涨跌幅) / amount(成交额) / price(股价) / turnover(换手率) — 默认 amount
-   * asc: 0(降序) / 1(升序) — 默认 0(降序)
-   */
   @Get('proxy/stock-list')
   async proxyStockList(
     @Query('node') node: string,
@@ -400,11 +454,6 @@ export class GemScreenerController {
     }
   }
 
-  /**
-   * 代理东方财富全市场股票列表（涨跌幅排序）
-   * GET /api/gem/proxy/eastmoney-list?node=hs_a&page=1&num=100
-   * node: hs_a(主板) / cyb(创业板) / gem(创业板)
-   */
   @Get('proxy/eastmoney-list')
   async proxyEastMoneyList(
     @Query('node') node: string,
@@ -413,10 +462,10 @@ export class GemScreenerController {
   ) {
     try {
       const fsMap: Record<string, string> = {
-        hs_a: 'm:0+t:6',       // 纯沪深主板（不再混创业板）
-        cyb: 'm:0+t:80',       // 创业板+科创板
+        hs_a: 'm:0+t:6',
+        cyb: 'm:0+t:80',
         gem: 'm:0+t:80',
-        all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81', // 全市场（沪主板+科创板+深主板+中小板+创业板）
+        all: 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81',
       };
       const safeNode = node && fsMap[node] ? node : 'hs_a';
       const safePage = parseInt(page || '1', 10);
@@ -435,13 +484,13 @@ export class GemScreenerController {
         name: item.f14 || '',
         trade: item.f2,
         changePercent: item.f3,
-        inflow: item.f62,          // 主力净流入
-        inflowAmount: item.f184,   // 流入总额
+        inflow: item.f62,
+        inflowAmount: item.f184,
         high: item.f15,
         low: item.f16,
         open: item.f17,
         prevClose: item.f18,
-        marketCap: item.f20,       // 总市值
+        marketCap: item.f20,
       }));
       return { code: 200, msg: 'success', data };
     } catch (e) {
@@ -450,10 +499,6 @@ export class GemScreenerController {
     }
   }
 
-  /**
-   * 代理东方财富搜索API - 支持名称和代码搜索全A股
-   * GET /api/gem/proxy/search?q=朗科科技
-   */
   @Get('proxy/search')
   async proxySearch(@Query('q') query: string) {
     if (!query || !query.trim()) {
@@ -471,10 +516,6 @@ export class GemScreenerController {
     }
   }
 
-  /**
-   * 代理新浪美股/港股实时行情（解决前端跨域问题）
-   * GET /api/gem/proxy/sina-us?code=aapl
-   */
   @Get('proxy/sina-us')
   async proxySinaUS(@Query('code') code: string) {
     if (!code || !code.trim()) {
@@ -501,7 +542,6 @@ export class GemScreenerController {
       return { code: 400, msg: '缺少股票代码或K线数据' };
     }
     try {
-      // 转换K线数据格式（Sina API返回day字段，quickAnalyze需要date字段）
       const klineData = body.kline.map((item: any) => ({
         date: item.day || item.date,
         open: parseFloat(item.open) || 0,
@@ -516,13 +556,12 @@ export class GemScreenerController {
         opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
       }
       if (opp) {
-        return { code: 200, msg: 'success', data: [opp] };
+        return { code: 200, msg: 'success', data: opp };
       }
-      return { code: 200, msg: '分析完成但无有效信号', data: [] };
+      return { code: 200, msg: '分析完成', data: { code: body.code, name: body.name || '', suggestion: '观望', score: 0 } };
     } catch (e) {
       this.logger.error(`K线分析失败: ${(e as Error).message}`);
-      return { code: 500, msg: '分析失败', data: [] };
+      return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
     }
   }
-
 }

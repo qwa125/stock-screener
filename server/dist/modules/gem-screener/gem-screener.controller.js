@@ -17,14 +17,102 @@ exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
 const access_limit_guard_1 = require("../../guards/access-limit.guard");
 const gem_screener_service_1 = require("./gem-screener.service");
+const gem_screener_scheduler_1 = require("./gem-screener.scheduler");
 const iconv = require("iconv-lite");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const data_1 = require("../../industry-sectors/data");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
-    constructor(gemScreener) {
+    constructor(gemScreener, scheduler) {
         this.gemScreener = gemScreener;
+        this.scheduler = scheduler;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
+    }
+    async getMarketState() {
+        const state = this.scheduler.getState();
+        const bjNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        const bjStr = bjNow.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return {
+            code: 200,
+            msg: 'success',
+            data: {
+                ...state,
+                beijingTime: bjStr,
+                lockUntilStr: state.lockUntil
+                    ? new Date(state.lockUntil).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+                    : null,
+                nextScanStr: state.nextScanTime
+                    ? new Date(state.nextScanTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+                    : null,
+            },
+        };
+    }
+    async priceStream(res) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        const codes = this.scheduler.getWatchedCodes();
+        if (codes.length === 0) {
+            res.write(`data: ${JSON.stringify({ error: 'no watched stocks' })}\n\n`);
+            res.end();
+            return;
+        }
+        this.logger.log(`📡 SSE 实时价格流开启: ${codes.length} 只关注股票`);
+        let closed = false;
+        res.on('close', () => { closed = true; });
+        setInterval(async () => {
+            if (closed) {
+                return;
+            }
+            const state = this.scheduler.getState();
+            if (state.status === 'closed' || state.status === 'premarket' || state.status === 'lunch') {
+                res.write(`data: ${JSON.stringify({ marketStatus: state.status, prices: [] })}\n\n`);
+                return;
+            }
+            try {
+                const BATCH = 30;
+                const allPrices = [];
+                const codeCopy = [...codes];
+                for (let i = 0; i < codeCopy.length; i += BATCH) {
+                    const batch = codeCopy.slice(i, i + BATCH);
+                    const q = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
+                    const url = `https://qt.gtimg.cn/q=${q}`;
+                    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+                    const buf = Buffer.from(await resp.arrayBuffer());
+                    const txt = buf.toString('utf-8');
+                    for (const line of txt.split(';')) {
+                        if (!line.trim() || !line.includes('='))
+                            continue;
+                        const parts = line.split('~');
+                        if (parts.length >= 7) {
+                            const fullCode = line.match(/v_([a-z]+_\w+)/)?.[1] || '';
+                            const shortCode = fullCode.replace(/^(sh|sz|sh)/, '');
+                            allPrices.push({
+                                code: shortCode,
+                                name: parts[1] || '',
+                                price: parseFloat(parts[3]) || 0,
+                                changePercent: parseFloat(parts[parts.length < 10 ? 4 : 5]) || 0,
+                                high: parseFloat(parts[33]) || 0,
+                                low: parseFloat(parts[34]) || 0,
+                                volume: parts[6] || '0',
+                            });
+                        }
+                    }
+                }
+                if (!closed) {
+                    res.write(`data: ${JSON.stringify({ marketStatus: 'trading', prices: allPrices, timestamp: Date.now() })}\n\n`);
+                }
+            }
+            catch (e) {
+                if (!closed) {
+                    res.write(`data: ${JSON.stringify({ marketStatus: 'error', error: e.message })}\n\n`);
+                }
+            }
+        }, 2000);
+    }
+    async getWatchedCodes() {
+        return { code: 200, msg: 'success', data: { codes: this.scheduler.getWatchedCodes() } };
     }
     async tencentProxy(body) {
         if (!body.q)
@@ -199,9 +287,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     readHeavyBuyCache() {
         try {
-            const paths = [
-                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
-            ];
+            const paths = [(0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json')];
             for (const p of paths) {
                 if ((0, fs_1.existsSync)(p)) {
                     const raw = (0, fs_1.readFileSync)(p, 'utf-8');
@@ -408,17 +494,39 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
             }
             if (opp) {
-                return { code: 200, msg: 'success', data: [opp] };
+                return { code: 200, msg: 'success', data: opp };
             }
-            return { code: 200, msg: '分析完成但无有效信号', data: [] };
+            return { code: 200, msg: '分析完成', data: { code: body.code, name: body.name || '', suggestion: '观望', score: 0 } };
         }
         catch (e) {
             this.logger.error(`K线分析失败: ${e.message}`);
-            return { code: 500, msg: '分析失败', data: [] };
+            return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
         }
     }
 };
 exports.GemScreenerController = GemScreenerController;
+__decorate([
+    (0, common_1.Get)('market-state'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getMarketState", null);
+__decorate([
+    (0, common_1.Get)('price-stream'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "priceStream", null);
+__decorate([
+    (0, common_1.Get)('watched-codes'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getWatchedCodes", null);
 __decorate([
     (0, common_1.Post)('tencent-proxy'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
@@ -608,5 +716,6 @@ __decorate([
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
-    __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService])
+    __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,
+        gem_screener_scheduler_1.GemScreenerScheduler])
 ], GemScreenerController);

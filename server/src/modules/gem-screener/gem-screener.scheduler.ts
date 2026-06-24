@@ -1,190 +1,332 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { GemScreenerService } from './gem-screener.service';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export interface MarketState {
+  status: 'premarket' | 'trading' | 'lunch' | 'closed';
+  lastScanTime: number;
+  lastScanCount: number;
+  lockUntil: number;
+  nextScanTime: number;
+}
 
 @Injectable()
 export class GemScreenerScheduler implements OnModuleInit {
   private readonly logger = new Logger(GemScreenerScheduler.name);
-  private lastAutoScanDate = '';
+  private state: MarketState = {
+    status: 'closed',
+    lastScanTime: 0,
+    lastScanCount: 0,
+    lockUntil: 0,
+    nextScanTime: 0,
+  };
+  private STATE_FILE = '/tmp/market-state.json';
   private isScanning = false;
-  private isFirstBoot = true;
+  // 上次完整扫描的"买入"股票代码列表（用于实时价格推送）
+  private watchedCodes: string[] = [];
 
   constructor(private readonly gemService: GemScreenerService) {}
 
-  /**
-   * 启动时立即检查是否需要扫描（处理Render冷启动唤醒）
-   * 用于：Render休眠后被请求唤醒 → 判断如果在交易时间内 → 立即扫描
-   */
   async onModuleInit() {
-    this.logger.log('🚀 服务启动，等待首次10分钟定时任务触发扫描');
-    // 启动时不做自动扫描，避免Render海外服务器访问Tencent API超时导致进程不稳定
-    // 所有扫描由每10分钟的Cron任务驱动
+    this.loadState();
+    this.logger.log(`📅 市场调度器启动 | 状态:${this.state.status} | 锁止到:${this.state.lockUntil ? new Date(this.state.lockUntil).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '无'}`);
+    // 初始化nextScanTime
+    this._updateNextScanTime();
+    this.saveState();
   }
 
-  /**
-   * 测试腾讯API是否可达（区分Render海外环境）
-   */
-  private async _testTencentApi(): Promise<boolean> {
-    try {
-      const http = require('http');
-      return new Promise<boolean>((resolve) => {
-        const req = http.get('http://qt.gtimg.cn/q=sh000001', (res) => {
-          resolve(res.statusCode === 200);
-        });
-        req.on('error', () => resolve(false));
-        req.setTimeout(3000, () => { req.destroy(); resolve(false); });
-      });
-    } catch {
-      return false;
-    }
-  }
+  // ===================== 北京时间判断 =====================
 
-  /**
-   * 判断当前是否为北京时间交易时段 (周一至周五 9:00-15:00)
-   */
-  private _isTradingHours(): boolean {
+  /** 当前北京时间（毫秒精度） */
+  private _bjNow(): Date {
     const now = new Date();
-    const beijingOffset = 8 * 60;
-    const utcMs = now.getTime();
-    const beijingMs = utcMs + beijingOffset * 60 * 1000;
-    const bj = new Date(beijingMs);
-    const dayOfWeek = bj.getUTCDay();
-    const hour = bj.getUTCHours();
-    const minute = bj.getUTCMinutes();
-    
-    if (dayOfWeek === 0 || dayOfWeek === 6) return false;
-    const totalMinutes = hour * 60 + minute;
-    return totalMinutes >= 540 && totalMinutes < 900;
+    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    return bj;
   }
 
-  /**
-   * 北京时间 9:00-15:00，每10分钟自动扫描一次
-   * 周末不扫描
-   * 15:00后到次日9:00不扫描
-   */
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async autoScan() {
+  /** 北京时间 星期几 1=周一 5=周五 */
+  private _bjDayOfWeek(): number { return this._bjNow().getUTCDay(); }
+
+  /** 北京时间 分钟数 (0-1439) */
+  private _bjMinutes(): number {
+    const bj = this._bjNow();
+    return bj.getUTCHours() * 60 + bj.getUTCMinutes();
+  }
+
+  /** 是否是交易日 (周一至周五) */
+  private _isTradingDay(): boolean {
+    const dow = this._bjDayOfWeek();
+    return dow >= 1 && dow <= 5;
+  }
+
+  /** 是否是交易时段 9:00-15:00 (含盘前) */
+  private _isInSession(): boolean {
+    const min = this._bjMinutes();
+    return min >= 540 && min < 900; // 9:00 - 15:00
+  }
+
+  /** 是否午休 11:30-13:00 */
+  private _isLunch(): boolean {
+    const min = this._bjMinutes();
+    return min >= 690 && min < 780; // 11:30 - 13:00
+  }
+
+  /** 盘前准备 9:00-9:25 */
+  private _isPreMarket(): boolean {
+    const min = this._bjMinutes();
+    return min >= 540 && min < 565; // 9:00 - 9:25
+  }
+
+  /** 可扫描时段（排除午休和盘前） */
+  private _isScanWindow(): boolean {
+    if (!this._isTradingDay()) return false;
+    const min = this._bjMinutes();
+    // 9:25-11:30 或 13:00-15:00
+    return (min >= 565 && min < 690) || (min >= 780 && min < 900);
+  }
+
+  /** 是否收盘后（15:00后） */
+  private _isAfterMarket(): boolean {
+    if (!this._isTradingDay()) return false;
+    return this._bjMinutes() >= 900;
+  }
+
+  /** 下个交易日的开盘时间（北京时间） */
+  private _nextTradingDayOpen(): Date {
+    const bj = this._bjNow();
+    let daysToAdd = 1;
+    while (true) {
+      const next = new Date(bj.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+      const dow = next.getUTCDay();
+      if (dow >= 1 && dow <= 5) {
+        // 设为 9:25 Beijing time
+        next.setUTCHours(1, 25, 0, 0); // 9:25 Beijing = 1:25 UTC
+        return next;
+      }
+      daysToAdd++;
+    }
+  }
+
+  // ===================== 状态持久化 =====================
+
+  private loadState() {
+    try {
+      if (fs.existsSync(this.STATE_FILE)) {
+        const raw = fs.readFileSync(this.STATE_FILE, 'utf-8');
+        this.state = JSON.parse(raw);
+        this.logger.log('📂 加载市场状态: ' + this.state.status);
+      }
+    } catch (e) {
+      this.logger.warn('⚠️ 无法加载市场状态文件，使用默认状态');
+    }
+  }
+
+  private saveState() {
+    try {
+      const dir = path.dirname(this.STATE_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.STATE_FILE, JSON.stringify(this.state, null, 2));
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  /** 更新下次扫描时间 */
+  private _updateNextScanTime() {
+    const min = this._bjMinutes();
+    const now = this._bjNow();
+    const base = now.getTime();
+
+    if (!this._isTradingDay()) {
+      this.state.nextScanTime = this._nextTradingDayOpen().getTime();
+      return;
+    }
+
+    if (this._isAfterMarket()) {
+      this.state.nextScanTime = this._nextTradingDayOpen().getTime();
+      return;
+    }
+
+    // 在交易时间内：下一次10分钟整点
+    const nextMin = Math.ceil((min + 1) / 10) * 10;
+    const nextHour = Math.floor(nextMin / 60);
+    const nextM = nextMin % 60;
+    if (nextM === 0) {
+      // 下一小时
+      now.setUTCHours(nextHour, 0, 0, 0);
+    } else {
+      now.setUTCHours(nextHour, nextM, 0, 0);
+    }
+    this.state.nextScanTime = now.getTime();
+  }
+
+  // ===================== 扫描执行 =====================
+
+  private async doScan(label: string) {
     if (this.isScanning) {
-      this.logger.log('⏳ 上一轮扫描尚未完成，跳过本轮');
+      this.logger.log(`⏳ [${label}] 上一轮扫描尚未完成，跳过`);
       return;
     }
 
-    // ─── 判断当前是否为可扫描时间 ───
-    if (!this._isTradingHours()) {
-      const now = new Date();
-      const bjHour = (now.getUTCHours() + 8) % 24;
-      const bjMin = now.getUTCMinutes();
-      this.logger.log(`⏰ 非交易时间 (${bjHour}:${String(bjMin).padStart(2,'0')})，跳过扫描`);
-      return;
-    }
-
-    // 首次启动标记清除
-    this.isFirstBoot = false;
-
-    // ─── 执行全市场自动扫描 ───
     this.isScanning = true;
-    this.logger.log(`🚀 [定时扫描] 开始全市场自动扫描 ${new Date().toISOString()}`);
+    this.state.lastScanTime = Date.now();
+    this.logger.log(`🚀 [${label}] 开始扫描`);
 
     try {
-      // 步骤1: 先测试腾讯API是否可达（判断是否在Render海外环境）
-      const tencentReachable = await Promise.race([
-        this._testTencentApi(),
-        new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
-      ]).catch(() => false);
-
-      if (!tencentReachable) {
-        this.logger.warn('  ⚠️ 腾讯API不可达（Render海外环境），跳过扫描，使用缓存数据');
-        this.isScanning = false;
-        return;
-      }
-
-      // 步骤2: 扫描创业板
-      this.logger.log('  扫描创业板...');
-      const gemResults = await Promise.race([
-        this.gemService['scanAllStocks'](),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
-      ]).catch(() => null);
-      if (gemResults && gemResults.length > 0) {
-        this.logger.log(`  ✅ 创业板: ${gemResults.length} 只机会`);
-      } else {
-        this.logger.warn('  ⚠️ 创业板扫描无结果或超时');
-      }
-
-      // 步骤3: 扫描主板
-      this.logger.log('  扫描主板...');
-      const mainResults = await Promise.race([
-        this.gemService['scanMainBoardStocks'](),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
-      ]).catch(() => null);
-      if (mainResults && mainResults.length > 0) {
-        this.logger.log(`  ✅ 主板: ${mainResults.length} 只机会`);
-      } else {
-        this.logger.warn('  ⚠️ 主板扫描无结果或超时');
-      }
-
-      // 步骤3: 合并全市场结果到 sectorCache
-      const allResults = [
-        ...(gemResults || []),
-        ...(mainResults || [])
-      ];
-      // 去重 by code
-      const codeMap = new Map<string, any>();
-      for (const s of allResults) {
-        if (s.code && s.code.length > 6) {
-          const shortCode = s.code.replace(/^(sh|sz)/, '');
-          if (!codeMap.has(shortCode)) codeMap.set(shortCode, s);
-        } else if (s.code) {
-          if (!codeMap.has(s.code)) codeMap.set(s.code, s);
-        }
-      }
-      const merged = Array.from(codeMap.values());
+      // 尝试从缓存加载（服务器在 Render 海外可能无法访问中国API）
+      // 先尝试从 assets 加载全市场缓存
+      const gemCache = JSON.parse(fs.readFileSync('./assets/gem-cache.json', 'utf-8'));
+      const mainCache = JSON.parse(fs.readFileSync('./assets/main-board-cache.json', 'utf-8'));
+      const allStocks = [...(gemCache.data || []), ...(mainCache.data || [])];
       
-      // 按分数排序取前10
-      merged.sort((a, b) => (b.score || 0) - (a.score || 0));
-      const top10 = merged.slice(0, 10);
+      // 过滤买入信号
+      const buySignals = allStocks.filter(s => 
+        ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)
+      );
       
-      (this.gemService as any)['sectorCache'] = {
-        data: top10,
-        timestamp: Date.now(),
-      };
+      this.state.lastScanCount = allStocks.length;
+      this.watchedCodes = buySignals.map(s => s.code);
 
-      // 更新 heavy-buy 缓存
-      const getAll = await this.gemService['getAllOpportunities']();
-      const heavyBuyStocks = (Array.isArray(getAll) ? getAll : []).filter(
-        (s: any) => s.suggestion === '重仓买入'
-      ).slice(0, 5);
+      // 保存到 /tmp/ 作为运行时缓存
+      const tmpDir = '/tmp';
+      fs.writeFileSync(path.join(tmpDir, 'gem-cache.json'), JSON.stringify(gemCache));
+      fs.writeFileSync(path.join(tmpDir, 'main-board-cache.json'), JSON.stringify(mainCache));
       
-      (this.gemService as any)['heavyBuyCache'] = {
-        data: heavyBuyStocks,
-        timestamp: Date.now(),
-      };
+      // 也保存买入信号列表供实时价格用
+      fs.writeFileSync(path.join(tmpDir, 'watched-codes.json'), JSON.stringify({
+        codes: this.watchedCodes,
+        timestamp: Date.now()
+      }));
 
-      // 写入磁盘缓存（可选）
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const cacheDir = '/tmp';
-        fs.writeFileSync(path.join(cacheDir, 'sector-opportunities-cache.json'), JSON.stringify({
-          data: top10,
-          timestamp: Date.now()
-        }));
-        fs.writeFileSync(path.join(cacheDir, 'gem-opportunities-cache.json'), JSON.stringify({
-          data: gemResults || [],
-          timestamp: Date.now()
-        }));
-        fs.writeFileSync(path.join(cacheDir, 'main-board-opportunities-cache.json'), JSON.stringify({
-          data: mainResults || [],
-          timestamp: Date.now()
-        }));
-      } catch (fsErr) {
-        // 无法写入磁盘缓存不影响主流程
-      }
+      this.logger.log(`✅ [${label}] 完成: ${allStocks.length}只, 其中买入信号${buySignals.length}只`);
+      
+      // 更新状态
+      this._updateNextScanTime();
+      this.saveState();
 
-      this.logger.log(`✅ [定时扫描] 完成！创业板${gemResults?.length || 0}只 + 主板${mainResults?.length || 0}只, 融合前10`);
-    } catch (error) {
-      this.logger.error(`❌ [定时扫描] 扫描异常: ${error.message}`);
+    } catch (error: any) {
+      this.logger.error(`❌ [${label}] 扫描异常: ${error.message}`);
+      this._updateNextScanTime();
+      this.saveState();
     } finally {
       this.isScanning = false;
     }
+  }
+
+  // ===================== Cron 定时任务 (北京时间) =====================
+
+  /** 9:25 - 首次扫描并解锁（覆盖昨天收盘数据） */
+  @Cron('25 9 * * 1-5', { timeZone: 'Asia/Shanghai' })
+  async morningFirstScan() {
+    if (!this._isTradingDay()) return;
+    this.state.status = 'trading';
+    this.state.lockUntil = 0;
+    this.saveState();
+    await this.doScan('9:25 首次开盘扫描');
+  }
+
+  /** 每10分钟扫描 (9:40-11:30, 13:00-15:00) */
+  @Cron('*/10 9-15 * * 1-5', { timeZone: 'Asia/Shanghai' })
+  async periodicScan() {
+    if (!this._isTradingDay()) return;
+    
+    // 盘前 9:00-9:25 跳过
+    if (this._isPreMarket()) {
+      this.state.status = 'premarket';
+      this._updateNextScanTime();
+      this.saveState();
+      return;
+    }
+
+    // 午休 11:30-13:00 跳过
+    if (this._isLunch()) {
+      this.state.status = 'lunch';
+      this._updateNextScanTime();
+      this.saveState();
+      return;
+    }
+
+    // 非交易时间跳过
+    if (!this._isScanWindow()) {
+      return;
+    }
+
+    // 已锁定（收盘后）跳过
+    if (this.state.lockUntil > Date.now()) {
+      return;
+    }
+
+    this.state.status = 'trading';
+    this.state.lockUntil = 0;
+    this.saveState();
+    await this.doScan('每10分钟扫描');
+  }
+
+  /** 11:30 - 午间收盘扫描+锁定 */
+  @Cron('30 11 * * 1-5', { timeZone: 'Asia/Shanghai' })
+  async lunchScanAndLock() {
+    if (!this._isTradingDay()) return;
+    
+    this.state.status = 'lunch';
+    this.saveState();
+    await this.doScan('11:30 午间扫描');
+
+    // 锁定到13:00
+    const bj = this._bjNow();
+    bj.setUTCHours(5, 0, 0, 0); // 13:00 Beijing = 5:00 UTC
+    this.state.lockUntil = bj.getTime();
+    this.saveState();
+    
+    const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    this.logger.log(`🔒 午间锁定到 ${lockTime}`);
+  }
+
+  /** 13:00 - 午后开盘扫描+解锁 */
+  @Cron('0 13 * * 1-5', { timeZone: 'Asia/Shanghai' })
+  async afternoonOpen() {
+    if (!this._isTradingDay()) return;
+    
+    this.state.status = 'trading';
+    this.state.lockUntil = 0;
+    this.saveState();
+    await this.doScan('13:00 午后开盘扫描');
+  }
+
+  /** 15:00 - 收盘扫描+锁定到下一交易日 */
+  @Cron('0 15 * * 1-5', { timeZone: 'Asia/Shanghai' })
+  async marketClose() {
+    if (!this._isTradingDay()) return;
+
+    this.state.status = 'closed';
+    await this.doScan('15:00 收盘扫描');
+
+    // 锁定到下一交易日9:25
+    const nextOpen = this._nextTradingDayOpen();
+    this.state.lockUntil = nextOpen.getTime();
+    this.saveState();
+
+    const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
+  }
+
+  // ===================== 公开 API =====================
+
+  getState(): MarketState {
+    // 动态检查：如果锁已过期，自动恢复
+    if (this.state.lockUntil > 0 && Date.now() > this.state.lockUntil && this._isTradingDay()) {
+      if (this._isScanWindow()) {
+        this.state.status = 'trading';
+        this.state.lockUntil = 0;
+        this.saveState();
+      }
+    }
+    return { ...this.state };
+  }
+
+  /** 获取当前关注的股票代码列表（买入信号） */
+  getWatchedCodes(): string[] {
+    return [...this.watchedCodes];
   }
 }
