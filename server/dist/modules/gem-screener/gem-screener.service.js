@@ -2599,18 +2599,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '持有';
                         }
                     }
-                    const now = Date.now();
-                    const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
-                    const sellEntry = this.sellStateCache.get(s.code);
-                    if (sellEntry && (now - sellEntry.timestamp) > THREE_DAYS) {
-                        this.sellStateCache.delete(s.code);
-                    }
-                    else if (sellEntry) {
-                        newSuggestion = '不要介入';
-                    }
-                    if (['卖出', '减仓'].includes(newSuggestion)) {
-                        this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: now });
-                    }
                     const entry = s.entryTiming ?? 50;
                     const sugIdx2 = PRIORITY.indexOf(newSuggestion);
                     if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
@@ -2618,6 +2606,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                     else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
                         newSuggestion = PRIORITY[sugIdx2 + 1];
+                    }
+                    const sellEntry = this.sellStateCache.get(s.code);
+                    if (sellEntry) {
+                        const now2 = Date.now();
+                        const THREE_DAYS2 = 3 * 24 * 60 * 60 * 1000;
+                        if (now2 - sellEntry.timestamp > THREE_DAYS2) {
+                            this.sellStateCache.delete(s.code);
+                        }
+                        else {
+                            newSuggestion = '不要介入';
+                        }
+                    }
+                    if (['卖出', '减仓'].includes(newSuggestion)) {
+                        this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                     }
                     const BASE = {
                         '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,

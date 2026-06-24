@@ -3038,25 +3038,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
             else if (oldIdx === 2 && newIdx > 3) { newSuggestion = '持有'; }
           }
 
-          // ─── 卖出锁定规则：卖出/减仓后→不要介入，直到新买入信号 ───
-          const now = Date.now();
-          const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
-          
-          // 检查持久卖出缓存
-          const sellEntry = this.sellStateCache.get(s.code);
-          if (sellEntry && (now - sellEntry.timestamp) > THREE_DAYS) {
-            // 3天自动过期，清除锁定
-            this.sellStateCache.delete(s.code);
-          } else if (sellEntry) {
-            // 🔒 卖出锁定生效：覆盖为不要介入（全量K线分析才能解锁）
-            newSuggestion = '不要介入';
-          }
-
-          // 如果当日是卖出/减仓 → 记录到持久缓存
-          if (['卖出', '减仓'].includes(newSuggestion)) {
-            this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: now });
-          }
-
           // ─── 入场时机与买卖信号对齐 ───
           const entry = s.entryTiming ?? 50;
           const sugIdx2 = PRIORITY.indexOf(newSuggestion);
@@ -3066,6 +3047,24 @@ export class GemScreenerService implements OnApplicationBootstrap {
           } else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
             // ❌不能入场 → 买入信号降一级
             newSuggestion = PRIORITY[sugIdx2 + 1];
+          }
+
+          // ─── 卖出锁定规则（最后执行，确保不被任何逻辑覆盖）───
+          const sellEntry = this.sellStateCache.get(s.code);
+          if (sellEntry) {
+            const now2 = Date.now();
+            const THREE_DAYS2 = 3 * 24 * 60 * 60 * 1000;
+            if (now2 - sellEntry.timestamp > THREE_DAYS2) {
+              this.sellStateCache.delete(s.code);
+            } else {
+              // 🔒 卖出锁定生效：覆盖为不要介入（全量K线分析才能解锁）
+              newSuggestion = '不要介入';
+            }
+          }
+          
+          // 如果当日是卖出/减仓 → 记录到持久缓存
+          if (['卖出', '减仓'].includes(newSuggestion)) {
+            this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
           }
 
           // 更新评分
