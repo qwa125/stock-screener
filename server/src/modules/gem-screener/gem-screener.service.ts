@@ -2999,26 +2999,36 @@ export class GemScreenerService implements OnApplicationBootstrap {
             results.push(opp as OpportunityStock);
           } else {
             // 超时(TIMEOUT) 或 quickAnalyze 返回 null (无K线/不符合条件)
-            // 都返回基础信息，让用户知道股票被找到了
-            this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp==='TIMEOUT'?'超时28s':'null'})，返回基础信息`);
-            results.push({
-              code: s.code,
-              name: s.name,
-              price: 0,
-              suggestion: '持有',
-              score: 0,
-              pricePosition: 50,
-              changePercent: 0,
-              entryTiming: 0,
-              capitalRank: 0,
-              mainForceInflow: 0,
-              baiXiaoDays: 0,
-              currentPrice: 0,
-              jiGouActiveScore: 0,
-              isGoldenCross: false,
-              priceIncrease: 0,
-              safetyScore: 50,
-            } as unknown as OpportunityStock);
+            // 先尝试从缓存中找数据
+            const cached = (this.cache?.data || this.mainBoardCache?.data || []).find(
+              (c: OpportunityStock) => c.code === s.code
+            );
+            if (cached) {
+              this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 实时分析超时，返回缓存数据`);
+              (cached as any).name = s.name;
+              results.push(cached);
+            } else {
+              // 缓存也没有，返回基础信息
+              this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp==='TIMEOUT'?'超时28s':'null'})，返回基础信息`);
+              results.push({
+                code: s.code,
+                name: s.name,
+                price: 0,
+                suggestion: '持有',
+                score: 0,
+                pricePosition: 50,
+                changePercent: 0,
+                entryTiming: 0,
+                capitalRank: 0,
+                mainForceInflow: 0,
+                baiXiaoDays: 0,
+                currentPrice: 0,
+                jiGouActiveScore: 0,
+                isGoldenCross: false,
+                priceIncrease: 0,
+                safetyScore: 50,
+              } as unknown as OpportunityStock);
+            }
           }
         } catch (e) {
           this.logger.warn(`搜索分析 ${s.code}(${s.name}) 失败: ${(e as Error).message}`);

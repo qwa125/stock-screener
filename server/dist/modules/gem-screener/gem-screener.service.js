@@ -2541,25 +2541,33 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         results.push(opp);
                     }
                     else {
-                        this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp === 'TIMEOUT' ? '超时28s' : 'null'})，返回基础信息`);
-                        results.push({
-                            code: s.code,
-                            name: s.name,
-                            price: 0,
-                            suggestion: '持有',
-                            score: 0,
-                            pricePosition: 50,
-                            changePercent: 0,
-                            entryTiming: 0,
-                            capitalRank: 0,
-                            mainForceInflow: 0,
-                            baiXiaoDays: 0,
-                            currentPrice: 0,
-                            jiGouActiveScore: 0,
-                            isGoldenCross: false,
-                            priceIncrease: 0,
-                            safetyScore: 50,
-                        });
+                        const cached = (this.cache?.data || this.mainBoardCache?.data || []).find((c) => c.code === s.code);
+                        if (cached) {
+                            this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 实时分析超时，返回缓存数据`);
+                            cached.name = s.name;
+                            results.push(cached);
+                        }
+                        else {
+                            this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp === 'TIMEOUT' ? '超时28s' : 'null'})，返回基础信息`);
+                            results.push({
+                                code: s.code,
+                                name: s.name,
+                                price: 0,
+                                suggestion: '持有',
+                                score: 0,
+                                pricePosition: 50,
+                                changePercent: 0,
+                                entryTiming: 0,
+                                capitalRank: 0,
+                                mainForceInflow: 0,
+                                baiXiaoDays: 0,
+                                currentPrice: 0,
+                                jiGouActiveScore: 0,
+                                isGoldenCross: false,
+                                priceIncrease: 0,
+                                safetyScore: 50,
+                            });
+                        }
                     }
                 }
                 catch (e) {
