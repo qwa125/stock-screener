@@ -29,11 +29,16 @@ let DeviceController = DeviceController_1 = class DeviceController {
         try {
             const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown');
             this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}`);
-            return { code: result.allowed ? 200 : 429, msg: result.message || 'ok' };
+            if (!result.allowed) {
+                throw new common_1.HttpException({ code: 429, msg: result.message || '名额已满' }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+            }
+            return { code: 200, msg: 'ok' };
         }
         catch (e) {
+            if (e instanceof common_1.HttpException)
+                throw e;
             this.logger.warn(`设备注册异常: ${e.message}`);
-            return { code: 200, msg: 'ok' };
+            throw new common_1.HttpException({ code: 500, msg: '设备注册失败' }, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
     async getSettings() {

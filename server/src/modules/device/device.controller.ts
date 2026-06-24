@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Logger, Headers } from '@nestjs/common'
+import { Controller, Post, Get, Body, Query, Logger, Headers, HttpException, HttpStatus } from '@nestjs/common'
 import { DeviceRegistryService } from './device-registry.service'
 import { SkipAccessLimit } from '@/guards/access-limit.guard'
 
@@ -21,10 +21,18 @@ export class DeviceController {
     try {
       const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown')
       this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}`)
-      return { code: result.allowed ? 200 : 429, msg: result.message || 'ok' }
+      if (!result.allowed) {
+        throw new HttpException(
+          { code: 429, msg: result.message || '名额已满' },
+          HttpStatus.TOO_MANY_REQUESTS,
+        )
+      }
+      return { code: 200, msg: 'ok' }
     } catch (e) {
+      // HttpException 直接透传（保持 HTTP 429 状态码）
+      if (e instanceof HttpException) throw e
       this.logger.warn(`设备注册异常: ${(e as Error).message}`)
-      return { code: 200, msg: 'ok' } // 不阻塞用户
+      throw new HttpException({ code: 500, msg: '设备注册失败' }, HttpStatus.INTERNAL_SERVER_ERROR)
     }
   }
 
