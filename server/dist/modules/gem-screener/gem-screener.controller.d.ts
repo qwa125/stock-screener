@@ -258,7 +258,7 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: import("./gem-screener.service").OpportunityStock;
+        data: import("./gem-screener.service").OpportunityStock[];
     } | {
         code: number;
         msg: string;
@@ -267,7 +267,7 @@ export declare class GemScreenerController {
             name: string;
             suggestion: string;
             score: number;
-        };
+        }[];
     } | {
         code: number;
         msg: string;

@@ -2978,85 +2978,50 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   /**
-   * 全市场搜索：根据关键词搜索股票/ETF/可转债，实时分析
+   * 缓存搜索：根据关键词搜索已缓存股票/ETF/可转债
+   * 注：不再调外部 API，纯缓存查询。前端实时分析走 POST /api/gem/analyze
    */
   async searchStocks(keyword: string): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
     try {
-      const stocks = await this.dataFetcher.searchStock(keyword);
-      if (!stocks || stocks.length === 0) return results;
-      const maxResults = Math.min(stocks.length, 5);
-      for (let i = 0; i < maxResults; i++) {
-        const s = stocks[i];
-        try {
-          // 加超时：quickAnalyze 在海外可能因中国API超时长达25s+
-          const opp = await Promise.race([
-            this.quickAnalyze(s.code, s.name),
-            new Promise<'TIMEOUT'>(r => setTimeout(() => r('TIMEOUT'), 28000))
-          ]);
-          if (opp && opp !== 'TIMEOUT' && (opp as OpportunityStock).suggestion) {
-            (opp as OpportunityStock).name = s.name;
-            results.push(opp as OpportunityStock);
+      const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+      // 去重
+      const seen = new Set<string>();
+      const deduped = allCached.filter(s => {
+        const key = s.code;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const kw = keyword.toLowerCase().trim();
+      const matched = deduped.filter(s =>
+        (s.code || '').toLowerCase().includes(kw) ||
+        (s.name || '').toLowerCase().includes(kw)
+      ).slice(0, 5);
+      if (matched.length === 0) return results;
+      // 应用信号重算，与机会列表保持一致
+      this.recalculateSuggestions(matched);
+      // ─── 搜索结果应用卖出锁定 ───
+      for (const r of matched) {
+        const sellEntry = this.sellStateCache.get(r.code);
+        if (sellEntry) {
+          const hasBuySignal =
+            ['重仓买入', '买入'].includes(r.suggestion || '') &&
+            r.isGoldenCross === true &&
+            (r.entryTiming ?? 0) >= 50;
+          if (hasBuySignal) {
+            this.sellStateCache.delete(r.code);
+            this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
           } else {
-            // 超时(TIMEOUT) 或 quickAnalyze 返回 null (无K线/不符合条件)
-            // 先尝试从缓存中找数据
-            const cached = (this.cache?.data || this.mainBoardCache?.data || []).find(
-              (c: OpportunityStock) => c.code === s.code
-            );
-            if (cached) {
-              this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 实时分析超时，返回缓存数据`);
-              (cached as any).name = s.name;
-              results.push(cached);
-            } else {
-              // 缓存也没有，返回基础信息
-              this.logger.warn(`⌛ 搜索 ${s.code}(${s.name}) 无完整分析结果 (${opp==='TIMEOUT'?'超时28s':'null'})，返回基础信息`);
-              results.push({
-                code: s.code,
-                name: s.name,
-                price: 0,
-                suggestion: '持有',
-                score: 0,
-                pricePosition: 50,
-                changePercent: 0,
-                entryTiming: 0,
-                capitalRank: 0,
-                mainForceInflow: 0,
-                baiXiaoDays: 0,
-                currentPrice: 0,
-                jiGouActiveScore: 0,
-                isGoldenCross: false,
-                priceIncrease: 0,
-                safetyScore: 50,
-              } as unknown as OpportunityStock);
-            }
+            r.suggestion = '不要介入';
+            r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
           }
-        } catch (e) {
-          this.logger.warn(`搜索分析 ${s.code}(${s.name}) 失败: ${(e as Error).message}`);
         }
       }
+      results.push(...matched);
     } catch (e) {
-      this.logger.error(`搜索失败: ${(e as Error).message}`);
+      this.logger.error(`缓存搜索失败: ${(e as Error).message}`);
     }
-    // ─── 搜索结果应用卖出锁定 ───
-    for (const r of results) {
-      const sellEntry = this.sellStateCache.get(r.code);
-      if (sellEntry) {
-        // 检查是否出现真实买入信号 → 自动解除锁定
-        const hasBuySignal =
-          ['重仓买入', '买入'].includes(r.suggestion || '') &&
-          r.isGoldenCross === true &&
-          (r.entryTiming ?? 0) >= 50;
-        if (hasBuySignal) {
-          this.sellStateCache.delete(r.code);
-          this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
-        } else {
-          r.suggestion = '不要介入';
-          r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-        }
-      }
-    }
-    // 对搜索结果也应用信号重算，与机会列表保持一致
-    try { this.recalculateSuggestions(results); } catch (e) {}
     return results;
   }
 

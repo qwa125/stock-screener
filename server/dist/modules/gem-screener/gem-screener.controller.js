@@ -494,9 +494,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
             }
             if (opp) {
-                return { code: 200, msg: 'success', data: opp };
+                return { code: 200, msg: 'success', data: [opp] };
             }
-            return { code: 200, msg: '分析完成', data: { code: body.code, name: body.name || '', suggestion: '观望', score: 0 } };
+            return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
         }
         catch (e) {
             this.logger.error(`K线分析失败: ${e.message}`);
