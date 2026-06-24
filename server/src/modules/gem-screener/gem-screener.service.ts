@@ -275,6 +275,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
             this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: item.timestamp });
           }
         }
+        // 清理旧的减仓锁定（减仓不触发锁定，只有卖出才锁定）
+        for (const [code, val] of this.sellStateCache.entries()) {
+          if (val.suggestion === '减仓') {
+            this.sellStateCache.delete(code);
+          }
+        }
         this.logger.log(`📂 加载卖出锁定: ${this.sellStateCache.size} 只`);
       }
     } catch (err) {
@@ -299,7 +305,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   syncSellStateFromFrontend(sellStates: { code: string; suggestion: string }[]) {
     const now = Date.now();
     for (const item of sellStates) {
-      if (['卖出', '减仓'].includes(item.suggestion)) {
+      if (['卖出'].includes(item.suggestion)) {
         this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: now });
       }
     }
@@ -3061,7 +3067,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           }
           
           // 如果当日是卖出/减仓 → 记录到持久缓存
-          if (['卖出', '减仓'].includes(newSuggestion)) {
+          if (['卖出'].includes(newSuggestion)) {
             this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
           }
 
@@ -3385,7 +3391,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
     // 卖出锁定状态机: 卖出后保持不要介入直到出现买入信号
-    const SELL_LOCK = ['卖出', '减仓'];
+    const SELL_LOCK = ['卖出'];
     const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
     for (const r of results) {
       const code = r.code;

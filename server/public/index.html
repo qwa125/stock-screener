@@ -1026,7 +1026,7 @@ async function doFullRescan(){
     var sellStates=[]
     for(var si=0;si<newStocks.length;si++){
       var ss=newStocks[si]
-      if(ss.suggestion==='卖出'||ss.suggestion==='减仓'){
+      if(ss.suggestion==='卖出'){
         sellStates.push({code:ss.code,suggestion:ss.suggestion})
       }
     }

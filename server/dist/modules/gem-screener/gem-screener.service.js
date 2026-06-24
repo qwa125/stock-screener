@@ -198,6 +198,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: item.timestamp });
                     }
                 }
+                for (const [code, val] of this.sellStateCache.entries()) {
+                    if (val.suggestion === '减仓') {
+                        this.sellStateCache.delete(code);
+                    }
+                }
                 this.logger.log(`📂 加载卖出锁定: ${this.sellStateCache.size} 只`);
             }
         }
@@ -219,7 +224,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     syncSellStateFromFrontend(sellStates) {
         const now = Date.now();
         for (const item of sellStates) {
-            if (['卖出', '减仓'].includes(item.suggestion)) {
+            if (['卖出'].includes(item.suggestion)) {
                 this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: now });
             }
         }
@@ -2614,7 +2619,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '不要介入';
                         }
                     }
-                    if (['卖出', '减仓'].includes(newSuggestion)) {
+                    if (['卖出'].includes(newSuggestion)) {
                         this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                     }
                     const BASE = {
@@ -2902,7 +2907,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const SELL_LOCK = ['卖出', '减仓'];
+        const SELL_LOCK = ['卖出'];
         const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
         for (const r of results) {
             const code = r.code;
