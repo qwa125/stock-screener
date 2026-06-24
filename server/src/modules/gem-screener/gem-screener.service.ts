@@ -3100,29 +3100,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
             else if (newSuggestion === '轻仓买入') newSuggestion = '买入';
           }
 
-          // ─── 信号连续性规则：买入信号必须维持，不能隔夜变卖出 ───
-          const oldSug = s.suggestion;
-          const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
-          const oldIdx = PRIORITY.indexOf(oldSug || '');
-          const newIdx = PRIORITY.indexOf(newSuggestion);
-          if (oldIdx >= 0 && newIdx >= 0) {
-            // 重仓买入 → 必须维持重仓买入
-            if (oldIdx === 0 && newIdx > 1) { newSuggestion = '重仓买入'; }
-            // 买入 → 至少维持买入
-            else if (oldIdx === 1 && newIdx > 2) { newSuggestion = '买入'; }
-            // 轻仓买入 → 至少轻仓买入或持有
-            else if (oldIdx === 2 && newIdx > 3) { newSuggestion = '持有'; }
-          }
-
           // ─── 入场时机与买卖信号对齐 ───
           const entry = s.entryTiming ?? 50;
-          const sugIdx2 = PRIORITY.indexOf(newSuggestion);
+          const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
+          const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
           if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
             // ⭐最佳入场 → 升级到买入以上
-            newSuggestion = sugIdx2 <= 2 ? PRIORITY[sugIdx2 - 1] : '轻仓买入';
+            newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
           } else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
             // ❌不能入场 → 买入信号降一级
-            newSuggestion = PRIORITY[sugIdx2 + 1];
+            newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
           }
 
           // ─── 卖出锁定规则（最后执行，确保不被任何逻辑覆盖）───
@@ -3181,14 +3168,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
         return (b.score || 0) - (a.score || 0);
       });
 
-      const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-      const buyUpdated = updated.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-      const top200 = buyUpdated.slice(0, 200);
-      this.cache = { data: top200, timestamp: now };
+      // 保留全部排序结果到缓存（含卖出/不要介入），不丢弃任何股票
+      this.cache = { data: updated, timestamp: now };
       try { require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8'); } catch {}
 
       // ─── 为结果添加简化趋势预测 ───
-      for (const stock of top200) {
+      for (const stock of updated) {
         if (!stock.trendPrediction) {
           stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
         }
@@ -3196,7 +3181,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
       // 持久化卖出锁定状态
       await this.saveSellStateCache();
-      this.logger.log(`重新评估完成：${top200.length} 只, 信号: ${top200.map(s=>s.suggestion).join(',')}`);
+      this.logger.log(`重新评估完成：${updated.length} 只, 信号: ${updated.map(s=>s.suggestion).join(',')}`);
     } catch (e) {
       this.logger.error(`重新评估失败: ${(e as Error).message}`);
     }

@@ -2646,28 +2646,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         else if (newSuggestion === '轻仓买入')
                             newSuggestion = '买入';
                     }
-                    const oldSug = s.suggestion;
-                    const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '观望', '不要介入'];
-                    const oldIdx = PRIORITY.indexOf(oldSug || '');
-                    const newIdx = PRIORITY.indexOf(newSuggestion);
-                    if (oldIdx >= 0 && newIdx >= 0) {
-                        if (oldIdx === 0 && newIdx > 1) {
-                            newSuggestion = '重仓买入';
-                        }
-                        else if (oldIdx === 1 && newIdx > 2) {
-                            newSuggestion = '买入';
-                        }
-                        else if (oldIdx === 2 && newIdx > 3) {
-                            newSuggestion = '持有';
-                        }
-                    }
                     const entry = s.entryTiming ?? 50;
-                    const sugIdx2 = PRIORITY.indexOf(newSuggestion);
+                    const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
+                    const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
                     if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
-                        newSuggestion = sugIdx2 <= 2 ? PRIORITY[sugIdx2 - 1] : '轻仓买入';
+                        newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
                     }
                     else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
-                        newSuggestion = PRIORITY[sugIdx2 + 1];
+                        newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
                     }
                     const sellEntry = this.sellStateCache.get(s.code);
                     if (sellEntry) {
@@ -2721,21 +2707,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     return pa - pb;
                 return (b.score || 0) - (a.score || 0);
             });
-            const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-            const buyUpdated = updated.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-            const top200 = buyUpdated.slice(0, 200);
-            this.cache = { data: top200, timestamp: now };
+            this.cache = { data: updated, timestamp: now };
             try {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
             }
             catch { }
-            for (const stock of top200) {
+            for (const stock of updated) {
                 if (!stock.trendPrediction) {
                     stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
                 }
             }
             await this.saveSellStateCache();
-            this.logger.log(`重新评估完成：${top200.length} 只, 信号: ${top200.map(s => s.suggestion).join(',')}`);
+            this.logger.log(`重新评估完成：${updated.length} 只, 信号: ${updated.map(s => s.suggestion).join(',')}`);
         }
         catch (e) {
             this.logger.error(`重新评估失败: ${e.message}`);
