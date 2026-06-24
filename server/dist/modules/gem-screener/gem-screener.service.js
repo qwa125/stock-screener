@@ -238,8 +238,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     if (now - sellEntry.timestamp > THREE_DAYS_MS) {
                         this.sellStateCache.delete(s.code);
                     }
-                    else if (!['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || '')) {
+                    else {
                         s.suggestion = '不要介入';
+                        s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+                        continue;
                     }
                 }
                 s.trendPrediction = this.calcSimpleTrendPrediction(s);
@@ -446,7 +448,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     calcSimpleTrendPrediction(s) {
         const direction = s.trendPrediction?.direction || '方向不明';
         const score = s.trendPrediction?.score || 50;
-        return { direction, score, source: 'cache-inferred' };
+        const reason = s.trendPrediction?.reason || '缓存数据推断';
+        return { direction, score, reason, details: {} };
     }
     calcTrendPrediction(kline, result) {
         try {
@@ -2593,7 +2596,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     if (sellEntry && (now - sellEntry.timestamp) > THREE_DAYS) {
                         this.sellStateCache.delete(s.code);
                     }
-                    else if (sellEntry && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+                    else if (sellEntry) {
                         newSuggestion = '不要介入';
                     }
                     if (['卖出', '减仓'].includes(newSuggestion)) {

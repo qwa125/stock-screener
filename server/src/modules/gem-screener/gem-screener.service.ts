@@ -327,11 +327,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
           // 3天自动过期
           if (now - sellEntry.timestamp > THREE_DAYS_MS) {
             this.sellStateCache.delete(s.code);
-          } else if (
-            !['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || '')
-          ) {
-            // 锁着且无买入信号 → 维持锁定
+          } else {
+            // 🔒 卖出锁定生效：覆盖为不要介入（除非全量K线分析判断出真实买入信号）
             s.suggestion = '不要介入';
+            s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+            continue;
           }
         }
 
@@ -590,7 +590,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 使用缓存数据推断趋势方向
     const direction = s.trendPrediction?.direction || '方向不明';
     const score = s.trendPrediction?.score || 50;
-    return { direction, score, source: 'cache-inferred' };
+    const reason = s.trendPrediction?.reason || '缓存数据推断';
+    return { direction, score, reason, details: {} };
   }
 
   /**
@@ -3036,7 +3037,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (sellEntry && (now - sellEntry.timestamp) > THREE_DAYS) {
             // 3天自动过期，清除锁定
             this.sellStateCache.delete(s.code);
-          } else if (sellEntry && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+          } else if (sellEntry) {
+            // 🔒 卖出锁定生效：覆盖为不要介入（全量K线分析才能解锁）
             newSuggestion = '不要介入';
           }
 
