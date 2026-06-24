@@ -106,6 +106,14 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    getCacheAll(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            total: number;
+            stocks: import("./gem-screener.service").OpportunityStock[];
+        };
+    }>;
     getCombinedTop(force?: string): Promise<{
         code: number;
         msg: string;

@@ -203,6 +203,12 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
   }
 
+  @Get('cache-all')
+  async getCacheAll() {
+    const gem = this.gemScreener.getCacheAll();
+    return { code: 200, msg: 'success', data: { total: gem.length, stocks: gem } };
+  }
+
   @Get('top/combined')
   async getCombinedTop(@Query('force') force?: string) {
     const [gemResult, mainResult] = await Promise.all([
@@ -619,8 +625,13 @@ export class GemScreenerController {
       if (opp) {
         // 应用信号重算，与机会列表保持一致
         this.gemScreener.recalculateSuggestions([opp]);
+        // 写回缓存，机会列表自动同步
+        this.gemScreener.updateSingleStockInCache(opp).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
         return { code: 200, msg: 'success', data: [opp] };
       }
+      // 即使分析失败也尝试用空信号更新缓存（避免旧数据残留）
+      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0 };
+      this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => {});
       return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
     } catch (e) {
       this.logger.error(`K线分析失败: ${(e as Error).message}`);

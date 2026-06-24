@@ -170,6 +170,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
         return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
     }
+    async getCacheAll() {
+        const gem = this.gemScreener.getCacheAll();
+        return { code: 200, msg: 'success', data: { total: gem.length, stocks: gem } };
+    }
     async getCombinedTop(force) {
         const [gemResult, mainResult] = await Promise.all([
             this.gemScreener.scanTopGem(force === 'true'),
@@ -553,8 +557,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
             if (opp) {
                 this.gemScreener.recalculateSuggestions([opp]);
+                this.gemScreener.updateSingleStockInCache(opp).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
                 return { code: 200, msg: 'success', data: [opp] };
             }
+            const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0 };
+            this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => { });
             return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
         }
         catch (e) {
@@ -649,6 +656,12 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getTopMainBoard", null);
+__decorate([
+    (0, common_1.Get)('cache-all'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getCacheAll", null);
 __decorate([
     (0, common_1.Get)('top/combined'),
     __param(0, (0, common_1.Query)('force')),

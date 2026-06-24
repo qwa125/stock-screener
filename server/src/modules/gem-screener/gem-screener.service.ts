@@ -481,6 +481,48 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { total, updated: total };
   }
 
+  /** 获取全量缓存 */
+  getCacheAll(): OpportunityStock[] {
+    const all: OpportunityStock[] = [];
+    if (this.cache?.data) all.push(...this.cache.data);
+    if (this.mainBoardCache?.data) all.push(...this.mainBoardCache.data);
+    // 去重 (以 code 为准)
+    const seen = new Set<string>();
+    return all.filter(s => {
+      if (seen.has(s.code)) return false;
+      seen.add(s.code);
+      return true;
+    });
+  }
+
+  /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
+  async updateSingleStockInCache(opp: OpportunityStock): Promise<void> {
+    const code = opp.code;
+    // 尝试更新 GEM 缓存
+    let found = false;
+    if (this.cache?.data) {
+      const idx = this.cache.data.findIndex(s => s.code === code);
+      if (idx >= 0) {
+        this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
+        found = true;
+      }
+    }
+    // 尝试更新主板缓存
+    if (!found && this.mainBoardCache?.data) {
+      const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
+      if (idx >= 0) {
+        this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
+        found = true;
+      }
+    }
+    // 都不在缓存中则忽略（新股票，没在机会列表里）
+    if (found) {
+      await this.saveCacheToDisk();
+      await this.saveMainBoardCacheToDisk();
+      this.logger.log(`📝 缓存已更新: ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+    }
+  }
+
   private triggerRefresh() {
     // 盘后/周末不刷新, 保留收盘数据
     if (!isMarketOpen()) {

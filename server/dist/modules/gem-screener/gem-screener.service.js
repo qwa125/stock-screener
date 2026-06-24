@@ -374,6 +374,43 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`✅ 缓存信号重算完成: ${total}只`);
         return { total, updated: total };
     }
+    getCacheAll() {
+        const all = [];
+        if (this.cache?.data)
+            all.push(...this.cache.data);
+        if (this.mainBoardCache?.data)
+            all.push(...this.mainBoardCache.data);
+        const seen = new Set();
+        return all.filter(s => {
+            if (seen.has(s.code))
+                return false;
+            seen.add(s.code);
+            return true;
+        });
+    }
+    async updateSingleStockInCache(opp) {
+        const code = opp.code;
+        let found = false;
+        if (this.cache?.data) {
+            const idx = this.cache.data.findIndex(s => s.code === code);
+            if (idx >= 0) {
+                this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
+                found = true;
+            }
+        }
+        if (!found && this.mainBoardCache?.data) {
+            const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
+            if (idx >= 0) {
+                this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
+                found = true;
+            }
+        }
+        if (found) {
+            await this.saveCacheToDisk();
+            await this.saveMainBoardCacheToDisk();
+            this.logger.log(`📝 缓存已更新: ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+        }
+    }
     triggerRefresh() {
         if (!(0, market_time_1.isMarketOpen)()) {
             if (this.cache) {
