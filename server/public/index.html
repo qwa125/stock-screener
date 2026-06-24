@@ -289,10 +289,9 @@ async function handleScanClick(){
     hideBlocked()
     doFullRescan()  // 腾讯实时1617只全市场扫描，覆盖300005
   }catch(e){
-    // 网络错误时放行：直接全市场重扫（不恢复旧缓存导致看到过时数据）
-    console.log('⚠️ 设备注册失败，直接全市场重扫:', e.message)
-    hideBlocked()
-    doFullRescan()
+    // 网络错误 → 保持毛玻璃拦截，不放行
+    console.log('⚠️ 设备注册请求失败，保持拦截:', e.message)
+    showBlocked(true)
   }
 }
 function $(id){return document.getElementById(id)}
@@ -621,7 +620,8 @@ async function doScan(){
     var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
     var d=await r.json()
     if(d.code!==200||!d.data||!d.data.opportunities){
-      // 429(设备未注册)或后端无数据→自动切全市场重扫
+      if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
+      // 后端无数据→自动切全市场重扫
       setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';
       doFullRescan();return
     }
@@ -704,9 +704,9 @@ async function doFullRescan(){
   var btn=$('rescanBtn');
   // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
   if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
-  // 毛玻璃可见时只缓存数据不更新UI
+  // 毛玻璃可见时（未注册）不执行任何操作
   var isBlurred=!$('pageBlur').classList.contains('hidden')
-  if(isBlurred&&loading)return
+  if(isBlurred)return
   loading=true
   stopPriceRefresh()
   setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')

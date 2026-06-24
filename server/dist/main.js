@@ -7,7 +7,6 @@ const express = require("express");
 const path = require("path");
 const https = require("https");
 const http_status_interceptor_1 = require("./interceptors/http-status.interceptor");
-const gem_screener_service_1 = require("./modules/gem-screener/gem-screener.service");
 const iconv = require("iconv-lite");
 let sinaCache = [];
 let sinaCacheReady = false;
@@ -239,25 +238,6 @@ async function bootstrap() {
         results.sort((a, b) => (b.changepercent || 0) - (a.changepercent || 0));
         console.log(`[TencentMarket] ${results.length} stocks in ${Date.now() - start}ms`);
         res.json({ code: 200, msg: '腾讯实时 ' + results.length + ' 只', data: results });
-    });
-    const gemSvc = app.get(gem_screener_service_1.GemScreenerService);
-    app.use('/api/gem/rescan', async (req, res, next) => {
-        if (req.originalUrl !== '/api/gem/rescan')
-            return next();
-        try {
-            const curCache = gemSvc['cache']?.data || [];
-            const curMainCache = gemSvc['mainBoardCache']?.data || [];
-            if (curCache.length < 30 || curMainCache.length < 30) {
-                gemSvc['scanTopGem'](true).catch(() => { });
-                gemSvc['scanTopMainBoard'](true).catch(() => { });
-                console.log('rescan: cache too small, async refresh triggered');
-            }
-            const results = await gemSvc.rescanMarket();
-            res.json({ code: 200, msg: 'ok', data: results });
-        }
-        catch (e) {
-            res.status(500).json({ code: 500, msg: '重扫失败: ' + (e.message || e), data: [] });
-        }
     });
     app.setGlobalPrefix('api');
     app.use(express.static(path.join(__dirname, '..', 'public')));

@@ -275,30 +275,6 @@ async function bootstrap() {
     console.log(`[TencentMarket] ${results.length} stocks in ${Date.now() - start}ms`);
     res.json({ code: 200, msg: '腾讯实时 ' + results.length + ' 只', data: results });
   });
-  // ══════════════════════════════════════════════
-  // 缓存重分析端点 (绕过全局守卫)
-  // 用 Express 中间件直接处理，避免被 NestJS AccessLimitGuard 拦截
-  // ══════════════════════════════════════════════
-    const gemSvc = app.get(GemScreenerService);
-  app.use('/api/gem/rescan', async (req, res, next) => {
-    // Express 中间件挂载路径是前缀匹配，/api/gem/rescan 会匹配 /api/gem/rescan-batch
-    // 用 req.originalUrl 做精确检查，确保只处理精确路径
-    if (req.originalUrl !== '/api/gem/rescan') return next();
-    try {
-      // 如果缓存数据太少（<30只），异步触发全量重新扫描
-      const curCache = gemSvc['cache']?.data || [];
-      const curMainCache = gemSvc['mainBoardCache']?.data || [];
-      if (curCache.length < 30 || curMainCache.length < 30) {
-        gemSvc['scanTopGem'](true).catch(() => {});
-        gemSvc['scanTopMainBoard'](true).catch(() => {});
-        console.log('rescan: cache too small, async refresh triggered');
-      }
-      const results = await gemSvc.rescanMarket();
-      res.json({ code: 200, msg: 'ok', data: results });
-    } catch (e) {
-      res.status(500).json({ code: 500, msg: '重扫失败: ' + (e.message || e), data: [] });
-    }
-  });
   app.setGlobalPrefix('api');
   // 托管 H5 前端静态文件
   app.use(express.static(path.join(__dirname, '..', 'public')));
