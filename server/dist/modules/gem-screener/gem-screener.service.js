@@ -2643,6 +2643,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
             }
             catch { }
+            for (const stock of top200) {
+                if (!stock.trendPrediction) {
+                    stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
+                }
+            }
             await this.saveSellStateCache();
             this.logger.log(`重新评估完成：${top200.length} 只, 信号: ${top200.map(s => s.suggestion).join(',')}`);
         }

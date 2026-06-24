@@ -3086,6 +3086,13 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.cache = { data: top200, timestamp: now };
       try { require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8'); } catch {}
 
+      // ─── 为结果添加简化趋势预测 ───
+      for (const stock of top200) {
+        if (!stock.trendPrediction) {
+          stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
+        }
+      }
+
       // 持久化卖出锁定状态
       await this.saveSellStateCache();
       this.logger.log(`重新评估完成：${top200.length} 只, 信号: ${top200.map(s=>s.suggestion).join(',')}`);
