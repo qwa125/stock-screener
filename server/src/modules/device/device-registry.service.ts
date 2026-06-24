@@ -13,6 +13,7 @@ export class DeviceRegistryService {
   private registryLoaded = false
   private supabase = this.initSupabase()
   private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
+  private readonly settingsPath = '/tmp/device-settings.json'
 
   private initSupabase() {
     try {
@@ -106,8 +107,32 @@ export class DeviceRegistryService {
     }
   }
 
+  private loadSettings() {
+    try {
+      if (fs.existsSync(this.settingsPath)) {
+        const raw = fs.readFileSync(this.settingsPath, 'utf-8')
+        const data = JSON.parse(raw)
+        if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+          this.maxSlots = data.maxSlots
+          this.logger.log(`⚙️ 从设置文件加载: 设备限额 ${this.maxSlots}`)
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`设置文件加载失败: ${(e as Error).message}`)
+    }
+  }
+
+  private saveSettings() {
+    try {
+      fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
+    } catch (e) {
+      this.logger.warn(`设置文件写入失败: ${(e as Error).message}`)
+    }
+  }
+
   private async ensureLoaded() {
     if (this.registryLoaded) return
+    this.loadSettings()
     await this.loadRegistry()
     if (!this.supabase) {
       this.loadFromFile()
@@ -259,6 +284,8 @@ export class DeviceRegistryService {
 
   async setMaxSlots(value: number) {
     this.maxSlots = value
+    this.saveSettings()
+    this.logger.log(`⚙️ 设备限额已改为: ${value}`)
     return { success: true, maxSlots: value }
   }
 

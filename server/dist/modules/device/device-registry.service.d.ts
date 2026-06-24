@@ -6,10 +6,13 @@ export declare class DeviceRegistryService {
     private registryLoaded;
     private supabase;
     private readonly filePath;
+    private readonly settingsPath;
     private initSupabase;
     private ensureTable;
     private saveToFile;
     private loadFromFile;
+    private loadSettings;
+    private saveSettings;
     private ensureLoaded;
     private loadRegistry;
     touchDevice(deviceId: string, ua: string): Promise<{

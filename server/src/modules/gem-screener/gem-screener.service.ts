@@ -323,6 +323,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 旧缓存升级：给旧格式数据补上 signalCombination / jiGouActiveScore
       this.upgradeCacheFields(this.cache.data);
       this.triggerAnalysisPreCache(this.cache.data);
+      // 重新生成缓存建议（与服务器算法一致，确保搜索和主列表结果匹配）
+      this.recalculateSuggestions(this.cache.data);
 
       // ─── 卖出锁定 + 趋势预测 ───
       const now = Date.now();
@@ -381,7 +383,64 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 推导芯片筹码字段（旧缓存缺失）
       s.chipConcentration90 = s.chipConcentration90 ?? 50;
       s.chipPeakPosition = s.chipPeakPosition ?? 'mid';
-      s.chipPattern = s.chipPattern ?? 'dispersed';
+          s.chipPattern = s.chipPattern ?? 'dispersed';
+    }
+  }
+
+  /** 重新生成缓存建议，与服务器分析算法保持一致 */
+  private recalculateSuggestions(data: OpportunityStock[]) {
+    for (const s of data) {
+      // 暴跌 → 卖出
+      if (s.changePercent <= -5) {
+        s.suggestion = '卖出';
+        s.score = Math.min(s.score, 35);
+        continue;
+      }
+
+      // 大幅下跌 + 死叉 → 减仓
+      if (s.changePercent <= -3 && !s.isGoldenCross) {
+        s.suggestion = '减仓';
+        s.score = Math.min(s.score, 45);
+        continue;
+      }
+
+      // 入场时机极差 → 不要介入
+      if (s.entryTiming < 25) {
+        s.suggestion = '不要介入';
+        s.score = Math.min(s.score, 30);
+        continue;
+      }
+
+      // 入场时机差 + 死叉 → 观望
+      if (s.entryTiming < 40 && !s.isGoldenCross) {
+        s.suggestion = '观望';
+        s.score = Math.min(s.score, 45);
+        continue;
+      }
+
+      // 根据评分重新计算建议（recalibrate 0-100 to 0-100 thresholds）
+      const baseScore = s.score ?? 50;
+      if (baseScore >= 88) {
+        s.suggestion = '重仓买入';
+      } else if (baseScore >= 78) {
+        s.suggestion = '买入';
+      } else if (baseScore >= 68) {
+        s.suggestion = '轻仓买入';
+      } else if (baseScore >= 55) {
+        s.suggestion = '持有';
+      } else if (baseScore >= 45) {
+        s.suggestion = '减仓';
+      } else if (baseScore >= 35) {
+        s.suggestion = '观望';
+      } else {
+        s.suggestion = '不要介入';
+      }
+
+      // 入场时机一般但评分高 → 降级
+      if (s.entryTiming < 50 && ['重仓买入','买入'].includes(s.suggestion)) {
+        s.suggestion = '轻仓买入';
+        s.score = Math.min(baseScore, 75);
+      }
     }
   }
 
@@ -1089,24 +1148,24 @@ export class GemScreenerService implements OnApplicationBootstrap {
       await fs.mkdir(assetDir, { recursive: true });
 
       // 先全量扫描获取最新数据
-      this.logger.log('  ⏳ 正在全量扫描创业板...');
+      this.logger.log('  ⏳ 正在全量扫描创业板(300xxx)...');
       try {
         await Promise.race([
           this['scanAllStocks'](),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 120000))
+          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 180000))
         ]);
       } catch (scanErr) {
         this.logger.warn(`  创业板扫描异常: ${scanErr.message}，使用当前缓存`);
       }
 
-      this.logger.log('  ⏳ 正在扫描重仓买入...');
+      this.logger.log('  ⏳ 正在全量扫描主板(000xxx+002xxx+600xxx+603xxx+605xxx等)...');
       try {
         await Promise.race([
-          this['scanGlobalHeavyBuy'](),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 60000))
+          this['scanMainBoardStocks'](),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('扫描超时')), 180000))
         ]);
       } catch (scanErr) {
-        this.logger.warn(`  重仓买入扫描异常: ${scanErr.message}，使用当前缓存`);
+        this.logger.warn(`  主板扫描异常: ${scanErr.message}，使用当前缓存`);
       }
 
       // 更新GEM缓存时间戳

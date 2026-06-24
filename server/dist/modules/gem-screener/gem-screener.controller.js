@@ -538,6 +538,7 @@ __decorate([
 ], GemScreenerController.prototype, "tencentProxy", null);
 __decorate([
     (0, common_1.Post)('refresh'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -546,6 +547,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshWithData", null);
 __decorate([
     (0, common_1.Post)('refresh-main-board'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -569,6 +571,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshHeavyBuy", null);
 __decorate([
     (0, common_1.Get)('opportunities'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -595,6 +598,7 @@ __decorate([
 ], GemScreenerController.prototype, "getTopMainBoard", null);
 __decorate([
     (0, common_1.Get)('top/combined'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -602,6 +606,7 @@ __decorate([
 ], GemScreenerController.prototype, "getCombinedTop", null);
 __decorate([
     (0, common_1.Get)('top/opportunities'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('force')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -636,6 +641,7 @@ __decorate([
 ], GemScreenerController.prototype, "seedCache", null);
 __decorate([
     (0, common_1.Get)('search'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('q')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -709,6 +715,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxySinaUS", null);
 __decorate([
     (0, common_1.Post)('analyze'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

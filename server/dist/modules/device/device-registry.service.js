@@ -21,6 +21,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.registryLoaded = false;
         this.supabase = this.initSupabase();
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
+        this.settingsPath = '/tmp/device-settings.json';
     }
     initSupabase() {
         try {
@@ -112,9 +113,33 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             this.logger.warn(`文件加载设备失败: ${e.message}`);
         }
     }
+    loadSettings() {
+        try {
+            if (fs.existsSync(this.settingsPath)) {
+                const raw = fs.readFileSync(this.settingsPath, 'utf-8');
+                const data = JSON.parse(raw);
+                if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+                    this.maxSlots = data.maxSlots;
+                    this.logger.log(`⚙️ 从设置文件加载: 设备限额 ${this.maxSlots}`);
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`设置文件加载失败: ${e.message}`);
+        }
+    }
+    saveSettings() {
+        try {
+            fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
+        }
+        catch (e) {
+            this.logger.warn(`设置文件写入失败: ${e.message}`);
+        }
+    }
     async ensureLoaded() {
         if (this.registryLoaded)
             return;
+        this.loadSettings();
         await this.loadRegistry();
         if (!this.supabase) {
             this.loadFromFile();
@@ -251,6 +276,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async setMaxSlots(value) {
         this.maxSlots = value;
+        this.saveSettings();
+        this.logger.log(`⚙️ 设备限额已改为: ${value}`);
         return { success: true, maxSlots: value };
     }
     async removeDevice(index) {
