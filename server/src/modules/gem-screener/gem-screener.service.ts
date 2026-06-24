@@ -3055,6 +3055,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
     }
+    // 对搜索结果也应用信号重算，与机会列表保持一致
+    try { this.recalculateSuggestions(results); } catch (e) {}
     return results;
   }
 

@@ -2594,6 +2594,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
+        try {
+            this.recalculateSuggestions(results);
+        }
+        catch (e) { }
         return results;
     }
     async rescanMarket() {
