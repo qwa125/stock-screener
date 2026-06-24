@@ -467,6 +467,20 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
+  /** 不调外部API，只对已有缓存重算信号并写回磁盘 */
+  async recalcCacheSignals(): Promise<{ total: number; updated: number }> {
+    let total = 0;
+    const allData: OpportunityStock[] = [];
+    if (this.cache?.data) { allData.push(...this.cache.data); total += this.cache.data.length; }
+    if (this.mainBoardCache?.data) { allData.push(...this.mainBoardCache.data); total += this.mainBoardCache.data.length; }
+    this.recalculateSuggestions(allData);
+    // 写回磁盘
+    if (this.cache?.data) await this.saveCacheToDisk();
+    if (this.mainBoardCache?.data) await this.saveMainBoardCacheToDisk();
+    this.logger.log(`✅ 缓存信号重算完成: ${total}只`);
+    return { total, updated: total };
+  }
+
   private triggerRefresh() {
     // 盘后/周末不刷新, 保留收盘数据
     if (!isMarketOpen()) {

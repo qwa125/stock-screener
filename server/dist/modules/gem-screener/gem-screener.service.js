@@ -355,6 +355,25 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
     }
+    async recalcCacheSignals() {
+        let total = 0;
+        const allData = [];
+        if (this.cache?.data) {
+            allData.push(...this.cache.data);
+            total += this.cache.data.length;
+        }
+        if (this.mainBoardCache?.data) {
+            allData.push(...this.mainBoardCache.data);
+            total += this.mainBoardCache.data.length;
+        }
+        this.recalculateSuggestions(allData);
+        if (this.cache?.data)
+            await this.saveCacheToDisk();
+        if (this.mainBoardCache?.data)
+            await this.saveMainBoardCacheToDisk();
+        this.logger.log(`✅ 缓存信号重算完成: ${total}只`);
+        return { total, updated: total };
+    }
     triggerRefresh() {
         if (!(0, market_time_1.isMarketOpen)()) {
             if (this.cache) {

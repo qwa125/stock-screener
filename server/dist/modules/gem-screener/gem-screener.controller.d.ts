@@ -251,6 +251,14 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    recalcCache(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            total: number;
+            updated: number;
+        };
+    }>;
     analyzeWithKLine(body: {
         code: string;
         name?: string;

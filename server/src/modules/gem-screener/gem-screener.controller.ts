@@ -589,6 +589,13 @@ export class GemScreenerController {
     }
   }
 
+  /** 只重算缓存信号，不调外部API */
+  @Post('recalc')
+  async recalcCache() {
+    const result = await this.gemScreener.recalcCacheSignals();
+    return { code: 200, msg: '缓存信号重算完成', data: result };
+  }
+
   @Post('analyze')
   async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {

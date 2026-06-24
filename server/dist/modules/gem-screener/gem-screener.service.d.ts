@@ -98,6 +98,10 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     }>;
     private upgradeCacheFields;
     recalculateSuggestions(data: OpportunityStock[]): void;
+    recalcCacheSignals(): Promise<{
+        total: number;
+        updated: number;
+    }>;
     private triggerRefresh;
     private refreshCache;
     onApplicationBootstrap(): Promise<void>;
