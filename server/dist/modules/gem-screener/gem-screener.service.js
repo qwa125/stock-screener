@@ -252,7 +252,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         if (allData.length > 0) {
             this.upgradeCacheFields(allData);
-            this.triggerAnalysisPreCache(allData);
             this.recalculateSuggestions(allData);
             const now = Date.now();
             for (const s of allData) {

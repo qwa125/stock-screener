@@ -340,7 +340,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (allData.length > 0) {
       // 旧缓存升级：给旧格式数据补上 signalCombination / jiGouActiveScore
       this.upgradeCacheFields(allData);
-      this.triggerAnalysisPreCache(allData);
+      // 注意：不能在Render上调用triggerAnalysisPreCache，腾讯API会超时导致进程卡死
       // 重新生成缓存建议（与服务器算法一致，确保搜索和主列表结果匹配）
       this.recalculateSuggestions(allData);
 
