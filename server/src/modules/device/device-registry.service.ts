@@ -184,6 +184,10 @@ export class DeviceRegistryService {
 
   private async ensureLoaded() {
     if (this.registryLoaded) return
+    // 先确保表存在，再加载设置（不然首次启动 DB 中设备和设置表都不存在）
+    if (this.supabase) {
+      await this.ensureTable()
+    }
     await this.loadSettingsFromDB()
     await this.loadRegistry()
     if (!this.supabase) {

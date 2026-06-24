@@ -21,9 +21,9 @@ export declare class AccessControlController {
         code: number;
         msg: string;
         data: {
+            maxSlots: number;
             usedSlots: number;
             allowed: boolean;
-            maxSlots: number;
             registered: boolean;
         };
     }>;

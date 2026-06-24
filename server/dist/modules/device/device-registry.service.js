@@ -192,6 +192,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     async ensureLoaded() {
         if (this.registryLoaded)
             return;
+        if (this.supabase) {
+            await this.ensureTable();
+        }
         await this.loadSettingsFromDB();
         await this.loadRegistry();
         if (!this.supabase) {
