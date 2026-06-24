@@ -2941,6 +2941,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
     } catch (e) {
       this.logger.error(`搜索失败: ${(e as Error).message}`);
     }
+    // ─── 搜索结果应用卖出锁定 ───
+    const now = Date.now();
+    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+    for (const r of results) {
+      const sellEntry = this.sellStateCache.get(r.code);
+      if (sellEntry && (now - sellEntry.timestamp) <= THREE_DAYS_MS) {
+        r.suggestion = '不要介入';
+        r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+      }
+    }
     return results;
   }
 
