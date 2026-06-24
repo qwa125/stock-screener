@@ -1236,32 +1236,32 @@ async function doSearch(){
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
       
-      // 优先走后端代理（同源请求，无跨域问题）
-      try{
-        var kr=await fetch(API+'/gem/proxy/kline?code='+stockCode+'&market='+prefix,{signal:timeoutSignal(20000)})
-        var kj=await kr.json()
-        if(kj&&kj.code===200&&kj.data&&kj.data.length>=5){
-          kdata=kj.data
-          console.log('[search] proxy kline got '+kdata.length+' bars')
-        }
-      }catch(e){console.warn('[search] proxy kline failed:',e)}
-      
-      // 兜底：直接从浏览器拉（部分浏览器可能可用）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us'){
-        // 东方财富
-        try{
-          var emSecId2=isIndex?"1.":(stockCode.startsWith('6')?'1.':'0.')+stockCode
-          var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
-          var ekr2=await fetch(ekurl2,{signal:timeoutSignal(5000)})
-          var ekd2=await ekr2.json()
+      // ★ 优先：浏览器直调东方财富（你在国内，直连最快最稳）
+      if(stockMarket!=='hk'&&stockMarket!=='us')try{
+        var emSecId2=isIndex?"1.":(stockCode.startsWith('6')?'1.':'0.')+stockCode
+        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
+        var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000)})
+        if(ekr2.ok||ekr2.status===0||ekr2.type==='basic'){
+          try{var ekd2=await ekr2.json()}catch(ee){ekd2=null}
           if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=5){
             kdata=ekd2.data.klines.map(function(l){
               var p=l.split(',')
               return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
             })
+            console.log('[search] direct eastmoney got '+kdata.length+' bars')
           }
-        }catch(e){}
-      }
+        }
+      }catch(e){console.warn('[search] direct eastmoney failed:',e.message||e)}
+      
+      // ★ 兜底：后端代理（某些浏览器跨域严格时走这里）
+      if(!kdata)try{
+        var kr=await fetch(API+'/gem/proxy/kline?code='+stockCode+'&market='+prefix,{signal:timeoutSignal(15000)})
+        var kj=await kr.json()
+        if(kj&&kj.code===200&&kj.data&&kj.data.length>=5){
+          kdata=kj.data
+          console.log('[search] proxy kline got '+kdata.length+' bars')
+        }
+      }catch(e){console.warn('[search] proxy kline failed:',e.message||e)}
       
       if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       
