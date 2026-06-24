@@ -1238,7 +1238,7 @@ async function doSearch(){
       
       // 优先走后端代理（同源请求，无跨域问题）
       try{
-        var kr=await fetch(API+'/gem/proxy/kline?code='+stockCode+'&market='+prefix,{signal:timeoutSignal(10000)})
+        var kr=await fetch(API+'/gem/proxy/kline?code='+stockCode+'&market='+prefix,{signal:timeoutSignal(20000)})
         var kj=await kr.json()
         if(kj&&kj.code===200&&kj.data&&kj.data.length>=5){
           kdata=kj.data
@@ -1305,9 +1305,7 @@ async function doSearch(){
         throw new Error('分析无结果')
       }
     }catch(e){
-      // K线分析失败，兜底调后端搜索（可能慢但尽力）
-      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-        +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ K线分析暂不可用，切换服务器分析……</div>'
+      // K线拉取失败（跨域/超时），兜底查缓存
       try{
         var r2=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode),{signal:timeoutSignal(15000)})
         var j2=await r2.json()
