@@ -340,14 +340,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
         await this.loadSellStateCache();
-        const now = Date.now();
-        for (const [code, suggestion] of [['603283', '卖出'], ['002378', '卖出'], ['603124', '卖出']]) {
-            if (!this.sellStateCache.has(code)) {
-                this.sellStateCache.set(code, { suggestion, timestamp: now });
-            }
-        }
-        this.saveSellStateCache();
-        this.logger.log(`🧪 测试卖出锁定已预置: 603283/002378/603124`);
     }
     calcKDJ(kline) {
         const high = kline.map(k => k.high);
