@@ -1,11 +1,11 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus, Logger, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 import { AuthService } from '@/modules/auth/auth.service';
 
 /** 标记路由是否跳过访问限制 */
 export const SKIP_ACCESS_LIMIT = 'skip_access_limit';
-export const SkipAccessLimit = () => Reflect.metadata(SKIP_ACCESS_LIMIT, true);
+export const SkipAccessLimit = () => SetMetadata(SKIP_ACCESS_LIMIT, true);
 
 @Injectable()
 export class AccessLimitGuard implements CanActivate {

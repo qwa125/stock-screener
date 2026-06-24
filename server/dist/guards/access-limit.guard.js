@@ -16,7 +16,7 @@ const core_1 = require("@nestjs/core");
 const device_registry_service_1 = require("../modules/device/device-registry.service");
 const auth_service_1 = require("../modules/auth/auth.service");
 exports.SKIP_ACCESS_LIMIT = 'skip_access_limit';
-const SkipAccessLimit = () => Reflect.metadata(exports.SKIP_ACCESS_LIMIT, true);
+const SkipAccessLimit = () => (0, common_1.SetMetadata)(exports.SKIP_ACCESS_LIMIT, true);
 exports.SkipAccessLimit = SkipAccessLimit;
 let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
     constructor(deviceRegistry, auth, reflector) {
