@@ -22,51 +22,23 @@ export class AccessLimitGuard implements CanActivate {
     const url: string = request.url || request.path || '';
 
     // ══════════════════════════════════
-    // URL 白名单 — 总比用元数据可靠
+    // URL 白名单 — 仅放行管理类端点（auth / device / health）
     // ══════════════════════════════════
-    const skipPaths = [
-      '/api/auth',
-      '/api/access',
-      '/api/device',
-      '/api/health',
-      '/api/gem/opportunities',
-      '/api/gem/search',
-      '/api/gem/market-state',
-      '/api/gem/price-stream',
-      '/api/gem/refresh',
-      '/api/gem/refresh-main-board',
-      '/api/gem/seed-cache',
-      '/api/gem/tencent-proxy',
-      '/api/gem/analyze',
-      '/api/gem/top',
-      '/api/gem/watched-codes',
-      '/api/gem/sync-sell-state',
-      '/api/sector',
-      '/api/stock',
-    ];
-    const shouldSkip = skipPaths.some((p) => url.startsWith(p));
-    if (shouldSkip) {
-      // 但还是要尝试注册设备（用于跟踪记录）
-      const deviceId = request.headers['x-device-id'];
-      if (deviceId && typeof deviceId === 'string') {
-        try {
-          await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
-        } catch (e) {
-          this.logger.warn(`设备注册失败: ${(e as Error).message}`);
-        }
-      }
-      return true;
-    }
+    const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health'];
+    if (adminPaths.some((p) => url.startsWith(p))) return true;
 
     // ══════════════════════════════════
-    // 元数据扫描（备选方案，URL 白名单命中后已提前跳过）
+    // 元数据 @SkipAccessLimit() 检查
     // ══════════════════════════════════
-    const skipMeta = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (skipMeta) return true;
+    if (skip) return true;
 
+    // ══════════════════════════════════
+    // 无论是否命中限制，先注册设备（让所有请求都能记录设备）
+    // ══════════════════════════════════
     const deviceId = request.headers['x-device-id'];
     if (deviceId && typeof deviceId === 'string') {
       try {
@@ -109,9 +81,6 @@ export class AccessLimitGuard implements CanActivate {
     // ══════════════════════════════════
     // 无 token → 按设备限制检查（兜底）
     // ══════════════════════════════════
-
-    // 优先使用前端发送的设备 ID（浏览器 localStorage 持久化）
-    // 注意：设备已在 guard 入口处注册过，这里只检查是否被限制
     if (deviceId) {
       const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
       if (!result.allowed) {

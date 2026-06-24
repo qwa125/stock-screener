@@ -21,7 +21,6 @@ export class GemScreenerController {
    * GET /api/gem/market-state
    */
   @Get('market-state')
-  @SkipAccessLimit()
   async getMarketState() {
     const state = this.scheduler.getState();
     const bjNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -47,7 +46,6 @@ export class GemScreenerController {
    * GET /api/gem/price-stream
    */
   @Get('price-stream')
-  @SkipAccessLimit()
   async priceStream(@Res() res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -117,7 +115,6 @@ export class GemScreenerController {
    * 获取当前关注的股票代码列表
    */
   @Get('watched-codes')
-  @SkipAccessLimit()
   async getWatchedCodes() {
     return { code: 200, msg: 'success', data: { codes: this.scheduler.getWatchedCodes() } };
   }
@@ -138,7 +135,6 @@ export class GemScreenerController {
   }
 
   @Post('refresh')
-  @SkipAccessLimit()
   @HttpCode(200)
   async refreshWithData(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
@@ -146,7 +142,6 @@ export class GemScreenerController {
   }
 
   @Post('refresh-main-board')
-  @SkipAccessLimit()
   @HttpCode(200)
   async refreshMainBoard(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanWithFrontendMainBoardData(body.stocks);
@@ -177,7 +172,6 @@ export class GemScreenerController {
   }
 
   @Get('opportunities')
-  @SkipAccessLimit()
   async getOpportunities() {
     const { opportunities, timestamp } = await this.gemScreener.getOpportunities();
     return { code: 200, msg: 'success', data: { opportunities, timestamp } };
@@ -210,7 +204,6 @@ export class GemScreenerController {
   }
 
   @Get('top/combined')
-  @SkipAccessLimit()
   async getCombinedTop(@Query('force') force?: string) {
     const [gemResult, mainResult] = await Promise.all([
       this.gemScreener.scanTopGem(force === 'true'),
@@ -250,7 +243,6 @@ export class GemScreenerController {
   }
 
   @Get('top/opportunities')
-  @SkipAccessLimit()
   async getTopOpportunities(@Query('force') force?: string) {
     const result = await this.gemScreener.scanTopOpportunities(force === 'true');
     return { code: 200, msg: 'success', data: { opportunities: result.opportunities, timestamp: result.timestamp } };
@@ -358,7 +350,6 @@ export class GemScreenerController {
   }
 
   @Get('search')
-  @SkipAccessLimit()
   async searchStock(@Query('q') keyword: string) {
     if (!keyword || keyword.trim().length === 0) {
       return { code: 400, msg: '请输入搜索关键词', data: [] };
@@ -392,7 +383,6 @@ export class GemScreenerController {
   }
 
   @Post('sync-sell-state')
-  @SkipAccessLimit()
   @HttpCode(200)
   async syncSellState(@Body() body: { sellStates: { code: string; suggestion: string }[] }) {
     try {
@@ -543,7 +533,6 @@ export class GemScreenerController {
   }
 
   @Post('analyze')
-  @SkipAccessLimit()
   async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {
       return { code: 400, msg: '缺少股票代码或K线数据' };
