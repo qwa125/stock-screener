@@ -591,6 +591,7 @@ export class GemScreenerController {
 
   /** 只重算缓存信号，不调外部API */
   @Post('recalc')
+  @SkipAccessLimit()
   async recalcCache() {
     const result = await this.gemScreener.recalcCacheSignals();
     return { code: 200, msg: '缓存信号重算完成', data: result };

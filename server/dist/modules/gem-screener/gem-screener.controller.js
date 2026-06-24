@@ -772,6 +772,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxyKLine", null);
 __decorate([
     (0, common_1.Post)('recalc'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
