@@ -1,4 +1,4 @@
-<!-- Core v20250120 -->
+<!-- Core v20250624-fix3 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -276,20 +276,21 @@ async function handleScanClick(){
       method:"POST",
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
+    console.log('🔍 handleScanClick: httpStatus='+regRes.status+' body='+JSON.stringify(await regRes.clone().json()))
+    // 浏览器打印：看看实际HTTP状态码和body
     if(regRes.status===429){
       showBlocked(true)
       return
     }
     if(regRes.status!==200){
-      showBlocked(false)
+      showBlocked(true)
       return
     }
-    // 设备注册成功 → 隐藏毛玻璃，全市场重扫（确保完整正确的排序和300005探路者）
-    console.log('✅ 设备注册成功，开始全市场重扫(doFullRescan)')
+    // 只有HTTP 200才放行
+    console.log('✅ 设备注册成功，开始全市场重扫')
     hideBlocked()
-    doFullRescan()  // 腾讯实时1617只全市场扫描，覆盖300005
+    doFullRescan()
   }catch(e){
-    // 网络错误 → 保持毛玻璃拦截，不放行
     console.log('⚠️ 设备注册请求失败，保持拦截:', e.message)
     showBlocked(true)
   }
@@ -307,16 +308,16 @@ async function handleRescanClick(){
       return
     }
     if(regRes.status!==200){
-      showBlocked(false)
+      showBlocked(true)
       return
     }
     hideBlocked()
     if(loading)return
     doFullRescan()
   }catch(e){
-    hideBlocked()
-    if(loading)return
-    doFullRescan()
+    console.log('⚠️ handleRescanClick 请求失败，保持拦截:', e.message)
+    showBlocked(true)
+    return
   }
 }
 function setStatus(s){$('status').textContent=s}
