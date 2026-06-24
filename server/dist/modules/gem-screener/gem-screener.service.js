@@ -245,9 +245,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         this.sellStateCache.delete(s.code);
                     }
                     else {
-                        s.suggestion = '不要介入';
-                        s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-                        continue;
+                        const hasBuySignal = ['重仓买入', '买入'].includes(s.suggestion || '') &&
+                            s.isGoldenCross === true &&
+                            (s.entryTiming ?? 0) >= 50;
+                        if (hasBuySignal) {
+                            this.sellStateCache.delete(s.code);
+                            this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
+                        }
+                        else {
+                            s.suggestion = '不要介入';
+                            s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+                            continue;
+                        }
                     }
                 }
                 s.trendPrediction = this.calcSimpleTrendPrediction(s);

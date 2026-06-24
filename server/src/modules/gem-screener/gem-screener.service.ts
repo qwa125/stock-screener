@@ -338,10 +338,22 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (now - sellEntry.timestamp > THREE_DAYS_MS) {
             this.sellStateCache.delete(s.code);
           } else {
-            // 🔒 卖出锁定生效：覆盖为不要介入（除非全量K线分析判断出真实买入信号）
-            s.suggestion = '不要介入';
-            s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-            continue;
+            // 锁定期内检查是否出现真实买入信号 → 自动解锁
+            // recalculateSuggestions 已在上方运行，s.suggestion 为最新结果
+            const hasBuySignal =
+              ['重仓买入', '买入'].includes(s.suggestion || '') &&
+              s.isGoldenCross === true &&
+              (s.entryTiming ?? 0) >= 50;
+            if (hasBuySignal) {
+              // 🎯 出现真实买入信号，自动解除卖出锁定
+              this.sellStateCache.delete(s.code);
+              this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
+            } else {
+              // 🔒 卖出锁定生效：覆盖为不要介入
+              s.suggestion = '不要介入';
+              s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+              continue;
+            }
           }
         }
 
