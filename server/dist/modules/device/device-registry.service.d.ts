@@ -11,8 +11,8 @@ export declare class DeviceRegistryService {
     private ensureTable;
     private saveToFile;
     private loadFromFile;
-    private loadSettings;
-    private saveSettings;
+    private loadSettingsFromDB;
+    private saveSettingsToDB;
     private ensureLoaded;
     private loadRegistry;
     touchDevice(deviceId: string, ua: string): Promise<{
