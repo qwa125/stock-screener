@@ -446,6 +446,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 由用户前端页面访问时触发
     // 加载卖出状态持久缓存
     await this.loadSellStateCache();
+
+    // ─── 测试种子：预置 3 只卖出锁定股，方便用户搜索验证 ───
+    const now = Date.now();
+    for (const [code, suggestion] of [['603283', '卖出'], ['002378', '卖出'], ['603124', '卖出']]) {
+      if (!this.sellStateCache.has(code)) {
+        this.sellStateCache.set(code, { suggestion, timestamp: now });
+      }
+    }
+    this.saveSellStateCache();
+    this.logger.log(`🧪 测试卖出锁定已预置: 603283/002378/603124`);
   }
 
   // ---------------------------------------------------------------------------
