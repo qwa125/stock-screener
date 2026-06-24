@@ -36,6 +36,12 @@ export interface OpportunityStock {
     chipConcentration90?: number;
     chipPeakPosition?: 'low' | 'mid' | 'high';
     chipPattern?: 'single_peak' | 'double_peak' | 'dispersed';
+    trendPrediction?: {
+        direction: string;
+        score: number;
+        reason: string;
+        details: Record<string, any>;
+    };
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
@@ -45,6 +51,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly STALE_TTL;
     private readonly REFRESH_INTERVAL;
     private readonly CACHE_FILE;
+    private readonly SELL_STATE_FILE;
     private readonly BUNDLED_GEM_CACHE;
     private readonly BATCH_SIZE;
     private readonly POSITION_THRESHOLD;
@@ -57,11 +64,12 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private cache;
     private refreshPromise;
     private mainBoardCache;
+    private sellStateCache;
+    private soldOutStocks;
     private mainBoardRefreshPromise;
     private sectorCache;
     private readonly MAIN_BOARD_CACHE;
     private readonly BUNDLED_MAIN_BOARD_CACHE;
-    private soldOutStocks;
     private readonly SECTOR_CACHE;
     private readonly BUNDLED_SECTOR_CACHE;
     private prevGEMResults;
@@ -76,6 +84,12 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private loadMainBoardCacheFromDisk;
     private loadSectorCacheFromDisk;
     private saveCacheToDisk;
+    private loadSellStateCache;
+    private saveSellStateCache;
+    syncSellStateFromFrontend(sellStates: {
+        code: string;
+        suggestion: string;
+    }[]): void;
     getOpportunities(): Promise<{
         opportunities: OpportunityStock[];
         timestamp: number;
@@ -101,6 +115,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         goldenCrossDays: number;
         isDeathCross: boolean;
     };
+    private calcSimpleTrendPrediction;
+    calcTrendPrediction(kline: any[], result?: any): any;
     private calcCorrection;
     private scanAllStocks;
     scanWithFrontendData(stocks: {

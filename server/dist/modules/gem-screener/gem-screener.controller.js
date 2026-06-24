@@ -250,6 +250,15 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
     }
+    async syncSellState(body) {
+        try {
+            this.gemScreener.syncSellStateFromFrontend(body.sellStates || []);
+            return { code: 200, msg: 'success' };
+        }
+        catch (e) {
+            return { code: 500, msg: e.message };
+        }
+    }
     async rescanBatch(body) {
         if (!body.codes || !body.codes.length) {
             return { code: 400, msg: '请提供股票代码列表', data: [] };
@@ -539,6 +548,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "refreshAll", null);
+__decorate([
+    (0, common_1.Post)('sync-sell-state'),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "syncSellState", null);
 __decorate([
     (0, common_1.Post)('rescan-batch'),
     (0, common_1.HttpCode)(200),

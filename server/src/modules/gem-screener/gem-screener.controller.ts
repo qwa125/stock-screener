@@ -322,6 +322,17 @@ export class GemScreenerController {
     return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
   }
 
+  @Post('sync-sell-state')
+  @HttpCode(200)
+  async syncSellState(@Body() body: { sellStates: { code: string; suggestion: string }[] }) {
+    try {
+      this.gemScreener.syncSellStateFromFrontend(body.sellStates || []);
+      return { code: 200, msg: 'success' };
+    } catch (e) {
+      return { code: 500, msg: e.message };
+    }
+  }
+
   @Post('rescan-batch')
   @HttpCode(200)
   async rescanBatch(@Body() body: { codes: string[]; names?: string[] }) {

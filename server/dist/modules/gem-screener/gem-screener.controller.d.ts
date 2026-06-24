@@ -176,6 +176,15 @@ export declare class GemScreenerController {
             timestamp: number;
         };
     }>;
+    syncSellState(body: {
+        sellStates: {
+            code: string;
+            suggestion: string;
+        }[];
+    }): Promise<{
+        code: number;
+        msg: any;
+    }>;
     rescanBatch(body: {
         codes: string[];
         names?: string[];

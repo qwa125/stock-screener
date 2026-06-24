@@ -356,6 +356,24 @@ function todayAdviceText(s,rt){
 }
 
 function futurePrediction(s){
+  // Step ④: 优先使用后端的calcTrendPrediction 7因子独立预测
+  if(s.trendPrediction){
+    var tp=s.trendPrediction
+    var dir=tp.direction||'方向不明'
+    var score=tp.score||0
+    var directionEmoji=''
+    if(dir==='强烈看涨')directionEmoji='🚀'
+    else if(dir==='看涨')directionEmoji='📈'
+    else if(dir==='震荡偏强')directionEmoji='↗️'
+    else if(dir==='震荡偏弱')directionEmoji='↘️'
+    else if(dir==='看跌')directionEmoji='📉'
+    else if(dir==='强烈看跌')directionEmoji='🔻'
+    else directionEmoji='➖'
+    var reason=tp.reason||''
+    var reasonHtml=reason?'<br><span style="font-size:11px;color:#94a3b8">('+reason+')</span>':''
+    return directionEmoji+' '+dir+'（评分：'+score+'分）'+reasonHtml
+  }
+  // 降级：无trendPrediction时使用旧方式
   if(s.suggestion==='重仓买入')return'低位区+MA5>MA10多头排列+强信号，未来1-2日有望继续走强，建议全仓买入'
   if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
   if(s.suggestion==='轻仓买入')return'中位区有趋势但信号不够强，未来1-2日存在不确定性，建议1/3仓位试探'
@@ -801,20 +819,29 @@ async function doFullRescan(){
     // 有真实涨跌幅则使用实时评分（Sina返回最后交易时段数据，非交易时段也有效）
     var hasLiveData = true  // Sina返回的都有实时行情，chg=0说明真没涨跌
     
-    // 已缓存个股：用实时数据更新价格/涨幅，同时重算信号/评分（让今日跌的让位）
+    // 已缓存个股：用实时数据更新价格/涨幅，同时按规则做信号合并
     if(seen[code]){
       for(var si3=0;si3<newStocks.length;si3++){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
-          // Sina实时数据：更新评分/入场时机；信号只升级不降级（保留后端多因子分析结果）
           if(hasLiveData){
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
-            // 信号：只有Sina涨幅更高时才升级（不因实时涨幅低而把后端分析的买入信号覆盖成观望）
-            var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
-            if(PRI_ORDER.indexOf(liveSuggestion) < PRI_ORDER.indexOf(newStocks[si3].suggestion||'观望')){
-              newStocks[si3].suggestion=liveSuggestion
+            // ─── 信号合并规则 ───
+            // Step ②: 后端建议是减仓/卖出/不要介入 → 保持不动，不受chg影响
+            var BACKEND_SELL=['减仓','卖出','不要介入']
+            var backendSug=newStocks[si3].suggestion||'观望'
+            if(BACKEND_SELL.indexOf(backendSug)===-1){
+              // 后端是买入/持有 + 今日大涨 → 升级信号（保留后端多因子分析结果）
+              var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
+              if(PRI_ORDER.indexOf(liveSuggestion) < PRI_ORDER.indexOf(backendSug)){
+                newStocks[si3].suggestion=liveSuggestion
+              }
+            }
+            // 实时卖点检测：暴跌检测（chg ≤ -5%）→ 覆盖所有买入
+            if(chg <= -5){
+              newStocks[si3].suggestion='卖出'
             }
           }
           break
@@ -980,6 +1007,24 @@ async function doFullRescan(){
     setStatus('❌ 重扫无结果')
   }
   loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+  // ─── Step ③: 前端同步卖出锁定到后端持久化 ───
+  try{
+    var sellStates=[]
+    for(var si=0;si<newStocks.length;si++){
+      var ss=newStocks[si]
+      if(ss.suggestion==='卖出'||ss.suggestion==='减仓'){
+        sellStates.push({code:ss.code,suggestion:ss.suggestion})
+      }
+    }
+    if(sellStates.length>0){
+      fetch(API+'/gem/sync-sell-state',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sellStates:sellStates})
+      }).catch(function(){})
+      console.log('🔒 前端同步 '+sellStates.length+' 只卖出锁定到后端')
+    }
+  }catch(e){}
   // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
 }
 

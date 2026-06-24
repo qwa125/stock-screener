@@ -40,6 +40,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.STALE_TTL = 30 * 60 * 1000;
         this.REFRESH_INTERVAL = 5 * 60 * 1000;
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
+        this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
         this.POSITION_THRESHOLD = 92;
@@ -55,11 +56,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.cache = null;
         this.refreshPromise = null;
         this.mainBoardCache = null;
+        this.sellStateCache = new Map();
+        this.soldOutStocks = new Set();
         this.mainBoardRefreshPromise = null;
         this.sectorCache = null;
         this.MAIN_BOARD_CACHE = '/tmp/main-board-opportunities-cache.json';
         this.BUNDLED_MAIN_BOARD_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'main-board-cache.json');
-        this.soldOutStocks = new Set();
         this.SECTOR_CACHE = '/tmp/sector-opportunities-cache.json';
         this.BUNDLED_SECTOR_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'sector-cache.json');
         this.prevGEMResults = [];
@@ -71,6 +73,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
         this.loadSectorCacheFromDisk();
+        this.loadSellStateCache();
     }
     isFrozenSchedule() {
         const now = new Date();
@@ -185,10 +188,63 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ 缓存写入失败: ${err.message}`);
         }
     }
+    loadSellStateCache() {
+        try {
+            if ((0, fs_1.existsSync)(this.SELL_STATE_FILE)) {
+                const raw = (0, fs_1.readFileSync)(this.SELL_STATE_FILE, 'utf-8');
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) {
+                    for (const item of arr) {
+                        this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: item.timestamp });
+                    }
+                }
+                this.logger.log(`📂 加载卖出锁定: ${this.sellStateCache.size} 只`);
+            }
+        }
+        catch (err) {
+            this.logger.warn(`⚠️ 卖出锁定文件读取失败: ${err.message}`);
+        }
+    }
+    async saveSellStateCache() {
+        try {
+            const arr = Array.from(this.sellStateCache.entries()).map(([code, val]) => ({
+                code, suggestion: val.suggestion, timestamp: val.timestamp
+            }));
+            await fs_1.promises.writeFile(this.SELL_STATE_FILE, JSON.stringify(arr), 'utf-8');
+        }
+        catch (err) {
+            this.logger.warn(`⚠️ 卖出锁定写入失败: ${err.message}`);
+        }
+    }
+    syncSellStateFromFrontend(sellStates) {
+        const now = Date.now();
+        for (const item of sellStates) {
+            if (['卖出', '减仓'].includes(item.suggestion)) {
+                this.sellStateCache.set(item.code, { suggestion: item.suggestion, timestamp: now });
+            }
+        }
+        this.saveSellStateCache();
+        this.logger.log(`📝 前端同步卖出锁定: ${sellStates.length} 条`);
+    }
     async getOpportunities() {
         if (this.cache) {
             this.upgradeCacheFields(this.cache.data);
             this.triggerAnalysisPreCache(this.cache.data);
+            const now = Date.now();
+            const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+            for (const s of this.cache.data) {
+                const sellEntry = this.sellStateCache.get(s.code);
+                if (sellEntry) {
+                    if (now - sellEntry.timestamp > THREE_DAYS_MS) {
+                        this.sellStateCache.delete(s.code);
+                    }
+                    else if (!['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || '')) {
+                        s.suggestion = '不要介入';
+                    }
+                }
+                s.trendPrediction = this.calcSimpleTrendPrediction(s);
+            }
+            this.saveSellStateCache();
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         return { opportunities: [], timestamp: Date.now() };
@@ -281,6 +337,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
             this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
+        await this.loadSellStateCache();
     }
     calcKDJ(kline) {
         const high = kline.map(k => k.high);
@@ -377,6 +434,236 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         return { diff, dea, currentDiff, currentDea, isGoldenCross, goldenCrossDays, isDeathCross };
+    }
+    calcSimpleTrendPrediction(s) {
+        const direction = s.trendPrediction?.direction || '方向不明';
+        const score = s.trendPrediction?.score || 50;
+        return { direction, score, source: 'cache-inferred' };
+    }
+    calcTrendPrediction(kline, result) {
+        try {
+            if (!kline || kline.length < 30) {
+                return { direction: '方向不明', score: 0, reason: 'K线数据不足(需≥30天)', signals: [] };
+            }
+            const closes = kline.slice(-120).map((k) => Number(k.close));
+            const highs = kline.slice(-120).map((k) => Number(k.high));
+            const lows = kline.slice(-120).map((k) => Number(k.low));
+            const volumes = kline.slice(-120).map((k) => Number(k.volume) || 0);
+            const price = closes[closes.length - 1];
+            const signals = [];
+            let totalScore = 0;
+            const last20 = closes.slice(-20);
+            const min20 = Math.min(...last20);
+            const max20 = Math.max(...last20);
+            const pos20 = ((price - min20) / (max20 - min20)) * 100;
+            if (pos20 < 20) {
+                totalScore += 18;
+                signals.push('超卖区间(20日低位)');
+            }
+            else if (pos20 < 35) {
+                totalScore += 14;
+                signals.push('偏低位');
+            }
+            else if (pos20 > 80) {
+                totalScore += 2;
+                signals.push('超买区间(20日高位)');
+            }
+            else if (pos20 > 65) {
+                totalScore += 6;
+                signals.push('偏高位置');
+            }
+            else {
+                totalScore += 10;
+                signals.push('中位震荡');
+            }
+            const ema12 = closes.reduce((a, c, i) => i === 0 ? c : a * 11 / 13 + c * 2 / 13, 0);
+            const ema26 = closes.reduce((a, c, i) => i === 0 ? c : a * 25 / 27 + c * 2 / 27, 0);
+            const dif = ema12 - ema26;
+            const macdBar = closes.slice(-12).map((_, i, arr) => {
+                if (i < 11)
+                    return 0;
+                const e12 = arr.slice(i - 11, i + 1).reduce((a, c) => a * 11 / 13 + c * 2 / 13, 0);
+                const e26 = arr.slice(i - 25, i + 1).reduce((a, c) => a * 25 / 27 + c * 2 / 27, 0);
+                return e12 - e26;
+            });
+            const lastBars = macdBar.slice(-5);
+            const barRising = lastBars.length >= 2 && lastBars[lastBars.length - 1] > lastBars[0];
+            const recentLows = closes.slice(-10);
+            const recentMacdBars = macdBar.slice(-10);
+            const priceLow = Math.min(...recentLows);
+            const priceLowIdx = recentLows.indexOf(priceLow);
+            const macdLowAtPriceLow = recentMacdBars[priceLowIdx];
+            const macdNow = recentMacdBars[recentMacdBars.length - 1];
+            const divergence = priceLow < recentLows[recentLows.length - 1] && macdNow > macdLowAtPriceLow;
+            if (divergence) {
+                totalScore += 18;
+                signals.push('MACD底背离(强烈反转信号)');
+            }
+            else if (barRising && dif > 0) {
+                totalScore += 14;
+                signals.push('MACD柱上升+正值');
+            }
+            else if (dif > 0) {
+                totalScore += 10;
+                signals.push('MACD正值');
+            }
+            else if (barRising) {
+                totalScore += 8;
+                signals.push('MACD柱上升(负值收窄)');
+            }
+            else {
+                totalScore += 4;
+                signals.push('MACD负值走弱');
+            }
+            const last3Closes = closes.slice(-3);
+            const last3Lows = lows.slice(-3);
+            const last3Highs = highs.slice(-3);
+            const l1 = last3Closes[last3Closes.length - 1], l2 = last3Closes[last3Closes.length - 2], l3 = last3Closes[last3Closes.length - 3];
+            const h1 = last3Highs[last3Highs.length - 1], h3 = last3Highs[last3Highs.length - 3];
+            const lo1 = last3Lows[last3Lows.length - 1], lo3 = last3Lows[last3Lows.length - 3];
+            const hammer = lo1 < l1 * 0.97 && h1 < l1 * 1.03;
+            const morningStar = l3 < l2 * 0.95 && Math.abs(l2 - l1) < 0.3 && l1 > l2 * 1.02;
+            const bullishEngulf = l1 > l2 && l1 > h3 && l3 > l2;
+            const crossStar = Math.abs(closes[closes.length - 1] - (lows[lows.length - 1] + highs[highs.length - 1]) / 2) < 0.1;
+            if (morningStar) {
+                totalScore += 15;
+                signals.push('启明星(强烈反弹信号)');
+            }
+            else if (bullishEngulf) {
+                totalScore += 13;
+                signals.push('看涨吞没');
+            }
+            else if (hammer) {
+                totalScore += 11;
+                signals.push('锤子线(探底回升)');
+            }
+            else if (crossStar) {
+                totalScore += 9;
+                signals.push('低位十字星(变盘信号)');
+            }
+            else if (l1 > l2) {
+                totalScore += 7;
+                signals.push('阳线收盘');
+            }
+            else {
+                totalScore += 3;
+                signals.push('阴线收盘');
+            }
+            const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+            const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const lastVol = volumes[volumes.length - 1];
+            if (l1 > l2 && lastVol > avgVol5 * 1.5) {
+                totalScore += 10;
+                signals.push('放量上涨');
+            }
+            else if (l1 > l2 && lastVol > avgVol5) {
+                totalScore += 8;
+                signals.push('温和放量上涨');
+            }
+            else if (l1 < l2 && lastVol < avgVol20 * 0.7) {
+                totalScore += 7;
+                signals.push('缩量下跌(卖压衰竭)');
+            }
+            else if (l1 < l2 && lastVol > avgVol5 * 1.3) {
+                totalScore += 3;
+                signals.push('放量下跌');
+            }
+            else {
+                totalScore += 5;
+                signals.push('成交量中性');
+            }
+            const ma5 = closes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const ma10 = closes.slice(-10).reduce((a, b) => a + b, 0) / 10;
+            const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+            if (ma5 > ma10 && ma10 > ma20) {
+                totalScore += 10;
+                signals.push('均线多头排列');
+            }
+            else if (ma5 > ma10) {
+                totalScore += 7;
+                signals.push('短期均线上行');
+            }
+            else if (ma5 < ma10 && ma10 < ma20) {
+                totalScore += 3;
+                signals.push('均线空头排列');
+            }
+            else {
+                totalScore += 5;
+                signals.push('均线交叉整理');
+            }
+            const rsv9 = (price - Math.min(...lows.slice(-9))) / (Math.max(...highs.slice(-9)) - Math.min(...lows.slice(-9))) * 100 || 50;
+            const kVal = rsv9;
+            const dVal = kVal * 2 / 3 + 50 / 3;
+            const jVal = 3 * kVal - 2 * dVal;
+            if (jVal < 20) {
+                totalScore += 14;
+                signals.push('KDJ超卖(J<20)');
+            }
+            else if (jVal < 40) {
+                totalScore += 11;
+                signals.push('KDJ偏低');
+            }
+            else if (jVal > 80) {
+                totalScore += 4;
+                signals.push('KDJ超买(J>80)');
+            }
+            else if (jVal > 60) {
+                totalScore += 7;
+                signals.push('KDJ偏高');
+            }
+            else {
+                totalScore += 9;
+                signals.push('KDJ中性');
+            }
+            const bbMa20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+            const bbStd = Math.sqrt(closes.slice(-20).reduce((a, b) => a + Math.pow(b - bbMa20, 2), 0) / 20);
+            const bbUpper = bbMa20 + 2 * bbStd;
+            const bbLower = bbMa20 - 2 * bbStd;
+            if (price <= bbLower * 1.01) {
+                totalScore += 10;
+                signals.push('触及布林下轨(超卖反弹)');
+            }
+            else if (price <= bbLower * 1.05) {
+                totalScore += 8;
+                signals.push('接近布林下轨');
+            }
+            else if (price >= bbUpper * 0.99) {
+                totalScore += 3;
+                signals.push('触及布林上轨(压力)');
+            }
+            else if (price >= bbUpper * 0.95) {
+                totalScore += 5;
+                signals.push('接近布林上轨');
+            }
+            else {
+                totalScore += 7;
+                signals.push('布林中轨附近');
+            }
+            let direction;
+            if (totalScore >= 85)
+                direction = '强烈看涨';
+            else if (totalScore >= 70)
+                direction = '看涨';
+            else if (totalScore >= 55)
+                direction = '震荡偏强';
+            else if (totalScore >= 40)
+                direction = '方向不明';
+            else if (totalScore >= 25)
+                direction = '震荡偏弱';
+            else if (totalScore >= 15)
+                direction = '看跌';
+            else
+                direction = '强烈看跌';
+            return {
+                direction,
+                score: Math.max(-100, Math.min(100, totalScore)),
+                reason: signals.join('；') || '无明显信号',
+                signals,
+            };
+        }
+        catch (e) {
+            return { direction: '方向不明', score: 0, reason: '计算异常', signals: [] };
+        }
     }
     calcCorrection(kline, index) {
         if (index === 0)
@@ -1120,6 +1407,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion,
             signalCombination: signalCombination || result.detail,
             jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+            trendPrediction: this.calcTrendPrediction(kline, result),
         };
     }
     calcEntryTiming(pricePosition, trendState, closeArr, highArr, lowArr, volumeArr, macdGoldenCross) {
@@ -2291,9 +2579,17 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '持有';
                         }
                     }
-                    if (['卖出', '减仓', '不要介入'].includes(oldSug || '') &&
-                        !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+                    const now = Date.now();
+                    const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+                    const sellEntry = this.sellStateCache.get(s.code);
+                    if (sellEntry && (now - sellEntry.timestamp) > THREE_DAYS) {
+                        this.sellStateCache.delete(s.code);
+                    }
+                    else if (sellEntry && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
                         newSuggestion = '不要介入';
+                    }
+                    if (['卖出', '减仓'].includes(newSuggestion)) {
+                        this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: now });
                     }
                     const entry = s.entryTiming ?? 50;
                     const sugIdx2 = PRIORITY.indexOf(newSuggestion);
@@ -2341,19 +2637,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             });
             const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
             const buyUpdated = updated.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-            const top20 = buyUpdated.slice(0, 30);
-            this.cache = { data: top20, timestamp: now };
+            const top200 = buyUpdated.slice(0, 200);
+            this.cache = { data: top200, timestamp: now };
             try {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
             }
             catch { }
-            this.logger.log(`重新评估完成：${top20.length} 只, 信号: ${top20.map(s => s.suggestion).join(',')}`);
+            await this.saveSellStateCache();
+            this.logger.log(`重新评估完成：${top200.length} 只, 信号: ${top200.map(s => s.suggestion).join(',')}`);
         }
         catch (e) {
             this.logger.error(`重新评估失败: ${e.message}`);
         }
         const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 30);
+        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 200);
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];
