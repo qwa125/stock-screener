@@ -237,26 +237,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.triggerAnalysisPreCache(this.cache.data);
             this.recalculateSuggestions(this.cache.data);
             const now = Date.now();
-            const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
             for (const s of this.cache.data) {
                 const sellEntry = this.sellStateCache.get(s.code);
                 if (sellEntry) {
-                    if (now - sellEntry.timestamp > THREE_DAYS_MS) {
+                    const hasBuySignal = ['重仓买入', '买入'].includes(s.suggestion || '') &&
+                        s.isGoldenCross === true &&
+                        (s.entryTiming ?? 0) >= 50;
+                    if (hasBuySignal) {
                         this.sellStateCache.delete(s.code);
+                        this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
                     }
                     else {
-                        const hasBuySignal = ['重仓买入', '买入'].includes(s.suggestion || '') &&
-                            s.isGoldenCross === true &&
-                            (s.entryTiming ?? 0) >= 50;
-                        if (hasBuySignal) {
-                            this.sellStateCache.delete(s.code);
-                            this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
-                        }
-                        else {
-                            s.suggestion = '不要介入';
-                            s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-                            continue;
-                        }
+                        s.suggestion = '不要介入';
+                        s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+                        continue;
                     }
                 }
                 s.trendPrediction = this.calcSimpleTrendPrediction(s);
@@ -2559,13 +2553,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         catch (e) {
             this.logger.error(`搜索失败: ${e.message}`);
         }
-        const now = Date.now();
-        const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
         for (const r of results) {
             const sellEntry = this.sellStateCache.get(r.code);
-            if (sellEntry && (now - sellEntry.timestamp) <= THREE_DAYS_MS) {
-                r.suggestion = '不要介入';
-                r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+            if (sellEntry) {
+                const hasBuySignal = ['重仓买入', '买入'].includes(r.suggestion || '') &&
+                    r.isGoldenCross === true &&
+                    (r.entryTiming ?? 0) >= 50;
+                if (hasBuySignal) {
+                    this.sellStateCache.delete(r.code);
+                    this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
+                }
+                else {
+                    r.suggestion = '不要介入';
+                    r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+                }
             }
         }
         return results;
@@ -2670,10 +2671,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                     const sellEntry = this.sellStateCache.get(s.code);
                     if (sellEntry) {
-                        const now2 = Date.now();
-                        const THREE_DAYS2 = 3 * 24 * 60 * 60 * 1000;
-                        if (now2 - sellEntry.timestamp > THREE_DAYS2) {
+                        const hasBuySignal = ['重仓买入', '买入'].includes(newSuggestion) &&
+                            goldenCross === true &&
+                            pp >= 50;
+                        if (hasBuySignal) {
                             this.sellStateCache.delete(s.code);
+                            this.logger.log(`🔓 [重扫] ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
                         }
                         else {
                             newSuggestion = '不要介入';

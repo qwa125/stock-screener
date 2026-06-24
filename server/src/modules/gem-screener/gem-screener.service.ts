@@ -328,32 +328,25 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
       // ─── 卖出锁定 + 趋势预测 ───
       const now = Date.now();
-      const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-
       for (const s of this.cache.data) {
         // 卖出锁定：检查 sellStateCache
         const sellEntry = this.sellStateCache.get(s.code);
         if (sellEntry) {
-          // 3天自动过期
-          if (now - sellEntry.timestamp > THREE_DAYS_MS) {
+          // recalculateSuggestions 已在上方运行，s.suggestion 为最新结果
+          // 检查是否出现真实买入信号 → 自动解除锁定（不考时间，只靠信号）
+          const hasBuySignal =
+            ['重仓买入', '买入'].includes(s.suggestion || '') &&
+            s.isGoldenCross === true &&
+            (s.entryTiming ?? 0) >= 50;
+          if (hasBuySignal) {
+            // 🎯 出现真实买入信号，自动解除卖出锁定
             this.sellStateCache.delete(s.code);
+            this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
           } else {
-            // 锁定期内检查是否出现真实买入信号 → 自动解锁
-            // recalculateSuggestions 已在上方运行，s.suggestion 为最新结果
-            const hasBuySignal =
-              ['重仓买入', '买入'].includes(s.suggestion || '') &&
-              s.isGoldenCross === true &&
-              (s.entryTiming ?? 0) >= 50;
-            if (hasBuySignal) {
-              // 🎯 出现真实买入信号，自动解除卖出锁定
-              this.sellStateCache.delete(s.code);
-              this.logger.log(`🔓 ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
-            } else {
-              // 🔒 卖出锁定生效：覆盖为不要介入
-              s.suggestion = '不要介入';
-              s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-              continue;
-            }
+            // 🔒 卖出锁定生效：覆盖为不要介入
+            s.suggestion = '不要介入';
+            s.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+            continue;
           }
         }
 
@@ -3017,13 +3010,21 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.logger.error(`搜索失败: ${(e as Error).message}`);
     }
     // ─── 搜索结果应用卖出锁定 ───
-    const now = Date.now();
-    const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
     for (const r of results) {
       const sellEntry = this.sellStateCache.get(r.code);
-      if (sellEntry && (now - sellEntry.timestamp) <= THREE_DAYS_MS) {
-        r.suggestion = '不要介入';
-        r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+      if (sellEntry) {
+        // 检查是否出现真实买入信号 → 自动解除锁定
+        const hasBuySignal =
+          ['重仓买入', '买入'].includes(r.suggestion || '') &&
+          r.isGoldenCross === true &&
+          (r.entryTiming ?? 0) >= 50;
+        if (hasBuySignal) {
+          this.sellStateCache.delete(r.code);
+          this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
+        } else {
+          r.suggestion = '不要介入';
+          r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+        }
       }
     }
     return results;
@@ -3127,12 +3128,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
           // ─── 卖出锁定规则（最后执行，确保不被任何逻辑覆盖）───
           const sellEntry = this.sellStateCache.get(s.code);
           if (sellEntry) {
-            const now2 = Date.now();
-            const THREE_DAYS2 = 3 * 24 * 60 * 60 * 1000;
-            if (now2 - sellEntry.timestamp > THREE_DAYS2) {
+            // 检查是否出现真实买入信号 → 自动解除锁定（不考时间，只靠信号）
+            const hasBuySignal =
+              ['重仓买入', '买入'].includes(newSuggestion) &&
+              goldenCross === true &&
+              pp >= 50;
+            if (hasBuySignal) {
               this.sellStateCache.delete(s.code);
+              this.logger.log(`🔓 [重扫] ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
             } else {
-              // 🔒 卖出锁定生效：覆盖为不要介入（全量K线分析才能解锁）
+              // 🔒 卖出锁定生效：覆盖为不要介入
               newSuggestion = '不要介入';
             }
           }
