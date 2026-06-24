@@ -411,7 +411,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   /** 重新生成缓存建议，与服务器分析算法保持一致 */
-  private recalculateSuggestions(data: OpportunityStock[]) {
+  recalculateSuggestions(data: OpportunityStock[]) {
     for (const s of data) {
       // 暴跌 → 卖出
       if (s.changePercent <= -5) {

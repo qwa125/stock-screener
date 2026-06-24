@@ -475,6 +475,60 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: '新浪美股API请求失败', data: '' };
         }
     }
+    async proxyKLine(code, market) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: [] };
+        const secId = (market || (code.startsWith('6') ? '1.' : '0.')) + code;
+        const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500`;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const json = await resp.json();
+            const klines = json?.data?.klines;
+            if (klines && klines.length > 0) {
+                const data = klines.map((l) => {
+                    const p = l.split(',');
+                    return { day: p[0], open: parseFloat(p[1]), close: parseFloat(p[2]), high: parseFloat(p[3]), low: parseFloat(p[4]), volume: parseFloat(p[5]), amount: parseFloat(p[6]) || 0 };
+                });
+                return { code: 200, msg: 'success', data };
+            }
+            const prefix = market || (code.startsWith('6') ? 'sh' : 'sz');
+            const tkUrl = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
+            const tkResp = await fetch(tkUrl, { signal: AbortSignal.timeout(8000) });
+            const tkJson = await tkResp.json();
+            const tkArr = tkJson?.data?.[code]?.day || tkJson?.data?.[prefix + code]?.qfqday || tkJson?.data?.[code]?.qfqday;
+            if (tkArr && tkArr.length > 0) {
+                const data = tkArr.map((l) => {
+                    if (Array.isArray(l))
+                        return { day: l[0], open: parseFloat(l[1]), close: parseFloat(l[2]), high: parseFloat(l[3]), low: parseFloat(l[4]), volume: parseFloat(l[5]) };
+                    const d = String(l).split(' ');
+                    return { day: d[0], open: parseFloat(d[1]), close: parseFloat(d[2]), high: parseFloat(d[3]), low: parseFloat(d[4]), volume: parseFloat(d[5]) };
+                });
+                return { code: 200, msg: 'success', data };
+            }
+            return { code: 404, msg: '未找到K线数据', data: [] };
+        }
+        catch (e) {
+            this.logger.warn(`代理K线失败 ${code}: ${e.message}`);
+            try {
+                const prefix = market || (code.startsWith('6') ? 'sh' : 'sz');
+                const tkUrl = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
+                const tkResp = await fetch(tkUrl, { signal: AbortSignal.timeout(8000) });
+                const tkJson = await tkResp.json();
+                const tkArr = tkJson?.data?.[code]?.day || tkJson?.data?.[prefix + code]?.qfqday || tkJson?.data?.[code]?.qfqday;
+                if (tkArr && tkArr.length > 0) {
+                    const data = tkArr.map((l) => {
+                        if (Array.isArray(l))
+                            return { day: l[0], open: parseFloat(l[1]), close: parseFloat(l[2]), high: parseFloat(l[3]), low: parseFloat(l[4]), volume: parseFloat(l[5]) };
+                        const d = String(l).split(' ');
+                        return { day: d[0], open: parseFloat(d[1]), close: parseFloat(d[2]), high: parseFloat(d[3]), low: parseFloat(d[4]), volume: parseFloat(d[5]) };
+                    });
+                    return { code: 200, msg: 'success', data };
+                }
+            }
+            catch (e2) { }
+            return { code: 500, msg: '所有K线源均不可用', data: [] };
+        }
+    }
     async analyzeWithKLine(body) {
         if (!body.code || !body.kline || !Array.isArray(body.kline)) {
             return { code: 400, msg: '缺少股票代码或K线数据' };
@@ -494,6 +548,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
             }
             if (opp) {
+                this.gemScreener.recalculateSuggestions([opp]);
                 return { code: 200, msg: 'success', data: [opp] };
             }
             return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
@@ -702,6 +757,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxySinaUS", null);
+__decorate([
+    (0, common_1.Get)('proxy/kline'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __param(1, (0, common_1.Query)('market')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxyKLine", null);
 __decorate([
     (0, common_1.Post)('analyze'),
     __param(0, (0, common_1.Body)()),

@@ -246,6 +246,11 @@ export declare class GemScreenerController {
         msg: string;
         data: string;
     }>;
+    proxyKLine(code: string, market: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    }>;
     analyzeWithKLine(body: {
         code: string;
         name?: string;
