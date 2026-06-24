@@ -19,10 +19,54 @@ export class AccessLimitGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const url: string = request.url || request.path || '';
 
     // ══════════════════════════════════
-    // 无论是否跳过限制，先注册设备（让所有请求都能记录设备）
+    // URL 白名单 — 总比用元数据可靠
     // ══════════════════════════════════
+    const skipPaths = [
+      '/api/auth',
+      '/api/access',
+      '/api/device',
+      '/api/health',
+      '/api/gem/opportunities',
+      '/api/gem/search',
+      '/api/gem/market-state',
+      '/api/gem/price-stream',
+      '/api/gem/refresh',
+      '/api/gem/refresh-main-board',
+      '/api/gem/seed-cache',
+      '/api/gem/tencent-proxy',
+      '/api/gem/analyze',
+      '/api/gem/top',
+      '/api/gem/watched-codes',
+      '/api/gem/sync-sell-state',
+      '/api/sector',
+      '/api/stock',
+    ];
+    const shouldSkip = skipPaths.some((p) => url.startsWith(p));
+    if (shouldSkip) {
+      // 但还是要尝试注册设备（用于跟踪记录）
+      const deviceId = request.headers['x-device-id'];
+      if (deviceId && typeof deviceId === 'string') {
+        try {
+          await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+        } catch (e) {
+          this.logger.warn(`设备注册失败: ${(e as Error).message}`);
+        }
+      }
+      return true;
+    }
+
+    // ══════════════════════════════════
+    // 元数据扫描（备选方案，URL 白名单命中后已提前跳过）
+    // ══════════════════════════════════
+    const skipMeta = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skipMeta) return true;
+
     const deviceId = request.headers['x-device-id'];
     if (deviceId && typeof deviceId === 'string') {
       try {
@@ -31,13 +75,6 @@ export class AccessLimitGuard implements CanActivate {
         this.logger.warn(`设备注册失败: ${(e as Error).message}`);
       }
     }
-
-    // 检查是否标记为跳过（如 /api/auth/*、/api/access/*）
-    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_ACCESS_LIMIT, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (skip) return true;
 
     const authHeader = request.headers['authorization'];
 

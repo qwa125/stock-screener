@@ -27,6 +27,46 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
     }
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
+        const url = request.url || request.path || '';
+        const skipPaths = [
+            '/api/auth',
+            '/api/access',
+            '/api/device',
+            '/api/health',
+            '/api/gem/opportunities',
+            '/api/gem/search',
+            '/api/gem/market-state',
+            '/api/gem/price-stream',
+            '/api/gem/refresh',
+            '/api/gem/refresh-main-board',
+            '/api/gem/seed-cache',
+            '/api/gem/tencent-proxy',
+            '/api/gem/analyze',
+            '/api/gem/top',
+            '/api/gem/watched-codes',
+            '/api/gem/sync-sell-state',
+            '/api/sector',
+            '/api/stock',
+        ];
+        const shouldSkip = skipPaths.some((p) => url.startsWith(p));
+        if (shouldSkip) {
+            const deviceId = request.headers['x-device-id'];
+            if (deviceId && typeof deviceId === 'string') {
+                try {
+                    await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+                }
+                catch (e) {
+                    this.logger.warn(`设备注册失败: ${e.message}`);
+                }
+            }
+            return true;
+        }
+        const skipMeta = this.reflector.getAllAndOverride(exports.SKIP_ACCESS_LIMIT, [
+            context.getHandler(),
+            context.getClass(),
+        ]);
+        if (skipMeta)
+            return true;
         const deviceId = request.headers['x-device-id'];
         if (deviceId && typeof deviceId === 'string') {
             try {
@@ -36,12 +76,6 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
                 this.logger.warn(`设备注册失败: ${e.message}`);
             }
         }
-        const skip = this.reflector.getAllAndOverride(exports.SKIP_ACCESS_LIMIT, [
-            context.getHandler(),
-            context.getClass(),
-        ]);
-        if (skip)
-            return true;
         const authHeader = request.headers['authorization'];
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.slice(7);
