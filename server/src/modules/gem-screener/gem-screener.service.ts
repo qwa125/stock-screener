@@ -57,6 +57,8 @@ export interface OpportunityStock {
   score: number;
   diff?: number;
   dea?: number;
+  ma5?: number;       // 5日均线价
+  ma10?: number;      // 10日均线价
   isGoldenCross?: boolean;
   /** 服务端计算的交易建议，与详情页完全一致 */
   suggestion?: string;
@@ -172,7 +174,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.CACHE_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 30);
+        const limitedData = parsed.data.slice(0, 500);
         this.cache = { ...parsed, data: limitedData };
         this.logger.log(`📦 创业板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -186,7 +188,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_GEM_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 30);
+          const limitedData = parsed.data.slice(0, 500);
           this.cache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复创业板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -201,7 +203,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.MAIN_BOARD_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 30);
+        const limitedData = parsed.data.slice(0, 500);
         this.mainBoardCache = { ...parsed, data: limitedData };
         this.logger.log(`📦 主板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -215,7 +217,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_MAIN_BOARD_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 30);
+          const limitedData = parsed.data.slice(0, 500);
           this.mainBoardCache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复主板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -230,7 +232,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.SECTOR_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 30);
+        const limitedData = parsed.data.slice(0, 500);
         this.sectorCache = { ...parsed, data: limitedData };
         this.logger.log(`📦 板块加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -244,7 +246,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_SECTOR_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 30);
+          const limitedData = parsed.data.slice(0, 500);
           this.sectorCache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复板块缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -1644,6 +1646,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       score: result.score,
       diff: Math.round(result.macd.currentDiff * 10000) / 10000,
       dea: Math.round(result.macd.currentDea * 10000) / 10000,
+      ma5: Math.round(result.ma5 * 100) / 100,
+      ma10: Math.round(result.ma10 * 100) / 100,
       isGoldenCross: result.isGoldenCross,
       suggestion,
       signalCombination: signalCombination || result.detail,
@@ -2886,6 +2890,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       chipPeakPosition,
       chipPattern,
       signalCombination: result.reason || '',
+      // 均线值（供前端三重卖点检测）
+      ma5: Math.round(ma5 * 100) / 100,
+      ma10: Math.round(ma10 * 100) / 100,
       // 机构活跃度 = 基于成交量比率的评分 (0-20)
       jiGouActiveScore: Math.round(Math.min((volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a: number, b: number) => a + b, 0) / 60 || 1)) * 6, 20) * 100) / 100,
     };

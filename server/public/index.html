@@ -839,9 +839,23 @@ async function doFullRescan(){
                 newStocks[si3].suggestion=liveSuggestion
               }
             }
-            // 实时卖点检测：暴跌检测（chg ≤ -5%）→ 覆盖所有买入
+            // ─── 实时三重卖点检测 ───
+            // ① 暴跌检测（chg ≤ -5%）→ 覆盖所有买入
             if(chg <= -5){
               newStocks[si3].suggestion='卖出'
+            }
+            // ② 均线死叉检测：MA5<MA10 死叉 + 反弹无力(chg<2%) → 不要介入
+            // isGoldenCross=false 说明MA5<MA10处于死叉状态
+            if(newStocks[si3].isGoldenCross===false && chg < 2 && chg >= 0){
+              newStocks[si3].suggestion='不要介入'
+            }
+            // ③ 破5日线检测：价 < MA5×0.98 或 价 < MA10 → 卖出
+            // (ma5/ma10由后端checkOpportunity全分析时输出)
+            var ma5=newStocks[si3].ma5, ma10=newStocks[si3].ma10
+            if(ma5 && ma10){
+              if(price < ma5*0.98 || price < ma10){
+                newStocks[si3].suggestion='卖出'
+              }
             }
           }
           break

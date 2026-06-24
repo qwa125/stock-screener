@@ -26,6 +26,8 @@ export interface OpportunityStock {
     score: number;
     diff?: number;
     dea?: number;
+    ma5?: number;
+    ma10?: number;
     isGoldenCross?: boolean;
     suggestion?: string;
     entryTiming: number;
