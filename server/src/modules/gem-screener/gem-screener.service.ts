@@ -174,7 +174,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.CACHE_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 500);
+        const limitedData = parsed.data; // 全量保留，不截断
         this.cache = { ...parsed, data: limitedData };
         this.logger.log(`📦 创业板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -188,7 +188,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_GEM_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 500);
+          const limitedData = parsed.data // 全量保留，不截断;
           this.cache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复创业板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -203,7 +203,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.MAIN_BOARD_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 500);
+        const limitedData = parsed.data // 全量保留，不截断;
         this.mainBoardCache = { ...parsed, data: limitedData };
         this.logger.log(`📦 主板加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -217,7 +217,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_MAIN_BOARD_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 500);
+          const limitedData = parsed.data // 全量保留，不截断;
           this.mainBoardCache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复主板缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -232,7 +232,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const raw = readFileSync(this.SECTOR_CACHE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && Array.isArray(parsed.data)) {
-        const limitedData = parsed.data.slice(0, 500);
+        const limitedData = parsed.data // 全量保留，不截断;
         this.sectorCache = { ...parsed, data: limitedData };
         this.logger.log(`📦 板块加载缓存成功, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleTimeString()}`);
         return;
@@ -246,7 +246,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const raw = readFileSync(this.BUNDLED_SECTOR_CACHE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && parsed.data && Array.isArray(parsed.data)) {
-          const limitedData = parsed.data.slice(0, 500);
+          const limitedData = parsed.data // 全量保留，不截断;
           this.sectorCache = { ...parsed, data: limitedData };
           this.logger.log(`📦 从部署包恢复板块缓存, ${limitedData.length} 只, 缓存时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
         }
@@ -319,16 +319,34 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async getOpportunities(): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
     // Render美国服务器调不通中国API(腾讯/东方财富)，不发起任何主动扫描
     // 仅返回磁盘缓存的旧数据，由前端浏览器从中国拉数据POST到 /api/gem/refresh
-    if (this.cache) {
+    // 合并 GEM + 主板缓存，确保全量股票都返回，不遗漏卖出/减仓/不要介入信号
+    const allData: OpportunityStock[] = [];
+    let latestTs = 0;
+
+    if (this.cache && this.cache.data?.length > 0) {
+      allData.push(...this.cache.data);
+      if (this.cache.timestamp > latestTs) latestTs = this.cache.timestamp;
+    }
+    if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
+      // 去重：避免同一只股票出现在两个缓存中
+      const gemCodes = new Set<string>();
+      for (const s of this.cache?.data || []) gemCodes.add(s.code);
+      for (const s of this.mainBoardCache.data) {
+        if (!gemCodes.has(s.code)) allData.push(s);
+      }
+      if (this.mainBoardCache.timestamp > latestTs) latestTs = this.mainBoardCache.timestamp;
+    }
+
+    if (allData.length > 0) {
       // 旧缓存升级：给旧格式数据补上 signalCombination / jiGouActiveScore
-      this.upgradeCacheFields(this.cache.data);
-      this.triggerAnalysisPreCache(this.cache.data);
+      this.upgradeCacheFields(allData);
+      this.triggerAnalysisPreCache(allData);
       // 重新生成缓存建议（与服务器算法一致，确保搜索和主列表结果匹配）
-      this.recalculateSuggestions(this.cache.data);
+      this.recalculateSuggestions(allData);
 
       // ─── 卖出锁定 + 趋势预测 ───
       const now = Date.now();
-      for (const s of this.cache.data) {
+      for (const s of allData) {
         // 卖出锁定：检查 sellStateCache
         const sellEntry = this.sellStateCache.get(s.code);
         if (sellEntry) {
@@ -357,7 +375,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 持久化 sellStateCache
       this.saveSellStateCache();
 
-      return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
+      return { opportunities: allData, timestamp: latestTs };
     }
     return { opportunities: [], timestamp: Date.now() };
   }
