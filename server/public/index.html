@@ -435,7 +435,25 @@ async function showBadStocks(){
 }
 
 function futurePrediction(s){
-  // Step ④: 优先使用后端的calcTrendPrediction 7因子独立预测
+  // Step ④: 使用评分系统的未来1-2日预测 (calcMultiScore 7因子预测)
+  if(s.forecast1_2Day){
+    var fp=s.forecast1_2Day
+    var dir=fp.direction||'方向不明'
+    var conf=fp.confidence||'中'
+    var detail=fp.detail||''
+    var dirEmoji=''
+    if(dir==='强烈看涨')dirEmoji='🚀'
+    else if(dir==='看涨')dirEmoji='📈'
+    else if(dir==='震荡偏强')dirEmoji='↗️'
+    else if(dir==='震荡')dirEmoji='➡️'
+    else if(dir==='震荡偏弱')dirEmoji='↘️'
+    else if(dir==='看跌')dirEmoji='📉'
+    else dirEmoji='➖'
+    var confBadge=conf==='高'?'<span style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">高置信度</span>':conf==='中'?'<span style="background:#eab308;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">中置信度</span>':'<span style="background:#94a3b8;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">低置信度</span>'
+    var detailHtml=detail?'<br><span style="font-size:11px;color:#94a3b8">'+detail+'</span>':''
+    return dirEmoji+' '+dir+confBadge+detailHtml
+  }
+  // 降级：使用trendPrediction
   if(s.trendPrediction){
     var tp=s.trendPrediction
     var dir=tp.direction||'方向不明'
@@ -452,7 +470,7 @@ function futurePrediction(s){
     var reasonHtml=reason?'<br><span style="font-size:11px;color:#94a3b8">('+reason+')</span>':''
     return directionEmoji+' '+dir+'（评分：'+score+'分）'+reasonHtml
   }
-  // 降级：无trendPrediction时使用旧方式
+  // 无预测数据时简单提示
   if(s.suggestion==='重仓买入')return'低位区+MA5>MA10多头排列+强信号，未来1-2日有望继续走强，建议全仓买入'
   if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
   if(s.suggestion==='轻仓买入')return'中位区有趋势但信号不够强，未来1-2日存在不确定性，建议1/3仓位试探'

@@ -44,6 +44,11 @@ export interface OpportunityStock {
         reason: string;
         details: Record<string, any>;
     };
+    forecast1_2Day?: {
+        direction: string;
+        confidence: string;
+        detail: string;
+    };
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
@@ -177,6 +182,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     private buildResult;
+    private calcScoreForecast;
     private calcEntryTiming;
     private calcSafetyScore;
     private applySignalContinuity;

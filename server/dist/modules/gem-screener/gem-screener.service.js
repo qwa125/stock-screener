@@ -1543,7 +1543,48 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             signalCombination: signalCombination || result.detail,
             jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
             trendPrediction: this.calcTrendPrediction(kline, result),
+            forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion),
         };
+    }
+    calcScoreForecast(score, signals, suggestion) {
+        const isBuySignal = ['轻仓买入', '买入', '重仓买入'].includes(suggestion);
+        const isSellSignal = ['减仓', '卖出', '不要介入'].includes(suggestion);
+        const baiBu = signals?.baiBu || signals?.hasBaiBu || false;
+        const baiXiao = signals?.baiXiao || signals?.hasBaiXiao || false;
+        const jiGouActive = signals?.jiGouActive || signals?.hasJiGouActive || false;
+        const macdGoldenCross = signals?.macdGoldenCross || false;
+        const zhuLiChuHuo = signals?.zhuLiChuHuo || false;
+        if (isSellSignal || (isBuySignal && baiBu)) {
+            return { direction: '观望', confidence: '--', detail: '信号偏空,暂不参与' };
+        }
+        if (score >= 12 && isBuySignal && jiGouActive) {
+            return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃,未来1-2日上涨概率大' };
+        }
+        if (score >= 12 && isBuySignal && macdGoldenCross) {
+            return { direction: '看涨', confidence: '高', detail: '评分高+MACD金叉,未来1-2日偏多' };
+        }
+        if (score >= 12 && !isBuySignal) {
+            return { direction: '看涨', confidence: '中', detail: '评分高但信号中性,向上潜力需验证' };
+        }
+        if (score >= 9 && isBuySignal) {
+            return { direction: '看涨', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
+        }
+        if (score >= 9 && isSellSignal) {
+            return { direction: '震荡', confidence: '低', detail: '评分尚可但有卖出信号,方向不明' };
+        }
+        if (score >= 6 && isBuySignal) {
+            return { direction: '震荡偏强', confidence: '低', detail: '评分一般但有买入信号,需观察' };
+        }
+        if (score >= 6 && !isBuySignal) {
+            return { direction: '震荡', confidence: '低', detail: '评分一般,近期无明显方向' };
+        }
+        if (score < 6 && (baiXiao || jiGouActive)) {
+            return { direction: '震荡偏弱', confidence: '低', detail: '评分偏低,虽有信号但短期压力大' };
+        }
+        if (score < 6) {
+            return { direction: '看跌', confidence: '高', detail: '评分低,未来1-2日回调风险较大' };
+        }
+        return { direction: '方向不明', confidence: '--', detail: '综合信号不明确' };
     }
     calcEntryTiming(pricePosition, trendState, closeArr, highArr, lowArr, volumeArr, macdGoldenCross) {
         const len = closeArr.length;

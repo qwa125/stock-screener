@@ -85,6 +85,12 @@ export interface OpportunityStock {
     reason: string;
     details: Record<string, any>;
   };
+  /** 评分系统未来1-2日预测: 多因子评分对未来短期走势的预测判断 */
+  forecast1_2Day?: {
+    direction: string;    // 强烈看涨|看涨|震荡偏强|方向不明|震荡偏弱|看跌
+    confidence: string;   // 高|中|低|--
+    detail: string;       // 预测依据说明
+  };
 }
 
 @Injectable()
@@ -1794,12 +1800,59 @@ export class GemScreenerService implements OnApplicationBootstrap {
       signalCombination: signalCombination || result.detail,
       jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
       trendPrediction: this.calcTrendPrediction(kline, result),
+      // ═══ 多因子评分预测: 基于 calcMultiScore 的 7 因子评分 (0-16分) ═══
+      forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion),
     };
   }
-  
+
+  // ═══ 多因子评分 → 未来1-2日预测 ═══
+  // 基于 calcMultiScore 的 7 因子评分(0-16分)，转化为清晰的方向性判断
+  private calcScoreForecast(score: number, signals: any, suggestion: string): { direction: string; confidence: string; detail: string } {
+    const isBuySignal = ['轻仓买入','买入','重仓买入'].includes(suggestion);
+    const isSellSignal = ['减仓','卖出','不要介入'].includes(suggestion);
+    const baiBu = signals?.baiBu || signals?.hasBaiBu || false;
+    const baiXiao = signals?.baiXiao || signals?.hasBaiXiao || false;
+    const jiGouActive = signals?.jiGouActive || signals?.hasJiGouActive || false;
+    const macdGoldenCross = signals?.macdGoldenCross || false;
+    const zhuLiChuHuo = signals?.zhuLiChuHuo || false;
+
+    // 评分(0-16) + 信号叠加 → 综合预测
+    if (isSellSignal || (isBuySignal && baiBu)) {
+      return { direction: '观望', confidence: '--', detail: '信号偏空,暂不参与' };
+    }
+    if (score >= 12 && isBuySignal && jiGouActive) {
+      return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃,未来1-2日上涨概率大' };
+    }
+    if (score >= 12 && isBuySignal && macdGoldenCross) {
+      return { direction: '看涨', confidence: '高', detail: '评分高+MACD金叉,未来1-2日偏多' };
+    }
+    if (score >= 12 && !isBuySignal) {
+      return { direction: '看涨', confidence: '中', detail: '评分高但信号中性,向上潜力需验证' };
+    }
+    if (score >= 9 && isBuySignal) {
+      return { direction: '看涨', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
+    }
+    if (score >= 9 && isSellSignal) {
+      return { direction: '震荡', confidence: '低', detail: '评分尚可但有卖出信号,方向不明' };
+    }
+    if (score >= 6 && isBuySignal) {
+      return { direction: '震荡偏强', confidence: '低', detail: '评分一般但有买入信号,需观察' };
+    }
+    if (score >= 6 && !isBuySignal) {
+      return { direction: '震荡', confidence: '低', detail: '评分一般,近期无明显方向' };
+    }
+    if (score < 6 && (baiXiao || jiGouActive)) {
+      return { direction: '震荡偏弱', confidence: '低', detail: '评分偏低,虽有信号但短期压力大' };
+    }
+    if (score < 6) {
+      return { direction: '看跌', confidence: '高', detail: '评分低,未来1-2日回调风险较大' };
+    }
+    return { direction: '方向不明', confidence: '--', detail: '综合信号不明确' };
+  }
 
   // ===========================================================================
   // 最佳介入时机评分（Level 2 排序）
+  // 核心逻辑:
   // 核心逻辑:
   //   1. 回调后横盘蓄力→准备二波 (30-55%位置, 缩量横盘, MACD金叉) → 高分
   //   2. 高位强势→即将突破前高 (75%+位置, 趋势强劲, 即将创新高) → 高分
