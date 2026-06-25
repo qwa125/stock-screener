@@ -393,14 +393,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (!data || data.length === 0) return;
     for (const s of data) {
       if (s.forecast1_2Day) continue; // 已有最新预测则跳过
-      const sig = s.suggestion || '';
-      const isSell = ['减仓','卖出','不要介入'].includes(sig);
-      if (isSell) {
-        s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
-        continue;
-      }
-      // 用entryTiming(0-100)作为评分的代理变量
-      // 回测结论: 高分→高赔率, 金叉在≥12分样本中从未出现, 不适合做主过滤
+      // ═══ 纯技术面独立预测：基于 entryTiming(0-100) + pricePosition，不受买卖信号影响 ═══
       const et = s.entryTiming ?? 0;
       const posOk = (s.pricePosition ?? 50) < 75;
       // 强烈看涨: 介入时机≥65 (类比评分≥12)
@@ -411,7 +404,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       } else if (et >= 45) {
         s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机尚可' };
       } else {
-        s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '信号不明确' };
+        s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '各技术指标方向不明朗' };
       }
     }
   }

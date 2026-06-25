@@ -284,12 +284,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (const s of data) {
             if (s.forecast1_2Day)
                 continue;
-            const sig = s.suggestion || '';
-            const isSell = ['减仓', '卖出', '不要介入'].includes(sig);
-            if (isSell) {
-                s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
-                continue;
-            }
             const et = s.entryTiming ?? 0;
             const posOk = (s.pricePosition ?? 50) < 75;
             if (et >= 65 && posOk) {
@@ -302,7 +296,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机尚可' };
             }
             else {
-                s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '信号不明确' };
+                s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '各技术指标方向不明朗' };
             }
         }
     }
