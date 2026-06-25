@@ -346,6 +346,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (allData.length > 0) {
       // 旧缓存升级：给旧格式数据补上 signalCombination / jiGouActiveScore
       this.upgradeCacheFields(allData);
+      this.addForecastToCache(allData);
       // 注意：不能在Render上调用triggerAnalysisPreCache，腾讯API会超时导致进程卡死
       // 重新生成缓存建议（与服务器算法一致，确保搜索和主列表结果匹配）
       this.recalculateSuggestions(allData);
@@ -388,6 +389,31 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
   // 旧缓存字段升级：新后端代码新增了 signalCombination / jiGouActiveScore，
   // 旧缓存中没有，从现有字段推导补充
+  private addForecastToCache(data: OpportunityStock[]) {
+    if (!data || data.length === 0) return;
+    for (const s of data) {
+      if (s.forecast1_2Day) continue; // 已有最新预测则跳过
+      const sig = s.suggestion || '';
+      const isSell = ['减仓','卖出','不要介入','观望'].includes(sig);
+      if (isSell) {
+        s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
+        continue;
+      }
+      const entryGood = (s.entryTiming ?? 0) >= 50;
+      const gc = s.isGoldenCross === true;
+      const posOk = (s.pricePosition ?? 50) < 70;
+      if (sig && entryGood && gc && posOk) {
+        s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: 'MACD金叉+介入时机佳+位置适中' };
+      } else if (sig && gc) {
+        s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: 'MACD金叉确认' };
+      } else if (sig && entryGood) {
+        s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机良好' };
+      } else {
+        s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '信号不明确' };
+      }
+    }
+  }
+
   private upgradeCacheFields(data: OpportunityStock[]) {
     if (!data || data.length === 0) return;
     // 已有新字段则跳过
@@ -2570,6 +2596,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 注意：不要在Render上调用 triggerAnalysisPreCache，否则会触发腾讯API超时导致进程崩溃
     if (this.cache && this.cache.data?.length) {
       this.upgradeCacheFields(this.cache.data);
+      this.addForecastToCache(this.cache.data);
       return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
     }
     // 完全没有缓存 → 触发异步扫描，立即返回空
@@ -2586,6 +2613,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 前端浏览器（在中国）通过 POST /api/gem/refresh-main-board 推送实时数据更新缓存
     if (this.mainBoardCache && this.mainBoardCache.data?.length) {
       this.upgradeCacheFields(this.mainBoardCache.data);
+      this.addForecastToCache(this.mainBoardCache.data);
       return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
     }
     // 完全没有缓存 → 触发异步扫描，立即返回空

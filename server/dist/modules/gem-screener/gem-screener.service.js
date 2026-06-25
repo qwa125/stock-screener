@@ -252,6 +252,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         if (allData.length > 0) {
             this.upgradeCacheFields(allData);
+            this.addForecastToCache(allData);
             this.recalculateSuggestions(allData);
             const now = Date.now();
             for (const s of allData) {
@@ -276,6 +277,35 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return { opportunities: allData, timestamp: latestTs };
         }
         return { opportunities: [], timestamp: Date.now() };
+    }
+    addForecastToCache(data) {
+        if (!data || data.length === 0)
+            return;
+        for (const s of data) {
+            if (s.forecast1_2Day)
+                continue;
+            const sig = s.suggestion || '';
+            const isSell = ['减仓', '卖出', '不要介入', '观望'].includes(sig);
+            if (isSell) {
+                s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
+                continue;
+            }
+            const entryGood = (s.entryTiming ?? 0) >= 50;
+            const gc = s.isGoldenCross === true;
+            const posOk = (s.pricePosition ?? 50) < 70;
+            if (sig && entryGood && gc && posOk) {
+                s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: 'MACD金叉+介入时机佳+位置适中' };
+            }
+            else if (sig && gc) {
+                s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: 'MACD金叉确认' };
+            }
+            else if (sig && entryGood) {
+                s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机良好' };
+            }
+            else {
+                s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '信号不明确' };
+            }
+        }
     }
     upgradeCacheFields(data) {
         if (!data || data.length === 0)
@@ -2158,6 +2188,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanTopGem(force = false) {
         if (this.cache && this.cache.data?.length) {
             this.upgradeCacheFields(this.cache.data);
+            this.addForecastToCache(this.cache.data);
             return { opportunities: this.cache.data, timestamp: this.cache.timestamp };
         }
         this.logger.log('📦 无缓存数据，触发异步扫描...');
@@ -2167,6 +2198,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanTopMainBoard(force = false) {
         if (this.mainBoardCache && this.mainBoardCache.data?.length) {
             this.upgradeCacheFields(this.mainBoardCache.data);
+            this.addForecastToCache(this.mainBoardCache.data);
             return { opportunities: this.mainBoardCache.data, timestamp: this.mainBoardCache.timestamp };
         }
         this.logger.log('📦 主板无缓存数据，触发异步扫描...');

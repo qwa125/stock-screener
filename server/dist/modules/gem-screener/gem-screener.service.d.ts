@@ -101,6 +101,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         opportunities: OpportunityStock[];
         timestamp: number;
     }>;
+    private addForecastToCache;
     private upgradeCacheFields;
     recalculateSuggestions(data: OpportunityStock[]): void;
     recalcCacheSignals(): Promise<{
