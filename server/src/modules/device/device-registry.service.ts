@@ -1,8 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
-import { getSupabaseClient } from '@/storage/database/supabase-client'
+import { getSupabaseClient, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as pg from 'pg'
 import type { DeviceRegistryEntry } from './device-registry.types'
 
 @Injectable()
@@ -17,11 +16,9 @@ export class DeviceRegistryService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('⚙️ DeviceRegistryService 启动中...')
-    // 服务启动时立即从数据库加载设置
-    if (this.supabase) {
-      await this.ensureTable()
-    }
+    // 先读取已持久化的设置（Supabase PostgREST / 文件兜底）
     await this.loadSettingsFromDB()
+    // 加载设备列表
     await this.loadRegistry()
     if (!this.supabase) {
       this.loadFromFile()
@@ -40,86 +37,64 @@ export class DeviceRegistryService implements OnModuleInit {
     return null
   }
 
-  private async ensureTable() {
-    const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
-    const pwd = process.env.SUPABASE_DB_PASSWORD || ''
-    if (!url || !pwd) {
-      this.logger.warn('缺少SUPABASE_DB_PASSWORD，无法自动创建表')
+  /** 创建表（只在首次部署时需要）。使用 Supabase SQL 端点（HTTPS），避免 pg.Client 直连 */
+  private async createTablesIfNeeded() {
+    const serviceKey = getSupabaseServiceRoleKey()
+    if (!serviceKey) {
+      this.logger.warn('缺少 SERVICE_ROLE_KEY，无法自动创建表')
       return false
     }
+    const supabaseUrl = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+    if (!supabaseUrl) return false
     try {
-      const parsedUrl = new URL(url)
-      // 从 URL 中提取 project ref：hostname 格式通常为 db.xxxx.supabase.co 或 xxxx.supabase.co
-      const hostParts = parsedUrl.hostname.split('.')
-      // 项目 ref 是 hostname 中的第二个部分（db.xxxx.supabase.co → xxxx）或第一个部分（xxxx.supabase.co → xxxx）
-      const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0]
-      const directHost = parsedUrl.hostname  // 直连用完整 hostname
-
-      // 尝试多种连接方式：pooler + 直连
-      const connectionMethods = [
-        // ① pooler 连接（新加坡）
-        { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-        // ② pooler 连接（东京）
-        { host: `aws-0-ap-northeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-        // ③ pooler 新格式
-        { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-        // ④ 直连数据库（绕过 pooler）
-        { host: directHost, port: 5432, user: 'postgres' },
-      ]
-      let lastError: Error | null = null
-      for (const method of connectionMethods) {
-        try {
-          const client = new pg.Client({
-            host: method.host,
-            port: method.port,
-            user: method.user,
-            password: pwd,
-            database: 'postgres',
-            ssl: { rejectUnauthorized: false },
-            connectionTimeoutMillis: 5000,
-          })
-          await client.connect()
-          await client.query(`
-            CREATE TABLE IF NOT EXISTS public.access_devices (
-              id TEXT PRIMARY KEY,
-              ua TEXT NOT NULL DEFAULT '',
-              display_name TEXT NOT NULL DEFAULT '',
-              first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-          `)
-          await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
-          `)
-          // 刷新 PostgREST schema 缓存
-          // 创建设备设置表
-          await client.query(`
-            CREATE TABLE IF NOT EXISTS public.device_settings (
-              key TEXT PRIMARY KEY,
-              value TEXT NOT NULL DEFAULT ''
-            )
-          `)
-          // 禁用 RLS，确保 anon key 可以正常读写
-          await client.query(`ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;`)
-          // 确保默认设置存在
-          await client.query(`
-            INSERT INTO public.device_settings (key, value)
-            VALUES ('max_slots', '3')
-            ON CONFLICT (key) DO NOTHING
-          `)
-          await client.query(`NOTIFY pgrst, 'reload schema'`)
-          await client.end()
-          this.logger.log(`通过 ${method.host}:${method.port} 自动创建/确认 access_devices + device_settings 表成功`)
-          // 等待缓存刷新
-          await new Promise(r => setTimeout(r, 3000))
-          return true
-        } catch (e) {
-          lastError = e as Error
-          const label = method.port === 6543 ? 'pooler' : '直连'
-          this.logger.warn(`${label} ${method.host}:${method.port} 连接失败: ${(e as Error).message}`)
+      const sql = `
+        CREATE TABLE IF NOT EXISTS public.access_devices (
+          id TEXT PRIMARY KEY,
+          ua TEXT NOT NULL DEFAULT '',
+          display_name TEXT NOT NULL DEFAULT '',
+          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen);
+        CREATE TABLE IF NOT EXISTS public.device_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL DEFAULT ''
+        );
+        ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;
+        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+          ON CONFLICT (key) DO NOTHING;
+        NOTIFY pgrst, 'reload schema';
+      `
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({}),
+      })
+      if (!resp.ok) {
+        // rpc 端点不可用，降级到 SQL 端点 (pg_query)
+        const sqlResp = await fetch(`${supabaseUrl}/rest/v1/pg_query`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Prefer': 'params=single-object',
+          },
+          body: JSON.stringify({ query: sql }),
+        })
+        if (!sqlResp.ok) {
+          const errText = await sqlResp.text()
+          this.logger.warn(`pg_query创建表失败: ${errText}`)
+          return false
         }
       }
-      throw lastError || new Error('所有连接方式均失败')
+      this.logger.log('通过Supabase API创建/确认数据表成功')
+      await new Promise(r => setTimeout(r, 3000)) // 等待 schema 缓存刷新
+      return true
     } catch (e) {
       this.logger.warn(`自动创建表失败: ${(e as Error).message}`)
       return false
@@ -149,9 +124,10 @@ export class DeviceRegistryService implements OnModuleInit {
     }
   }
 
+  /** 从数据库加载设置，只使用 Supabase PostgREST（HTTPS），不依赖 pg.Client 直连 */
   private async loadSettingsFromDB() {
     let loaded = false
-    // ① 从 access_devices 表读取设置（该表已存在且 schema 已缓存）
+    // ① 从 access_devices 表读取设置
     if (this.supabase) {
       try {
         const { data, error } = await this.supabase
@@ -165,6 +141,26 @@ export class DeviceRegistryService implements OnModuleInit {
             this.maxSlots = val
             this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`)
             loaded = true
+          }
+        } else if (error) {
+          // 表不存在或 schema 未缓存 → 尝试创建表
+          this.logger.warn(`access_devices读取失败 (${error?.code || error?.message})，尝试创建表...`)
+          const created = await this.createTablesIfNeeded()
+          if (created) {
+            // 创建成功后重试一次
+            const retry = await this.supabase
+              .from('access_devices')
+              .select('display_name')
+              .eq('id', '__settings__')
+              .maybeSingle()
+            if (!retry.error && retry.data?.display_name?.startsWith('maxSlots:')) {
+              const val = parseInt(retry.data.display_name.replace('maxSlots:', ''), 10)
+              if (val > 0) {
+                this.maxSlots = val
+                this.logger.log(`⚙️ 从数据库加载(建表后): 设备限额 ${this.maxSlots}`)
+                loaded = true
+              }
+            }
           }
         }
       } catch (e) {
@@ -201,54 +197,7 @@ export class DeviceRegistryService implements OnModuleInit {
         }
       }
     }
-    // ③ 兜底：直接用 pg.Client 查（绕过 PostgREST schema cache / RLS）
-    if (!loaded) {
-      const pwd = process.env.SUPABASE_DB_PASSWORD || ''
-      if (pwd) { // note: url is checked inside ensureTable, here we just try pg
-        try {
-          const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
-          const parsedUrl = new URL(url)
-          const hostParts = parsedUrl.hostname.split('.')
-          const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0]
-          const directHost = parsedUrl.hostname
-          const connMethods = [
-            { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-            { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-            { host: directHost, port: 5432, user: 'postgres' },
-          ]
-          for (const method of connMethods) {
-            try {
-              const client = new pg.Client({
-                host: method.host, port: method.port, user: method.user,
-                password: pwd, database: 'postgres',
-                ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
-              })
-              await client.connect()
-              const result = await client.query(
-                `SELECT display_name FROM public.access_devices WHERE id = '__settings__'`
-              )
-              await client.end()
-              if (result.rows?.length > 0 && result.rows[0].display_name?.startsWith('maxSlots:')) {
-                const val = parseInt(result.rows[0].display_name.replace('maxSlots:', ''), 10)
-                if (val > 0) {
-                  this.maxSlots = val
-                  const label = method.port === 6543 ? 'pooler' : '直连'
-                  this.logger.log(`⚙️ 从数据库加载(${label}): 设备限额 ${this.maxSlots}`)
-                  loaded = true
-                  break
-                }
-              }
-            } catch (e) {
-              const label = method.port === 6543 ? 'pooler' : '直连'
-              this.logger.warn(`pg${label}查询失败(${method.host}:${method.port}): ${(e as Error).message}`)
-            }
-          }
-        } catch (e) {
-          this.logger.warn(`pg直连查询异常: ${(e as Error).message}`)
-        }
-      }
-    }
-    // ④ 兜底：读文件
+    // ③ 兜底：读文件
     if (!loaded) {
       const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
       for (const fp of [projectSettingsPath, this.settingsPath]) {
@@ -279,7 +228,7 @@ export class DeviceRegistryService implements OnModuleInit {
       return
     }
     try {
-      // ① 写入 access_devices 表（该表已存在且 schema 已缓存）
+      // ① 写入 access_devices 表
       const { error: err1 } = await this.supabase
         .from('access_devices')
         .upsert({
@@ -295,13 +244,11 @@ export class DeviceRegistryService implements OnModuleInit {
         this.logger.log(`⚙️ 设备限额已持久化到数据库: ${this.maxSlots}`)
       }
       // ② 也尝试写入 device_settings（兼容旧数据）
-      if (this.supabase) {
-        const { error: err2 } = await this.supabase
-          .from('device_settings')
-          .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' })
-        if (err2) {
-          this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`)
-        }
+      const { error: err2 } = await this.supabase
+        .from('device_settings')
+        .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' })
+      if (err2) {
+        this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`)
       }
     } catch (e) {
       this.logger.warn(`数据库写入设置异常: ${(e as Error).message}，降级到文件`)
@@ -311,14 +258,12 @@ export class DeviceRegistryService implements OnModuleInit {
   }
 
   private async writeSettingsFileFallback() {
-    // 写入项目根目录（同会话内重启可恢复）
     const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
     try {
       fs.writeFileSync(projectSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
     } catch (e) {
       this.logger.warn(`设置文件写入失败 (${projectSettingsPath}): ${(e as Error).message}`)
     }
-    // 也写 /tmp 作额外兜底
     try {
       fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
     } catch {
@@ -328,10 +273,6 @@ export class DeviceRegistryService implements OnModuleInit {
 
   private async ensureLoaded() {
     if (this.registryLoaded) return
-    // 先确保表存在，再加载设置（不然首次启动 DB 中设备和设置表都不存在）
-    if (this.supabase) {
-      await this.ensureTable()
-    }
     await this.loadSettingsFromDB()
     await this.loadRegistry()
     if (!this.supabase) {
@@ -362,9 +303,8 @@ export class DeviceRegistryService implements OnModuleInit {
       const msg = (e as Error).message
       this.logger.warn(`Supabase加载失败: ${msg}`)
       if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('404')) {
-        const created = await this.ensureTable()
+        const created = await this.createTablesIfNeeded()
         if (created) {
-          // 重试一次
           const retry = await this.supabase
             .from('access_devices')
             .select('*')
@@ -378,7 +318,7 @@ export class DeviceRegistryService implements OnModuleInit {
               lastSeen: new Date(r.last_seen).getTime(),
             }))
             this.logger.log(`从Supabase加载了 ${this.registry.length} 个设备（建表后重试）`)
-            return // ← 关键：重试成功就保留 supabase 连接，不设为 null
+            return
           }
         }
       }
@@ -393,7 +333,6 @@ export class DeviceRegistryService implements OnModuleInit {
     const displayName = ua.includes('iPhone') ? 'iPhone · Safari 📱'
       : ua.includes('MicroMessenger') ? '微信浏览器 💬'
       : ua.includes('Chrome') ? 'Chrome 🌐'
-      : ua.includes('Firefox') ? 'Firefox 🦊'
       : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
       : '未识别'
     const limit = this.getEffectiveMax()
@@ -405,7 +344,6 @@ export class DeviceRegistryService implements OnModuleInit {
       const now = new Date().toISOString()
 
       // 即使已存在，也按注册先后（firstSeen）检查是否在限额内
-      // 最早注册的设备永久占位，超出限额的设备永久拒绝（不轮转）
       const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen)
       const rank = sorted.findIndex(e => e.fingerprint === deviceId)
       if (rank >= limit) {
@@ -456,7 +394,6 @@ export class DeviceRegistryService implements OnModuleInit {
     }
     this.registry.push({ fingerprint, ua, displayName: '未识别', firstSeen: Date.now(), lastSeen: Date.now() })
     this.logger.log(`📱 新设备注册: ${fingerprint.slice(0, 30)} (${this.registry.length}/${limit})`)
-    // 同时写入 Supabase 持久化
     const supabase = await this.getOrInitSupabase()
     if (supabase) {
       const { error } = await supabase
@@ -529,7 +466,7 @@ export class DeviceRegistryService implements OnModuleInit {
     const device = this.registry[index]
     const oldName = device.displayName
     device.displayName = remark
-    
+
     const client = await this.getOrInitSupabase()
     if (client) {
       try {
@@ -555,14 +492,12 @@ export class DeviceRegistryService implements OnModuleInit {
     return this.maxSlots
   }
 
-  /** 如果 supabase 连接已丢失则尝试重新初始化 */
   private async getOrInitSupabase() {
     if (this.supabase) return this.supabase
     this.supabase = this.initSupabase()
     if (this.supabase) {
       try {
         await this.supabase.from('access_devices').select('id').limit(1)
-        // 连接恢复后，将内存中已有的设备全量同步到 Supabase
         await this.syncRegistryToSupabase()
       } catch {
         this.supabase = null
@@ -571,7 +506,6 @@ export class DeviceRegistryService implements OnModuleInit {
     return this.supabase
   }
 
-  /** 将内存中所有设备写入 Supabase（用于连接恢复后的全量同步） */
   private async syncRegistryToSupabase() {
     if (!this.supabase || this.registry.length === 0) return
     try {

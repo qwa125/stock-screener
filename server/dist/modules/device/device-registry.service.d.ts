@@ -10,7 +10,7 @@ export declare class DeviceRegistryService implements OnModuleInit {
     private readonly settingsPath;
     onModuleInit(): Promise<void>;
     private initSupabase;
-    private ensureTable;
+    private createTablesIfNeeded;
     private saveToFile;
     private loadFromFile;
     private loadSettingsFromDB;

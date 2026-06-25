@@ -12,7 +12,6 @@ const common_1 = require("@nestjs/common");
 const supabase_client_1 = require("../../storage/database/supabase-client");
 const fs = require("fs");
 const path = require("path");
-const pg = require("pg");
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
@@ -25,9 +24,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async onModuleInit() {
         this.logger.log('⚙️ DeviceRegistryService 启动中...');
-        if (this.supabase) {
-            await this.ensureTable();
-        }
         await this.loadSettingsFromDB();
         await this.loadRegistry();
         if (!this.supabase) {
@@ -47,74 +43,63 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         return null;
     }
-    async ensureTable() {
-        const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-        const pwd = process.env.SUPABASE_DB_PASSWORD || '';
-        if (!url || !pwd) {
-            this.logger.warn('缺少SUPABASE_DB_PASSWORD，无法自动创建表');
+    async createTablesIfNeeded() {
+        const serviceKey = (0, supabase_client_1.getSupabaseServiceRoleKey)();
+        if (!serviceKey) {
+            this.logger.warn('缺少 SERVICE_ROLE_KEY，无法自动创建表');
             return false;
         }
+        const supabaseUrl = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+        if (!supabaseUrl)
+            return false;
         try {
-            const parsedUrl = new URL(url);
-            const hostParts = parsedUrl.hostname.split('.');
-            const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0];
-            const directHost = parsedUrl.hostname;
-            const connectionMethods = [
-                { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-                { host: `aws-0-ap-northeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-                { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-                { host: directHost, port: 5432, user: 'postgres' },
-            ];
-            let lastError = null;
-            for (const method of connectionMethods) {
-                try {
-                    const client = new pg.Client({
-                        host: method.host,
-                        port: method.port,
-                        user: method.user,
-                        password: pwd,
-                        database: 'postgres',
-                        ssl: { rejectUnauthorized: false },
-                        connectionTimeoutMillis: 5000,
-                    });
-                    await client.connect();
-                    await client.query(`
-            CREATE TABLE IF NOT EXISTS public.access_devices (
-              id TEXT PRIMARY KEY,
-              ua TEXT NOT NULL DEFAULT '',
-              display_name TEXT NOT NULL DEFAULT '',
-              first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-          `);
-                    await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen)
-          `);
-                    await client.query(`
-            CREATE TABLE IF NOT EXISTS public.device_settings (
-              key TEXT PRIMARY KEY,
-              value TEXT NOT NULL DEFAULT ''
-            )
-          `);
-                    await client.query(`ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;`);
-                    await client.query(`
-            INSERT INTO public.device_settings (key, value)
-            VALUES ('max_slots', '3')
-            ON CONFLICT (key) DO NOTHING
-          `);
-                    await client.query(`NOTIFY pgrst, 'reload schema'`);
-                    await client.end();
-                    this.logger.log(`通过 ${method.host}:${method.port} 自动创建/确认 access_devices + device_settings 表成功`);
-                    await new Promise(r => setTimeout(r, 3000));
-                    return true;
-                }
-                catch (e) {
-                    lastError = e;
-                    const label = method.port === 6543 ? 'pooler' : '直连';
-                    this.logger.warn(`${label} ${method.host}:${method.port} 连接失败: ${e.message}`);
+            const sql = `
+        CREATE TABLE IF NOT EXISTS public.access_devices (
+          id TEXT PRIMARY KEY,
+          ua TEXT NOT NULL DEFAULT '',
+          display_name TEXT NOT NULL DEFAULT '',
+          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen);
+        CREATE TABLE IF NOT EXISTS public.device_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL DEFAULT ''
+        );
+        ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;
+        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+          ON CONFLICT (key) DO NOTHING;
+        NOTIFY pgrst, 'reload schema';
+      `;
+            const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': serviceKey,
+                    'Authorization': `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({}),
+            });
+            if (!resp.ok) {
+                const sqlResp = await fetch(`${supabaseUrl}/rest/v1/pg_query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': serviceKey,
+                        'Authorization': `Bearer ${serviceKey}`,
+                        'Prefer': 'params=single-object',
+                    },
+                    body: JSON.stringify({ query: sql }),
+                });
+                if (!sqlResp.ok) {
+                    const errText = await sqlResp.text();
+                    this.logger.warn(`pg_query创建表失败: ${errText}`);
+                    return false;
                 }
             }
-            throw lastError || new Error('所有连接方式均失败');
+            this.logger.log('通过Supabase API创建/确认数据表成功');
+            await new Promise(r => setTimeout(r, 3000));
+            return true;
         }
         catch (e) {
             this.logger.warn(`自动创建表失败: ${e.message}`);
@@ -160,6 +145,25 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                         loaded = true;
                     }
                 }
+                else if (error) {
+                    this.logger.warn(`access_devices读取失败 (${error?.code || error?.message})，尝试创建表...`);
+                    const created = await this.createTablesIfNeeded();
+                    if (created) {
+                        const retry = await this.supabase
+                            .from('access_devices')
+                            .select('display_name')
+                            .eq('id', '__settings__')
+                            .maybeSingle();
+                        if (!retry.error && retry.data?.display_name?.startsWith('maxSlots:')) {
+                            const val = parseInt(retry.data.display_name.replace('maxSlots:', ''), 10);
+                            if (val > 0) {
+                                this.maxSlots = val;
+                                this.logger.log(`⚙️ 从数据库加载(建表后): 设备限额 ${this.maxSlots}`);
+                                loaded = true;
+                            }
+                        }
+                    }
+                }
             }
             catch (e) {
                 this.logger.warn(`数据库加载设置异常: ${e.message}`);
@@ -194,52 +198,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 catch (e) {
                     this.logger.warn(`数据库加载设置异常: ${e.message}`);
                     break;
-                }
-            }
-        }
-        if (!loaded) {
-            const pwd = process.env.SUPABASE_DB_PASSWORD || '';
-            if (pwd) {
-                try {
-                    const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-                    const parsedUrl = new URL(url);
-                    const hostParts = parsedUrl.hostname.split('.');
-                    const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0];
-                    const directHost = parsedUrl.hostname;
-                    const connMethods = [
-                        { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-                        { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
-                        { host: directHost, port: 5432, user: 'postgres' },
-                    ];
-                    for (const method of connMethods) {
-                        try {
-                            const client = new pg.Client({
-                                host: method.host, port: method.port, user: method.user,
-                                password: pwd, database: 'postgres',
-                                ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
-                            });
-                            await client.connect();
-                            const result = await client.query(`SELECT display_name FROM public.access_devices WHERE id = '__settings__'`);
-                            await client.end();
-                            if (result.rows?.length > 0 && result.rows[0].display_name?.startsWith('maxSlots:')) {
-                                const val = parseInt(result.rows[0].display_name.replace('maxSlots:', ''), 10);
-                                if (val > 0) {
-                                    this.maxSlots = val;
-                                    const label = method.port === 6543 ? 'pooler' : '直连';
-                                    this.logger.log(`⚙️ 从数据库加载(${label}): 设备限额 ${this.maxSlots}`);
-                                    loaded = true;
-                                    break;
-                                }
-                            }
-                        }
-                        catch (e) {
-                            const label = method.port === 6543 ? 'pooler' : '直连';
-                            this.logger.warn(`pg${label}查询失败(${method.host}:${method.port}): ${e.message}`);
-                        }
-                    }
-                }
-                catch (e) {
-                    this.logger.warn(`pg直连查询异常: ${e.message}`);
                 }
             }
         }
@@ -288,13 +246,11 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             else {
                 this.logger.log(`⚙️ 设备限额已持久化到数据库: ${this.maxSlots}`);
             }
-            if (this.supabase) {
-                const { error: err2 } = await this.supabase
-                    .from('device_settings')
-                    .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
-                if (err2) {
-                    this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`);
-                }
+            const { error: err2 } = await this.supabase
+                .from('device_settings')
+                .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
+            if (err2) {
+                this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`);
             }
         }
         catch (e) {
@@ -320,9 +276,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     async ensureLoaded() {
         if (this.registryLoaded)
             return;
-        if (this.supabase) {
-            await this.ensureTable();
-        }
         await this.loadSettingsFromDB();
         await this.loadRegistry();
         if (!this.supabase) {
@@ -355,7 +308,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             const msg = e.message;
             this.logger.warn(`Supabase加载失败: ${msg}`);
             if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('404')) {
-                const created = await this.ensureTable();
+                const created = await this.createTablesIfNeeded();
                 if (created) {
                     const retry = await this.supabase
                         .from('access_devices')
@@ -384,9 +337,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         const displayName = ua.includes('iPhone') ? 'iPhone · Safari 📱'
             : ua.includes('MicroMessenger') ? '微信浏览器 💬'
                 : ua.includes('Chrome') ? 'Chrome 🌐'
-                    : ua.includes('Firefox') ? 'Firefox 🦊'
-                        : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
-                            : '未识别';
+                    : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
+                        : '未识别';
         const limit = this.getEffectiveMax();
         const existing = this.registry.find(e => e.fingerprint === deviceId);
         if (existing) {
