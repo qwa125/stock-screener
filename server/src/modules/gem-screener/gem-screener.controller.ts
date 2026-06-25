@@ -633,9 +633,15 @@ export class GemScreenerController {
 
   @Post('analyze')
   @SkipAccessLimit()
-  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
-    if (!body.code || !body.kline || !Array.isArray(body.kline)) {
-      return { code: 400, msg: '缺少股票代码或K线数据' };
+  async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number; price?: number; changePercent?: number }) {
+    if (!body.code) {
+      return { code: 400, msg: '缺少股票代码' };
+    }
+    // 无K线时直接创建基础记录入缓存（浏览器无法从中国外拉取K线时降级使用）
+    if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 5) {
+      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 5, entryTiming: 0, currentPrice: body.price || 0, changePercent: body.changePercent || 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0, trade: body.price || 0, price: body.price || 0, changepercent: body.changePercent || 0, inflow: 0, timestamp: Date.now() };
+      this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => {});
+      return { code: 200, msg: '已缓存基础数据（无K线）', data: [fallbackOpp] };
     }
     try {
       const klineData = body.kline.map((item: any) => ({

@@ -272,10 +272,35 @@ export declare class GemScreenerController {
         name?: string;
         kline: any[];
         mainForceInflow?: number;
+        price?: number;
+        changePercent?: number;
     }): Promise<{
         code: number;
         msg: string;
         data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            code: string;
+            name: string;
+            suggestion: string;
+            score: number;
+            entryTiming: number;
+            currentPrice: number;
+            changePercent: number;
+            pricePosition: number;
+            priceIncrease: number;
+            mainForceInflow: number;
+            baiXiaoDays: number;
+            capitalRank: number;
+            safetyScore: number;
+            trade: number;
+            price: number;
+            changepercent: number;
+            inflow: number;
+            timestamp: number;
+        }[];
     } | {
         code: number;
         msg: string;

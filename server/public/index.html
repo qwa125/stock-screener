@@ -371,26 +371,33 @@ function handleClearCache(){
 async function fetchKlineAndAnalyze(s){
   try{
     var code=s.code,pname=s.name||''
-    var emCode=code.startsWith('6')?'1.'+code:'0.'+code
-    var kurl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120'
-    var kr=await fetch(kurl).then(function(r){return r.json()})
-    var kdata=kr&&kr.data&&kr.data.klines?kr.data.klines:null
-    if(!kdata)return
-    // 解析K线原始数组 → 转为对象格式（后端 analyze 接口要求）
-    var klines=kdata.map(function(line){
-      var p=line.split(',')
-      return { day: p[0], open: parseFloat(p[1]), close: parseFloat(p[2]), high: parseFloat(p[3]), low: parseFloat(p[4]), volume: parseFloat(p[5]), amount: parseFloat(p[6])||0 }
-    })
     var curPrice=parseFloat(s.trade)||parseFloat(s.price)||0
-    var chg=parseFloat(s.chg)||0
-    if(!curPrice||!klines||klines.length<5)return
-    // 重要：字段名必须叫 kline（不是 klines），后端接口定义的是 kline
-    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, kline:klines }
+    var chg=parseFloat(s.changepercent)||parseFloat(s.chg)||0
+    if(!curPrice)return
+
+    // 尝试拉K线，失败也不影响基础数据入缓存
+    var klines=null
+    try{
+      var emCode=code.startsWith('6')?'1.'+code:'0.'+code
+      var kurl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120'
+      var kr=await fetch(kurl,{mode:'cors'}).then(r=>r.json())
+      var kdata=kr&&kr.data&&kr.data.klines?kr.data.klines:null
+      if(kdata){
+        klines=kdata.map(function(line){
+          var p=line.split(',')
+          return { day:p[0], open:parseFloat(p[1]), close:parseFloat(p[2]), high:parseFloat(p[3]), low:parseFloat(p[4]), volume:parseFloat(p[5]), amount:parseFloat(p[6])||0 }
+        })
+      }
+    }catch(e){}
+
+    // 始终推送基础数据到后端（含或不含K线）
+    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0 }
+    if(klines&&klines.length>=5)payload.kline=klines
     await fetch(API+'/gem/analyze',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
-    }).then(function(r){return r.json()})
+    }).then(r=>r.json())
   }catch(e){/* 静默跳过 */}
 }
 function setStatus(s){$('status').textContent=s}
