@@ -454,23 +454,58 @@ async function fetchKlineAndAnalyze(s){
     var chg=parseFloat(s.changepercent)||parseFloat(s.chg)||0
     if(!curPrice)return
 
-    // 多源K线回退：东财→新浪（浏览器直连国内API）
+    // 多源K线强制拉取：东财→新浪→腾讯（必须拉到至少5条）
     var klines=null
     var emCode=code.startsWith('6')?'1.'+code:'0.'+code
     var sinCode=(code.startsWith('6')?'sh':'sz')+code
+    var gtCode=sinCode  // 腾讯同sinCode格式
     try{
-      var kr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120',{mode:'cors'}).then(r=>r.json())
+      var ac=new AbortController()
+      var tid=setTimeout(function(){ac.abort()},8000)
+      var kr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120',{signal:ac.signal,mode:'cors'}).then(function(r){return r.json()})
+      clearTimeout(tid)
       if(kr&&kr.data&&kr.data.klines){
         klines=kr.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
       }
-    }catch(e){}
-    if(!klines){
+    }catch(e){console.warn('东财K线失败('+code+'):',e.message)}
+    // 新浪回退
+    if(!klines||klines.length<5){
       try{
-        var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240').then(r=>r.json())
+        var ac2=new AbortController()
+        var tid2=setTimeout(function(){ac2.abort()},8000)
+        var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240',{signal:ac2.signal}).then(function(r){return r.json()})
+        clearTimeout(tid2)
         if(sr&&sr.data&&sr.data.length){
           klines=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
         }
-      }catch(e){}
+      }catch(e){console.warn('新浪K线失败('+code+'):',e.message)}
+    }
+    // 腾讯回退
+    if(!klines||klines.length<5){
+      try{
+        var ac3=new AbortController()
+        var tid3=setTimeout(function(){ac3.abort()},8000)
+        var tr=await fetch('https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
+        clearTimeout(tid3)
+        tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
+        var tj=JSON.parse(tr)
+        if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
+          klines=tj.data[gtCode].m5.map(function(l){return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0}})
+        }
+      }catch(e){console.warn('腾讯K线失败('+code+'):',e.message)}
+    }
+    // 如果所有来源都失败，1.5秒后重试东财一次
+    if(!klines||klines.length<5){
+      try{
+        await new Promise(function(r){setTimeout(r,1500)})
+        var ac4=new AbortController()
+        var tid4=setTimeout(function(){ac4.abort()},10000)
+        var kr2=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120',{signal:ac4.signal,mode:'cors'}).then(function(r){return r.json()})
+        clearTimeout(tid4)
+        if(kr2&&kr2.data&&kr2.data.klines){
+          klines=kr2.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
+        }
+      }catch(e){console.warn('东财重试也失败('+code+'):',e.message)}
     }
 
     // 始终推送基础数据到后端（含或不含K线）
