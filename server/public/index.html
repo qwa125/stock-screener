@@ -311,8 +311,8 @@ async function handleRescanClick(){
     var list=listSH.concat(listSZ)
     if(!list||!list.length)throw new Error('未获取到股票列表')
     txt.textContent='共获取 '+list.length+' 只股票'
-    // 使用 code 字段（无前缀）过滤：6xx=沪主板, 0xx=深主板, 3xx=创业板
-    var stocks=list.filter(function(s){return s.code&&(s.code.startsWith('6')||s.code.startsWith('0')||s.code.startsWith('3'))})
+    // 使用 code 字段（无前缀）过滤：60=沪主板, 00=深主板, 30=创业板（排除688科创板）
+	    var stocks=list.filter(function(s){return s.code&&(s.code.startsWith('60')||s.code.startsWith('00')||s.code.startsWith('30'))})
     txt.textContent='分析 '+stocks.length+' 只A股中 (0%)...'
     if(bar)bar.style.width='0%'
     var done=0,total=stocks.length
@@ -831,8 +831,8 @@ async function doFullRescan(){
   //    覆盖：沪深主板(600601603605000001002) + 创业板(300301)
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，从东方财富获取全量排序...')
   
-  // 沪深主板代码前缀
-  function isMainBoard(c){return /^60[0-5]/.test(c)||/^00/.test(c)||/^001/.test(c)||/^002/.test(c)}
+  // 沪深主板：60开头（排除688科创板）, 00开头（含000/001/002）
+  function isMainBoard(c){return /^60/.test(c)||/^00/.test(c)}
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
