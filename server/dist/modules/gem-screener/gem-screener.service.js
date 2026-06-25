@@ -348,7 +348,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 45);
                 continue;
             }
-            if (!s.isGoldenCross) {
+            if (s.ma5 < s.ma10) {
                 s.suggestion = '不要介入';
                 s.score = Math.min(s.score, 30);
                 continue;

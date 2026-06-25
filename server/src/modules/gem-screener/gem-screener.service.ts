@@ -464,8 +464,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 下跌趋势没信号 → 不要介入
-      if (!s.isGoldenCross) {
+      // 下跌趋势(MA5 < MA10)没信号 → 不要介入
+      if (s.ma5 < s.ma10) {
         s.suggestion = '不要介入';
         s.score = Math.min(s.score, 30);
         continue;
