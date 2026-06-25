@@ -300,8 +300,8 @@ async function handleRescanClick(){
       for(var p=1;p<=pages;p++){
         txt.textContent='获取 '+label+' 涨跌幅排行 '+p+'/'+pages+' 页...'
         try{
-          var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,
-            {signal:AbortSignal.timeout(10000)}).then(function(r){return r.text()})
+          var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node)
+            .then(function(r){return r.text()})
           src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
           try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
             var m=src.match(/\[[\s\S]*\]/)
