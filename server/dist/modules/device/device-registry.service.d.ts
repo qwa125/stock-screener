@@ -19,7 +19,7 @@ export declare class DeviceRegistryService implements OnModuleInit {
     private writeSettingsFileFallback;
     private ensureLoaded;
     private loadRegistry;
-    touchDevice(deviceId: string, ua: string): Promise<{
+    touchDevice(deviceId: string, ua: string, isAdmin?: boolean): Promise<{
         allowed: boolean;
         message?: string;
     }>;

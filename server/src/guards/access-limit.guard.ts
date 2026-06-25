@@ -22,16 +22,6 @@ export class AccessLimitGuard implements CanActivate {
     const url: string = request.url || request.path || '';
 
     // ══════════════════════════════════
-    // 管理员令牌：X-Admin-Token 匹配则永久放行（不占设备名额）
-    // 优先取环境变量 ADMIN_TOKEN，未设置则用内置默认值
-    // ══════════════════════════════════
-    const adminToken = process.env.ADMIN_TOKEN || 'admin2025';
-    {
-      const token = request.headers['x-admin-token'];
-      if (token === adminToken) return true;
-    }
-
-    // ══════════════════════════════════
     // URL 白名单 — 仅放行管理类端点（auth / device / health）
     // ══════════════════════════════════
     const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health'];

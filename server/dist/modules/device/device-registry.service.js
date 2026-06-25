@@ -12,6 +12,7 @@ const common_1 = require("@nestjs/common");
 const supabase_client_1 = require("../../storage/database/supabase-client");
 const fs = require("fs");
 const path = require("path");
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin2025';
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
@@ -335,18 +336,21 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             this.supabase = null;
         }
     }
-    async touchDevice(deviceId, ua) {
+    async touchDevice(deviceId, ua, isAdmin = false) {
         await this.ensureLoaded();
         const now = new Date().toISOString();
-        const displayName = ua.includes('iPhone') ? 'iPhone · Safari 📱'
-            : ua.includes('MicroMessenger') ? '微信浏览器 💬'
-                : ua.includes('Chrome') ? 'Chrome 🌐'
-                    : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
-                        : '未识别';
+        const displayName = isAdmin ? '👑 管理员'
+            : ua.includes('iPhone') ? 'iPhone · Safari 📱'
+                : ua.includes('MicroMessenger') ? '微信浏览器 💬'
+                    : ua.includes('Chrome') ? 'Chrome 🌐'
+                        : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
+                            : '未识别';
         const limit = this.getEffectiveMax();
         const existing = this.registry.find(e => e.fingerprint === deviceId);
         if (existing) {
             existing.lastSeen = Date.now();
+            if (existing.isAdmin)
+                return { allowed: true };
             const now = new Date().toISOString();
             const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen);
             const rank = sorted.findIndex(e => e.fingerprint === deviceId);
@@ -360,6 +364,16 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                     .update({ last_seen: now, ua })
                     .eq('id', deviceId);
             }
+            return { allowed: true };
+        }
+        if (isAdmin) {
+            this.registry.push({ fingerprint: deviceId, ua, displayName, firstSeen: Date.now(), lastSeen: Date.now(), isAdmin: true });
+            this.logger.log(`👑 管理员设备注册: ${deviceId.slice(0, 20)} (不计入名额)`);
+            const supabase = await this.getOrInitSupabase();
+            if (supabase) {
+                await supabase.from('access_devices').insert({ id: deviceId, ua, display_name: displayName + '(管理员)' });
+            }
+            this.saveToFile();
             return { allowed: true };
         }
         if (this.registry.length >= limit) {

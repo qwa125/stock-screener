@@ -22,13 +22,14 @@ let DeviceController = DeviceController_1 = class DeviceController {
         this.deviceRegistry = deviceRegistry;
         this.logger = new common_1.Logger(DeviceController_1.name);
     }
-    async register(deviceId, ua) {
+    async register(deviceId, ua, adminToken) {
         if (!deviceId) {
             return { code: 400, msg: '缺少设备ID' };
         }
+        const isAdmin = adminToken === (process.env.ADMIN_TOKEN || 'admin2025');
         try {
-            const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown');
-            this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}`);
+            const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown', isAdmin);
+            this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}${isAdmin ? ' [管理员]' : ''}`);
             if (!result.allowed) {
                 throw new common_1.HttpException({ code: 429, msg: result.message || '名额已满' }, common_1.HttpStatus.TOO_MANY_REQUESTS);
             }
@@ -92,8 +93,9 @@ __decorate([
     (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Headers)('x-device-id')),
     __param(1, (0, common_1.Headers)('user-agent')),
+    __param(2, (0, common_1.Headers)('x-admin-token')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], DeviceController.prototype, "register", null);
 __decorate([

@@ -5,4 +5,5 @@ export interface DeviceRegistryEntry {
     firstSeen: number;
     lastSeen: number;
     remark?: string;
+    isAdmin?: boolean;
 }

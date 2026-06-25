@@ -14,13 +14,15 @@ export class DeviceController {
   async register(
     @Headers('x-device-id') deviceId: string,
     @Headers('user-agent') ua: string,
+    @Headers('x-admin-token') adminToken?: string,
   ) {
     if (!deviceId) {
       return { code: 400, msg: '缺少设备ID' }
     }
+    const isAdmin = adminToken === (process.env.ADMIN_TOKEN || 'admin2025')
     try {
-      const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown')
-      this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}`)
+      const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown', isAdmin)
+      this.logger.log(`设备注册: ${deviceId.slice(0, 20)} | 允许: ${result.allowed}${isAdmin ? ' [管理员]' : ''}`)
       if (!result.allowed) {
         throw new HttpException(
           { code: 429, msg: result.message || '名额已满' },

@@ -3,7 +3,7 @@ export declare class DeviceController {
     private readonly deviceRegistry;
     private readonly logger;
     constructor(deviceRegistry: DeviceRegistryService);
-    register(deviceId: string, ua: string): Promise<{
+    register(deviceId: string, ua: string, adminToken?: string): Promise<{
         code: number;
         msg: string;
     }>;

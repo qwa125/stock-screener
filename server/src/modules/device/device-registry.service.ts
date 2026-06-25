@@ -4,6 +4,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { DeviceRegistryEntry } from './device-registry.types'
 
+/** 内置管理员令牌（优先取环境变量） */
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin2025'
+
 @Injectable()
 export class DeviceRegistryService implements OnModuleInit {
   private readonly logger = new Logger(DeviceRegistryService.name)
@@ -338,10 +341,11 @@ export class DeviceRegistryService implements OnModuleInit {
     }
   }
 
-  async touchDevice(deviceId: string, ua: string): Promise<{ allowed: boolean; message?: string }> {
+  async touchDevice(deviceId: string, ua: string, isAdmin = false): Promise<{ allowed: boolean; message?: string }> {
     await this.ensureLoaded()
     const now = new Date().toISOString()
-    const displayName = ua.includes('iPhone') ? 'iPhone · Safari 📱'
+    const displayName = isAdmin ? '👑 管理员'
+      : ua.includes('iPhone') ? 'iPhone · Safari 📱'
       : ua.includes('MicroMessenger') ? '微信浏览器 💬'
       : ua.includes('Chrome') ? 'Chrome 🌐'
       : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari 🧭'
@@ -352,6 +356,8 @@ export class DeviceRegistryService implements OnModuleInit {
     const existing = this.registry.find(e => e.fingerprint === deviceId)
     if (existing) {
       existing.lastSeen = Date.now()
+      // 管理员设备不检查限额
+      if (existing.isAdmin) return { allowed: true }
       const now = new Date().toISOString()
 
       // 即使已存在，也按注册先后（firstSeen）检查是否在限额内
@@ -371,6 +377,17 @@ export class DeviceRegistryService implements OnModuleInit {
       return { allowed: true }
     }
 
+    // 新设备 → 管理员不占名额，直接放行
+    if (isAdmin) {
+      this.registry.push({ fingerprint: deviceId, ua, displayName, firstSeen: Date.now(), lastSeen: Date.now(), isAdmin: true })
+      this.logger.log(`👑 管理员设备注册: ${deviceId.slice(0, 20)} (不计入名额)`)
+      const supabase = await this.getOrInitSupabase()
+      if (supabase) {
+        await supabase.from('access_devices').insert({ id: deviceId, ua, display_name: displayName + '(管理员)' })
+      }
+      this.saveToFile()
+      return { allowed: true }
+    }
     // 新设备 → 检查限额
     if (this.registry.length >= limit) {
       return { allowed: false, message: `最多允许 ${limit} 个不同设备访问` }

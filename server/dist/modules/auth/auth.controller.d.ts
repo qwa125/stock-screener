@@ -107,6 +107,7 @@ export declare class AuthController {
                 firstSeen: number;
                 lastSeen: number;
                 remark?: string;
+                isAdmin?: boolean;
             }[];
             total: number;
         };
