@@ -447,14 +447,17 @@ export class GemScreenerService implements OnApplicationBootstrap {
   /** 重新生成缓存建议，与服务器分析算法保持一致 */
   recalculateSuggestions(data: OpportunityStock[]) {
     for (const s of data) {
-      // 暴跌 → 卖出
+      // 已有信号（来自 signalRule 的白布+清仓/紧急清仓/主力出货等）→ 不覆盖
+      if (s.suggestion) continue;
+
+      // 暴跌 → 卖出（兜底，正常情况下signalRule已处理）
       if (s.changePercent <= -5) {
         s.suggestion = '卖出';
         s.score = Math.min(s.score, 35);
         continue;
       }
 
-      // 大幅下跌 + 死叉 → 减仓
+      // 大幅下跌 + 死叉 → 减仓（兜底）
       if (s.changePercent <= -3 && !s.isGoldenCross) {
         s.suggestion = '减仓';
         s.score = Math.min(s.score, 45);
@@ -462,18 +465,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
 
       // 下跌趋势没信号 → 不要介入
-      if (!s.isGoldenCross && !s.suggestion) {
+      if (!s.isGoldenCross) {
         s.suggestion = '不要介入';
         s.score = Math.min(s.score, 30);
         continue;
       }
 
       // 上涨趋势没信号 → 持有
-      if (s.isGoldenCross && !s.suggestion) {
-        s.suggestion = '持有';
-      }
-
-      
+      s.suggestion = '持有';
     }
   }
 
@@ -2952,9 +2951,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     const NEGATIVE = ['减仓', '不要介入'];
     // 卖出信号：不直接返回null，先记录锁定，后续会以"不要介入"展示
-    if (suggestion === '卖出') {
+    if (['卖出', '减仓', '不要介入'].includes(suggestion)) {
       this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
-      this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
+      this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
     }
     if (!keepAll && NEGATIVE.includes(suggestion)) return null;
 
@@ -3256,8 +3255,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
             }
           }
           
-          // 如果当日是卖出/减仓 → 记录到持久缓存
-          if (['卖出'].includes(newSuggestion)) {
+          // 如果当日是卖出/减仓/不要介入 → 记录到持久缓存（上锁）
+          if (['卖出', '减仓', '不要介入'].includes(newSuggestion)) {
             this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
           }
 

@@ -336,6 +336,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     recalculateSuggestions(data) {
         for (const s of data) {
+            if (s.suggestion)
+                continue;
             if (s.changePercent <= -5) {
                 s.suggestion = '卖出';
                 s.score = Math.min(s.score, 35);
@@ -346,14 +348,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 45);
                 continue;
             }
-            if (!s.isGoldenCross && !s.suggestion) {
+            if (!s.isGoldenCross) {
                 s.suggestion = '不要介入';
                 s.score = Math.min(s.score, 30);
                 continue;
             }
-            if (s.isGoldenCross && !s.suggestion) {
-                s.suggestion = '持有';
-            }
+            s.suggestion = '持有';
         }
     }
     async recalcCacheSignals() {
@@ -2482,9 +2482,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
         const NEGATIVE = ['减仓', '不要介入'];
-        if (suggestion === '卖出') {
+        if (['卖出', '减仓', '不要介入'].includes(suggestion)) {
             this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
-            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
         }
         if (!keepAll && NEGATIVE.includes(suggestion))
             return null;
@@ -2755,7 +2755,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '不要介入';
                         }
                     }
-                    if (['卖出'].includes(newSuggestion)) {
+                    if (['卖出', '减仓', '不要介入'].includes(newSuggestion)) {
                         this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                     }
                     const BASE = {
