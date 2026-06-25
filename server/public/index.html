@@ -401,7 +401,10 @@ function futurePrediction(s){
   if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
   if(s.suggestion==='轻仓买入')return'中位区有趋势但信号不够强，未来1-2日存在不确定性，建议1/3仓位试探'
   if(s.suggestion==='持有')return'趋势向上但无明确买入信号，未来1-2日大概率延续趋势，建议持股待涨'
-  return'暂无明确买入信号，未来1-2日建议持有为主'
+  if(s.suggestion==='减仓')return'风险信号出现，未来1-2日建议减仓回避'
+  if(s.suggestion==='卖出')return'卖出信号确定，未来1-2日风险较大，观望为主'
+  if(s.suggestion==='不要介入')return'下跌趋势+卖出锁定，未来1-2日不介入，等待企稳'
+  return'暂无明确信号，未来1-2日等待方向选择'
 }
 
 function sigColor(s){return COLORS[s.suggestion]||'#999'}

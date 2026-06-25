@@ -3104,8 +3104,20 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
+      // ═══ 多因子评分预测：未来1-2天方向判断 ═══
+      const signals = {
+        baiBu: !!(baiXing as any)?.覆盖中?.[closeArr.length - 1],
+        baiXiao: !!(baiXing as any)?.baiXiao?.[closeArr.length - 1],
+        jiGouActive: volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a: number, b: number) => a + b, 0) / 60 || 1) > 1.5,
+        macdGoldenCross: isGoldenCross,
+        zhuLiChuHuo: !!(sanJiao as any)?.zhuLiChuHuo,
+      };
+      const volumeRatio = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a: number, b: number) => a + b, 0) / 60 || 1);
+      const forecast1_2Day = this.calcScoreForecast(score, signals, finalSuggestion, trendState, isGoldenCross, pricePos, volumeRatio);
+
       return {
         code, name: name ?? '',
+        forecast1_2Day,
         currentPrice: price,
         changePercent: Math.round(changePct * 100) / 100,
         priceIncrease: Math.round(priceIncrease * 100) / 100,
