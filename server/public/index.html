@@ -375,20 +375,24 @@ async function fetchKlineAndAnalyze(s){
     var chg=parseFloat(s.changepercent)||parseFloat(s.chg)||0
     if(!curPrice)return
 
-    // 尝试拉K线，失败也不影响基础数据入缓存
+    // 多源K线回退：东财→新浪（浏览器直连国内API）
     var klines=null
+    var emCode=code.startsWith('6')?'1.'+code:'0.'+code
+    var sinCode=(code.startsWith('6')?'sh':'sz')+code
     try{
-      var emCode=code.startsWith('6')?'1.'+code:'0.'+code
-      var kurl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120'
-      var kr=await fetch(kurl,{mode:'cors'}).then(r=>r.json())
-      var kdata=kr&&kr.data&&kr.data.klines?kr.data.klines:null
-      if(kdata){
-        klines=kdata.map(function(line){
-          var p=line.split(',')
-          return { day:p[0], open:parseFloat(p[1]), close:parseFloat(p[2]), high:parseFloat(p[3]), low:parseFloat(p[4]), volume:parseFloat(p[5]), amount:parseFloat(p[6])||0 }
-        })
+      var kr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120',{mode:'cors'}).then(r=>r.json())
+      if(kr&&kr.data&&kr.data.klines){
+        klines=kr.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
       }
     }catch(e){}
+    if(!klines){
+      try{
+        var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240').then(r=>r.json())
+        if(sr&&sr.data&&sr.data.length){
+          klines=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
+        }
+      }catch(e){}
+    }
 
     // 始终推送基础数据到后端（含或不含K线）
     var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0 }
@@ -397,7 +401,7 @@ async function fetchKlineAndAnalyze(s){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
-    }).then(r=>r.json())
+    }).then(function(r){return r.json()})
   }catch(e){/* 静默跳过 */}
 }
 function setStatus(s){$('status').textContent=s}
@@ -948,8 +952,8 @@ async function doFullRescan(){
             // ─── 信号合并规则 ───
             // Step ②: 后端建议是减仓/卖出/不要介入 → 保持不动，不受chg影响
             var BACKEND_SELL=['减仓','卖出','不要介入']
-            var backendSug=newStocks[si3].suggestion||'持有'
-            if(BACKEND_SELL.indexOf(backendSug)===-1){
+            var backendSug=newStocks[si3].suggestion
+            if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入/持有 → 结合评分预测+实时数据做升级
               var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
               var upgSug = liveSuggestion  // 默认用实时数据
@@ -1522,7 +1526,7 @@ async function doSearch(){
         if(stockChgP>=9)liveSug='重仓买入'
         else if(stockChgP>=6)liveSug='买入'
         else if(stockChgP>=3)liveSug='轻仓买入'
-        if(liveSug && !BACKEND_SELL.includes(o.suggestion||'') && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion||'持有')){
+        if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
         da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
