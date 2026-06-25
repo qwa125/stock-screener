@@ -701,13 +701,43 @@ function showDetail(i){
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
-  // 从搜索接口获取最新预测（确保与搜索区完全一致）
-  fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
-    if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
-      s.forecast1_2Day=d.data[0].forecast1_2Day
-      da.innerHTML=buildDetail(s,rt)
-    }
-  }).catch(function(e){console.error('获取最新预测失败',e)})
+  // ★ 异步拉取新鲜K线→重新分析（与搜索流程完全一致，确保使用最新判断逻辑）
+  ;(async function(){
+    try{
+      var code=s.code,market=code.startsWith('6')?'sh':'sz',emSecId=(code.startsWith('6')?'1.':'0.')+code
+      var kdata=null
+      // 东财（第一位）
+      try{
+        var ekr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500',{signal:timeoutSignal(8000)})
+        if(ekr.ok||ekr.status===0||ekr.type==='basic'){var ekd=await ekr.json();if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=5){kdata=ekd.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})}}
+      }catch(e){}
+      // 新浪（第二位）
+      if(!kdata)try{var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+market+code+'&scale=240&ma=no&datalen=500';var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)});if(srr.ok||srr.status===0){var srd=await srr.json();if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}})}}}catch(e){}
+      // 腾讯（第三位）
+      if(!kdata)try{var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+market+code+',day,,,500,qfq';var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)});if(tqr.ok||tqr.status===0){var tqd=await tqr.json();if(tqd&&tqd.data){var tk=tqd.data[market+code];if(tk&&tk.qfq&&tk.qfq.day&&tk.qfq.day.length>=5){kdata=tk.qfq.day.map(function(l){var p=l.split(' ');return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}})}}}}catch(e){}
+      if(!kdata)return // 拉不到K线就保持原缓存数据
+      // 前端算jiGouActiveScore
+      var jiGouFromKdata=0
+      if(kdata&&kdata.length>=20){var cv=kdata.slice(-60).map(function(k){return k.volume||0});var v5=cv.slice(-5).reduce(function(a,b){return a+b},0)/5;var v20=cv.slice(-20).reduce(function(a,b){return a+b},0)/Math.min(cv.length,20);jiGouFromKdata=Math.min(Math.round(v5/(v20||1)*6*100)/100,20)}
+      // POST重新分析
+      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,name:s.name,kline:kdata})})
+      var aj=await ar.json()
+      if(aj.code===200&&aj.data&&aj.data.length>0){
+        var o=aj.data[0]
+        // 用前端计算的机构活跃度覆盖
+        if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
+        o.name=s.name;o.currentPrice=o.currentPrice||rt.price||s.currentPrice||0;o.changePercent=o.changePercent||rt.chgP||s.changePercent||0
+        // 用实时涨幅修正信号（与搜索逻辑一致）
+        var chg=o.changePercent||0, LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'], BACKEND_SELL=['观望','持有','减仓','卖出','不要介入'], liveSug=null
+        if(chg>=9)liveSug='重仓买入';else if(chg>=6)liveSug='买入';else if(chg>=3)liveSug='轻仓买入'
+        if(liveSug&&o.suggestion&&!BACKEND_SELL.includes(o.suggestion)&&LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){o.suggestion=liveSug}
+        // 更新显示
+        da.innerHTML=buildDetail(o,{price:o.currentPrice,chgP:o.changePercent,high:rt.high,low:rt.low})
+        // 同步更新到缓存列表，后续点击直接显示最新数据
+        stocks[i]=o
+      }
+    }catch(e){console.warn('[detail] 新鲜分析失败，保持缓存数据:',e.message)}
+  })()
 }
 
 // ---------- 腾讯实时行情 ----------
