@@ -1388,8 +1388,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
         const sj = result.sanJiao || {};
         const lx = result.lingXing || {};
-        if (sj.shortSell || sj.strongSell || lx.shortSell || lx.strongSell) {
-            return { suggestion: '卖出', signalComb: '短线/强化卖出信号' };
+        if (sj.shortSell || lx.shortSell) {
+            return { suggestion: '卖出', signalComb: '紧急清仓' };
+        }
+        if (sj.strongSell || lx.strongSell) {
+            return { suggestion: '卖出', signalComb: '空' };
         }
         if (priceIncrease > 60)
             return null;

@@ -1602,11 +1602,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (baiBu && hasChuHuo) return { suggestion: '卖出', signalComb: '白布+出货' };
     // 白消 + 出货 → 减仓（覆盖买入信号）
     if (!baiBu && hasChuHuo && baiXiaoStart) return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
-    // 公式引擎短线卖出/强化卖出 → 卖出（覆盖紧急清仓、空→闭眼卖）
+    // 公式引擎卖出信号：shortSell=紧急清仓, strongSell=空 → 卖出
     const sj = (result as any).sanJiao || {};
     const lx = (result as any).lingXing || {};
-    if (sj.shortSell || sj.strongSell || lx.shortSell || lx.strongSell) {
-      return { suggestion: '卖出', signalComb: '短线/强化卖出信号' };
+    if (sj.shortSell || lx.shortSell) {
+      return { suggestion: '卖出', signalComb: '紧急清仓' };
+    }
+    if (sj.strongSell || lx.strongSell) {
+      return { suggestion: '卖出', signalComb: '空' };
     }
     if (priceIncrease > 60) return null; // 涨幅过大过滤
 
