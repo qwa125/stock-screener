@@ -30,9 +30,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .list-header{display:flex;padding:8px 16px 4px;font-size:11px;color:#999;font-weight:500}
 .col-name{flex:1.5}
 .col-action{flex:.75;text-align:center}
-.col-price{flex:1;text-align:center}
-.col-chg{flex:1;text-align:center}
-.col-pos{flex:1.1;text-align:right}
+.col-price-chg{flex:1.5;text-align:center}
+.col-pos{flex:1;text-align:center}
+.col-trend{flex:1;text-align:center}
 .stock-list{padding:0 12px 8px;display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto}
 .stock-card{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:all .15s}
 .stock-card:active{transform:scale(.98)}
@@ -44,10 +44,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .stock-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stock-code{font-size:10px;color:#999}
 .signal-badge{padding:3px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;text-align:center;flex:.75;display:inline-block;text-align:center}
-.price{font-size:13px;font-weight:500;flex:1;text-align:center}
-.chg{font-size:13px;font-weight:700;flex:1;text-align:center}
-.pos{font-size:13px;font-weight:700;flex:1.1;text-align:right}
-.pred-badge{display:inline-block;padding:2px 5px;border-radius:3px;font-size:10px;font-weight:600;color:#fff;margin-left:4px;white-space:nowrap;flex-shrink:0}
+.price-chg{font-size:13px;font-weight:600;flex:1.5;text-align:center}
+.pos{font-size:13px;font-weight:700;flex:1;text-align:center}
+.pred-badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;color:#fff;flex:1;text-align:center;white-space:nowrap;flex-shrink:0}
 
 /* Detail panel - rich analysis style */
 .detail-panel{display:none;margin:6px 0 0;padding:0;background:#fff;border-radius:8px;overflow-y:auto;max-height:45vh}
@@ -149,8 +148,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="list-header">
   <span class="col-name">名称</span>
   <span class="col-action">操作</span>
-  <span class="col-chg">涨跌幅</span>
+  <span class="col-price-chg">涨幅</span>
   <span class="col-pos">位置</span>
+  <span class="col-trend">未来趋势</span>
 </div>
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
@@ -626,7 +626,7 @@ function renderList(){
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
     var card=document.createElement('div');card.className='stock-card'+(selectedIdx===i?' selected':'')
     card.onclick=function(){showDetail(i)}
-    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span>'+_buildPredBadge(s)+'</div>'
+    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price-chg" style="color:'+chgClr+'">¥'+price.toFixed(2)+' '+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span>'+_buildPredBadge(s)+'</div>'
     list.appendChild(card)
   })
 }
@@ -634,18 +634,17 @@ function renderList(){
 // 未来1-2日评分预测泡标（在列表卡片上显示）
 function _buildPredBadge(s){
   var fp=s.forecast1_2Day
-  if(!fp||!fp.direction) return ''
-  var dir=fp.direction,clr='#999',ico='○'
-  if(dir==='强烈看涨'){clr='#dc2626';ico='🟢'}
-  else if(dir==='看涨'){clr='#2563eb';ico='🟢'}
-  else if(dir==='震荡偏强'){clr='#eab308';ico='🟡'}
-  else if(dir==='震荡'||dir==='震荡偏弱'){clr='#999';ico='○'}
-  else if(dir==='观望'){clr='#6b7280';ico='◐'}
-  else if(dir==='方向不明'){clr='#999';ico='?'}
-  // 前端用评分预测升级: 后端买入+强烈看涨→可见可升级
-  var label=(dir==='强烈看涨'||dir==='看涨')?dir:''
-  if(label) return '<span class="pred-badge" style="background:'+clr+';opacity:0.85">'+label+'</span>'
-  return ''
+  if(!fp||!fp.direction) return '<span class="pred-badge" style="background:#e5e7eb;color:#999">—</span>'
+  var dir=fp.direction,clr='#999',label='—'
+  if(dir==='强烈看涨'){clr='#dc2626';label='强烈看涨'}
+  else if(dir==='看涨'){clr='#2563eb';label='看涨'}
+  else if(dir==='震荡偏强'){clr='#eab308';label='偏强'}
+  else if(dir==='震荡'){clr='#94a3b8';label='震荡'}
+  else if(dir==='震荡偏弱'){clr='#94a3b8';label='偏弱'}
+  else if(dir==='看跌'){clr='#22c55e';label='看跌'}
+  else if(dir==='观望'){clr='#6b7280';label='观望'}
+  else if(dir==='方向不明'){clr='#999';label='不明'}
+  return '<span class="pred-badge" style="background:'+clr+'">'+label+'</span>'
 }
 
 // ---------- 扫描 ----------
@@ -1535,12 +1534,11 @@ function startPriceRefresh(stks){
             var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
             // 查找价格和涨跌幅元素
             var spans=card.querySelectorAll('.stock-row span')
-            // 结构: rank-badge | info | signal-badge | price | chg | pos
-            var priceSpan=spans[3],chgSpan=spans[4]
-            if(priceSpan) priceSpan.textContent=price.toFixed(2)
-            if(chgSpan){
-              chgSpan.textContent=chgT
-              chgSpan.style.color=chgClr
+            // 结构: rank-badge | info | signal-badge | price-chg | pos | pred
+            var priceChgSpan=spans[2]
+            if(priceChgSpan){
+              priceChgSpan.textContent='¥'+price.toFixed(2)+' '+chgT
+              priceChgSpan.style.color=chgClr
             }
           })
         }).catch(function(){})
