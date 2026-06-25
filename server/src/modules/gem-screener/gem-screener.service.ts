@@ -508,28 +508,41 @@ export class GemScreenerService implements OnApplicationBootstrap {
   /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
   async updateSingleStockInCache(opp: OpportunityStock): Promise<void> {
     const code = opp.code;
-    // 尝试更新 GEM 缓存
-    let found = false;
+    // 判断股票归属（60/00开头=主板, 30开头=创业板/GEM）
+    const isMainBoardStock = /^60/.test(code) || /^00/.test(code);
+    const isGEMStock = /^30/.test(code);
+
     if (this.cache?.data) {
       const idx = this.cache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
-        found = true;
+        await this.saveCacheToDisk();
+        this.logger.log(`📝 缓存已更新(GEM): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+        return;
+      }
+      // 创业板新股 → 加入GEM缓存
+      if (isGEMStock) {
+        this.cache.data.push(opp);
+        await this.saveCacheToDisk();
+        this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
+        return;
       }
     }
-    // 尝试更新主板缓存
-    if (!found && this.mainBoardCache?.data) {
+    if (this.mainBoardCache?.data) {
       const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
-        found = true;
+        await this.saveMainBoardCacheToDisk();
+        this.logger.log(`📝 缓存已更新(主板): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+        return;
       }
-    }
-    // 都不在缓存中则忽略（新股票，没在机会列表里）
-    if (found) {
-      await this.saveCacheToDisk();
-      await this.saveMainBoardCacheToDisk();
-      this.logger.log(`📝 缓存已更新: ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+      // 主板新股 → 加入主板缓存
+      if (isMainBoardStock) {
+        this.mainBoardCache.data.push(opp);
+        await this.saveMainBoardCacheToDisk();
+        this.logger.log(`🆕 新加入主板缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
+        return;
+      }
     }
   }
 

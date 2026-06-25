@@ -392,25 +392,37 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async updateSingleStockInCache(opp) {
         const code = opp.code;
-        let found = false;
+        const isMainBoardStock = /^60/.test(code) || /^00/.test(code);
+        const isGEMStock = /^30/.test(code);
         if (this.cache?.data) {
             const idx = this.cache.data.findIndex(s => s.code === code);
             if (idx >= 0) {
                 this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
-                found = true;
+                await this.saveCacheToDisk();
+                this.logger.log(`📝 缓存已更新(GEM): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+                return;
+            }
+            if (isGEMStock) {
+                this.cache.data.push(opp);
+                await this.saveCacheToDisk();
+                this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
+                return;
             }
         }
-        if (!found && this.mainBoardCache?.data) {
+        if (this.mainBoardCache?.data) {
             const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
             if (idx >= 0) {
                 this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
-                found = true;
+                await this.saveMainBoardCacheToDisk();
+                this.logger.log(`📝 缓存已更新(主板): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+                return;
             }
-        }
-        if (found) {
-            await this.saveCacheToDisk();
-            await this.saveMainBoardCacheToDisk();
-            this.logger.log(`📝 缓存已更新: ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
+            if (isMainBoardStock) {
+                this.mainBoardCache.data.push(opp);
+                await this.saveMainBoardCacheToDisk();
+                this.logger.log(`🆕 新加入主板缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
+                return;
+            }
         }
     }
     triggerRefresh() {
