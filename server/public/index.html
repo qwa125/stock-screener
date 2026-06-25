@@ -144,10 +144,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
   <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
 </div>
-<div class="btn-scan-wrapper" style="gap:8px;margin-top:4px">
-  <button class="btn-scan" id="klineScanBtn" onclick="handleKlineScan()" style="flex:1;background:#7c3aed">📊 全量K线分析</button>
-</div>
-<div id="klineScanProgress" style="display:none;padding:6px 16px 4px;font-size:12px;color:#7c3aed;font-weight:500;text-align:center"></div>
 
 <div class="list-header">
   <span class="col-name">名称</span>
@@ -326,76 +322,7 @@ async function handleRescanClick(){
 }
 // 全量K线分析按钮：从缓存取所有代码，前端拉K线推送到后端分析，结果自动写入缓存
 var _klineScanRunning=false
-async function handleKlineScan(){
-  var btn=$('klineScanBtn')
-  if(_klineScanRunning||!btn)return
-  _klineScanRunning=true
-  btn.disabled=true
-  btn.textContent='⏳ K线分析中...'
-  $('klineScanProgress').style.display='block'
-  $('klineScanProgress').textContent='🚀 正在获取全量股票列表...'
-  try{
-    var cr=await fetch('/api/gem/cache-all')
-    if(cr.status!==200){$('klineScanProgress').textContent='❌ 获取股票列表失败';btn.textContent='📊 全量K线分析';btn.disabled=false;_klineScanRunning=false;return}
-    var cd=await cr.json()
-    var stocks=cd.data?.stocks||[]
-    if(stocks.length===0){$('klineScanProgress').textContent='❌ 缓存为空';btn.textContent='📊 全量K线分析';btn.disabled=false;_klineScanRunning=false;return}
-    $('klineScanProgress').textContent='✅ 共 '+stocks.length+' 只，开始并行拉取K线... (6路)'
-    var done=0,fail=0,skip=0
-    var C=6,timeout=12000
-    var signals={}
-    
-    async function processStock(s,i){
-      var code=s.code||''
-      if(!code){skip++;return}
-      // 构建东方财富secid
-      var em=code[0]=='6'?'1.'+code:'0.'+code
-      var pf=code[0]=='6'?'sh':'sz'
-      var kline=null
-      // 1. 东方财富
-      try{
-        var e=await Promise.race([fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120'),new Promise(function(_,r){setTimeout(function(){r('timeout')},timeout)})])
-        if(e!=='timeout'){var d=await e.json();if(d?.data?.klines?.length>20)kline=d.data.klines.map(function(l){var x=l.split(',');return{day:x[0],open:+x[1],close:+x[2],high:+x[3],low:+x[4],volume:+x[5]}})}
-      }catch(e){}
-      // 2. 腾讯备用
-      if(!kline) try{
-        var t=await Promise.race([fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+pf+code+',day,,,120,qfq'),new Promise(function(_,r){setTimeout(function(){r('timeout')},timeout)})])
-        if(t!=='timeout'){var qd=await t.json();var q=qd?.data?.[pf+code]?.qfqday||qd?.data?.[pf+code]?.day||[];if(q.length>20)kline=q.map(function(x){return{day:x[0],open:+x[1],close:+x[2],high:+x[3],low:+x[4],volume:+x[5]}})}
-      }catch(e){}
-      if(!kline){skip++;return}
-      try{
-        var a=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,name:s.name||code,kline:kline.slice(-30)})})
-        var ad=await a.json()
-        var o=Array.isArray(ad.data)?ad.data[0]:ad.data
-        if(o?.suggestion){signals[o.suggestion]=(signals[o.suggestion]||0)+1;done++}else fail++
-      }catch(e){fail++}
-    }
-    
-    var total=stocks.length
-    for(var i=0;i<total;i+=C){
-      var batch=stocks.slice(i,i+C)
-      await Promise.all(batch.map(function(s,idx){return processStock(s,i+idx)}))
-      var pct=Math.round((i+C)/total*100)
-      if(pct>100)pct=100
-      var bar='█'.repeat(Math.floor(pct/5))+'░'.repeat(20-Math.floor(pct/5))
-      $('klineScanProgress').textContent='['+bar+'] '+pct+'% ✅'+done+' ❌'+fail+' ⏭'+skip+'  ('+(i+C)+'/'+total+')'
-    }
-    var sigStr=Object.entries(signals).filter(function(e){return e[1]>0}).map(function(e){return e[0]+'='+e[1]}).join('  ')
-    $('klineScanProgress').innerHTML='✅ K线分析完成！'+sigStr+'<br><span style="font-size:11px;color:#999">刷新页面查看最新机会列表</span>'
-    
-    // 分析完成后自动刷新机会列表
-    try{
-      var rr=await fetch(API+'/gem/opportunities')
-      var rd=await rr.json()
-      if(rd?.data?.length>0){stocks=rd.data;renderList()}
-    }catch(e){}
-  }catch(e){
-    $('klineScanProgress').textContent='❌ 分析出错: '+e.message
-  }
-  btn.textContent='📊 全量K线分析'
-  btn.disabled=false
-  _klineScanRunning=false
-}
+/* handleKlineScan 已移除 - 全量扫描已完成，后续由定时扫描 + 搜索自动更新覆盖 */
 function setStatus(s){$('status').textContent=s}
 function updateScanCount(n){var b=$('scanCountBadge');if(b){b.textContent=n>0?n+'只':'—'}}
 var selectedIdx=-1
