@@ -143,6 +143,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
   <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
+  <button class="btn-scan" id="clearCacheBtn" onclick="clearAllCache()" style="flex:0;min-width:60px;padding:8px 10px;font-size:12px;background:#dc2626">🗑️ 清缓存</button>
 </div>
 
 <div class="list-header">
@@ -296,6 +297,16 @@ async function handleScanClick(){
   }
 }
 function $(id){return document.getElementById(id)}
+// 清除手机端缓存：强制刷新机会区和搜索数据
+function clearAllCache(){
+  localStorage.removeItem('lastStocks');
+  localStorage.removeItem('stocksCache');
+  localStorage.removeItem('lastStocks1');
+  localStorage.removeItem('stocksCache1');
+  localStorage.removeItem('_lastScanCount');
+  localStorage.removeItem('stocks');
+  location.reload();
+}
 // 全市场重扫按钮：同样先检查设备权限
 async function handleRescanClick(){
   try{
