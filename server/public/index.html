@@ -355,7 +355,7 @@ async function handleRescanClick(){
     if(bar)bar.style.width='100%'
     setStatus('全市场重扫完成！已分析 '+total+' 只股票，正在刷新机会区...')
     // ④ 刷新缓存并重新加载（不改变扫描进度显示）
-    await doFullRescan()
+    try{ await doFullRescan() }catch(e2){ console.log("⚠️ doFullRescan异常(不影响缓存):",e2.message) }
     setStatus('全市场重扫完毕 | 已扫描 '+total+' 只A股')
   }catch(e){
     console.error('全市场重扫失败:',e)
