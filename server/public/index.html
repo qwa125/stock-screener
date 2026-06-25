@@ -367,6 +367,70 @@ function handleClearCache(){
 		setStatus("清空缓存失败: "+e.message)
 	})
 }
+/** 交易时段每10分钟：拉成交量前1000主板+前500创业板，推送后端分析覆盖旧缓存 */
+var _autoScanning=false
+async function autoLightScan(){
+  if(_autoScanning||loading||_rescanAll)return
+  _autoScanning=true
+  try{
+    setStatus('⏳ 轻量扫描: 获取热门股票...')
+    // ① 沪市按成交额排序，取前10页(1000只) → 过滤60主板
+    var shStocks=[]
+    for(var p=1;p<=10;p++){
+      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=amount&asc=0&node=sh_a')
+        .then(function(r){return r.text()})
+      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+      try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){
+        var m=src.match(/\[[\s\S]*\]/)
+        if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}
+      }
+    }
+    // ② 深市按成交额排序，取前10页(1000只) → 过滤00主板+30创业板
+    var szStocks=[]
+    for(var p=1;p<=10;p++){
+      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=amount&asc=0&node=sz_a')
+        .then(function(r){return r.text()})
+      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+      try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){
+        var m=src.match(/\[[\s\S]*\]/)
+        if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}
+      }
+    }
+    // ③ 筛选主板前1000 + 创业板前500
+    var mainBoard=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
+    var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
+    var gem=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
+    mainBoard=mainBoard.concat(sz00).slice(0,1000)
+    gem=gem.slice(0,500)
+    var totalList=mainBoard.concat(gem)
+    if(!totalList.length)throw new Error('未获取到热门股票')
+    setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
+    // ④ 分批抓K线推送后端（每批20只，间隔200ms）
+    var done=0,total=totalList.length
+    var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
+    if(prog)prog.style.display='block'
+    if(bar)bar.style.width='0%'
+    if(txt)txt.textContent='准备中...'
+    for(var i=0;i<total;i+=20){
+      var batch=totalList.slice(i,i+20)
+      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze(s)}))
+      done=Math.min(i+20,total)
+      if(txt)txt.textContent='轻量分析 '+done+'/'+total+' ('+Math.round(done/total*100)+'%)'
+      if(bar)bar.style.width=Math.round(done/total*100)+'%'
+      if(i+20<total)await new Promise(function(r){setTimeout(r,200)})
+    }
+    if(txt)txt.textContent='轻量扫描完成!'
+    if(bar)bar.style.width='100%'
+    // ⑤ 刷新机会区
+    await doFullRescan()
+    setStatus('✅ 轻量扫描 '+total+' 只完成，覆盖旧缓存')
+  }catch(e){
+    console.error('轻量扫描失败:',e)
+  }finally{
+    _autoScanning=false
+    setTimeout(function(){if($('rescanProgress'))$('rescanProgress').style.display='none'},3000)
+  }
+}
 // 浏览器拉K线 → 推送到后端分析（已修复字段名和格式）
 async function fetchKlineAndAnalyze(s){
   try{
@@ -1577,9 +1641,9 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动刷新：拉取最新数据覆盖旧缓存（重复股票以最新分析为准）
+// 每10分钟交易时段自动轻量扫描：拉热门股推送后端分析覆盖旧缓存
 setInterval(function(){
-  if(isTH()&&!loading){doFullRescan()}
+  if(isTH()&&!loading){autoLightScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
 },600000)
