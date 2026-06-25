@@ -2926,6 +2926,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
                 }
             }
+            this.addForecastToCache(updated);
             await this.saveSellStateCache();
             this.logger.log(`重新评估完成：${updated.length} 只, 信号: ${updated.map(s => s.suggestion).join(',')}`);
         }

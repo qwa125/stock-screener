@@ -3444,12 +3444,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       this.cache = { data: updated, timestamp: now };
       try { require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8'); } catch {}
 
-      // ─── 为结果添加简化趋势预测 ───
+      // ─── 为结果添加简化趋势预测 + 未来1-2日预测 ───
       for (const stock of updated) {
         if (!stock.trendPrediction) {
           stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
         }
       }
+      this.addForecastToCache(updated);
 
       // 持久化卖出锁定状态
       await this.saveSellStateCache();
