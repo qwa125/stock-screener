@@ -356,31 +356,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 30);
                 continue;
             }
-            const baseScore = s.score ?? 50;
-            if (baseScore >= 88) {
-                s.suggestion = '重仓买入';
-            }
-            else if (baseScore >= 78) {
-                s.suggestion = '买入';
-            }
-            else if (baseScore >= 68) {
-                s.suggestion = '轻仓买入';
-            }
-            else if (baseScore >= 55) {
+            if (!s.suggestion) {
                 s.suggestion = '持有';
-            }
-            else if (baseScore >= 45) {
-                s.suggestion = '减仓';
-            }
-            else if (baseScore >= 35) {
-                s.suggestion = '不要介入';
-            }
-            else {
-                s.suggestion = '不要介入';
             }
             if (s.entryTiming < 50 && ['重仓买入', '买入'].includes(s.suggestion)) {
                 s.suggestion = '轻仓买入';
-                s.score = Math.min(baseScore, 75);
             }
         }
     }

@@ -475,28 +475,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 根据评分重新计算建议（recalibrate 0-100 to 0-100 thresholds）
-      const baseScore = s.score ?? 50;
-      if (baseScore >= 88) {
-        s.suggestion = '重仓买入';
-      } else if (baseScore >= 78) {
-        s.suggestion = '买入';
-      } else if (baseScore >= 68) {
-        s.suggestion = '轻仓买入';
-      } else if (baseScore >= 55) {
+      // 没有触发卖出规则的股票，默认保持原信号或'持有'
+      if (!s.suggestion) {
         s.suggestion = '持有';
-      } else if (baseScore >= 45) {
-        s.suggestion = '减仓';
-      } else if (baseScore >= 35) {
-        s.suggestion = '不要介入';
-      } else {
-        s.suggestion = '不要介入';
       }
 
-      // 入场时机一般但评分高 → 降级
+      // 入场时机一般且有强买入信号 → 降级为轻仓买入
       if (s.entryTiming < 50 && ['重仓买入','买入'].includes(s.suggestion)) {
         s.suggestion = '轻仓买入';
-        s.score = Math.min(baseScore, 75);
       }
     }
   }
