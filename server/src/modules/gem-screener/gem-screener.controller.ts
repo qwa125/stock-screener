@@ -249,6 +249,20 @@ export class GemScreenerController {
       }
       if (s.signalCombination === undefined) s.signalCombination = '';
       if (s.jiGouActiveScore === undefined) s.jiGouActiveScore = 0;
+      // 强制确保 forecast1_2Day 存在，兼容旧缓存/部署包残留数据
+      if (!s.forecast1_2Day || typeof s.forecast1_2Day === 'string') {
+        try {
+          s.forecast1_2Day = GemScreenerService.computeTechnicalForecast({
+            entryTiming: s.entryTiming ?? 0,
+            isGoldenCross: s.isGoldenCross ?? false,
+            ma5: s.ma5 ?? 0,
+            ma10: s.ma10 ?? 0,
+            pricePosition: s.pricePosition ?? 50,
+            mainForceInflow: s.mainForceInflow ?? 0,
+            jiGouActiveScore: s.jiGouActiveScore ?? 0,
+          });
+        } catch { /* ignore */ }
+      }
     }
     return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
   }

@@ -213,6 +213,20 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 s.signalCombination = '';
             if (s.jiGouActiveScore === undefined)
                 s.jiGouActiveScore = 0;
+            if (!s.forecast1_2Day || typeof s.forecast1_2Day === 'string') {
+                try {
+                    s.forecast1_2Day = gem_screener_service_1.GemScreenerService.computeTechnicalForecast({
+                        entryTiming: s.entryTiming ?? 0,
+                        isGoldenCross: s.isGoldenCross ?? false,
+                        ma5: s.ma5 ?? 0,
+                        ma10: s.ma10 ?? 0,
+                        pricePosition: s.pricePosition ?? 50,
+                        mainForceInflow: s.mainForceInflow ?? 0,
+                        jiGouActiveScore: s.jiGouActiveScore ?? 0,
+                    });
+                }
+                catch { }
+            }
         }
         return { code: 200, msg: 'success', data: { opportunities: sorted, timestamp: Date.now() } };
     }
