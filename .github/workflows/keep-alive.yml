@@ -1,9 +1,11 @@
-name: 🔄 Keep Render Awake
+name: 🔄 A股交易日保活 (9:00-15:00 每5分钟)
 
 on:
   schedule:
-    # 每5分钟ping Render + 检查自动部署
-    - cron: '*/5 1-7 * * 1-5'
+    # 交易日(1-5) 北京时间9:00-14:55 (UTC 1:00-6:55) 每5分钟ping一次
+    - cron: '*/5 1-6 * * 1-5'
+    # 交易日 15:00 (UTC 7:00) 最后一次ping收盘保活
+    - cron: '0 7 * * 1-5'
   workflow_dispatch:
 
 jobs:

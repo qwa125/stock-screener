@@ -1,12 +1,10 @@
-name: 🔄 A股交易定时器
+name: 🔄 交易日9:00准时激活
 
 on:
   schedule:
-    # 每10分钟唤醒，确保Render服务不睡眠 + 激活前端扫描
-    - cron: '*/10 * * * *'
-    # 北京时间9:00 (UTC 01:00) 周一至周五准点唤醒市场开盘
+    # 交易日(1-5) 北京时间9:00 (UTC 01:00) 准时唤醒开盘
     - cron: '0 1 * * 1-5'
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   wake-up:
