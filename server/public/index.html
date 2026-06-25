@@ -1045,6 +1045,8 @@ async function doFullRescan(){
     }
   }catch(e){}
   // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
+  // ─── 启动2秒实时价格刷新 ───
+  startPriceRefresh(stocks)
 }
 
 // ---------- 搜索缓存（东方财富全量） ----------
@@ -1398,11 +1400,13 @@ setInterval(function(){
   fetchMarketState() // 每分钟刷新市场状态
 },60000)
 
-// 仅更新冻结横幅，不自动渲染股票或扫描（用户必须点击扫描按钮触发）
+// 首次加载 + 自动扫描（延迟2秒等初始化完成后执行）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   fetchMarketState() // 首次加载市场状态
+  // 自动拉取机会列表并启动2秒刷新
+  if(isTH()&&!loading){doScan()}
 },3000)
 
 // 个股股价每2秒刷新
