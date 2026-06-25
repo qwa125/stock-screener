@@ -1292,7 +1292,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (macd.isGoldenCross && priceIncrease > 25)
             totalScore = Math.min(totalScore, 3);
         let buySignal = '';
-        const hasMainRise = trendState >= 2 || (sanJiao.bestBuyPoints || []).some(p => p.includes('主升'));
+        const hasMainRise = trendState >= 2
+            || (sanJiao.bestBuyPoints || []).some(p => p.includes('主升'))
+            || !!bx.jiaCang;
         const hasZhenDang = (sanJiao.bestBuyPoints || []).includes('震荡买点');
         const hengPo = !!bx.baiXiaoBuy2;
         const hasJiGouActive = bx.jiGouHuoYueDu >= 12;
@@ -1301,6 +1303,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const ma10NotDown = ma10 >= (len >= 11 ? closeArr.slice(len - 11, len - 1).reduce((a, b) => a + b, 0) / 10 : ma10);
         const hasStrongSell = !!(bx.gaoKaiDiZouQingCang || bx.baoLiangFuGaiQingCang || bx.po5RiXian || bx.yinDiePoWei);
         const hasChuHuo = !!(sanJiao.zhuLiChuHuo || lingXing.zhuShengZhongWeiChuHuo || lingXing.zhenShiChuHuo);
+        const qiangShiHuiCaiLast3 = [len - 2, len - 3, len - 4].some(i => i >= 0 && !!bx.qiangShiHuiCai?.[i]);
+        const hengPoLast3 = [len - 2, len - 3, len - 4].some(i => i >= 0 && !!bx.baiXiaoBuy2?.[i]);
         const signals = {
             baiXiaoStart: !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2),
             qiangShiHuiCai: !!bx.qiangShiHuiCai,
@@ -1314,6 +1318,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             firstBreakMA5, ma5NotDown, ma10NotDown,
             lingXingBuy: !!lingXing.buySignalDiamond,
             xiPanFanZhuan: !!lingXing.xiPanFanZhuanBuy,
+            qiangShiHuiCaiLast3, hengPoLast3,
         };
         const signalParts = [];
         if (signals.baiXiaoStart)
@@ -1368,8 +1373,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return '持有';
         return '不要介入';
     }
-    determineBySignalRule(signals, bx, result) {
-        const { baiXiaoStart, qiangShiHuiCai, jiaCang, diBuBuy, zhuLiShiPan, gaoWeiHuiDiao, hengPo, hasMainRise, hasZhenDang, baiXiaoDays, baiXiao, baiBu, jiGouActive, firstBreakMA5, ma5NotDown, ma10NotDown, lingXingBuy, xiPanFanZhuan, } = signals;
+    determineBySignalRule(signals, bx, result, bhResult) {
+        const { baiXiaoStart, qiangShiHuiCai, jiaCang, diBuBuy, zhuLiShiPan, gaoWeiHuiDiao, hengPo, hasMainRise, hasZhenDang, baiXiaoDays, baiXiao, baiBu, jiGouActive, firstBreakMA5, ma5NotDown, ma10NotDown, lingXingBuy, xiPanFanZhuan, qiangShiHuiCaiLast3, hengPoLast3, } = signals;
         const trendState = result.trendState;
         const priceIncrease = result.priceIncrease;
         const pricePosition = result.pricePosition;
@@ -1378,69 +1383,81 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const ma60 = result.ma60;
         const hasStrongSell = result.hasStrongSell;
         const hasChuHuo = result.hasChuHuo;
-        const prevClose0 = closeArr?.[closeArr.length - 2] ?? 0;
-        const prevClose1 = closeArr?.[closeArr.length - 3] ?? 0;
-        const prevDayGain = prevClose1 > 0 ? (prevClose0 - prevClose1) / prevClose1 * 100 : 0;
+        const sj = result.sanJiao || {};
+        const lx = result.lingXing || {};
         if (baiBu && hasStrongSell)
             return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
         if (baiBu && hasChuHuo)
             return { suggestion: '卖出', signalComb: '白布+出货' };
-        if (!baiBu && hasChuHuo && baiXiaoStart)
-            return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
-        const sj = result.sanJiao || {};
-        const lx = result.lingXing || {};
-        if (baiBu && (sj.shortSell || lx.shortSell)) {
+        if (baiBu && (sj.shortSell || lx.shortSell))
             return { suggestion: '卖出', signalComb: '白布+紧急清仓' };
-        }
-        if (baiBu && (sj.strongSell || lx.strongSell)) {
+        if (baiBu && (sj.strongSell || lx.strongSell))
             return { suggestion: '卖出', signalComb: '白布+空' };
-        }
+        if (!baiBu && hasChuHuo && (baiXiaoStart || baiXiao))
+            return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
         if (priceIncrease > 60)
             return null;
-        const cnb = [];
+        const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
+        if (baiBu) {
+            if (jiGouActiveBreak)
+                return { suggestion: '轻仓买入', signalComb: '白布+机构活跃+突破MA5' };
+            if (diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang) {
+                const parts = ['白布'];
+                if (diBuBuy)
+                    parts.push('主力建仓');
+                if (zhuLiShiPan)
+                    parts.push('主力试盘');
+                if (gaoWeiHuiDiao)
+                    parts.push('企稳');
+                if (jiaCang)
+                    parts.push('★加仓');
+                return { suggestion: '轻仓买入', signalComb: parts.join('+') };
+            }
+            return null;
+        }
         if (baiXiao) {
             if (hasChuHuo)
                 return { suggestion: '减仓', signalComb: '白消+出货' };
-            const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
             if (baiXiaoDays <= 6) {
-                if (baiXiaoDays <= 3 && hasMainRise)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+主升(间隔<3天)' };
-                if (baiXiaoDays <= 3 && qiangShiHuiCai)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩(间隔<3天)' };
-                if (baiXiaoDays <= 3 && hasZhenDang)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+震荡买点(间隔<3天)' };
-                if (qiangShiHuiCai && hasMainRise)
-                    return { suggestion: '重仓买入', signalComb: '强势回踩+主升' };
-                if (baiXiaoStart)
-                    return { suggestion: '重仓买入', signalComb: '白消启动' };
-                if (qiangShiHuiCai)
-                    return { suggestion: '重仓买入', signalComb: '强势回踩' };
+                if (qiangShiHuiCaiLast3 && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩→主升' };
+                if ((baiXiaoStart || baiXiaoDays <= 4) && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
+                if ((baiXiaoStart || baiXiaoDays <= 4) && qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
                 if (qiangShiHuiCai && jiaCang)
                     return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
-                if (baiXiaoDays <= 3 && jiaCang)
-                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓(间隔<3天)' };
+                if (baiXiaoStart && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
                 if (hasMainRise)
                     return { suggestion: '重仓买入', signalComb: '主升' };
+                if (qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩' };
+                if (baiXiaoStart)
+                    return { suggestion: '重仓买入', signalComb: '白消启动' };
                 if (jiGouActiveBreak)
                     return { suggestion: '重仓买入', signalComb: '机构活跃+突破MA5' };
                 if (baiXiaoDays >= 4)
-                    return { suggestion: '重仓买入', signalComb: `白消第${baiXiaoDays}天` };
+                    return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天(待观察)` };
                 return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
             }
-            if (baiXiaoDays >= 7) {
+            if (baiXiaoDays >= 6) {
                 if (hengPo && hasMainRise)
                     return { suggestion: '买入', signalComb: '横盘突破+主升' };
+                if (hengPo && qiangShiHuiCai)
+                    return { suggestion: '买入', signalComb: '横盘突破+强势回踩' };
+                if (hengPoLast3 && hasMainRise && !hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破→主升' };
+                if (hengPoLast3 && qiangShiHuiCai && !hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破→强势回踩' };
+                if (qiangShiHuiCaiLast3 && hasMainRise)
+                    return { suggestion: '买入', signalComb: '强势回踩→主升' };
                 if (hengPo)
                     return { suggestion: '买入', signalComb: '横盘突破' };
-                if (qiangShiHuiCai && hasMainRise)
-                    return { suggestion: '买入', signalComb: '强势回踩+主升' };
                 if (jiGouActiveBreak)
                     return { suggestion: '买入', signalComb: '机构活跃+突破MA5' };
                 return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
             }
-        }
-        if (baiBu) {
-            return null;
         }
         return null;
     }
@@ -1530,16 +1547,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const macdGoldenCross = signals?.macdGoldenCross || isGoldenCross;
         const zhuLiChuHuo = signals?.zhuLiChuHuo || false;
         const uptrend = trendState >= 2;
-        if (isSellSignal || (isBuySignal && baiBu)) {
-            return { direction: '观望', confidence: '--', detail: '信号偏空,暂不参与' };
-        }
-        if (score >= 12 && isBuySignal && jiGouActive && macdGoldenCross && uptrend && pricePosition < 70 && volumeRatio > 0.6) {
+        if (score >= 12 && jiGouActive && macdGoldenCross && uptrend && pricePosition < 70 && volumeRatio > 0.6) {
             return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃+趋势向上+金叉确认,未来1-2日上涨概率高' };
         }
-        if (score >= 10 && isBuySignal && macdGoldenCross && uptrend && pricePosition < 75 && volumeRatio > 0.5) {
+        if (score >= 10 && macdGoldenCross && uptrend && pricePosition < 75 && volumeRatio > 0.5) {
             return { direction: '看涨', confidence: '高', detail: '评分中上+趋势向上+金叉确认,未来1-2日偏多' };
         }
-        if (score >= 12 && isBuySignal) {
+        if (score >= 12) {
             return { direction: '看涨', confidence: '中', detail: '评分高但趋势/位置一般,需确认再介入' };
         }
         if (score >= 9 && isBuySignal && pricePosition < 80) {
