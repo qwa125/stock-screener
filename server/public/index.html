@@ -292,38 +292,32 @@ async function handleRescanClick(){
       showBlocked(true);return
     }
     hideBlocked()
-    // ② 浏览器直接请求新浪获取全部A股（翻页拉取全量）
-    setStatus('正在获取全部A股列表...')
-    txt.textContent='获取股票列表...'
-    async function fetchAllSinaPages(node){
+    // ② 按涨跌幅排序取热门股（主板前1000 + 创业板前500）
+    setStatus('正在获取热门A股...')
+    txt.textContent='获取涨跌幅排行中...'
+    async function fetchNodePages(node,pages){
       var all=[]
-      var promises=[]
-      for(var p=1;p<=30;p++){
-        promises.push(
-          fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node)
-            .then(function(r){return r.text()})
-            .then(function(src){
-              src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-              try{
-                var d=JSON.parse(src)
-                if(d&&d.length)all=all.concat(d)
-              }catch(e){
-                var m=src.match(/\[[\s\S]*\]/)
-                if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
-              }
-            })
-        )
+      for(var p=1;p<=pages;p++){
+        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node)
+          .then(function(r){return r.text()})
+        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+        try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
+          var m=src.match(/\[[\s\S]*\]/)
+          if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+        }
       }
-      await Promise.all(promises)
       return all
     }
-    var [listSH,listSZ]=await Promise.all([fetchAllSinaPages('sh_a'),fetchAllSinaPages('sz_a')])
-    var list=listSH.concat(listSZ)
-    if(!list||!list.length)throw new Error('未获取到股票列表')
-    txt.textContent='共获取 '+list.length+' 只股票'
-    // 使用 code 字段（无前缀）过滤：60=沪主板, 00=深主板, 30=创业板（排除688科创板）
-	    var stocks=list.filter(function(s){return s.code&&(s.code.startsWith('60')||s.code.startsWith('00')||s.code.startsWith('30'))})
-    txt.textContent='分析 '+stocks.length+' 只A股中 (0%)...'
+    var [shList,szList]=await Promise.all([fetchNodePages('sh_a',15),fetchNodePages('sz_a',20)])
+    // 主板：沪60 + 深00（上限1000）
+    var mainBoard=shList.filter(function(s){return s.code&&s.code.startsWith('60')})
+    var sz00=szList.filter(function(s){return s.code&&s.code.startsWith('00')})
+    mainBoard=mainBoard.concat(sz00).slice(0,1000)
+    // 创业板：深30（上限500）
+    var gem=szList.filter(function(s){return s.code&&s.code.startsWith('30')}).slice(0,500)
+    var stocks=mainBoard.concat(gem)
+    if(!stocks.length)throw new Error('未获取到热门股票')
+    txt.textContent='分析 '+stocks.length+' 只热门A股 (0%)...'
     if(bar)bar.style.width='0%'
     var done=0,total=stocks.length
     // ③ 分批并行抓取K线并推送到后端，每批20只，批次间增加间隔避免限流
@@ -339,12 +333,12 @@ async function handleRescanClick(){
       // 每批后等待200ms，避免东方财富限流
       if(i+batchSize<total)await new Promise(function(r){setTimeout(r,200)})
     }
-    txt.textContent='全市场扫描完成! '+'已获取 '+total+' 只A股并推送后端分析'
+    txt.textContent='全市场扫描完成! '+'已获取 '+total+' 只热门A股并推送后端分析'
     if(bar)bar.style.width='100%'
-    setStatus('全市场重扫完成！已分析 '+total+' 只股票，正在刷新机会区...')
+    setStatus('全市场重扫完成！已分析 '+total+' 只热门股票，正在刷新机会区...')
     // ④ 刷新缓存并重新加载（不改变扫描进度显示）
     try{ await doFullRescan() }catch(e2){ console.log("⚠️ doFullRescan异常(不影响缓存):",e2.message) }
-    setStatus('全市场重扫完毕 | 已扫描 '+total+' 只A股')
+    setStatus('全市场重扫完毕 | 已扫描 '+total+' 只热门A股')
   }catch(e){
     console.error('全市场重扫失败:',e)
     setStatus('全市场重扫失败: '+e.message)
@@ -373,11 +367,11 @@ async function autoLightScan(){
   if(_autoScanning||loading||_rescanAll)return
   _autoScanning=true
   try{
-    setStatus('⏳ 轻量扫描: 获取热门股票...')
-    // ① 沪市按成交额排序，取前10页(1000只) → 过滤60主板
+    setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
+    // ① 沪市按涨跌幅排序，取前10页(1000只) → 过滤60主板
     var shStocks=[]
     for(var p=1;p<=10;p++){
-      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=amount&asc=0&node=sh_a')
+      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a')
         .then(function(r){return r.text()})
       src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
       try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){
@@ -385,10 +379,10 @@ async function autoLightScan(){
         if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}
       }
     }
-    // ② 深市按成交额排序，取前10页(1000只) → 过滤00主板+30创业板
+    // ② 深市按涨跌幅排序，取前10页(1000只) → 过滤00主板+30创业板
     var szStocks=[]
     for(var p=1;p<=10;p++){
-      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=amount&asc=0&node=sz_a')
+      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a')
         .then(function(r){return r.text()})
       src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
       try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){
