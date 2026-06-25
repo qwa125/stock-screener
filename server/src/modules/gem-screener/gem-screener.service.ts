@@ -3272,7 +3272,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           if (py.includes(kw)) return true;
         } catch (_) {}
         return false;
-      }).slice(0, 5);
+      }).slice(0, 15);
       if (matched.length === 0) return results;
       // 应用信号重算，与机会列表保持一致
       this.recalculateSuggestions(matched);

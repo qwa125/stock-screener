@@ -2752,7 +2752,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
                 catch (_) { }
                 return false;
-            }).slice(0, 5);
+            }).slice(0, 15);
             if (matched.length === 0)
                 return results;
             this.recalculateSuggestions(matched);
