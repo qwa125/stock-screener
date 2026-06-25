@@ -97,28 +97,12 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日方向待确认，建议持有',
       };
     }
-    // trend === 0
-    if (strongBuy) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '低位末端+强买入信号',
-        prediction: '未来1-2日有望止跌反弹，建议轻仓买入',
-      };
-    }
-    if (hasBuySignal) {
-      return {
-        action: '观望',
-        color: 'bg-gray-400',
-        reason: '低位下降趋势，有买入信号但未企稳',
-        prediction: '未来1-2日预计继续探底，建议观望',
-      };
-    }
+    // trend === 0 — 下降趋势不产生任何买入信号
     return {
-      action: '观望',
-      color: 'bg-gray-400',
-      reason: '低位下降趋势，尚未企稳',
-      prediction: '未来1-2日预计继续探底，建议观望',
+      action: '不要介入',
+      color: 'bg-gray-500',
+      reason: '低位+下降趋势，均线空头压制',
+      prediction: '未来1-2日预计继续探底，建议不要介入',
     };
   }
 
@@ -286,10 +270,10 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
   if (trend === 0) {
     if (strongSell) {
       return {
-        action: '清仓',
+        action: '卖出',
         color: 'bg-red-600',
         reason: '高位下降+卖出信号，清仓离场',
-        prediction: '未来1-2日预计继续回落，建议清仓',
+        prediction: '未来1-2日预计继续回落，建议卖出',
       };
     }
     return {

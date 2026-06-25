@@ -2461,7 +2461,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const suggestion = result.action;
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
-        const NEGATIVE = ['减仓', '卖出', '不要介入'];
+        const NEGATIVE = ['减仓', '不要介入'];
+        if (suggestion === '卖出') {
+            this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
+        }
         if (!keepAll && NEGATIVE.includes(suggestion))
             return null;
         const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
@@ -2556,6 +2560,17 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const volRatio = avgVol5 / (avgVol20 || 1);
         const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
         const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
+        const sellEntry = this.sellStateCache.get(code);
+        if (sellEntry) {
+            const hasBuySignal = ['重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
+            if (hasBuySignal) {
+                this.sellStateCache.delete(code);
+                this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
+            }
+            else {
+                finalSuggestion = '不要介入';
+            }
+        }
         return {
             code, name: name ?? '',
             currentPrice: price,
