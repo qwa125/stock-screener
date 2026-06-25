@@ -1,54 +1,45 @@
-# Dependencies
-node_modules/
-.pnpm-store/
 
-# Production
-dist/
-build/
-dist-*/
-
-# But allow deploy build artifacts (pre-built for Docker)
 !dist-web/
 !server/dist/
-
-# Misc
-.DS_Store
-.env
 # .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
+# But allow deploy build artifacts (pre-built for Docker)
+# Dependencies
+# Editor directories and files
+# Key
+# Misc
+# OS X
+# Preview files
+# Production
 # Runtime settings files (auto-generated)
+# Taro specific
+# key/
+*.njsproj
+*.ntvs*
 *.settings.json
+*.sln
+*.suo
+*.sw?
+.DS_Store
+.cozeproj/reduction
+.env
+.env.development.local
+.env.production.local
+.env.test.local
+.idea/
+.pnpm-store/
+.preview
+.taro/
+.vscode/
+build/
+deploy-package.zip
+deploy/
+dist-*/
+dist-web
+dist/
+node-compile-cache/
+node_modules/
 npm-debug.log*
+pnpm-debug.log*
+public/deploy-package.zip
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-
-# Editor directories and files
-.idea/
-.vscode/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Taro specific
-.taro/
-
-# OS X
-.DS_Store
-
-# Key
-# key/
-
-# Preview files
-.preview
-
-.cozeproj/reduction
-node-compile-cache/
-deploy-package.zip
-public/deploy-package.zip
-deploy/
