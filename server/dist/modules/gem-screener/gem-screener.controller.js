@@ -578,6 +578,15 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message };
         }
     }
+    async backtestForecast() {
+        try {
+            const result = await this.gemScreener.runForecastBacktest();
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            return { code: 500, msg: e.message };
+        }
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -828,6 +837,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "backtest", null);
+__decorate([
+    (0, common_1.Get)('backtest-forecast'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "backtestForecast", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

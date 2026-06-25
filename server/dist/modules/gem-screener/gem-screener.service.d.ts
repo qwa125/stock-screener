@@ -254,4 +254,5 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         klines: any[];
     }[]): Promise<any[]>;
     runBacktest(): Promise<any>;
+    runForecastBacktest(): Promise<any>;
 }

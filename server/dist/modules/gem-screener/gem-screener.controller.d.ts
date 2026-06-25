@@ -303,4 +303,13 @@ export declare class GemScreenerController {
         msg: any;
         data?: undefined;
     }>;
+    backtestForecast(): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    } | {
+        code: number;
+        msg: any;
+        data?: undefined;
+    }>;
 }

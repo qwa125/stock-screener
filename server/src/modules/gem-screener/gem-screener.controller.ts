@@ -664,4 +664,15 @@ export class GemScreenerController {
       return { code: 500, msg: e.message };
     }
   }
+
+  @Get('backtest-forecast')
+  @SkipAccessLimit()
+  async backtestForecast() {
+    try {
+      const result = await this.gemScreener.runForecastBacktest();
+      return { code: 200, msg: 'success', data: result };
+    } catch (e) {
+      return { code: 500, msg: e.message };
+    }
+  }
 }

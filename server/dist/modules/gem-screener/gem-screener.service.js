@@ -290,17 +290,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
                 continue;
             }
-            const entryGood = (s.entryTiming ?? 0) >= 50;
-            const gc = s.isGoldenCross === true;
-            const posOk = (s.pricePosition ?? 50) < 70;
-            if (sig && entryGood && gc && posOk) {
-                s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: 'MACD金叉+介入时机佳+位置适中' };
+            const et = s.entryTiming ?? 0;
+            const posOk = (s.pricePosition ?? 50) < 75;
+            if (et >= 65 && posOk) {
+                s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: '介入时机极佳+位置适中' };
             }
-            else if (sig && gc) {
-                s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: 'MACD金叉确认' };
+            else if (et >= 55) {
+                s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: '介入时机良好' };
             }
-            else if (sig && entryGood) {
-                s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机良好' };
+            else if (et >= 45) {
+                s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机尚可' };
             }
             else {
                 s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '信号不明确' };
@@ -3184,6 +3183,118 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             method: "\u6b65\u8fdb: \u4ece120\u65e5\u7ebf\u5f00\u59cb\uff0c\u6bcf3\u65e5\u4e3a1\u4e2a\u6d4b\u8bd5\u70b9\uff0c\u5f53\u524d\u8bc4\u5206 VS \u672a\u67651-2\u65e5\u771f\u5b9e\u6da8\u8dcc",
             groups: resultGroups,
             bestGroup: resultGroups[0],
+        };
+    }
+    async runForecastBacktest() {
+        const allCodes = [];
+        try {
+            for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                    const stocks = raw?.data || raw?.stocks || raw;
+                    if (Array.isArray(stocks))
+                        stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
+                            allCodes.push(s.code); });
+                }
+            }
+        }
+        catch { }
+        const sample = allCodes.slice(0, 25);
+        this.logger.log(`=== 评分预测过滤器回测: 抽取 ${sample.length} 只股票 ===`);
+        const records = [];
+        let processed = 0, totalDays = 0;
+        for (const code of sample) {
+            try {
+                const kline = await this.dataFetcher.getKLineData(code);
+                if (!kline || kline.length < 150)
+                    continue;
+                processed++;
+                for (let day = 100; day < kline.length - 2; day += 5) {
+                    const slice = kline.slice(0, day + 1);
+                    const now = kline[day];
+                    const next1 = kline[day + 1];
+                    const next2 = kline[day + 2];
+                    if (!now?.close || !next1?.close || !next2?.close)
+                        continue;
+                    const result = this.calcMultiScore({ code, name: '' }, slice);
+                    if (!result)
+                        continue;
+                    const ret1d = (next1.close - now.close) / now.close * 100;
+                    const ret2d = (next2.close - now.close) / now.close * 100;
+                    records.push({
+                        score: result.score,
+                        ret1d,
+                        ret2d,
+                        isGoldenCross: result.isGoldenCross || false,
+                        trendState: result.trendState || 0,
+                        pricePosition: result.pricePosition || 50,
+                        volumeRatio: result.volumeRatio || 0.5,
+                        jiGouActive: (result.signals?.jiGouActive) || false,
+                        baiXiaoDays: result.signals?.baiXiaoDays || 0,
+                        baiBu: result.signals?.baiBu || false,
+                    });
+                    totalDays++;
+                }
+            }
+            catch { }
+        }
+        const configs = [
+            { label: 'A.基准: score>=12', filter: r => r.score >= 12 },
+            { label: 'B.基准: score>=10', filter: r => r.score >= 10 },
+            { label: 'C.基准: score>=8', filter: r => r.score >= 8 },
+            { label: 'D.评分>=12+金叉', filter: r => r.score >= 12 && r.isGoldenCross },
+            { label: 'E.评分>=12+趋势>=2', filter: r => r.score >= 12 && r.trendState >= 2 },
+            { label: 'F.评分>=12+位置<70', filter: r => r.score >= 12 && r.pricePosition < 70 },
+            { label: 'G.评分>=12+金叉+趋势>=2', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 },
+            { label: 'H.评分>=12+金叉+趋势>=2+位置<70', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 },
+            { label: 'I.评分>=12+金叉+趋势>=2+位置<70+量比>0.6', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 && r.volumeRatio > 0.6 },
+            { label: 'J.评分>=10+金叉+趋势>=2+位置<80', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 80 },
+            { label: 'K.评分>=10+金叉+趋势>=1+位置<80+量比>0.6', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 1 && r.pricePosition < 80 && r.volumeRatio > 0.6 },
+            { label: 'L.评分>=8+金叉+趋势>=2+位置<75', filter: r => r.score >= 8 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 75 },
+            { label: 'M.评分>=14', filter: r => r.score >= 14 },
+            { label: 'N.评分>=12+金叉+机构活跃', filter: r => r.score >= 12 && r.isGoldenCross && r.jiGouActive },
+        ];
+        const results = [];
+        for (const cfg of configs) {
+            const matched = records.filter(cfg.filter);
+            const n = matched.length;
+            if (n < 3) {
+                results.push({ config: cfg.label, count: n, avgRet1D: 'N/A(样本不足)', winRate1D: 'N/A', avgRet2D: 'N/A', winRate2D: 'N/A', score: 0 });
+                continue;
+            }
+            const avg1d = matched.reduce((s, r) => s + r.ret1d, 0) / n;
+            const avg2d = matched.reduce((s, r) => s + r.ret2d, 0) / n;
+            const w1 = matched.filter(r => r.ret1d > 0).length / n * 100;
+            const w2 = matched.filter(r => r.ret2d > 0).length / n * 100;
+            const fmtRet = (v) => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+            results.push({
+                config: cfg.label,
+                count: n,
+                pct: (n / records.length * 100).toFixed(1) + '%',
+                avgRet1D: fmtRet(avg1d),
+                winRate1D: w1.toFixed(1) + '%',
+                avgRet2D: fmtRet(avg2d),
+                winRate2D: w2.toFixed(1) + '%',
+                _score: avg1d * 0.6 + avg2d * 0.3 + (w1 / 100) * 0.1,
+            });
+        }
+        results.sort((a, b) => b._score - a._score);
+        const midRecords = records.filter(r => r.score >= 6 && r.score <= 8 && r.isGoldenCross);
+        const midAvg1d = midRecords.length > 0 ? midRecords.reduce((s, r) => s + r.ret1d, 0) / midRecords.length : 0;
+        const midWin1 = midRecords.length > 0 ? midRecords.filter(r => r.ret1d > 0).length / midRecords.length * 100 : 0;
+        this.logger.log(`✅ 评分预测回测完成: ${processed}/${sample.length}只有效, ${totalDays}个测试点`);
+        return {
+            summary: `评分预测过滤器回测: ${processed}/${sample.length}只股票, ${totalDays}个测试点`,
+            records: `每个记录含 score/ret1d/ret2d/isGoldenCross/trendState/pricePosition/volumeRatio`,
+            totalRecords: records.length,
+            combinations: results,
+            bestConfig: results[0] || { config: '无足够数据' },
+            midRangeInfo: {
+                desc: '评分6-8+金叉(高胜率稳定区间)',
+                count: midRecords.length,
+                avgRet1D: midRecords.length > 0 ? (midAvg1d > 0 ? '+' : '') + midAvg1d.toFixed(2) + '%' : 'N/A',
+                winRate1D: midRecords.length > 0 ? midWin1.toFixed(1) + '%' : 'N/A',
+            },
         };
     }
 };
