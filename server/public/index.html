@@ -1067,8 +1067,8 @@ async function doFullRescan(){
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
             // ─── 信号合并规则 ───
-            // Step ②: 后端建议是持有/减仓/卖出/不要介入 → 保持不动，不受chg影响
-            var BACKEND_SELL=['持有','减仓','卖出','不要介入']
+            // Step ②: 后端建议是观望/持有/减仓/卖出/不要介入 → 保持不动，不受chg影响
+            var BACKEND_SELL=['观望','持有','减仓','卖出','不要介入']
             var backendSug=newStocks[si3].suggestion
             if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
@@ -1116,6 +1116,34 @@ async function doFullRescan(){
       continue
     }
     
+    // ─── 新股二次安全校验：查后端缓存是否已有该股（可能seen匹配失败但缓存中确有数据）───
+    var _cacheInNewStk=null;
+    for(var _bb=0;_bb<newStocks.length;_bb++){
+      if(newStocks[_bb].code===code){_cacheInNewStk=newStocks[_bb];break}
+    }
+    if(_cacheInNewStk){
+      // 缓存已有该股且建议是持有/减仓/卖出/不要介入/观望 → 禁止用涨幅升级
+      if(['持有','减仓','卖出','不要介入','观望'].indexOf(_cacheInNewStk.suggestion)>=0){
+        _cacheInNewStk.currentPrice=price;
+        _cacheInNewStk.changePercent=chg;
+        seenInSina[code]=1;
+        continue;  // 跳过新股路径，保持缓存原有建议
+      }
+      // 缓存是买入信号但没匹配到seen → 走升级逻辑
+      // 更新实时数据后继续往下走（不添加为新股）
+      _cacheInNewStk.currentPrice=price;
+      _cacheInNewStk.changePercent=chg;
+      _cacheInNewStk.score=liveScore;
+      _cacheInNewStk.entryTiming=liveEntryTiming;
+      var _bks=_cacheInNewStk.suggestion;
+      var _LIVE_PRI=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入'];
+      if(_LIVE_PRI.indexOf(liveSuggestion) < _LIVE_PRI.indexOf(_bks)){
+        _cacheInNewStk.suggestion=liveSuggestion;
+        console.log('🔍 降级修复：缓存股 '+code+' 未匹配seen，但允许从 '+_bks+' 升级到 '+liveSuggestion);
+      }
+      seenInSina[code]=1;
+      continue;
+    }
     // 新增个股数量控制（非缓存的分析新面孔）
     if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
     else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
@@ -1639,7 +1667,7 @@ async function doSearch(){
         // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
         var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
         var liveSug=null
-        var BACKEND_SELL=['持有','减仓','卖出','不要介入']
+        var BACKEND_SELL=['观望','持有','减仓','卖出','不要介入']
         if(stockChgP>=9)liveSug='重仓买入'
         else if(stockChgP>=6)liveSug='买入'
         else if(stockChgP>=3)liveSug='轻仓买入'
@@ -1662,7 +1690,7 @@ async function doSearch(){
           o2.changePercent=o2.changePercent||stockChgP
           // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
           var liveSug2=null
-          var BACKEND_SELL2=['持有','减仓','卖出','不要介入']
+          var BACKEND_SELL2=['观望','持有','减仓','卖出','不要介入']
           if(stockChgP>=9)liveSug2='重仓买入'
           else if(stockChgP>=6)liveSug2='买入'
           else if(stockChgP>=3)liveSug2='轻仓买入'
