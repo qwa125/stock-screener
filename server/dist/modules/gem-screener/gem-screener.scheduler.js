@@ -230,11 +230,16 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
     }
     getState() {
-        if (this.state.lockUntil > 0 && Date.now() > this.state.lockUntil && this._isTradingDay()) {
-            if (this._isScanWindow()) {
-                this.state.status = 'trading';
-                this.state.lockUntil = 0;
-                this.saveState();
+        if (this.state.lockUntil > 0 && this._isTradingDay()) {
+            const now = Date.now();
+            const inScanWindow = this._isScanWindow();
+            const shouldUnlock = now > this.state.lockUntil || inScanWindow;
+            if (shouldUnlock) {
+                if (!this._isLunch()) {
+                    this.state.status = inScanWindow ? 'trading' : this._isAfterMarket() ? 'closed' : this._isPreMarket() ? 'premarket' : 'trading';
+                    this.state.lockUntil = 0;
+                    this.saveState();
+                }
             }
         }
         return { ...this.state };

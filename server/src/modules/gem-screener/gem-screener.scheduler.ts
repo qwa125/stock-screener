@@ -311,12 +311,18 @@ export class GemScreenerScheduler implements OnModuleInit {
   // ===================== 公开 API =====================
 
   getState(): MarketState {
-    // 动态检查：如果锁已过期，自动恢复
-    if (this.state.lockUntil > 0 && Date.now() > this.state.lockUntil && this._isTradingDay()) {
-      if (this._isScanWindow()) {
-        this.state.status = 'trading';
-        this.state.lockUntil = 0;
-        this.saveState();
+    // 动态检查：如果锁已过期或已进入交易时段，自动恢复
+    if (this.state.lockUntil > 0 && this._isTradingDay()) {
+      const now = Date.now();
+      const inScanWindow = this._isScanWindow();
+      const shouldUnlock = now > this.state.lockUntil || inScanWindow;
+      if (shouldUnlock) {
+        // 午休期间不解锁（11:30-13:00）
+        if (!this._isLunch()) {
+          this.state.status = inScanWindow ? 'trading' : this._isAfterMarket() ? 'closed' : this._isPreMarket() ? 'premarket' : 'trading';
+          this.state.lockUntil = 0;
+          this.saveState();
+        }
       }
     }
     return { ...this.state };
