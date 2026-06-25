@@ -393,10 +393,11 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async rescanMarket() {
     try {
-      const results = await this.gemScreener.rescanMarket();
+      // 直接返回缓存数据，不再重新分析（quickAnalyze已分析过）
+      const results = this.gemScreener.getCacheAll();
       return { code: 200, msg: 'ok', data: results };
     } catch (e) {
-      this.logger.error(`重扫失败: ${e.message}`);
+      this.logger.error(`读取缓存失败: ${e.message}`);
       return { code: 500, msg: e.message, data: [] };
     }
   }

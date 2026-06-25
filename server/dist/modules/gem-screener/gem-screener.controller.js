@@ -342,11 +342,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     async rescanMarket() {
         try {
-            const results = await this.gemScreener.rescanMarket();
+            const results = this.gemScreener.getCacheAll();
             return { code: 200, msg: 'ok', data: results };
         }
         catch (e) {
-            this.logger.error(`重扫失败: ${e.message}`);
+            this.logger.error(`读取缓存失败: ${e.message}`);
             return { code: 500, msg: e.message, data: [] };
         }
     }
