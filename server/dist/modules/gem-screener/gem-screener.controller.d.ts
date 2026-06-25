@@ -294,4 +294,13 @@ export declare class GemScreenerController {
         msg: string;
         data: null;
     }>;
+    backtest(): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    } | {
+        code: number;
+        msg: any;
+        data?: undefined;
+    }>;
 }

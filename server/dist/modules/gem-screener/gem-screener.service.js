@@ -3042,6 +3042,110 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
         return finalResults;
     }
+    async runBacktest() {
+        const allCodes = [];
+        try {
+            for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                    const stocks = raw?.data || raw?.stocks || raw;
+                    if (Array.isArray(stocks))
+                        stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
+                            allCodes.push(s.code); });
+                }
+            }
+        }
+        catch { }
+        this.logger.log("回测: " + allCodes.length + " 只, 找有效买入规则匹配...");
+        const buySignals = ["重仓买入", "买入", "轻仓买入"];
+        const holdSignals = ["持有"];
+        const allConfigs = [
+            { name: "A-标准", hs: 11, ltUp: 8, noDown: true },
+            { name: "B-严格", hs: 12, ltUp: 9, noDown: true },
+            { name: "C-宽松", hs: 10, ltUp: 7, noDown: true },
+            { name: "F-基线", hs: 999, ltUp: 999, noDown: true },
+        ];
+        const stats = {};
+        for (const c of allConfigs)
+            stats[c.name] = { baseBuy: 0, baseHold: 0, finalBuy: 0, hv: 0, bu: 0, lt: 0, hd: 0 };
+        let processed = 0, matched = 0;
+        const buyScores = [];
+        const holdScores = [];
+        for (const code of allCodes) {
+            if (matched >= 200)
+                break;
+            try {
+                const kline = await this.dataFetcher.getKLineData(code);
+                if (!kline || kline.length < 120)
+                    continue;
+                processed++;
+                const result = this.calcMultiScore({ code, name: '' }, kline);
+                if (!result)
+                    continue;
+                const { signals, bx, score } = result;
+                const ruleResult = this.determineBySignalRule(signals, bx, result);
+                if (!ruleResult)
+                    continue;
+                matched++;
+                const baseSug = ruleResult.suggestion;
+                const isBaseBuy = buySignals.includes(baseSug);
+                const isBaseHold = holdSignals.includes(baseSug);
+                if (isBaseBuy)
+                    buyScores.push(score);
+                else if (isBaseHold)
+                    holdScores.push(score);
+                for (const cfg of allConfigs) {
+                    const s = stats[cfg.name];
+                    if (isBaseBuy)
+                        s.baseBuy++;
+                    if (isBaseHold)
+                        s.baseHold++;
+                    let finalSug = baseSug;
+                    if (cfg.hs < 999 && isBaseBuy) {
+                        if (score >= cfg.hs)
+                            finalSug = "重仓买入";
+                        else if (score >= cfg.ltUp && baseSug === "轻仓买入")
+                            finalSug = "买入";
+                    }
+                    if (buySignals.includes(finalSug))
+                        s.finalBuy++;
+                    if (finalSug === "重仓买入")
+                        s.hv++;
+                    else if (finalSug === "买入")
+                        s.bu++;
+                    else if (finalSug === "轻仓买入")
+                        s.lt++;
+                    else
+                        s.hd++;
+                }
+            }
+            catch { }
+        }
+        this.logger.log("扫描完成: processed=" + processed + " matched=" + matched);
+        const avgScore = (arr) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : "N/A";
+        const minScore = (arr) => arr.length > 0 ? Math.min(...arr) : 0;
+        const maxScore = (arr) => arr.length > 0 ? Math.max(...arr) : 0;
+        const report = allConfigs.map(c => {
+            const s = stats[c.name];
+            return {
+                name: c.name,
+                threshold: "重仓≥" + c.hs,
+                processed, matched,
+                baseBuy: s.baseBuy, finalBuy: s.finalBuy,
+                signalDist: { hv: s.hv, bu: s.bu, lt: s.lt, hd: s.hd },
+                upgradedToHeavy: s.hv - s.baseBuy,
+                _score: s.hv * 2 + s.bu,
+            };
+        });
+        report.sort((a, b) => b._score - a._score);
+        return {
+            summary: "回测 " + processed + "/" + allCodes.length + " 只, 规则匹配 " + matched + " 只",
+            scoreSummary: { buy: "avg=" + avgScore(buyScores) + " min=" + minScore(buyScores) + " max=" + maxScore(buyScores),
+                hold: "avg=" + avgScore(holdScores) + " min=" + minScore(holdScores) + " max=" + maxScore(holdScores) },
+            configs: report,
+            bestConfig: report[0],
+        };
+    }
 };
 exports.GemScreenerService = GemScreenerService;
 exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decorate([

@@ -226,9 +226,9 @@ export class GemScreenerController {
     const all = [...gemMerged, ...mainMerged];
     const seen = new Set<string>();
     const deduped = all.filter(s => { if (seen.has(s.code)) return false; seen.add(s.code); return true; });
-    const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+    const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
     const sorted = deduped
-      .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '观望'].includes(s.suggestion))
+      .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '减仓', '卖出', '不要介入'].includes(s.suggestion))
       .sort((a, b) => {
         const ao = signalOrder[a.suggestion] ?? 9;
         const bo = signalOrder[b.suggestion] ?? 9;
@@ -427,10 +427,10 @@ export class GemScreenerController {
         if (opp) results.push(opp);
       } catch {}
     }
-    const PRIORITY: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+    const PRIORITY: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
     results.sort((a, b) => {
-      const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
-      const pb = PRIORITY[b.suggestion || '观望'] ?? 9;
+      const pa = PRIORITY[a.suggestion || '持有'] ?? 9;
+      const pb = PRIORITY[b.suggestion || '持有'] ?? 9;
       if (pa !== pb) return pa - pb;
       return (b.score || 0) - (a.score || 0);
     });
@@ -645,12 +645,23 @@ export class GemScreenerController {
         return { code: 200, msg: 'success', data: [opp] };
       }
       // 即使分析失败也尝试用空信号更新缓存（避免旧数据残留）
-      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0 };
+      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '持有', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0 };
       this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => {});
-      return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
+      return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '持有', score: 0 }] };
     } catch (e) {
       this.logger.error(`K线分析失败: ${(e as Error).message}`);
       return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
+    }
+  }
+
+  @Get('backtest')
+  @SkipAccessLimit()
+  async backtest() {
+    try {
+      const result = await this.gemScreener.runBacktest();
+      return { code: 200, msg: 'success', data: result };
+    } catch (e) {
+      return { code: 500, msg: e.message };
     }
   }
 }

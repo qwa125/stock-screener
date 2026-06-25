@@ -186,9 +186,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const seen = new Set();
         const deduped = all.filter(s => { if (seen.has(s.code))
             return false; seen.add(s.code); return true; });
-        const signalOrder = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+        const signalOrder = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
         const sorted = deduped
-            .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '观望'].includes(s.suggestion))
+            .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '减仓', '卖出', '不要介入'].includes(s.suggestion))
             .sort((a, b) => {
             const ao = signalOrder[a.suggestion] ?? 9;
             const bo = signalOrder[b.suggestion] ?? 9;
@@ -368,10 +368,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
             catch { }
         }
-        const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '观望': 4 };
+        const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
         results.sort((a, b) => {
-            const pa = PRIORITY[a.suggestion || '观望'] ?? 9;
-            const pb = PRIORITY[b.suggestion || '观望'] ?? 9;
+            const pa = PRIORITY[a.suggestion || '持有'] ?? 9;
+            const pb = PRIORITY[b.suggestion || '持有'] ?? 9;
             if (pa !== pb)
                 return pa - pb;
             return (b.score || 0) - (a.score || 0);
@@ -560,13 +560,22 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 this.gemScreener.updateSingleStockInCache(opp).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
                 return { code: 200, msg: 'success', data: [opp] };
             }
-            const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0 };
+            const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '持有', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0 };
             this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => { });
-            return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
+            return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '持有', score: 0 }] };
         }
         catch (e) {
             this.logger.error(`K线分析失败: ${e.message}`);
             return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
+        }
+    }
+    async backtest() {
+        try {
+            const result = await this.gemScreener.runBacktest();
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            return { code: 500, msg: e.message };
         }
     }
 };
@@ -812,6 +821,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
+__decorate([
+    (0, common_1.Get)('backtest'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "backtest", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

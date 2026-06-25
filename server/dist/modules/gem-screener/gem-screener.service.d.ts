@@ -246,4 +246,5 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         inflow: number;
         klines: any[];
     }[]): Promise<any[]>;
+    runBacktest(): Promise<any>;
 }
