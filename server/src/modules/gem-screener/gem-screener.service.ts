@@ -465,8 +465,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 下跌趋势(MA5 < MA10)没信号 → 不要介入
-      if ((s.ma5 ?? 0) < (s.ma10 ?? 0)) {
+      // 下跌趋势(MA5 < MA10)没信号 + 今日下跌 → 不要介入（今日上涨保留原信号，如301051 MA5<MA10但MA10上行+当日+13.52%）
+      if ((s.ma5 ?? 0) < (s.ma10 ?? 0) && (s.changePercent ?? 0) <= 0) {
         s.suggestion = '不要介入';
         s.score = Math.min(s.score, 30);
         continue;
@@ -3033,6 +3033,9 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 
     const ma5Up = closeArr.length > 5 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
     const ma10Up = closeArr.length > 10 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+    // MA10环比下降：当前10日均线 < 5天前的10日均线（需要至少15根K线）
+    const ma10Down = closeArr.length > 15
+      && ma10 < (closeArr.slice(-15, -5).reduce((a: number, b: number) => a + b, 0) / 10);
     let trendState = 1;
     if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
     else if (ma5 > ma10 && ma5Up) trendState = 2;
@@ -3092,8 +3095,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
     }
 
-    // ─── 下跌趋势(MA5<MA10)兜底：getTradingSuggestion可能返回持有，下跌趋势一律不要介入 ───
-    if (suggestion !== '卖出' && ma5 < ma10) {
+    // ─── 下跌趋势(MA5<MA10 + MA10环比下降)兜底：仅双边下行才判不要介入 ───
+    // 如果MA5<MA10但MA10还在往上（如301051 MA5<MA10但MA10趋势向上+白布+机构活跃>12），
+    // 保留getTradingSuggestion的原始信号（可能为轻仓买入/持有）
+    if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
       suggestion = '不要介入';
     }
 

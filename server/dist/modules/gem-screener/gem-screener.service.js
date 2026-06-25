@@ -349,7 +349,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 45);
                 continue;
             }
-            if ((s.ma5 ?? 0) < (s.ma10 ?? 0)) {
+            if ((s.ma5 ?? 0) < (s.ma10 ?? 0) && (s.changePercent ?? 0) <= 0) {
                 s.suggestion = '不要介入';
                 s.score = Math.min(s.score, 30);
                 continue;
@@ -2550,6 +2550,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
         const ma5Up = closeArr.length > 5 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
         const ma10Up = closeArr.length > 10 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+        const ma10Down = closeArr.length > 15
+            && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
         let trendState = 1;
         if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
             trendState = 3;
@@ -2603,7 +2605,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
         }
-        if (suggestion !== '卖出' && ma5 < ma10) {
+        if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
             suggestion = '不要介入';
         }
         const NEGATIVE = ['减仓', '不要介入'];
