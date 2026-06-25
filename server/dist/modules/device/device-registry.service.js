@@ -55,19 +55,23 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             return false;
         }
         try {
-            const ref = new URL(url).hostname.split('.')[0];
-            const poolerHosts = [
-                `aws-0-ap-southeast-1.pooler.supabase.com`,
-                `aws-0-ap-northeast-1.pooler.supabase.com`,
-                `${ref}.pooler.supabase.com`,
+            const parsedUrl = new URL(url);
+            const hostParts = parsedUrl.hostname.split('.');
+            const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0];
+            const directHost = parsedUrl.hostname;
+            const connectionMethods = [
+                { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+                { host: `aws-0-ap-northeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+                { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+                { host: directHost, port: 5432, user: 'postgres' },
             ];
             let lastError = null;
-            for (const host of poolerHosts) {
+            for (const method of connectionMethods) {
                 try {
                     const client = new pg.Client({
-                        host,
-                        port: 6543,
-                        user: `postgres.${ref}`,
+                        host: method.host,
+                        port: method.port,
+                        user: method.user,
                         password: pwd,
                         database: 'postgres',
                         ssl: { rejectUnauthorized: false },
@@ -100,16 +104,17 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
           `);
                     await client.query(`NOTIFY pgrst, 'reload schema'`);
                     await client.end();
-                    this.logger.log(`通过 ${host} 自动创建/确认 access_devices + device_settings 表成功`);
+                    this.logger.log(`通过 ${method.host}:${method.port} 自动创建/确认 access_devices + device_settings 表成功`);
                     await new Promise(r => setTimeout(r, 3000));
                     return true;
                 }
                 catch (e) {
                     lastError = e;
-                    this.logger.warn(`pooler ${host} 连接失败: ${e.message}`);
+                    const label = method.port === 6543 ? 'pooler' : '直连';
+                    this.logger.warn(`${label} ${method.host}:${method.port} 连接失败: ${e.message}`);
                 }
             }
-            throw lastError || new Error('所有 pooler 连接均失败');
+            throw lastError || new Error('所有连接方式均失败');
         }
         catch (e) {
             this.logger.warn(`自动创建表失败: ${e.message}`);
@@ -197,15 +202,19 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             if (pwd) {
                 try {
                     const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-                    const ref = new URL(url).hostname.split('.')[0];
-                    const poolerHosts = [
-                        `aws-0-ap-southeast-1.pooler.supabase.com`,
-                        `${ref}.pooler.supabase.com`,
+                    const parsedUrl = new URL(url);
+                    const hostParts = parsedUrl.hostname.split('.');
+                    const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0];
+                    const directHost = parsedUrl.hostname;
+                    const connMethods = [
+                        { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+                        { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+                        { host: directHost, port: 5432, user: 'postgres' },
                     ];
-                    for (const host of poolerHosts) {
+                    for (const method of connMethods) {
                         try {
                             const client = new pg.Client({
-                                host, port: 6543, user: `postgres.${ref}`,
+                                host: method.host, port: method.port, user: method.user,
                                 password: pwd, database: 'postgres',
                                 ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
                             });
@@ -216,14 +225,16 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                                 const val = parseInt(result.rows[0].display_name.replace('maxSlots:', ''), 10);
                                 if (val > 0) {
                                     this.maxSlots = val;
-                                    this.logger.log(`⚙️ 从数据库加载(pg直连): 设备限额 ${this.maxSlots}`);
+                                    const label = method.port === 6543 ? 'pooler' : '直连';
+                                    this.logger.log(`⚙️ 从数据库加载(${label}): 设备限额 ${this.maxSlots}`);
                                     loaded = true;
                                     break;
                                 }
                             }
                         }
                         catch (e) {
-                            this.logger.warn(`pg直连查询失败(${host}): ${e.message}`);
+                            const label = method.port === 6543 ? 'pooler' : '直连';
+                            this.logger.warn(`pg${label}查询失败(${method.host}:${method.port}): ${e.message}`);
                         }
                     }
                 }

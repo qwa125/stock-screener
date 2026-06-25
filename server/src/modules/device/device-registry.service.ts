@@ -48,20 +48,31 @@ export class DeviceRegistryService implements OnModuleInit {
       return false
     }
     try {
-      const ref = new URL(url).hostname.split('.')[0]
-      // 尝试多种 pooler 连接方式
-      const poolerHosts = [
-        `aws-0-ap-southeast-1.pooler.supabase.com`, // 新加坡 pooler
-        `aws-0-ap-northeast-1.pooler.supabase.com`, // 东京 pooler（兜底）
-        `${ref}.pooler.supabase.com`,               // 新格式 pooler
+      const parsedUrl = new URL(url)
+      // 从 URL 中提取 project ref：hostname 格式通常为 db.xxxx.supabase.co 或 xxxx.supabase.co
+      const hostParts = parsedUrl.hostname.split('.')
+      // 项目 ref 是 hostname 中的第二个部分（db.xxxx.supabase.co → xxxx）或第一个部分（xxxx.supabase.co → xxxx）
+      const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0]
+      const directHost = parsedUrl.hostname  // 直连用完整 hostname
+
+      // 尝试多种连接方式：pooler + 直连
+      const connectionMethods = [
+        // ① pooler 连接（新加坡）
+        { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+        // ② pooler 连接（东京）
+        { host: `aws-0-ap-northeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+        // ③ pooler 新格式
+        { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+        // ④ 直连数据库（绕过 pooler）
+        { host: directHost, port: 5432, user: 'postgres' },
       ]
       let lastError: Error | null = null
-      for (const host of poolerHosts) {
+      for (const method of connectionMethods) {
         try {
           const client = new pg.Client({
-            host,
-            port: 6543,
-            user: `postgres.${ref}`,
+            host: method.host,
+            port: method.port,
+            user: method.user,
             password: pwd,
             database: 'postgres',
             ssl: { rejectUnauthorized: false },
@@ -98,16 +109,17 @@ export class DeviceRegistryService implements OnModuleInit {
           `)
           await client.query(`NOTIFY pgrst, 'reload schema'`)
           await client.end()
-          this.logger.log(`通过 ${host} 自动创建/确认 access_devices + device_settings 表成功`)
+          this.logger.log(`通过 ${method.host}:${method.port} 自动创建/确认 access_devices + device_settings 表成功`)
           // 等待缓存刷新
           await new Promise(r => setTimeout(r, 3000))
           return true
         } catch (e) {
           lastError = e as Error
-          this.logger.warn(`pooler ${host} 连接失败: ${(e as Error).message}`)
+          const label = method.port === 6543 ? 'pooler' : '直连'
+          this.logger.warn(`${label} ${method.host}:${method.port} 连接失败: ${(e as Error).message}`)
         }
       }
-      throw lastError || new Error('所有 pooler 连接均失败')
+      throw lastError || new Error('所有连接方式均失败')
     } catch (e) {
       this.logger.warn(`自动创建表失败: ${(e as Error).message}`)
       return false
@@ -195,15 +207,19 @@ export class DeviceRegistryService implements OnModuleInit {
       if (pwd) { // note: url is checked inside ensureTable, here we just try pg
         try {
           const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
-          const ref = new URL(url).hostname.split('.')[0]
-          const poolerHosts = [
-            `aws-0-ap-southeast-1.pooler.supabase.com`,
-            `${ref}.pooler.supabase.com`,
+          const parsedUrl = new URL(url)
+          const hostParts = parsedUrl.hostname.split('.')
+          const ref = hostParts.length >= 4 ? hostParts[1] : hostParts[0]
+          const directHost = parsedUrl.hostname
+          const connMethods = [
+            { host: `aws-0-ap-southeast-1.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+            { host: `${ref}.pooler.supabase.com`, port: 6543, user: `postgres.${ref}` },
+            { host: directHost, port: 5432, user: 'postgres' },
           ]
-          for (const host of poolerHosts) {
+          for (const method of connMethods) {
             try {
               const client = new pg.Client({
-                host, port: 6543, user: `postgres.${ref}`,
+                host: method.host, port: method.port, user: method.user,
                 password: pwd, database: 'postgres',
                 ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
               })
@@ -216,13 +232,15 @@ export class DeviceRegistryService implements OnModuleInit {
                 const val = parseInt(result.rows[0].display_name.replace('maxSlots:', ''), 10)
                 if (val > 0) {
                   this.maxSlots = val
-                  this.logger.log(`⚙️ 从数据库加载(pg直连): 设备限额 ${this.maxSlots}`)
+                  const label = method.port === 6543 ? 'pooler' : '直连'
+                  this.logger.log(`⚙️ 从数据库加载(${label}): 设备限额 ${this.maxSlots}`)
                   loaded = true
                   break
                 }
               }
             } catch (e) {
-              this.logger.warn(`pg直连查询失败(${host}): ${(e as Error).message}`)
+              const label = method.port === 6543 ? 'pooler' : '直连'
+              this.logger.warn(`pg${label}查询失败(${method.host}:${method.port}): ${(e as Error).message}`)
             }
           }
         } catch (e) {
