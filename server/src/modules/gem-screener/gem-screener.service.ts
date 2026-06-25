@@ -3103,6 +3103,18 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       suggestion = '不要介入';
     }
 
+    // ─── 深度洗盘后期特殊判断：MA5<MA10但MA10向上 + 白布 + 站上5日线 + 机构活跃 ───
+    // 上涨趋势中的深度洗盘接近尾声，有企稳迹象，不应判不要介入
+    // 如 301051 信濠光电：MA5<MA10但MA10向上+白布+机构活跃18.49+站上5日线
+    if (suggestion === '不要介入' && ma5 < ma10 && !ma10Down && baiBuState && price > ma5) {
+      const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
+      const avgVol20 = volumeArr.length >= 20
+        ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
+        : avgVol5;
+      const volActive = avgVol5 / (avgVol20 || 1) * 6;
+      suggestion = volActive > 12 ? '轻仓买入' : '持有';
+    }
+
     const NEGATIVE = ['减仓', '不要介入'];
     // 卖出信号：不直接返回null，先记录锁定，后续会以"不要介入"展示
     if (suggestion === '卖出') {

@@ -2610,6 +2610,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
             suggestion = '不要介入';
         }
+        if (suggestion === '不要介入' && ma5 < ma10 && !ma10Down && baiBuState && price > ma5) {
+            const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const avgVol20 = volumeArr.length >= 20
+                ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
+                : avgVol5;
+            const volActive = avgVol5 / (avgVol20 || 1) * 6;
+            suggestion = volActive > 12 ? '轻仓买入' : '持有';
+        }
         const NEGATIVE = ['减仓', '不要介入'];
         if (suggestion === '卖出') {
             this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
