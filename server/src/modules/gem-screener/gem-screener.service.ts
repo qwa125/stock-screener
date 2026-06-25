@@ -3192,72 +3192,78 @@ export class GemScreenerService implements OnApplicationBootstrap {
           else if (pp > 40) trendState = 2;
           else if (pp < 25) trendState = 0;
 
-          // 应用三层买入体系逻辑（同 checkOpportunity）
-          let newSuggestion = s.suggestion || '持有';
-          const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
-          const baiXiaoDays = s.baiXiaoDays ?? 0;
-
-          // —— 分级判定 ——
-          if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
-            if (jiGou >= 14 && pp >= 20) newSuggestion = '重仓买入';
-            else if (jiGou >= 10 || baiXiaoDays >= 4) newSuggestion = '买入';
-            else newSuggestion = '轻仓买入';
-          } else if (trendState >= 1 && goldenCross && pp > 10 && pp < 50) {
-            if (baiXiaoDays >= 6) newSuggestion = '买入';
-            else if (pp >= 25) newSuggestion = '轻仓买入';
-            else newSuggestion = '持有';
-          } else if (trendState >= 1 && pp > 15) {
-            newSuggestion = '持有';
-          } else {
-            newSuggestion = '持有';
-          }
-
-          // 筹码修正：分散+峰高位+未企稳 → 降级
-          const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
-          const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
-          if (chipDowngrade || chipRisk) {
-            if (newSuggestion === '重仓买入') newSuggestion = '买入';
-            else if (newSuggestion === '买入') newSuggestion = '轻仓买入';
-            else if (newSuggestion === '轻仓买入') newSuggestion = '持有';
-          }
-          // 筹码集中+峰在下方+低位企稳 → 升级
-          if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
-            if (newSuggestion === '买入') newSuggestion = '重仓买入';
-            else if (newSuggestion === '轻仓买入') newSuggestion = '买入';
-          }
-
-          // ─── 入场时机与买卖信号对齐 ───
-          const entry = s.entryTiming ?? 50;
-          const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
-          const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
-          if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
-            // ⭐最佳入场 → 升级到买入以上
-            newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
-          } else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
-            // ❌不能入场 → 买入信号降一级
-            newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
-          }
-
-          // ─── 卖出锁定规则（最后执行，确保不被任何逻辑覆盖）───
+          // ─── 先检查卖出锁定 ───
           const sellEntry = this.sellStateCache.get(s.code);
           if (sellEntry) {
-            // 检查是否出现真实买入信号 → 自动解除锁定（不考时间，只靠信号）
-            const hasBuySignal =
-              ['重仓买入', '买入'].includes(newSuggestion) &&
-              goldenCross === true &&
-              pp >= 50;
-            if (hasBuySignal) {
+            // 检查是否出现真实买入信号 → 自动解除锁定
+            const canUnlock = (s.suggestion && ['重仓买入', '买入'].includes(s.suggestion)) && goldenCross === true && pp >= 50;
+            if (canUnlock) {
               this.sellStateCache.delete(s.code);
               this.logger.log(`🔓 [重扫] ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
+              // 解锁后走正常信号逻辑
             } else {
-              // 🔒 卖出锁定生效：覆盖为不要介入
-              newSuggestion = '不要介入';
+              // 🔒 卖出锁定生效：不要介入
+              updated.push({
+                ...s,
+                suggestion: '不要介入',
+                score: Math.min(s.score ?? 50, 30),
+                updatedAt: Date.now(),
+                signalComb: 'sellLocked',
+              });
+              continue;
             }
           }
-          
-          // 如果当日是卖出/减仓/不要介入 → 记录到持久缓存（上锁）
-          if (newSuggestion === '卖出') {
-            this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
+
+          // ─── 已有卖出信号(卖出/减仓/不要介入) → 保留并上锁 ───
+          const SELL_SIGS = ['卖出', '减仓', '不要介入'];
+          let newSuggestion: string;
+          if (SELL_SIGS.includes(s.suggestion)) {
+            newSuggestion = s.suggestion;
+            if (newSuggestion === '卖出') {
+              this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
+            }
+            // 跳过评分逻辑，直接到更新
+          } else {
+            // ─── 无信号 / 买入信号 → 趋势兜底 ───
+            const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
+            const baiXiaoDays = s.baiXiaoDays ?? 0;
+
+            if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
+              if (jiGou >= 14 && pp >= 20) newSuggestion = '重仓买入';
+              else if (jiGou >= 10 || baiXiaoDays >= 4) newSuggestion = '买入';
+              else newSuggestion = '轻仓买入';
+            } else if (trendState >= 1 && goldenCross && pp > 10 && pp < 50) {
+              if (baiXiaoDays >= 6) newSuggestion = '买入';
+              else if (pp >= 25) newSuggestion = '轻仓买入';
+              else newSuggestion = '持有';
+            } else if (trendState >= 1 && pp > 15) {
+              newSuggestion = '持有';
+            } else {
+              newSuggestion = '持有';
+            }
+
+            // 筹码修正
+            const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
+            const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
+            if (chipDowngrade || chipRisk) {
+              if (newSuggestion === '重仓买入') newSuggestion = '买入';
+              else if (newSuggestion === '买入') newSuggestion = '轻仓买入';
+              else if (newSuggestion === '轻仓买入') newSuggestion = '持有';
+            }
+            if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
+              if (newSuggestion === '买入') newSuggestion = '重仓买入';
+              else if (newSuggestion === '轻仓买入') newSuggestion = '买入';
+            }
+
+            // 入场时机对齐
+            const entry = s.entryTiming ?? 50;
+            const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
+            const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
+            if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
+              newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
+            } else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
+              newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
+            }
           }
 
           // 更新评分
