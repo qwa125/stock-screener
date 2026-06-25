@@ -1455,20 +1455,28 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (ruleResult) {
             if (pricePosition >= 95)
                 return null;
-            return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
+            const sug = ruleResult.suggestion;
+            const buySignals = ['重仓买入', '买入', '轻仓买入'];
+            if (buySignals.includes(sug)) {
+                if (score >= 12) {
+                    return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+                }
+                else if (score >= 9) {
+                    if (sug === '轻仓买入') {
+                        return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+                    }
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+                }
+                else if (score >= 6) {
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+                }
+                else {
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+                }
+            }
+            return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
-        if (priceIncrease > 40)
-            return null;
-        if (pricePosition >= 92 && score < 10)
-            return null;
-        if (bx.baiBu && result.hasStrongSell)
-            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
-        if (bx.baiBu)
-            return null;
-        const suggestion = this.scoreToSuggestion(score);
-        if (suggestion === '不要介入')
-            return null;
-        return this.buildResult(s, kline, result, suggestion, detail);
+        return null;
     }
     async checkOpportunityRelaxed(s, prevSuggestion) {
         const kline = await this.dataFetcher.getKLineData(s.code);
@@ -1482,35 +1490,34 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (ruleResult) {
             if (pricePosition >= 97)
                 return null;
-            return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
-        }
-        if (priceIncrease > 50)
-            return null;
-        if (pricePosition >= 95 && score < 8)
-            return null;
-        if (bx.baiBu && (bx.baoLiangFuGaiQingCang || bx.po5RiXian))
-            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
-        if (bx.baiBu)
-            return null;
-        const suggestion = this.scoreToSuggestionRelaxed(score);
-        if (suggestion === '不要介入')
-            return null;
-        const chip = this.calcChipAnalysis(kline.map(k => k.close), kline.map(k => k.high), kline.map(k => k.low), kline.map(k => k.volume || 0), kline[kline.length - 1].close);
-        let finalSuggestion = suggestion;
-        let finalComb = detail;
-        if (chip.pattern === 'dispersed' && chip.peakPosition === 'high' && result.pricePosition < 30 && score >= 6) {
-            const downgrade = { '重仓买入': '买入', '买入': '轻仓买入', '轻仓买入': '持有' };
-            finalSuggestion = downgrade[finalSuggestion] || finalSuggestion;
-            finalComb += '|筹码承压降级';
-        }
-        if (prevSuggestion) {
-            const cont = this.applySignalContinuity(finalSuggestion, prevSuggestion, result.pricePosition, result.trendState);
-            if (cont.changed) {
-                finalSuggestion = cont.suggestion;
-                finalComb += '|信号延续:' + finalSuggestion;
+            const sug = ruleResult.suggestion;
+            const buySignals = ['重仓买入', '买入', '轻仓买入'];
+            if (buySignals.includes(sug)) {
+                if (score >= 11) {
+                    return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+                }
+                else if (score >= 8) {
+                    if (sug === '轻仓买入') {
+                        return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+                    }
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+                }
+                else if (score >= 5) {
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+                }
+                else {
+                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+                }
             }
+            return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
-        return this.buildResult(s, kline, result, finalSuggestion, finalComb);
+        if (score >= 11 && priceIncrease <= 50 && pricePosition < 95) {
+            return this.buildResult(s, kline, result, '轻仓买入', '综合评分高·无规则信号');
+        }
+        if (score >= 9 && priceIncrease <= 30 && pricePosition < 90 && bx.baiXiaoDays > 0) {
+            return this.buildResult(s, kline, result, '轻仓买入', '白消+综合评分中高');
+        }
+        return null;
     }
     buildResult(s, kline, result, suggestion, signalCombination) {
         const entryTiming = this.calcEntryTiming(result.pricePosition, result.trendState, kline.map(k => k.close), kline.map(k => k.high), kline.map(k => k.low), kline.map(k => k.volume || 0), result.isGoldenCross);

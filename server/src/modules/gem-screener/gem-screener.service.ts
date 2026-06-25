@@ -1678,26 +1678,39 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
 
-    // ═══ 一级: 信号组合规则 ═══
+    // ═══ 一级: 信号组合规则 (买入信号主来源) ═══
     const ruleResult = this.determineBySignalRule(signals, bx, result);
     if (ruleResult) {
       if (pricePosition >= 95) return null; // 过高的位置过滤
-      return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
+      const sug = ruleResult.suggestion;
+      const buySignals = ['重仓买入', '买入', '轻仓买入'];
+
+      if (buySignals.includes(sug)) {
+        // ═══ 评分系统优化买入信号（只升级，不降级） ═══
+        if (score >= 12) {
+          // 高评分(≥12/16) → 升级为重仓买入
+          return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+        } else if (score >= 9) {
+          // 中评分(≥9/16) → 确认买入
+          if (sug === '轻仓买入') {
+            return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+          }
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+        } else if (score >= 6) {
+          // 偏低评分(≥6/16) → 保持规则信号
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+        } else {
+          // 低评分(<6/16) → 信号有效但建议谨慎，保持规则信号
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+        }
+      }
+
+      // 非买入信号(卖出/减仓/持有)直接返回
+      return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
     }
 
-    // ═══ 二级: 多因子评分 (无信号匹配) ═══
-    if (priceIncrease > 40) return null;
-    if (pricePosition >= 92 && score < 10) return null;
-
-    // 白布+卖出信号 → 锁定
-    if (bx.baiBu && result.hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
-    // 白布状态下不产生买入信号
-    if (bx.baiBu) return null;
-
-    const suggestion = this.scoreToSuggestion(score);
-    if (suggestion === '不要介入') return null;
-
-    return this.buildResult(s, kline, result, suggestion, detail);
+    // ═══ 无信号规则匹配 → 不靠评分单独产生买入信号 ═══
+    return null;
   }
 
   async checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null> {
@@ -1713,42 +1726,37 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const ruleResult = this.determineBySignalRule(signals, bx, result);
     if (ruleResult) {
       if (pricePosition >= 97) return null;
-      return this.buildResult(s, kline, result, ruleResult.suggestion, ruleResult.signalComb);
+      const sug = ruleResult.suggestion;
+      const buySignals = ['重仓买入', '买入', '轻仓买入'];
+
+      if (buySignals.includes(sug)) {
+        // 评分系统优化买入信号（宽松模式下阈值略低）
+        if (score >= 11) {
+          return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+        } else if (score >= 8) {
+          if (sug === '轻仓买入') {
+            return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+          }
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+        } else if (score >= 5) {
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+        } else {
+          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+        }
+      }
+
+      return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
     }
 
-    // ═══ 二级: 多因子宽松模式 ═══
-    if (priceIncrease > 50) return null;
-    if (pricePosition >= 95 && score < 8) return null;
-
-    // 白布+卖出信号 → 锁定
-    if (bx.baiBu && (bx.baoLiangFuGaiQingCang || bx.po5RiXian))
-      return this.buildResult(s, kline, result, '卖出', '白布+清仓');
-    // 白布状态下不产生买入信号
-    if (bx.baiBu) return null;
-
-    const suggestion = this.scoreToSuggestionRelaxed(score);
-    if (suggestion === '不要介入') return null;
-
-    // 筹码修正
-    const chip = this.calcChipAnalysis(
-      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
-      kline.map(k=>k.volume||0), kline[kline.length-1].close
-    );
-    let finalSuggestion = suggestion;
-    let finalComb = detail;
-    if (chip.pattern === 'dispersed' && chip.peakPosition === 'high' && result.pricePosition < 30 && score >= 6) {
-      const downgrade: Record<string,string> = { '重仓买入':'买入', '买入':'轻仓买入', '轻仓买入':'持有' };
-      finalSuggestion = downgrade[finalSuggestion] || finalSuggestion;
-      finalComb += '|筹码承压降级';
+    // ═══ 二级: 多因子宽松模式（仅评分极高时兜底） ═══
+    if (score >= 11 && priceIncrease <= 50 && pricePosition < 95) {
+      return this.buildResult(s, kline, result, '轻仓买入', '综合评分高·无规则信号');
+    }
+    if (score >= 9 && priceIncrease <= 30 && pricePosition < 90 && bx.baiXiaoDays > 0) {
+      return this.buildResult(s, kline, result, '轻仓买入', '白消+综合评分中高');
     }
 
-    // 信号延续
-    if (prevSuggestion) {
-      const cont = this.applySignalContinuity(finalSuggestion, prevSuggestion, result.pricePosition, result.trendState);
-      if (cont.changed) { finalSuggestion = cont.suggestion; finalComb += '|信号延续:'+finalSuggestion; }
-    }
-
-    return this.buildResult(s, kline, result, finalSuggestion, finalComb);
+    return null;
   }
 
   /** 统一构建结果对象 */
