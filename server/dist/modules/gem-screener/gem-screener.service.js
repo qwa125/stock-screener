@@ -285,18 +285,41 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (s.forecast1_2Day)
                 continue;
             const et = s.entryTiming ?? 0;
-            const posOk = (s.pricePosition ?? 50) < 75;
-            if (et >= 65 && posOk) {
-                s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: '介入时机极佳+位置适中' };
+            const pos = s.pricePosition ?? 50;
+            const gc = s.isGoldenCross;
+            const ma5 = s.ma5 ?? 0;
+            const ma10 = s.ma10 ?? 0;
+            const downtrend = ma5 > 0 && ma10 > 0 && ma5 < ma10;
+            const overbought = pos >= 85;
+            if (downtrend && et < 45) {
+                s.forecast1_2Day = { direction: '下跌趋势', confidence: '高', detail: '均线空头+介入时机差，继续调整概率大' };
             }
-            else if (et >= 55) {
-                s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: '介入时机良好' };
+            else if (downtrend && et < 55) {
+                s.forecast1_2Day = { direction: '震荡偏弱', confidence: '中', detail: '均线空头排列，短期弱势难改' };
             }
-            else if (et >= 45) {
-                s.forecast1_2Day = { direction: '震荡偏强', confidence: '中', detail: '介入时机尚可' };
+            else if (!gc && et < 40) {
+                s.forecast1_2Day = { direction: '看跌', confidence: '中', detail: 'MACD死叉+介入时机差，警惕回调' };
+            }
+            else if (overbought && et < 50) {
+                s.forecast1_2Day = { direction: '回调风险', confidence: '中', detail: '位置偏高+动量不足，注意回调' };
+            }
+            else if (et < 45) {
+                s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '各技术指标方向不明朗，观望为宜' };
+            }
+            else if (et < 55 && !gc) {
+                s.forecast1_2Day = { direction: '震荡偏弱', confidence: '低', detail: '趋势不明+动能偏弱' };
+            }
+            else if (et < 55) {
+                s.forecast1_2Day = { direction: '震荡偏强', confidence: '低', detail: '介入时机尚可' };
+            }
+            else if (et >= 65 && gc && pos < 65) {
+                s.forecast1_2Day = { direction: '强烈看涨', confidence: '高', detail: '金叉+介入时机极佳+位置适中' };
+            }
+            else if (et >= 60) {
+                s.forecast1_2Day = { direction: '看涨', confidence: '高', detail: '介入时机良好' };
             }
             else {
-                s.forecast1_2Day = { direction: '震荡', confidence: '低', detail: '各技术指标方向不明朗' };
+                s.forecast1_2Day = { direction: '看涨', confidence: '中', detail: '介入时机尚可' };
             }
         }
     }
