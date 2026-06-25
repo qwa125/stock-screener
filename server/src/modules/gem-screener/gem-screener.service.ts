@@ -3037,10 +3037,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const ma10Down = closeArr.length > 15
       && ma10 < (closeArr.slice(-15, -5).reduce((a: number, b: number) => a + b, 0) / 10);
     let trendState = 1;
-    if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
-    else if (ma5 > ma10 && ma5Up) trendState = 2;
-    else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
-    else if (ma5 < ma10) trendState = 0; // ma5<ma10即为短期走弱（即使ma20未拐头）
+    if (ma5 > ma10 && ma5Up && ma10Up) trendState = 3;   // 双线向上 → 强上升
+    else if (ma5 > ma10 && ma10Up) trendState = 2;        // MA5>MA10+MA10↑ → 上升趋势（MA5短线回调也属正常调整）
+    else if (ma5 > ma10 && ma5Up) trendState = 2;         // MA5>MA10+MA5↑ → 上升趋势
+    else if (ma5 < ma10 && ma10 < ma20) trendState = 0;   // 均线空头排列 → 下降趋势
+    else if (ma5 < ma10) trendState = 0;                  // ma5<ma10即为短期走弱
 
     const klineO: number[] = klineV.map((k: any) => Number(k.open));
     const klineH: number[] = klineV.map((k: any) => Number(k.high));

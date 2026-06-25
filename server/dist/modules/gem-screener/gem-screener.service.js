@@ -2553,8 +2553,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const ma10Down = closeArr.length > 15
             && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
         let trendState = 1;
-        if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
+        if (ma5 > ma10 && ma5Up && ma10Up)
             trendState = 3;
+        else if (ma5 > ma10 && ma10Up)
+            trendState = 2;
         else if (ma5 > ma10 && ma5Up)
             trendState = 2;
         else if (ma5 < ma10 && ma10 < ma20)
