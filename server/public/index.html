@@ -1037,7 +1037,7 @@ async function doFullRescan(){
             var backendSug=newStocks[si3].suggestion
             if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
-              var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
+              var PRI_ORDER=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入']
               var upgSug = liveSuggestion  // 默认用实时数据
               var fp = newStocks[si3].forecast1_2Day
               if(fp && fp.direction){
