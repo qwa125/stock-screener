@@ -181,7 +181,7 @@ function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes()
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
 // localStorage 版本检查：清空过期缓存
 try{
-  var STORAGE_VER='v2'
+  var STORAGE_VER='v3'
   var storedVer=localStorage.getItem('cacheVer')
   if(storedVer!==STORAGE_VER){
     localStorage.removeItem('lastStocks')
