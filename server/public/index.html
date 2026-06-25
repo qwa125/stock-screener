@@ -673,7 +673,7 @@ function renderList(){
   if(isBlurred&&stocks.length){return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
-  var scanSummary='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
+  var scanSummary='✅ Top'+stocks.length+' | 实时 | 10分钟自动刷新·覆盖旧数据'
   if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
   $('footer').textContent=scanSummary
   // 计算信号分布显示在状态栏
@@ -1532,7 +1532,7 @@ async function doSearch(){
   if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动刷新缓存（不自动解锁毛玻璃）
+// 每10分钟交易时段自动刷新：拉取最新数据覆盖旧缓存（重复股票以最新分析为准）
 setInterval(function(){
   if(isTH()&&!loading){doFullRescan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
