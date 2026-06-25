@@ -1643,8 +1643,8 @@ async function doSearch(){
       if(kdata&&kdata.length>=20){
         var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
         var vol5=closedVols.slice(-5).reduce(function(a,b){return a+b},0)/5
-        var vol60=closedVols.reduce(function(a,b){return a+b},0)/Math.min(closedVols.length,60)
-        jiGouFromKdata=Math.min(Math.round(vol5/(vol60||1)*6*100)/100,20)
+        var vol20=closedVols.slice(-20).reduce(function(a,b){return a+b},0)/Math.min(closedVols.length,20)
+        jiGouFromKdata=Math.min(Math.round(vol5/(vol20||1)*6*100)/100,20)
         console.log('[search] jiGouFromKdata:', jiGouFromKdata)
       }
       

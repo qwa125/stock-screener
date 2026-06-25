@@ -2607,7 +2607,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       const price = closeArr[closeArr.length - 1];
       const high60 = Math.max(...highArr.slice(-60));
       const low60 = Math.min(...lowArr.slice(-60));
-      const pricePos = ((price - low60) / (high60 - low60)) * 100;
+      const pricePos = high60 > low60 ? ((price - low60) / (high60 - low60)) * 100 : 50;
       const ma5 = closeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
       const ma10 = closeArr.slice(-10).reduce((a: number, b: number) => a + b, 0) / 10;
       const ma20 = closeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20;
@@ -3269,7 +3269,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       ma5: Math.round(ma5 * 100) / 100,
       ma10: Math.round(ma10 * 100) / 100,
       // 机构活跃度 = 基于成交量比率的评分 (0-20)
-      jiGouActiveScore: Math.round(Math.min((volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a: number, b: number) => a + b, 0) / 60 || 1)) * 6, 20) * 100) / 100,
+      jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
     };
   }
 
