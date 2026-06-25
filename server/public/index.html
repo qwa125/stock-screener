@@ -511,8 +511,8 @@ function showDetail(i){
   // 如果forecast1_2Day缺失(如从旧缓存加载),从搜索接口补获取
   if(!s.forecast1_2Day && s.code){
     fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
-      if(d&&d.data&&d.data.forecast1_2Day){
-        s.forecast1_2Day=d.data.forecast1_2Day
+      if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
+        s.forecast1_2Day=d.data[0].forecast1_2Day
         da.innerHTML=buildDetail(s,rt)
       }
     }).catch(function(){})
