@@ -143,31 +143,60 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         if (this.supabase) {
             try {
                 const { data, error } = await this.supabase
-                    .from('device_settings')
-                    .select('value')
-                    .eq('key', 'max_slots')
+                    .from('access_devices')
+                    .select('display_name')
+                    .eq('id', '__settings__')
                     .maybeSingle();
-                if (!error && data) {
-                    const val = parseInt(data.value, 10);
+                if (!error && data?.display_name?.startsWith('maxSlots:')) {
+                    const val = parseInt(data.display_name.replace('maxSlots:', ''), 10);
                     if (val > 0) {
                         this.maxSlots = val;
                         this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`);
                         loaded = true;
                     }
                 }
-                else if (error) {
-                    this.logger.warn(`数据库加载设置失败: ${error.message} (code=${error.code})`);
-                }
             }
             catch (e) {
                 this.logger.warn(`数据库加载设置异常: ${e.message}`);
             }
         }
+        if (!loaded && this.supabase) {
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const { data, error } = await this.supabase
+                        .from('device_settings')
+                        .select('value')
+                        .eq('key', 'max_slots')
+                        .maybeSingle();
+                    if (!error && data) {
+                        const val = parseInt(data.value, 10);
+                        if (val > 0) {
+                            this.maxSlots = val;
+                            this.logger.log(`⚙️ 从数据库加载(device_settings): 设备限额 ${this.maxSlots}`);
+                            loaded = true;
+                            break;
+                        }
+                    }
+                    else if (error?.code === 'PGRST205') {
+                        this.logger.warn(`PostgREST schema 缓存未就绪 (第${attempt + 1}次)，等待2秒重试...`);
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                catch (e) {
+                    this.logger.warn(`数据库加载设置异常: ${e.message}`);
+                    break;
+                }
+            }
+        }
         if (!loaded) {
-            try {
-                const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-                const pwd = process.env.SUPABASE_DB_PASSWORD || '';
-                if (url && pwd) {
+            const pwd = process.env.SUPABASE_DB_PASSWORD || '';
+            if (pwd) {
+                try {
+                    const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
                     const ref = new URL(url).hostname.split('.')[0];
                     const poolerHosts = [
                         `aws-0-ap-southeast-1.pooler.supabase.com`,
@@ -181,10 +210,10 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                                 ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
                             });
                             await client.connect();
-                            const result = await client.query(`SELECT value FROM public.device_settings WHERE key = 'max_slots'`);
+                            const result = await client.query(`SELECT display_name FROM public.access_devices WHERE id = '__settings__'`);
                             await client.end();
-                            if (result.rows && result.rows.length > 0) {
-                                const val = parseInt(result.rows[0].value, 10);
+                            if (result.rows?.length > 0 && result.rows[0].display_name?.startsWith('maxSlots:')) {
+                                const val = parseInt(result.rows[0].display_name.replace('maxSlots:', ''), 10);
                                 if (val > 0) {
                                     this.maxSlots = val;
                                     this.logger.log(`⚙️ 从数据库加载(pg直连): 设备限额 ${this.maxSlots}`);
@@ -198,9 +227,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                         }
                     }
                 }
-            }
-            catch (e) {
-                this.logger.warn(`pg直连查询异常: ${e.message}`);
+                catch (e) {
+                    this.logger.warn(`pg直连查询异常: ${e.message}`);
+                }
             }
         }
         if (!loaded) {
@@ -233,16 +262,28 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             return;
         }
         try {
-            await this.ensureTable();
-            const { error } = await this.supabase
-                .from('device_settings')
-                .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
-            if (error) {
-                this.logger.warn(`数据库写入设置失败: ${error.message}，降级到文件`);
-                await this.writeSettingsFileFallback();
+            const { error: err1 } = await this.supabase
+                .from('access_devices')
+                .upsert({
+                id: '__settings__',
+                ua: '',
+                display_name: `maxSlots:${this.maxSlots}`,
+                first_seen: new Date().toISOString(),
+                last_seen: new Date().toISOString(),
+            }, { onConflict: 'id' });
+            if (err1) {
+                this.logger.warn(`access_devices写入失败: ${err1.message}`);
             }
             else {
                 this.logger.log(`⚙️ 设备限额已持久化到数据库: ${this.maxSlots}`);
+            }
+            if (this.supabase) {
+                const { error: err2 } = await this.supabase
+                    .from('device_settings')
+                    .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
+                if (err2) {
+                    this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`);
+                }
             }
         }
         catch (e) {
