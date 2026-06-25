@@ -1,4 +1,4 @@
-<!-- Core v20250624-fix3 -->
+<!-- Core v20250624-fix5 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -156,7 +156,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v5</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -510,12 +510,12 @@ function showDetail(i){
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
   // 始终从搜索接口获取最新预测（机会区的forecast基于缓存旧数据，可能与实时搜索不一致）
-  fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
-    if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
-      s.forecast1_2Day=d.data[0].forecast1_2Day
+  fetch(API+'/gem/detail?code='+s.code).then(function(r){return r.json()}).then(function(d){
+    if(d&&d.data&&d.data.forecast1_2Day){
+      s.forecast1_2Day=d.data.forecast1_2Day
       da.innerHTML=buildDetail(s,rt)
     }
-  }).catch(function(){})
+  }).catch(function(e){console.error('获取最新预测失败',e)})
 }
 
 // ---------- 腾讯实时行情 ----------

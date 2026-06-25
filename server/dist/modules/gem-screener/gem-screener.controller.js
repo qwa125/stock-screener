@@ -327,6 +327,19 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const merged = [...heavyBuy, ...uniqueOpps].sort((a, b) => (b.score || 0) - (a.score || 0));
         return merged;
     }
+    async getStockDetail(code) {
+        if (!code || code.trim().length === 0) {
+            return { code: 400, msg: '请输入股票代码', data: null };
+        }
+        try {
+            const result = await this.gemScreener.quickAnalyze(code.trim());
+            return { code: 200, msg: 'ok', data: result };
+        }
+        catch (e) {
+            this.logger.error(`个股详情失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
     async searchStock(keyword) {
         if (!keyword || keyword.trim().length === 0) {
             return { code: 400, msg: '请输入搜索关键词', data: [] };
@@ -741,6 +754,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "seedCache", null);
+__decorate([
+    (0, common_1.Get)('detail'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getStockDetail", null);
 __decorate([
     (0, common_1.Get)('search'),
     __param(0, (0, common_1.Query)('q')),
