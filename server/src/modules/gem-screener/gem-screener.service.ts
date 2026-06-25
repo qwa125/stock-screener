@@ -3264,6 +3264,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
             }
           }
 
+            // ─── 下跌趋势(MA5<MA10)兜底：下降趋势不持有不买入 ───
+            if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
+              newSuggestion = '不要介入';
+            }
+
           // 更新评分
           const BASE: Record<string, number> = {
             '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
