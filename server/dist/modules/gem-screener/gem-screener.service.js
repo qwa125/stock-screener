@@ -2863,6 +2863,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                         }
                     }
+                    else if (s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)) {
+                        newSuggestion = s.suggestion;
+                    }
                     else {
                         const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
                         const baiXiaoDays = s.baiXiaoDays ?? 0;

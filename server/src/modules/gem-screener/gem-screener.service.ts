@@ -3391,8 +3391,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
               this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
             }
             // 跳过评分逻辑，直接到更新
+          } else if (s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)) {
+            // 保留quickAnalyze的原始买入信号（趋势分析太保守会误判）
+            newSuggestion = s.suggestion;
           } else {
-            // ─── 无信号 / 买入信号 → 趋势兜底 ───
+            // ─── 无信号 / 中性信号 → 趋势兜底 ───
             const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
             const baiXiaoDays = s.baiXiaoDays ?? 0;
 
