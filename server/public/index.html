@@ -144,13 +144,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
   <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
-  <button class="btn-scan" id="coverBtn" onclick="handleCoverScan()" style="flex:1;min-width:100px;background:#dc2626">🏭 全量覆盖扫描</button>
 </div>
-<div id="coverProgress" style="display:none;margin:4px 12px 0">
+<div id="rescanProgress" style="display:none;margin:4px 12px 0">
   <div style="background:#eee;border-radius:3px;height:8px;overflow:hidden">
-    <div id="coverBar" style="height:100%;width:0%;background:#dc2626;border-radius:3px;transition:width 0.3s"></div>
+    <div id="rescanBar" style="height:100%;width:0%;background:#2563eb;border-radius:3px;transition:width 0.3s"></div>
   </div>
-  <div id="coverText" style="font-size:10px;color:#888;margin-top:2px;text-align:center"></div>
+  <div id="rescanText" style="font-size:10px;color:#888;margin-top:2px;text-align:center"></div>
 </div>
 <div style="margin:4px 12px 0;text-align:right">
   <span style="font-size:11px;color:#999;cursor:pointer" onclick="handleClearCache()">🧹 清空缓存</span>
@@ -323,55 +322,27 @@ async function handleScanClick(){
   }
 }
 function $(id){return document.getElementById(id)}
-// 全市场重扫按钮：同样先检查设备权限
+// 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
+var _rescanAll=false
 async function handleRescanClick(){
+  if(_rescanAll||loading)return
+  _rescanAll=true
+  var btn=$('rescanBtn')
+  var prog=$('rescanProgress')
+  var bar=$('rescanBar')
+  var txt=$('rescanText')
+  if(btn)btn.textContent='⏳ 全市场重扫中...'
+  if(prog)prog.style.display='block'
   try{
     var regRes=await fetch("/api/device/register",{
       method:"POST",
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
-    if(regRes.status===429){
-      showBlocked(true)
-      return
-    }
-    if(regRes.status!==200){
-      showBlocked(true)
-      return
+    if(regRes.status===429||regRes.status!==200){
+      showBlocked(true);return
     }
     hideBlocked()
-    if(loading)return
-    doFullRescan()
-  }catch(e){
-    console.log('⚠️ handleRescanClick 请求失败，保持拦截:', e.message)
-    showBlocked(true)
-    return
-  }
-}
-function handleClearCache(){
-	if(loading)return
-	setStatus("正在清空后端缓存...")
-	fetch(API+"/gem/clear-cache").then(function(r){return r.json()}).then(function(d){
-		// 只清缓存数据，保留设备注册信息
-		try{localStorage.removeItem('lastStocks');localStorage.removeItem('cacheVer')}catch(e){}
-		setStatus("缓存已清空，正在刷新...")
-		location.reload()
-	}).catch(function(e){
-		setStatus("清空缓存失败: "+e.message)
-	})
-}
-// 全量覆盖扫描：浏览器拉数据（国内访问）→ 后端只做分析
-var _coverScanning=false
-async function handleCoverScan(){
-  if(_coverScanning||loading)return
-  _coverScanning=true
-  var btn=$('coverBtn')
-  var prog=$('coverProgress')
-  var bar=$('coverBar')
-  var txt=$('coverText')
-  if(btn)btn.textContent='⏳ 覆盖扫描中...'
-  if(prog)prog.style.display='block'
-  try{
-    // ① 浏览器直接请求新浪获取全部A股（国内用户访问国内API不超时）
+    // ② 浏览器直接请求新浪获取全部A股
     setStatus('正在获取全部A股列表...')
     txt.textContent='获取股票列表...'
     var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=hs_a').then(function(r){return r.text()})
@@ -387,7 +358,7 @@ async function handleCoverScan(){
     txt.textContent='分析 '+stocks.length+' 只A股中 (0%)...'
     if(bar)bar.style.width='0%'
     var done=0,total=stocks.length
-    // ② 分批并行抓取K线并推送到后端，每批20只
+    // ③ 分批并行抓取K线并推送到后端，每批20只
     var batchSize=20
     for(var i=0;i<total;i+=batchSize){
       var batch=stocks.slice(i,i+batchSize)
@@ -400,18 +371,30 @@ async function handleCoverScan(){
     }
     txt.textContent='扫描完成! '+'共处理 '+done+' 只股票'
     if(bar)bar.style.width='100%'
-    setStatus('全量覆盖扫描完成!')
-    // ③ 刷新缓存并重新加载
+    setStatus('全市场重扫完成!')
+    // ④ 刷新缓存并重新加载
     await doFullRescan()
   }catch(e){
-    console.error('覆盖扫描失败:',e)
-    setStatus('覆盖扫描失败: '+e.message)
+    console.error('全市场重扫失败:',e)
+    setStatus('全市场重扫失败: '+e.message)
     txt.textContent='失败: '+e.message
   }finally{
-    _coverScanning=false
-    if(btn)btn.textContent='🏭 全量覆盖扫描'
+    _rescanAll=false
+    if(btn)btn.textContent='🌐 全市场重扫'
     setTimeout(function(){if(prog)prog.style.display='none'},5000)
   }
+}
+function handleClearCache(){
+	if(loading)return
+	setStatus("正在清空后端缓存...")
+	fetch(API+"/gem/clear-cache").then(function(r){return r.json()}).then(function(d){
+		// 只清缓存数据，保留设备注册信息
+		try{localStorage.removeItem('lastStocks');localStorage.removeItem('cacheVer')}catch(e){}
+		setStatus("缓存已清空，正在刷新...")
+		location.reload()
+	}).catch(function(e){
+		setStatus("清空缓存失败: "+e.message)
+	})
 }
 // 浏览器拉K线 → 推送到后端分析（已修复字段名和格式）
 async function fetchKlineAndAnalyze(s){
