@@ -1690,18 +1690,18 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ═══ 一级: 信号组合规则 (买入信号主来源) ═══
     const ruleResult = this.determineBySignalRule(signals, bx, result);
     if (ruleResult) {
-      if (pricePosition >= 95) return null; // 过高的位置过滤
       const sug = ruleResult.suggestion;
       const buySignals = ['重仓买入', '买入', '轻仓买入'];
 
       if (buySignals.includes(sug)) {
+        if (pricePosition >= 95) return null; // 过高的位置过滤(仅对买入信号)
         // ═══ 评分系统仅用于未来1-2日预测(独立字段forecast1_2Day) ═══
         // 评分系统不改信号，信号由determineBySignalRule独立产生
         // 前端见BUY_SELL架构: 后端卖信号100%尊重,后端买信号结合forecast1_2Day+实时升级
         return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
       }
 
-      // 非买入信号(卖出/减仓/持有)直接返回
+      // 非买入信号(卖出/减仓/持有)直接返回（不过滤高位）
       return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
     }
 
@@ -1721,15 +1721,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ═══ 一级: 信号组合规则 (与标准模式相同) ═══
     const ruleResult = this.determineBySignalRule(signals, bx, result);
     if (ruleResult) {
-      if (pricePosition >= 97) return null;
       const sug = ruleResult.suggestion;
       const buySignals = ['重仓买入', '买入', '轻仓买入'];
 
       if (buySignals.includes(sug)) {
+        if (pricePosition >= 97) return null; // 过高的位置过滤(仅对买入信号)
         // 宽松版同样: 评分系统仅用于预测字段,不改信号
         return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
       }
 
+      // 非买入信号(卖出/减仓/持有)直接返回（不过滤高位）
       return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
     }
 

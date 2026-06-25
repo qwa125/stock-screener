@@ -1454,11 +1454,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
         const ruleResult = this.determineBySignalRule(signals, bx, result);
         if (ruleResult) {
-            if (pricePosition >= 95)
-                return null;
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
+                if (pricePosition >= 95)
+                    return null;
                 return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
@@ -1475,11 +1475,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const { signals, bx, score, priceIncrease, pricePosition, detail } = result;
         const ruleResult = this.determineBySignalRule(signals, bx, result);
         if (ruleResult) {
-            if (pricePosition >= 97)
-                return null;
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
+                if (pricePosition >= 97)
+                    return null;
                 return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
