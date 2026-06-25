@@ -3097,94 +3097,83 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         catch { }
-        this.logger.log("回测: " + allCodes.length + " 只, 找有效买入规则匹配...");
-        const buySignals = ["重仓买入", "买入", "轻仓买入"];
-        const holdSignals = ["持有"];
-        const allConfigs = [
-            { name: "A-标准", hs: 11, ltUp: 8, noDown: true },
-            { name: "B-严格", hs: 12, ltUp: 9, noDown: true },
-            { name: "C-宽松", hs: 10, ltUp: 7, noDown: true },
-            { name: "F-基线", hs: 999, ltUp: 999, noDown: true },
-        ];
-        const stats = {};
-        for (const c of allConfigs)
-            stats[c.name] = { baseBuy: 0, baseHold: 0, finalBuy: 0, hv: 0, bu: 0, lt: 0, hd: 0 };
-        let processed = 0, matched = 0;
-        const buyScores = [];
-        const holdScores = [];
-        for (const code of allCodes) {
-            if (matched >= 200)
-                break;
+        const sample = allCodes.slice(0, 20);
+        this.logger.log("\u56de\u5f52\u9a8c\u8bc1: \u62bd\u53d6 " + sample.length + " \u53ea\u80a1\u7968\uff0c\u6b65\u8fdb\u6d4b\u8bd5\u8bc4\u5206\u7684\u9884\u6d4b\u80fd\u529b");
+        const records = [];
+        let processed = 0, totalDays = 0;
+        for (const code of sample) {
             try {
                 const kline = await this.dataFetcher.getKLineData(code);
-                if (!kline || kline.length < 120)
+                if (!kline || kline.length < 150)
                     continue;
                 processed++;
-                const result = this.calcMultiScore({ code, name: '' }, kline);
-                if (!result)
-                    continue;
-                const { signals, bx, score } = result;
-                const ruleResult = this.determineBySignalRule(signals, bx, result);
-                if (!ruleResult)
-                    continue;
-                matched++;
-                const baseSug = ruleResult.suggestion;
-                const isBaseBuy = buySignals.includes(baseSug);
-                const isBaseHold = holdSignals.includes(baseSug);
-                if (isBaseBuy)
-                    buyScores.push(score);
-                else if (isBaseHold)
-                    holdScores.push(score);
-                for (const cfg of allConfigs) {
-                    const s = stats[cfg.name];
-                    if (isBaseBuy)
-                        s.baseBuy++;
-                    if (isBaseHold)
-                        s.baseHold++;
-                    let finalSug = baseSug;
-                    if (cfg.hs < 999 && isBaseBuy) {
-                        if (score >= cfg.hs)
-                            finalSug = "重仓买入";
-                        else if (score >= cfg.ltUp && baseSug === "轻仓买入")
-                            finalSug = "买入";
-                    }
-                    if (buySignals.includes(finalSug))
-                        s.finalBuy++;
-                    if (finalSug === "重仓买入")
-                        s.hv++;
-                    else if (finalSug === "买入")
-                        s.bu++;
-                    else if (finalSug === "轻仓买入")
-                        s.lt++;
-                    else
-                        s.hd++;
+                for (let day = 100; day < kline.length - 2; day += 5) {
+                    const slice = kline.slice(0, day + 1);
+                    const now = kline[day];
+                    const next1 = kline[day + 1];
+                    const next2 = kline[day + 2];
+                    if (!now?.close || !next1?.close || !next2?.close)
+                        continue;
+                    const result = this.calcMultiScore({ code, name: '' }, slice);
+                    if (!result)
+                        continue;
+                    const score = result.score;
+                    const ret1d = (next1.close - now.close) / now.close * 100;
+                    const ret2d = (next2.close - now.close) / now.close * 100;
+                    records.push({ score, ret1d, ret2d });
+                    totalDays++;
                 }
             }
             catch { }
         }
-        this.logger.log("扫描完成: processed=" + processed + " matched=" + matched);
-        const avgScore = (arr) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : "N/A";
-        const minScore = (arr) => arr.length > 0 ? Math.min(...arr) : 0;
-        const maxScore = (arr) => arr.length > 0 ? Math.max(...arr) : 0;
-        const report = allConfigs.map(c => {
-            const s = stats[c.name];
+        const groups = {};
+        const ranges = [
+            { label: "0-3", min: 0, max: 3 },
+            { label: "4-5", min: 4, max: 5 },
+            { label: "6-7", min: 6, max: 7 },
+            { label: "8-9", min: 8, max: 9 },
+            { label: "10-11", min: 10, max: 11 },
+            { label: "12-16", min: 12, max: 16 },
+        ];
+        for (const r of ranges)
+            groups[r.label] = { scores: [], ret1ds: [], ret2ds: [] };
+        for (const rec of records) {
+            for (const r of ranges) {
+                if (rec.score >= r.min && rec.score <= r.max) {
+                    groups[r.label].scores.push(rec.score);
+                    groups[r.label].ret1ds.push(rec.ret1d);
+                    groups[r.label].ret2ds.push(rec.ret2d);
+                    break;
+                }
+            }
+        }
+        const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const winRate = (arr) => arr.length > 0 ? arr.filter(x => x > 0).length / arr.length * 100 : 0;
+        const resultGroups = ranges.map(r => {
+            const g = groups[r.label];
+            const n = g.scores.length;
+            const avg1d = parseFloat(avg(g.ret1ds).toFixed(2));
+            const avg2d = parseFloat(avg(g.ret2ds).toFixed(2));
+            const w1 = parseFloat(winRate(g.ret1ds).toFixed(1));
+            const w2 = parseFloat(winRate(g.ret2ds).toFixed(1));
             return {
-                name: c.name,
-                threshold: "重仓≥" + c.hs,
-                processed, matched,
-                baseBuy: s.baseBuy, finalBuy: s.finalBuy,
-                signalDist: { hv: s.hv, bu: s.bu, lt: s.lt, hd: s.hd },
-                upgradedToHeavy: s.hv - s.baseBuy,
-                _score: s.hv * 2 + s.bu,
+                range: r.label,
+                count: n,
+                avgScore: n > 0 ? parseFloat((g.scores.reduce((a, b) => a + b, 0) / n).toFixed(1)) : 0,
+                avgRet1D: avg1d > 0 ? "+" + avg1d + "%" : avg1d + "%",
+                avgRet2D: avg2d > 0 ? "+" + avg2d + "%" : avg2d + "%",
+                winRate1D: w1 + "%",
+                winRate2D: w2 + "%",
+                _score: avg1d * n + avg2d * n * 0.5,
             };
         });
-        report.sort((a, b) => b._score - a._score);
+        resultGroups.sort((a, b) => b._score - a._score);
+        this.logger.log("\u2705 \u56de\u5f52\u5b8c\u6210: " + processed + "/" + sample.length + " \u53ea\u6709\u6548K\u7ebf, " + totalDays + " \u4e2a\u6d4b\u8bd5\u70b9");
         return {
-            summary: "回测 " + processed + "/" + allCodes.length + " 只, 规则匹配 " + matched + " 只",
-            scoreSummary: { buy: "avg=" + avgScore(buyScores) + " min=" + minScore(buyScores) + " max=" + maxScore(buyScores),
-                hold: "avg=" + avgScore(holdScores) + " min=" + minScore(holdScores) + " max=" + maxScore(holdScores) },
-            configs: report,
-            bestConfig: report[0],
+            summary: "\u56de\u5f52\u9a8c\u8bc1: " + processed + "/" + sample.length + " \u53ea\uff0c\u5171" + totalDays + "\u4e2a\u65e5\u7ebf\u6d4b\u8bd5\u70b9",
+            method: "\u6b65\u8fdb: \u4ece120\u65e5\u7ebf\u5f00\u59cb\uff0c\u6bcf3\u65e5\u4e3a1\u4e2a\u6d4b\u8bd5\u70b9\uff0c\u5f53\u524d\u8bc4\u5206 VS \u672a\u67651-2\u65e5\u771f\u5b9e\u6da8\u8dcc",
+            groups: resultGroups,
+            bestGroup: resultGroups[0],
         };
     }
 };
