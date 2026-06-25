@@ -1310,18 +1310,31 @@ async function doSearch(){
   // 第二步：显示基础信息
   if(stockCode){
     da.style.display='block'
+    // ★　搜索前先查机会区是否有该股（含前端实时升级后的建议）
+    var localStock=null
+    if(typeof stocks!=='undefined'&&stocks){
+      for(var si=0;si<stocks.length;si++){
+        if(stocks[si].code===stockCode){localStock=stocks[si];break}
+      }
+    }
     // 构建临时股票对象
     var tmpStock={
       name: stockName,
       code: stockCode,
       currentPrice: stockPrice,
       changePercent: stockChgP,
-      suggestion: '查找中…',
-      score: 0, entryTiming: 0, pricePosition: 0,
-      safetyScore: 0,
-      isGoldenCross: false, baiXiaoDays: 0,
-      signalCombination: '', jiGouActiveScore: 0,
-      chipAnalysis: null
+      suggestion: localStock?localStock.suggestion:'查找中…',
+      score: localStock?localStock.score:0,
+      entryTiming: localStock?localStock.entryTiming:0,
+      pricePosition: localStock?localStock.pricePosition:0,
+      safetyScore: localStock?localStock.safetyScore:0,
+      isGoldenCross: localStock?localStock.isGoldenCross:false,
+      baiXiaoDays: localStock?localStock.baiXiaoDays:0,
+      signalCombination: localStock?localStock.signalCombination:'',
+      jiGouActiveScore: localStock?localStock.jiGouActiveScore:0,
+      chipAnalysis: localStock?localStock.chipAnalysis:null,
+      forecast1_2Day: localStock?localStock.forecast1_2Day:null,
+      mainForceInflow: localStock?localStock.mainForceInflow:0
     }
     da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
       +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在分析该股票……</div>'
