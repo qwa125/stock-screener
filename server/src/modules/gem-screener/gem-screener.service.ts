@@ -2969,6 +2969,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
     }
 
+    // ─── 下跌趋势(MA5<MA10)兜底：getTradingSuggestion可能返回持有，下跌趋势一律不要介入 ───
+    if (suggestion !== '卖出' && ma5 < ma10) {
+      suggestion = '不要介入';
+    }
+
     const NEGATIVE = ['减仓', '不要介入'];
     // 卖出信号：不直接返回null，先记录锁定，后续会以"不要介入"展示
     if (suggestion === '卖出') {

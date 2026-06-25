@@ -2494,6 +2494,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
         }
+        if (suggestion !== '卖出' && ma5 < ma10) {
+            suggestion = '不要介入';
+        }
         const NEGATIVE = ['减仓', '不要介入'];
         if (suggestion === '卖出') {
             this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
