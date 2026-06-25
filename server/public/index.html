@@ -1659,7 +1659,12 @@ async function doSearch(){
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
         // 用前端计算的机构活跃度覆盖后端值（后端海外解析volume可能为0）
-        if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
+        // 优先用缓存机构活跃度（扫描时东财完整K线更准），其次前端即时计算
+        if(localStock&&localStock.jiGouActiveScore){
+          o.jiGouActiveScore=localStock.jiGouActiveScore
+        }else if(jiGouFromKdata){
+          o.jiGouActiveScore=jiGouFromKdata
+        }
         console.log('[search] analysis result:', JSON.stringify(o,null,2))
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
