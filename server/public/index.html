@@ -297,16 +297,6 @@ async function handleScanClick(){
   }
 }
 function $(id){return document.getElementById(id)}
-// 清除手机端缓存：强制刷新机会区和搜索数据
-function clearAllCache(){
-  localStorage.removeItem('lastStocks');
-  localStorage.removeItem('stocksCache');
-  localStorage.removeItem('lastStocks1');
-  localStorage.removeItem('stocksCache1');
-  localStorage.removeItem('_lastScanCount');
-  localStorage.removeItem('stocks');
-  location.reload();
-}
 // 全市场重扫按钮：同样先检查设备权限
 async function handleRescanClick(){
   try{
