@@ -1450,7 +1450,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const result = this.calcMultiScore(s, kline);
         if (!result)
             return null;
-        const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
+        const { signals, bx, score, pricePosition, priceIncrease, detail, trendState, isGoldenCross, volumeRatio } = result;
         const ruleResult = this.determineBySignalRule(signals, bx, result);
         if (ruleResult) {
             if (pricePosition >= 95)
@@ -1458,7 +1458,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                const forecast = this.calcScoreForecast(score, signals, sug);
+                const forecast = this.calcScoreForecast(score, signals, sug, trendState, isGoldenCross, pricePosition, volumeRatio);
                 const dir = forecast.direction;
                 if (dir === '强烈看涨') {
                     return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
@@ -1493,7 +1493,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                const forecast = this.calcScoreForecast(score, signals, sug);
+                const forecast = this.calcScoreForecast(score, signals, sug, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio);
                 const dir = forecast.direction;
                 if (dir === '强烈看涨' || (score >= 11 && dir === '看涨')) {
                     return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
@@ -1511,7 +1511,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
-        const forecast = this.calcScoreForecast(score, signals, '轻仓买入');
+        const forecast = this.calcScoreForecast(score, signals, '轻仓买入', result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio);
         const dir = forecast.direction;
         if ((dir === '强烈看涨' || dir === '看涨') && pricePosition < 95) {
             return this.buildResult(s, kline, result, '轻仓买入', '评分预测' + dir + '|' + forecast.confidence + '%');
@@ -1545,36 +1545,40 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             signalCombination: signalCombination || result.detail,
             jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
             trendPrediction: this.calcTrendPrediction(kline, result),
-            forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion),
+            forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio),
         };
     }
-    calcScoreForecast(score, signals, suggestion) {
+    calcScoreForecast(score, signals, suggestion, trendState = 0, isGoldenCross = false, pricePosition = 50, volumeRatio = 0.5) {
         const isBuySignal = ['轻仓买入', '买入', '重仓买入'].includes(suggestion);
         const isSellSignal = ['减仓', '卖出', '不要介入'].includes(suggestion);
         const baiBu = signals?.baiBu || signals?.hasBaiBu || false;
         const baiXiao = signals?.baiXiao || signals?.hasBaiXiao || false;
         const jiGouActive = signals?.jiGouActive || signals?.hasJiGouActive || false;
-        const macdGoldenCross = signals?.macdGoldenCross || false;
+        const macdGoldenCross = signals?.macdGoldenCross || isGoldenCross;
         const zhuLiChuHuo = signals?.zhuLiChuHuo || false;
+        const uptrend = trendState >= 2;
         if (isSellSignal || (isBuySignal && baiBu)) {
             return { direction: '观望', confidence: '--', detail: '信号偏空,暂不参与' };
         }
-        if (score >= 12 && isBuySignal && jiGouActive) {
-            return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃,未来1-2日上涨概率大' };
+        if (score >= 12 && isBuySignal && jiGouActive && macdGoldenCross && uptrend && pricePosition < 70 && volumeRatio > 0.6) {
+            return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃+趋势向上+金叉确认,未来1-2日上涨概率高' };
         }
-        if (score >= 12 && isBuySignal && macdGoldenCross) {
-            return { direction: '看涨', confidence: '高', detail: '评分高+MACD金叉,未来1-2日偏多' };
+        if (score >= 10 && isBuySignal && macdGoldenCross && uptrend && pricePosition < 75 && volumeRatio > 0.5) {
+            return { direction: '看涨', confidence: '高', detail: '评分中上+趋势向上+金叉确认,未来1-2日偏多' };
         }
-        if (score >= 12 && !isBuySignal) {
-            return { direction: '看涨', confidence: '中', detail: '评分高但信号中性,向上潜力需验证' };
+        if (score >= 12 && isBuySignal) {
+            return { direction: '看涨', confidence: '中', detail: '评分高但趋势/位置一般,需确认再介入' };
+        }
+        if (score >= 9 && isBuySignal && pricePosition < 80) {
+            return { direction: '震荡偏强', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
         }
         if (score >= 9 && isBuySignal) {
-            return { direction: '看涨', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
+            return { direction: '震荡', confidence: '低', detail: '评分尚可但位置偏高,方向不明' };
         }
         if (score >= 9 && isSellSignal) {
             return { direction: '震荡', confidence: '低', detail: '评分尚可但有卖出信号,方向不明' };
         }
-        if (score >= 6 && isBuySignal) {
+        if (score >= 6 && isBuySignal && pricePosition < 85) {
             return { direction: '震荡偏强', confidence: '低', detail: '评分一般但有买入信号,需观察' };
         }
         if (score >= 6 && !isBuySignal) {

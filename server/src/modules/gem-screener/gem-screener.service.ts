@@ -1682,7 +1682,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const result = this.calcMultiScore(s, kline);
     if (!result) return null;
 
-    const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
+    const { signals, bx, score, pricePosition, priceIncrease, detail, trendState, isGoldenCross, volumeRatio } = result;
 
     // ═══ 一级: 信号组合规则 (买入信号主来源) ═══
     const ruleResult = this.determineBySignalRule(signals, bx, result);
@@ -1693,8 +1693,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
       if (buySignals.includes(sug)) {
         // ═══ 评分系统预测驱动优化（未来1-2日预测） ═══
-        // calcScoreForecast 基于 calcMultiScore(0-16分)+信号叠加,做未来1-2日方向判断
-        const forecast = this.calcScoreForecast(score, signals, sug);
+        // calcScoreForecast 基于 calcMultiScore(0-16分)+趋势/金叉/位置+量比,做高胜率方向判断
+        const forecast = this.calcScoreForecast(score, signals, sug, trendState, isGoldenCross, pricePosition, volumeRatio);
         const dir = forecast.direction;
         // 强烈看涨(score≥12+buy+机构活跃) → 升级为重仓买入
         if (dir === '强烈看涨') {
@@ -1741,7 +1741,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
       if (buySignals.includes(sug)) {
         // 评分系统预测驱动优化（宽松版：阈值略低）
-        const forecast = this.calcScoreForecast(score, signals, sug);
+        const forecast = this.calcScoreForecast(score, signals, sug, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio);
         const dir = forecast.direction;
         // 强烈看涨 → 升级为重仓买入(宽松版:score≥11或强烈看涨即可)
         if (dir === '强烈看涨' || (score >= 11 && dir === '看涨')) {
@@ -1766,7 +1766,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
 
     // ═══ 二级: 多因子宽松模式（评分预测为买入信号兜底） ═══
-    const forecast = this.calcScoreForecast(score, signals, '轻仓买入');
+    const forecast = this.calcScoreForecast(score, signals, '轻仓买入', result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio);
     const dir = forecast.direction;
     if ((dir === '强烈看涨' || dir === '看涨') && pricePosition < 95) {
       return this.buildResult(s, kline, result, '轻仓买入', '评分预测' + dir + '|' + forecast.confidence + '%');
@@ -1814,41 +1814,55 @@ export class GemScreenerService implements OnApplicationBootstrap {
       jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
       trendPrediction: this.calcTrendPrediction(kline, result),
       // ═══ 多因子评分预测: 基于 calcMultiScore 的 7 因子评分 (0-16分) ═══
-      forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion),
+      forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio),
     };
   }
 
   // ═══ 多因子评分 → 未来1-2日预测 ═══
-  // 基于 calcMultiScore 的 7 因子评分(0-16分)，转化为清晰的方向性判断
-  private calcScoreForecast(score: number, signals: any, suggestion: string): { direction: string; confidence: string; detail: string } {
+  // 基于 calcMultiScore 的 7 因子评分(0-16分)+趋势/金叉/位置+成交量过滤，
+  // 提供高胜率的方向性判断
+  private calcScoreForecast(
+    score: number, signals: any, suggestion: string,
+    trendState: number = 0, isGoldenCross: boolean = false,
+    pricePosition: number = 50, volumeRatio: number = 0.5
+  ): { direction: string; confidence: string; detail: string } {
     const isBuySignal = ['轻仓买入','买入','重仓买入'].includes(suggestion);
     const isSellSignal = ['减仓','卖出','不要介入'].includes(suggestion);
     const baiBu = signals?.baiBu || signals?.hasBaiBu || false;
     const baiXiao = signals?.baiXiao || signals?.hasBaiXiao || false;
     const jiGouActive = signals?.jiGouActive || signals?.hasJiGouActive || false;
-    const macdGoldenCross = signals?.macdGoldenCross || false;
+    const macdGoldenCross = signals?.macdGoldenCross || isGoldenCross;
     const zhuLiChuHuo = signals?.zhuLiChuHuo || false;
+    const uptrend = trendState >= 2; // MA5>MA10>MA20
 
     // 评分(0-16) + 信号叠加 → 综合预测
     if (isSellSignal || (isBuySignal && baiBu)) {
       return { direction: '观望', confidence: '--', detail: '信号偏空,暂不参与' };
     }
-    if (score >= 12 && isBuySignal && jiGouActive) {
-      return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃,未来1-2日上涨概率大' };
+
+    // ═══ 强烈看涨 — 高胜率+高赔率 ═══
+    // 要求: 评分高 + 买入信号 + 机构活跃 + MACD金叉 + 趋势向上 + 价格不过高 + 成交量有效
+    if (score >= 12 && isBuySignal && jiGouActive && macdGoldenCross && uptrend && pricePosition < 70 && volumeRatio > 0.6) {
+      return { direction: '强烈看涨', confidence: '高', detail: '评分高+机构活跃+趋势向上+金叉确认,未来1-2日上涨概率高' };
     }
-    if (score >= 12 && isBuySignal && macdGoldenCross) {
-      return { direction: '看涨', confidence: '高', detail: '评分高+MACD金叉,未来1-2日偏多' };
+    // ═══ 次强版 — 评分高+买信号+趋势向上（个别条件略弱） ═══
+    if (score >= 10 && isBuySignal && macdGoldenCross && uptrend && pricePosition < 75 && volumeRatio > 0.5) {
+      return { direction: '看涨', confidence: '高', detail: '评分中上+趋势向上+金叉确认,未来1-2日偏多' };
     }
-    if (score >= 12 && !isBuySignal) {
-      return { direction: '看涨', confidence: '中', detail: '评分高但信号中性,向上潜力需验证' };
+    // ═══ 评分高+买信号，但部分条件不满足（谨慎偏多） ═══
+    if (score >= 12 && isBuySignal) {
+      return { direction: '看涨', confidence: '中', detail: '评分高但趋势/位置一般,需确认再介入' };
+    }
+    if (score >= 9 && isBuySignal && pricePosition < 80) {
+      return { direction: '震荡偏强', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
     }
     if (score >= 9 && isBuySignal) {
-      return { direction: '看涨', confidence: '中', detail: '评分中上+买入信号,短期震荡偏多' };
+      return { direction: '震荡', confidence: '低', detail: '评分尚可但位置偏高,方向不明' };
     }
     if (score >= 9 && isSellSignal) {
       return { direction: '震荡', confidence: '低', detail: '评分尚可但有卖出信号,方向不明' };
     }
-    if (score >= 6 && isBuySignal) {
+    if (score >= 6 && isBuySignal && pricePosition < 85) {
       return { direction: '震荡偏强', confidence: '低', detail: '评分一般但有买入信号,需观察' };
     }
     if (score >= 6 && !isBuySignal) {
