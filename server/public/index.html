@@ -766,7 +766,7 @@ async function doFullRescan(){
   if(newStocks.length===0){
     try{
       var cached=localStorage.getItem('lastStocks')
-      if(cached){newStocks=JSON.parse(cached).slice();for(var sci=0;sci<newStocks.length;sci++) delete newStocks[sci].suggestion;console.log('📦 从缓存加载 '+newStocks.length+' 只，已清除历史信号')}
+      if(cached){var cp=JSON.parse(cached);var hasForecast=cp.some(function(x){return x&&x.forecast1_2Day});if(!hasForecast){localStorage.removeItem('lastStocks');console.warn('🧹 旧缓存无forecast1_2Day，已清除，重新从API获取');cached=null}else{newStocks=cp.slice();for(var sci=0;sci<newStocks.length;sci++) delete newStocks[sci].suggestion;console.log('📦 从缓存加载 '+newStocks.length+' 只，已清除历史信号')}}
     }catch(e){}
   }
   var cacheCount=newStocks.length  // 记录缓存股数量，用于后续追加
