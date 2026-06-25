@@ -295,16 +295,24 @@ async function handleRescanClick(){
     // ② 浏览器直接请求新浪获取全部A股
     setStatus('正在获取全部A股列表...')
     txt.textContent='获取股票列表...'
-    var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=hs_a').then(function(r){return r.text()})
-    src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-    var list
-    try{list=JSON.parse(src)}catch(e){
-      var m=src.match(/\[[\s\S]*\]/)
-      if(m)list=JSON.parse(m[0]);else throw e
+    // 分别获取沪市(sh_a)和深市(sz_a)的全部A股
+    var [srcSH,srcSZ]=await Promise.all([
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=sh_a').then(function(r){return r.text()}),
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=sz_a').then(function(r){return r.text()})
+    ])
+    function parseSinaJson(src){
+      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+      try{return JSON.parse(src)}catch(e){
+        var m=src.match(/\[[\s\S]*\]/)
+        if(m)return JSON.parse(m[0]);throw e
+      }
     }
+    var listSH=parseSinaJson(srcSH),listSZ=parseSinaJson(srcSZ)
+    var list=listSH.concat(listSZ)
     if(!list||!list.length)throw new Error('未获取到股票列表')
     txt.textContent='共获取 '+list.length+' 只股票'
-    var stocks=list.filter(function(s){return s.symbol&&(s.symbol.startsWith('6')||s.symbol.startsWith('0')||s.symbol.startsWith('3'))})
+    // 使用 code 字段（无前缀）过滤：6xx=沪主板, 0xx=深主板, 3xx=创业板
+    var stocks=list.filter(function(s){return s.code&&(s.code.startsWith('6')||s.code.startsWith('0')||s.code.startsWith('3'))})
     txt.textContent='分析 '+stocks.length+' 只A股中 (0%)...'
     if(bar)bar.style.width='0%'
     var done=0,total=stocks.length
@@ -352,7 +360,7 @@ function handleClearCache(){
 // 浏览器拉K线 → 推送到后端分析（已修复字段名和格式）
 async function fetchKlineAndAnalyze(s){
   try{
-    var code=s.symbol,pname=s.name||''
+    var code=s.code,pname=s.name||''
     var emCode=code.startsWith('6')?'1.'+code:'0.'+code
     var kurl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120'
     var kr=await fetch(kurl).then(function(r){return r.json()})
@@ -833,18 +841,24 @@ async function doFullRescan(){
   var scanCount=0
   try{
     setStatus('🔄 浏览器拉取Sina全市场行情...')
-    var sinaUrl='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=hs_a'
-    var src=await fetch(sinaUrl).then(function(r){return r.text()})
-    src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-    var list
-    try{list=JSON.parse(src)}catch(e){
-      var m=src.match(/\[[\s\S]*\]/)
-      if(m)list=JSON.parse(m[0]);else throw e
+    // 分别获取沪市(sh_a)和深市(sz_a)的全部A股实时行情
+    var [srcSH,srcSZ]=await Promise.all([
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=sh_a',{signal:AbortSignal.timeout(15000)}).then(function(r){return r.text()}),
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=sz_a',{signal:AbortSignal.timeout(15000)}).then(function(r){return r.text()})
+    ])
+    function parseSina(src){
+      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+      try{return JSON.parse(src)}catch(e){
+        var m=src.match(/\[[\s\S]*\]/)
+        if(m)return JSON.parse(m[0]);throw e
+      }
     }
+    var listSH=parseSina(srcSH),listSZ=parseSina(srcSZ)
+    var list=listSH.concat(listSZ)
     if(list&&list.length){
       var seenCodes={}
       for(var si=0;si<list.length;si++){
-        var sc=list[si],c=String(sc.symbol||'')
+        var sc=list[si],c=String(sc.code||'')
         if(!c||seenCodes[c])continue
         seenCodes[c]=1
         emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0})
