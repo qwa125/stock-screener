@@ -2482,7 +2482,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
         const NEGATIVE = ['减仓', '不要介入'];
-        if (['卖出', '减仓', '不要介入'].includes(suggestion)) {
+        if (suggestion === '卖出') {
             this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
             this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
         }
@@ -2755,7 +2755,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = '不要介入';
                         }
                     }
-                    if (['卖出', '减仓', '不要介入'].includes(newSuggestion)) {
+                    if (newSuggestion === '卖出') {
                         this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                     }
                     const BASE = {

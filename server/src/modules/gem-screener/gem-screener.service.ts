@@ -2951,7 +2951,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     const NEGATIVE = ['减仓', '不要介入'];
     // 卖出信号：不直接返回null，先记录锁定，后续会以"不要介入"展示
-    if (['卖出', '减仓', '不要介入'].includes(suggestion)) {
+    if (suggestion === '卖出') {
       this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
       this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
     }
@@ -3256,7 +3256,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           }
           
           // 如果当日是卖出/减仓/不要介入 → 记录到持久缓存（上锁）
-          if (['卖出', '减仓', '不要介入'].includes(newSuggestion)) {
+          if (newSuggestion === '卖出') {
             this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
           }
 
