@@ -1458,10 +1458,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         if (pricePosition >= 92 && score < 10)
             return null;
-        if (bx.baiBu)
-            return null;
         if (bx.baiBu && result.hasStrongSell)
             return this.buildResult(s, kline, result, '卖出', '白布+清仓');
+        if (bx.baiBu)
+            return null;
         const suggestion = this.scoreToSuggestion(score);
         if (suggestion === '不要介入')
             return null;
@@ -1485,11 +1485,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         if (pricePosition >= 95 && score < 8)
             return null;
+        if (bx.baiBu && (bx.baoLiangFuGaiQingCang || bx.po5RiXian))
+            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
         if (bx.baiBu)
             return null;
-        const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
-        if (bx.baiBu && hasStrongSell)
-            return this.buildResult(s, kline, result, '卖出', '白布+清仓');
         const suggestion = this.scoreToSuggestionRelaxed(score);
         if (suggestion === '不要介入')
             return null;

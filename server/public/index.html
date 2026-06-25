@@ -182,7 +182,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <script>
 var API='/api'
 function timeoutSignal(ms){try{if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout)return AbortSignal.timeout(ms)}catch(e){}var c=new AbortController();setTimeout(function(){try{c.abort()}catch(e){}},ms);return c.signal}
-var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','观望':'#6b7280'}
+var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','减仓':'#9333ea','卖出':'#dc2626','不要介入':'#6b7280'}
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
@@ -368,7 +368,7 @@ function todayAdviceText(s,rt){
     if(chg<-2) return'今日回调但趋势未破，继续持有观察'
     return'今日走势平稳，建议继续持有'
   }
-  return'今日暂无明显买入信号，建议观望'
+  return'今日暂无明显买入信号，建议持有'
 }
 
 // 临时功能：评分分布分析
@@ -457,7 +457,7 @@ function futurePrediction(s){
   if(s.suggestion==='买入')return'低位区出现买点信号，趋势企稳，未来1-2日看好，建议半仓买入'
   if(s.suggestion==='轻仓买入')return'中位区有趋势但信号不够强，未来1-2日存在不确定性，建议1/3仓位试探'
   if(s.suggestion==='持有')return'趋势向上但无明确买入信号，未来1-2日大概率延续趋势，建议持股待涨'
-  return'暂无明确买入信号，未来1-2日建议观望为主'
+  return'暂无明确买入信号，未来1-2日建议持有为主'
 }
 
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
@@ -593,7 +593,7 @@ function buildDetail(s,rt){
   var sc=s.score||0
   var gc=s.isGoldenCross
   var bai=s.baiXiaoDays||0
-  var sig=s.suggestion||'观望'
+  var sig=s.suggestion||'持有'
   // 前端推导信号组合（后端旧缓存可能没有）
   var comb=s.signalCombination||''
   if(!comb){
@@ -616,11 +616,11 @@ function buildDetail(s,rt){
     +'</div>'
 
   // 操作按钮 - 今日操作建议
-  var btnColors={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','观望':'#6b7280'}
+  var btnColors={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','减仓':'#9333ea','卖出':'#dc2626','不要介入':'#6b7280'}
   var btnColor=btnColors[sig]||'#6b7280'
-  var icons={'重仓买入':'📈','买入':'📊','轻仓买入':'🔍','持有':'💼','观望':'⏸️'}
+  var icons={'重仓买入':'📈','买入':'📊','轻仓买入':'🔍','持有':'💼','减仓':'📉','卖出':'❌','不要介入':'⛔'}
   var today=todayAdviceText(s,rt)
-  var action='<div style="padding:0 12px 4px;font-size:12px;font-weight:600;color:#666">📌 今日操作建议</div><div class="action-card"><div class="action-btn" style="background:'+btnColor+'"><span class="action-label">'+icons[sig]+' '+sig+'</span><span class="action-reason">'+(sig==='重仓买入'?'全仓买入':sig==='买入'?'半仓买入':sig==='轻仓买入'?'1/3仓位':sig==='持有'?'继续持有':'观望')+'</span></div><div style="font-size:11px;color:#6b7280;padding:6px 4px 0">'+today+'</div></div>'
+  var action='<div style="padding:0 12px 4px;font-size:12px;font-weight:600;color:#666">📌 今日操作建议</div><div class="action-card"><div class="action-btn" style="background:'+btnColor+'"><span class="action-label">'+icons[sig]+' '+sig+'</span><span class="action-reason">'+(sig==='重仓买入'?'全仓买入':sig==='买入'?'半仓买入':sig==='轻仓买入'?'1/3仓位':sig==='持有'?'继续持有':sig==='减仓'?'减仓控制风险':sig==='卖出'?'卖出离场':'继续持有')+'</span></div><div style="font-size:11px;color:#6b7280;padding:6px 4px 0">'+today+'</div></div>'
 
   // 未来预测
   var pred=futurePrediction(s)
@@ -706,9 +706,9 @@ async function doScan(){
     }
     stocks=d.data.opportunities
     // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
-    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
+    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
+      var pa=PRI[a.suggestion||'持有']??9,pb=PRI[b.suggestion||'持有']??9
       if(pa!==pb) return pa-pb
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
@@ -886,7 +886,7 @@ async function doFullRescan(){
     
     // 基于今日涨幅计算实时信号/评分（缓存股和新股都用这个）
     var liveScore=Math.round(30+Math.abs(chg)*2)
-    var liveSuggestion='观望'
+    var liveSuggestion='持有'
     // 涨停风险控制：10cm主板涨超6%不推荐追高；20cm创业板涨超15%同理
     if((isMainBoard(code)&&chg>9)||(isGEM(code)&&chg>15))continue
     if(chg>=9)liveSuggestion='重仓买入'
@@ -911,30 +911,30 @@ async function doFullRescan(){
             // ─── 信号合并规则 ───
             // Step ②: 后端建议是减仓/卖出/不要介入 → 保持不动，不受chg影响
             var BACKEND_SELL=['减仓','卖出','不要介入']
-            var backendSug=newStocks[si3].suggestion||'观望'
+            var backendSug=newStocks[si3].suggestion||'持有'
             if(BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入/持有 + 今日大涨 → 升级信号（保留后端多因子分析结果）
-              var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
+              var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
               if(PRI_ORDER.indexOf(liveSuggestion) < PRI_ORDER.indexOf(backendSug)){
                 newStocks[si3].suggestion=liveSuggestion
               }
             }
-            // ─── 实时三重卖点检测 ───
-            // ① 暴跌检测（chg ≤ -5%）→ 覆盖所有买入
-            if(chg <= -5){
-              newStocks[si3].suggestion='卖出'
-            }
-            // ② 均线死叉检测：MA5<MA10 死叉 + 反弹无力(chg<2%) → 不要介入
-            // isGoldenCross=false 说明MA5<MA10处于死叉状态
-            if(newStocks[si3].isGoldenCross===false && chg < 2 && chg >= 0){
-              newStocks[si3].suggestion='不要介入'
-            }
-            // ③ 破5日线检测：价 < MA5×0.98 或 价 < MA10 → 卖出
-            // (ma5/ma10由后端checkOpportunity全分析时输出)
-            var ma5=newStocks[si3].ma5, ma10=newStocks[si3].ma10
-            if(ma5 && ma10){
-              if(price < ma5*0.98 || price < ma10){
+            // ─── 实时三重卖点检测（仅后端未判定卖出时生效）───
+            if(BACKEND_SELL.indexOf(backendSug)===-1){
+              // ① 暴跌检测（chg ≤ -5%）→ 覆盖所有买入
+              if(chg <= -5){
                 newStocks[si3].suggestion='卖出'
+              }
+              // ② 均线死叉检测：MA5<MA10 死叉 + 反弹无力(chg<2%) → 不要介入
+              if(newStocks[si3].isGoldenCross===false && chg < 2 && chg >= 0){
+                newStocks[si3].suggestion='不要介入'
+              }
+              // ③ 破5日线检测：价 < MA5×0.98 或 价 < MA10 → 卖出
+              var ma5=newStocks[si3].ma5, ma10=newStocks[si3].ma10
+              if(ma5 && ma10){
+                if(price < ma5*0.98 || price < ma10){
+                  newStocks[si3].suggestion='卖出'
+                }
               }
             }
           }
@@ -954,7 +954,7 @@ async function doFullRescan(){
     newStocks.push({code:code,name:name,currentPrice:price,
       pricePosition:50,
       // 新股按涨跌幅给基础评分（即使非交易时段也有排序依据）
-      suggestion:hasLiveData?liveSuggestion:'观望',
+      suggestion:hasLiveData?liveSuggestion:'持有',
       score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
@@ -978,7 +978,7 @@ async function doFullRescan(){
   for(var di=0;di<newStocks.length;di++){
     var ds=newStocks[di]
     if(ds.code&&!seenInSina[ds.code]&&(ds.suggestion==='买入'||ds.suggestion==='重仓买入'||ds.suggestion==='轻仓买入'||ds.score>30)){
-      ds.suggestion='观望'
+      ds.suggestion='持有'
       ds.score=20
       ds.entryTiming=0
       deprioritized++
@@ -1002,12 +1002,12 @@ async function doFullRescan(){
     setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
     stocks=newStocks
     // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
-    var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5 }
+    var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6 }
     // 保存缓存股最新数据（排序会打乱位置）
     var cacheLatest=[]
     for(var ci=0;ci<cacheCount;ci++){cacheLatest.push(newStocks[ci])}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
+      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
       if(pa!==pb) return pa-pb
       // 第二排序：入场时机(高→低)
       var ea=a.entryTiming||0, eb=b.entryTiming||0
@@ -1040,9 +1040,9 @@ async function doFullRescan(){
       }
     }
     // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按信号→入场时机→评分→涨幅重整）
-    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'观望':4,'不要介入':5}
+    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
     stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'观望']??9,pb=PRI[b.suggestion||'观望']??9
+      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
       if(pa!==pb) return pa-pb
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
@@ -1408,12 +1408,12 @@ async function doSearch(){
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
         // 用实时涨幅修正信号（只升级不降级，与全市场重扫一致）
-        var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
-        var liveSug='观望'
+        var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
+        var liveSug='持有'
         if(stockChgP>=9)liveSug='重仓买入'
         else if(stockChgP>=6)liveSug='买入'
         else if(stockChgP>=3)liveSug='轻仓买入'
-        if(LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion||'观望')){
+        if(LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion||'持有')){
           o.suggestion=liveSug
         }
         da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
@@ -1431,12 +1431,12 @@ async function doSearch(){
           o2.currentPrice=o2.currentPrice||stockPrice
           o2.changePercent=o2.changePercent||stockChgP
           // 用实时涨幅修正信号（只升级不降级）
-          var liveSug2='观望'
+          var liveSug2='持有'
           if(stockChgP>=9)liveSug2='重仓买入'
           else if(stockChgP>=6)liveSug2='买入'
           else if(stockChgP>=3)liveSug2='轻仓买入'
-          var LP=['重仓买入','买入','轻仓买入','持有','观望','不要介入']
-          if(LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'观望')){
+          var LP=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
+          if(LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})

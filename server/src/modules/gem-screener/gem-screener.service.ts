@@ -1686,11 +1686,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (priceIncrease > 40) return null;
     if (pricePosition >= 92 && score < 10) return null;
 
+    // 白布+卖出信号 → 锁定
+    if (bx.baiBu && result.hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
     // 白布状态下不产生买入信号
     if (bx.baiBu) return null;
-
-    // 卖出信号 → 统一返回卖出
-    if (bx.baiBu && result.hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
 
     const suggestion = this.scoreToSuggestion(score);
     if (suggestion === '不要介入') return null;
@@ -1718,11 +1717,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (priceIncrease > 50) return null;
     if (pricePosition >= 95 && score < 8) return null;
 
+    // 白布+卖出信号 → 锁定
+    if (bx.baiBu && (bx.baoLiangFuGaiQingCang || bx.po5RiXian))
+      return this.buildResult(s, kline, result, '卖出', '白布+清仓');
     // 白布状态下不产生买入信号
     if (bx.baiBu) return null;
-
-    const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
-    if (bx.baiBu && hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
 
     const suggestion = this.scoreToSuggestionRelaxed(score);
     if (suggestion === '不要介入') return null;
