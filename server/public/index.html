@@ -509,15 +509,13 @@ function showDetail(i){
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
-  // 如果forecast1_2Day缺失(如从旧缓存加载),从搜索接口补获取
-  if(!s.forecast1_2Day && s.code){
-    fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
-      if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
-        s.forecast1_2Day=d.data[0].forecast1_2Day
-        da.innerHTML=buildDetail(s,rt)
-      }
-    }).catch(function(){})
-  }
+  // 始终从搜索接口获取最新预测（机会区的forecast基于缓存旧数据，可能与实时搜索不一致）
+  fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
+    if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
+      s.forecast1_2Day=d.data[0].forecast1_2Day
+      da.innerHTML=buildDetail(s,rt)
+    }
+  }).catch(function(){})
 }
 
 // ---------- 腾讯实时行情 ----------
