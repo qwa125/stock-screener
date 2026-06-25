@@ -17,7 +17,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
         this.registry = [];
-        this.maxSlots = 3;
+        this.maxSlots = parseInt(process.env.MAX_SLOTS || '3', 10);
         this.registryLoaded = false;
         this.supabase = this.initSupabase();
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
