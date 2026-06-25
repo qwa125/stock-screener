@@ -468,10 +468,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 入场时机差 + 死叉 → 持有（无明确买卖信号）
+      // 入场时机差 + 非金叉 → 不要介入（下跌趋势不应入场）
       if (s.entryTiming < 40 && !s.isGoldenCross) {
-        s.suggestion = '持有';
-        s.score = Math.min(s.score, 45);
+        s.suggestion = '不要介入';
+        s.score = Math.min(s.score, 30);
         continue;
       }
 
@@ -488,7 +488,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       } else if (baseScore >= 45) {
         s.suggestion = '减仓';
       } else if (baseScore >= 35) {
-        s.suggestion = '持有';
+        s.suggestion = '不要介入';
       } else {
         s.suggestion = '不要介入';
       }

@@ -352,8 +352,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 continue;
             }
             if (s.entryTiming < 40 && !s.isGoldenCross) {
-                s.suggestion = '持有';
-                s.score = Math.min(s.score, 45);
+                s.suggestion = '不要介入';
+                s.score = Math.min(s.score, 30);
                 continue;
             }
             const baseScore = s.score ?? 50;
@@ -373,7 +373,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.suggestion = '减仓';
             }
             else if (baseScore >= 35) {
-                s.suggestion = '持有';
+                s.suggestion = '不要介入';
             }
             else {
                 s.suggestion = '不要介入';
