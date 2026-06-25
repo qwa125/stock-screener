@@ -333,12 +333,24 @@ async function handleRescanClick(){
       // 每批后等待200ms，避免东方财富限流
       if(i+batchSize<total)await new Promise(function(r){setTimeout(r,200)})
     }
-    txt.textContent='全市场扫描完成! '+'已获取 '+total+' 只热门A股并推送后端分析'
+    txt.textContent='✅ 全市场扫描完成! 已获取 '+total+' 只热门A股并推送后端分析'
     if(bar)bar.style.width='100%'
-    setStatus('全市场重扫完成！已分析 '+total+' 只热门股票，正在刷新机会区...')
-    // ④ 刷新缓存并重新加载（不改变扫描进度显示）
-    try{ await doFullRescan() }catch(e2){ console.log("⚠️ doFullRescan异常(不影响缓存):",e2.message) }
-    setStatus('全市场重扫完毕 | 已扫描 '+total+' 只热门A股')
+    setStatus('⏳ 正在查询后端缓存状态...')
+    // ③ 查询后端缓存确认数据已落盘
+    try{
+      var cr2=await fetch(API+'/gem/cache-all',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json()})
+      var cachedTotal=cr2?.data?.total||0
+      setStatus('✅ 后端已缓存 '+cachedTotal+' 只股票，正在加载机会区...')
+    }catch(e){
+      setStatus('✅ 后端分析完成，正在加载机会区...')
+    }
+    // ④ 刷新机会区（错误不影响缓存）
+    try{
+      await doFullRescan()
+      setStatus('✅ 全市场重扫完毕 | 已分析 '+total+' 只热门A股')
+    }catch(e2){
+      setStatus('❌ 机会区加载异常: '+e2.message)
+    }
   }catch(e){
     console.error('全市场重扫失败:',e)
     setStatus('全市场重扫失败: '+e.message)
@@ -889,22 +901,25 @@ async function doFullRescan(){
   if(isBlurred)return
   loading=true
   stopPriceRefresh()
-  setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')
+  setStatus('🔄 加载缓存数据（来自后端分析）...')
   
   // 1. 缓存重分析（瞬间）
   var newStocks=[]
   try{
-    var cr=await fetch(API+'/gem/rescan')
+    var cr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(15000)})
     var cd=await cr.json()
     newStocks=(cd.data||[]).slice()
-  }catch(e){}
+  }catch(e){
+    console.warn('⚠️ rescan超时或失败:', e.message)
+  }
   
   // rescan被拦截(429)时，不再从localStorage回退——数据空则显示空列表
   if(newStocks.length===0){
     console.warn('⚠️ 后端缓存为空，需先执行全市场重扫')
+    loading=false; doFreshSina=true
+  }else{
+    setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取实时行情...')
   }
-  var cacheCount=newStocks.length  // 记录缓存股数量，用于后续追加
-  setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
   
   // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
   //    覆盖：沪深主板(600601603605000001002) + 创业板(300301)
