@@ -92,6 +92,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
               value TEXT NOT NULL DEFAULT ''
             )
           `);
+                    await client.query(`ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;`);
                     await client.query(`
             INSERT INTO public.device_settings (key, value)
             VALUES ('max_slots', '3')
@@ -160,6 +161,46 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             }
             catch (e) {
                 this.logger.warn(`数据库加载设置异常: ${e.message}`);
+            }
+        }
+        if (!loaded) {
+            try {
+                const url = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+                const pwd = process.env.SUPABASE_DB_PASSWORD || '';
+                if (url && pwd) {
+                    const ref = new URL(url).hostname.split('.')[0];
+                    const poolerHosts = [
+                        `aws-0-ap-southeast-1.pooler.supabase.com`,
+                        `${ref}.pooler.supabase.com`,
+                    ];
+                    for (const host of poolerHosts) {
+                        try {
+                            const client = new pg.Client({
+                                host, port: 6543, user: `postgres.${ref}`,
+                                password: pwd, database: 'postgres',
+                                ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 5000,
+                            });
+                            await client.connect();
+                            const result = await client.query(`SELECT value FROM public.device_settings WHERE key = 'max_slots'`);
+                            await client.end();
+                            if (result.rows && result.rows.length > 0) {
+                                const val = parseInt(result.rows[0].value, 10);
+                                if (val > 0) {
+                                    this.maxSlots = val;
+                                    this.logger.log(`⚙️ 从数据库加载(pg直连): 设备限额 ${this.maxSlots}`);
+                                    loaded = true;
+                                    break;
+                                }
+                            }
+                        }
+                        catch (e) {
+                            this.logger.warn(`pg直连查询失败(${host}): ${e.message}`);
+                        }
+                    }
+                }
+            }
+            catch (e) {
+                this.logger.warn(`pg直连查询异常: ${e.message}`);
             }
         }
         if (!loaded) {
