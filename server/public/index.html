@@ -180,7 +180,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <script>
 var API='/api'
-function timeoutSignal(ms){try{if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout)return AbortSignal.timeout(ms)}catch(e){}var c=new AbortController();setTimeout(function(){try{c.abort()}catch(e){}},ms);return c.signal}
+function timeoutSignal(ms){try{if(typeof AbortSignal!=='undefined'&&AbortSignal.timeout)return AbortSignal.timeout(ms)}catch(e){}
+
+// 紧急修复：?fix=1 自动重置设备名额+清空缓存（用于毛玻璃卡死时自救）
+try{
+  if(location.search.indexOf('fix=1')>=0){
+    (async function(){
+      try{await fetch('/api/device/reset',{method:'POST'})}catch(e){}
+      try{await fetch(API+'/gem/clear-cache')}catch(e){}
+      location.href=location.pathname+location.hash
+    })()
+  }
+}catch(e){}var c=new AbortController();setTimeout(function(){try{c.abort()}catch(e){}},ms);return c.signal}
 var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04','持有':'#2563eb','减仓':'#9333ea','卖出':'#dc2626','不要介入':'#6b7280'}
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
