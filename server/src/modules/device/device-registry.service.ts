@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { getSupabaseClient } from '@/storage/database/supabase-client'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -6,7 +6,7 @@ import * as pg from 'pg'
 import type { DeviceRegistryEntry } from './device-registry.types'
 
 @Injectable()
-export class DeviceRegistryService {
+export class DeviceRegistryService implements OnModuleInit {
   private readonly logger = new Logger(DeviceRegistryService.name)
   private registry: DeviceRegistryEntry[] = []
   private maxSlots = 3
@@ -14,6 +14,21 @@ export class DeviceRegistryService {
   private supabase = this.initSupabase()
   private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
   private readonly settingsPath = '/tmp/device-settings.json'
+
+  async onModuleInit() {
+    this.logger.log('⚙️ DeviceRegistryService 启动中...')
+    // 服务启动时立即从数据库加载设置
+    if (this.supabase) {
+      await this.ensureTable()
+    }
+    await this.loadSettingsFromDB()
+    await this.loadRegistry()
+    if (!this.supabase) {
+      this.loadFromFile()
+    }
+    this.registryLoaded = true
+    this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}`)
+  }
 
   private initSupabase() {
     try {

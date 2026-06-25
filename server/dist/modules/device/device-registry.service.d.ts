@@ -1,5 +1,6 @@
+import { OnModuleInit } from '@nestjs/common';
 import type { DeviceRegistryEntry } from './device-registry.types';
-export declare class DeviceRegistryService {
+export declare class DeviceRegistryService implements OnModuleInit {
     private readonly logger;
     private registry;
     private maxSlots;
@@ -7,6 +8,7 @@ export declare class DeviceRegistryService {
     private supabase;
     private readonly filePath;
     private readonly settingsPath;
+    onModuleInit(): Promise<void>;
     private initSupabase;
     private ensureTable;
     private saveToFile;

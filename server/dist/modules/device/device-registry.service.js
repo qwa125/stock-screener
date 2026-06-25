@@ -23,6 +23,19 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
         this.settingsPath = '/tmp/device-settings.json';
     }
+    async onModuleInit() {
+        this.logger.log('⚙️ DeviceRegistryService 启动中...');
+        if (this.supabase) {
+            await this.ensureTable();
+        }
+        await this.loadSettingsFromDB();
+        await this.loadRegistry();
+        if (!this.supabase) {
+            this.loadFromFile();
+        }
+        this.registryLoaded = true;
+        this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}`);
+    }
     initSupabase() {
         try {
             const client = (0, supabase_client_1.getSupabaseClient)();
