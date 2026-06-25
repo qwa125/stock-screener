@@ -348,7 +348,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 45);
                 continue;
             }
-            if (s.ma5 < s.ma10) {
+            if ((s.ma5 ?? 0) < (s.ma10 ?? 0)) {
                 s.suggestion = '不要介入';
                 s.score = Math.min(s.score, 30);
                 continue;
@@ -2704,16 +2704,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                                 ...s,
                                 suggestion: '不要介入',
                                 score: Math.min(s.score ?? 50, 30),
-                                updatedAt: Date.now(),
-                                signalComb: 'sellLocked',
                             });
                             continue;
                         }
                     }
                     const SELL_SIGS = ['卖出', '减仓', '不要介入'];
                     let newSuggestion;
-                    if (SELL_SIGS.includes(s.suggestion)) {
-                        newSuggestion = s.suggestion;
+                    if (s.suggestion && SELL_SIGS.includes(s.suggestion)) {
+                        newSuggestion = s.suggestion ?? '持有';
                         if (newSuggestion === '卖出') {
                             this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
                         }

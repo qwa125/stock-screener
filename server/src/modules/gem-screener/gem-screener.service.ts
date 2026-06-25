@@ -465,7 +465,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
 
       // 下跌趋势(MA5 < MA10)没信号 → 不要介入
-      if (s.ma5 < s.ma10) {
+      if ((s.ma5 ?? 0) < (s.ma10 ?? 0)) {
         s.suggestion = '不要介入';
         s.score = Math.min(s.score, 30);
         continue;
@@ -3207,8 +3207,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
                 ...s,
                 suggestion: '不要介入',
                 score: Math.min(s.score ?? 50, 30),
-                updatedAt: Date.now(),
-                signalComb: 'sellLocked',
               });
               continue;
             }
@@ -3217,8 +3215,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
           // ─── 已有卖出信号(卖出/减仓/不要介入) → 保留并上锁 ───
           const SELL_SIGS = ['卖出', '减仓', '不要介入'];
           let newSuggestion: string;
-          if (SELL_SIGS.includes(s.suggestion)) {
-            newSuggestion = s.suggestion;
+          if (s.suggestion && SELL_SIGS.includes(s.suggestion)) {
+            newSuggestion = s.suggestion ?? '持有';
             if (newSuggestion === '卖出') {
               this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
             }
