@@ -507,8 +507,16 @@ function showDetail(i){
   da.style.display='block'
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
-  // 高亮列表中的选中项
   renderList()
+  // 如果forecast1_2Day缺失(如从旧缓存加载),从搜索接口补获取
+  if(!s.forecast1_2Day && s.code){
+    fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.data&&d.data.forecast1_2Day){
+        s.forecast1_2Day=d.data.forecast1_2Day
+        da.innerHTML=buildDetail(s,rt)
+      }
+    }).catch(function(){})
+  }
 }
 
 // ---------- 腾讯实时行情 ----------
