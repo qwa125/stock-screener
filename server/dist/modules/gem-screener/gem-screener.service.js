@@ -346,21 +346,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.score = Math.min(s.score, 45);
                 continue;
             }
-            if (s.entryTiming < 25) {
+            if (!s.isGoldenCross && !s.suggestion) {
                 s.suggestion = '不要介入';
                 s.score = Math.min(s.score, 30);
                 continue;
             }
-            if (s.entryTiming < 40 && !s.isGoldenCross) {
-                s.suggestion = '不要介入';
-                s.score = Math.min(s.score, 30);
-                continue;
-            }
-            if (!s.suggestion) {
+            if (s.isGoldenCross && !s.suggestion) {
                 s.suggestion = '持有';
-            }
-            if (s.entryTiming < 50 && ['重仓买入', '买入'].includes(s.suggestion)) {
-                s.suggestion = '轻仓买入';
             }
         }
     }

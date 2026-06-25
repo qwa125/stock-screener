@@ -461,29 +461,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 入场时机极差 → 不要介入
-      if (s.entryTiming < 25) {
+      // 下跌趋势没信号 → 不要介入
+      if (!s.isGoldenCross && !s.suggestion) {
         s.suggestion = '不要介入';
         s.score = Math.min(s.score, 30);
         continue;
       }
 
-      // 入场时机差 + 非金叉 → 不要介入（下跌趋势不应入场）
-      if (s.entryTiming < 40 && !s.isGoldenCross) {
-        s.suggestion = '不要介入';
-        s.score = Math.min(s.score, 30);
-        continue;
-      }
-
-      // 没有触发卖出规则的股票，默认保持原信号或'持有'
-      if (!s.suggestion) {
+      // 上涨趋势没信号 → 持有
+      if (s.isGoldenCross && !s.suggestion) {
         s.suggestion = '持有';
       }
 
-      // 入场时机一般且有强买入信号 → 降级为轻仓买入
-      if (s.entryTiming < 50 && ['重仓买入','买入'].includes(s.suggestion)) {
-        s.suggestion = '轻仓买入';
-      }
+      
     }
   }
 
