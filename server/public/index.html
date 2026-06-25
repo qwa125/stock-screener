@@ -1590,17 +1590,23 @@ async function doSearch(){
         }
       }catch(e){console.warn('[search] direct eastmoney failed:',e.message||e)}
       
-      // ★ 备选1：后端代理 → 东财K线（浏览器跨域受限时走自己后端，数据最准，volume口径与扫描一致）
+      // ★ 备选1：新浪行情K线（直连，第二位）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        var kr=await fetch(API+'/gem/proxy/kline?code='+stockCode+'&market='+prefix,{signal:timeoutSignal(20000)})
-        var kj=await kr.json()
-        if(kj&&kj.code===200&&kj.data&&kj.data.length>=5){
-          kdata=kj.data
-          console.log('[search] proxy eastmoney kline got '+kdata.length+' bars')
+        var sinaPrefix=prefix==='sz'?'sz':'sh'
+        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=500'
+        var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)})
+        if(srr.ok||srr.status===0){
+          try{var srd=await srr.json()}catch(ee){srd=null}
+          if(srd&&Array.isArray(srd)&&srd.length>=5){
+            kdata=srd.map(function(l){
+              return {day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}
+            })
+            console.log('[search] sina kline got '+kdata.length+' bars')
+          }
         }
-      }catch(e){console.warn('[search] proxy eastmoney failed:',e.message||e)}
+      }catch(e){console.warn('[search] sina kline failed:',e.message||e)}
       
-      // ★ 备选2：腾讯行情K线（国内浏览器直连，volume口径与东财不同，仅代理失败时回退）
+      // ★ 备选2：腾讯行情K线（直连，第三位）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
         var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
@@ -1619,22 +1625,6 @@ async function doSearch(){
           }
         }
       }catch(e){console.warn('[search] tencent kline failed:',e.message||e)}
-      
-      // ★ 备选3：新浪行情K线（国内浏览器直连，最后兜底）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        var sinaPrefix=prefix==='sz'?'sz':'sh'
-        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=500'
-        var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)})
-        if(srr.ok||srr.status===0){
-          try{var srd=await srr.json()}catch(ee){srd=null}
-          if(srd&&Array.isArray(srd)&&srd.length>=5){
-            kdata=srd.map(function(l){
-              return {day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}
-            })
-            console.log('[search] sina kline got '+kdata.length+' bars')
-          }
-        }
-      }catch(e){console.warn('[search] sina kline failed:',e.message||e)}
       
       if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       
