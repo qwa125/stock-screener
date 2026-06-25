@@ -2914,6 +2914,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                             newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
                         }
                     }
+                    const chg = s.changePercent ?? 0;
+                    if (chg >= 9 && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+                        newSuggestion = '轻仓买入';
+                    }
+                    else if (chg >= 6 && !['重仓买入', '买入', '轻仓买入', '减仓', '卖出'].includes(newSuggestion)) {
+                        newSuggestion = '轻仓买入';
+                    }
+                    else if (chg >= 3 && newSuggestion === '不要介入') {
+                        newSuggestion = '持有';
+                    }
                     if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
                         newSuggestion = '不要介入';
                     }

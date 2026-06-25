@@ -1145,7 +1145,7 @@ async function doFullRescan(){
       return (b.changePercent||0)-(a.changePercent||0)
     })
     // 只保留重仓买入/买入的股票
-    var ALLOWED={'重仓买入':1,'买入':1}
+    var ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
     if(newStocks.length>0){
@@ -1184,7 +1184,7 @@ async function doFullRescan(){
       stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
     }catch(e){}
     // 过滤：只保留重仓买入/买入
-    var ALLOWED={'重仓买入':1,'买入':1}
+    var ALLOWED={'重仓买入':1,'买入':1,'轻仓买入':1}
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
