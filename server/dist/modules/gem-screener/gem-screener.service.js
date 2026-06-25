@@ -298,94 +298,95 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const mfIn = mf > 2;
             const jiScore = s.jiGouActiveScore ?? 0;
             const volDead = jiScore < 3;
+            const volState = jiScore >= 10 ? '放量' : jiScore >= 5 ? '平量' : jiScore >= 2 ? '缩量' : '极度缩量';
             if (downtrend && mfStrongOut && et < 50) {
                 s.forecast1_2Day = {
                     direction: '下跌趋势', confidence: '高',
-                    detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})+主力大幅出逃(${mf.toFixed(1)}亿)+介入时机差(${et}),资金与趋势同步向下,未来1-2日继续探底概率极大,坚决不介入`
+                    detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})+${volState}+主力大幅出逃(${mf.toFixed(1)}亿)+介入时机差(${et}),资金与趋势同步向下,未来1-2日继续探底概率极大,坚决不介入`
                 };
             }
             else if (downtrend && et < 45) {
                 s.forecast1_2Day = {
                     direction: '下跌趋势', confidence: '高',
-                    detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''}+介入时机差(${et}),短期空方主导,未来1-2日继续震荡探底概率大,不宜抄底`
+                    detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})+${volState}${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''}+介入时机差(${et}),短期空方主导,未来1-2日继续震荡探底概率大,不宜抄底`
                 };
             }
             else if (downtrend && et < 55) {
                 s.forecast1_2Day = {
                     direction: '震荡偏弱', confidence: '中',
-                    detail: `均线空头排列(MA5<MA10)${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},介入时机中性(${et}),下跌节奏放缓但未企稳,未来1-2日低位震荡为主,等待均线走平再观察`
+                    detail: `均线空头排列(MA5<MA10)+${volState}${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},介入时机中性(${et}),下跌节奏放缓但未企稳,未来1-2日低位震荡为主,等待均线走平再观察`
                 };
             }
             else if (!gc && mfStrongOut) {
                 s.forecast1_2Day = {
                     direction: '看跌', confidence: '高',
-                    detail: `MACD死叉+主力大幅出逃(${mf.toFixed(1)}亿),资金加速撤离,短期动能在快速减弱,未来1-2日大概率继续回调,下方支撑位是关键`
+                    detail: `MACD死叉+${volState}+主力大幅出逃(${mf.toFixed(1)}亿),资金加速撤离,短期动能在快速减弱,未来1-2日大概率继续回调,下方支撑位是关键`
                 };
             }
             else if (!gc && et < 40) {
                 s.forecast1_2Day = {
                     direction: '看跌', confidence: '中',
-                    detail: `MACD死叉+介入时机差(${et})${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},短期动能偏弱,未来1-2日大概率延续回调,关注下方支撑位`
+                    detail: `MACD死叉+${volState}+介入时机差(${et})${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},短期动能偏弱,未来1-2日大概率延续回调,关注下方支撑位`
                 };
             }
             else if (overbought && et < 50) {
                 s.forecast1_2Day = {
                     direction: '回调风险', confidence: '中',
-                    detail: `价格已处于高位(位置${Math.round(pos)}%)${mfStrongOut ? `+主力明显出逃(${mf.toFixed(1)}亿)` : mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},介入时机不足(${et}),获利盘抛压增大,未来1-2日注意冲高回落`
+                    detail: `价格已处于高位(位置${Math.round(pos)}%)+${volState}${mfStrongOut ? `+主力明显出逃(${mf.toFixed(1)}亿)` : mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},介入时机不足(${et}),获利盘抛压增大,未来1-2日注意冲高回落`
                 };
             }
             else if (et < 45 && volDead) {
                 s.forecast1_2Day = {
                     direction: '震荡', confidence: '低',
-                    detail: `介入时机差(${et})+量能枯竭(活跃度${jiScore}),无人交易无方向,均线${downtrend ? '空头' : '方向不明'},未来1-2日大概率横盘等待方向,不参与`
+                    detail: `介入时机差(${et})+${volState}(活跃度${jiScore}),无人交易无方向,均线${downtrend ? '空头' : '方向不明'},未来1-2日大概率横盘等待方向,不参与`
                 };
             }
             else if (et < 45) {
                 s.forecast1_2Day = {
                     direction: '震荡', confidence: '低',
-                    detail: `介入时机差(${et})${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},均线${downtrend ? '空头排列' : '方向不明'},未来1-2日大概率横盘整理,等待方向选择`
+                    detail: `介入时机差(${et})+${volState}${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},均线${downtrend ? '空头排列' : '方向不明'},未来1-2日大概率横盘整理,等待方向选择`
                 };
             }
             else if (et < 55 && !gc) {
                 s.forecast1_2Day = {
                     direction: '震荡偏弱', confidence: '低',
-                    detail: `介入时机一般(${et})+MACD未金叉${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},趋势动能偏弱,未来1-2日延续弱势震荡,突破需量能配合`
+                    detail: `介入时机一般(${et})+${volState}+MACD未金叉${mfOut ? `+主力流出(${mf.toFixed(1)}亿)` : ''},趋势动能偏弱,未来1-2日延续弱势震荡,突破需量能配合`
                 };
             }
             else if (et < 55) {
                 s.forecast1_2Day = {
                     direction: '震荡偏强', confidence: '低',
-                    detail: `介入时机中性偏可(${et})+MACD金叉向上${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},多方略有优势,未来1-2日震荡中偏多运行,关注量能是否配合`
+                    detail: `介入时机中性偏可(${et})+${volState}+MACD金叉向上${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},多方略有优势,未来1-2日震荡中偏多运行`
                 };
             }
             else if (et >= 65 && gc && pos < 65 && mfStrongIn) {
                 s.forecast1_2Day = {
                     direction: '强烈看涨', confidence: '高',
-                    detail: `主力大幅进场(${mf.toFixed(1)}亿)+MACD金叉确认+介入时机极佳(${et})+位置适中(${Math.round(pos)}%),资金+趋势+位置共振向上,未来1-2日大概率强势上攻,积极关注`
+                    detail: `主力大幅进场(${mf.toFixed(1)}亿)+${volState}+MACD金叉确认+介入时机极佳(${et})+位置适中(${Math.round(pos)}%),资金+趋势+位置共振向上,未来1-2日大概率强势上攻,积极关注`
                 };
             }
             else if (et >= 65 && gc && pos < 65) {
                 s.forecast1_2Day = {
                     direction: '强烈看涨', confidence: '高',
-                    detail: `介入时机极佳(${et})+MACD金叉确认+位置适中(${Math.round(pos)}%)${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},趋势共振向上,未来1-2日大概率延续升势,可积极关注`
+                    detail: `介入时机极佳(${et})+${volState}+MACD金叉确认+位置适中(${Math.round(pos)}%)${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},趋势共振向上,未来1-2日大概率延续升势,可积极关注`
                 };
             }
             else if (et >= 60 && mfIn) {
                 s.forecast1_2Day = {
                     direction: '看涨', confidence: '高',
-                    detail: `主力进场(${mf.toFixed(1)}亿)+介入时机良好(${et}),资金面与情绪面偏多,未来1-2日有望继续震荡走高,持股待涨或逢低关注`
+                    detail: `主力进场(${mf.toFixed(1)}亿)+${volState}+介入时机良好(${et}),资金面与情绪面偏多,未来1-2日有望继续震荡走高,持股待涨或逢低关注`
                 };
             }
             else if (et >= 60) {
                 s.forecast1_2Day = {
                     direction: '看涨', confidence: '高',
-                    detail: `介入时机良好(${et})+技术面偏多${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},未来1-2日有望继续震荡走高,持股待涨或逢低关注`
+                    detail: `介入时机良好(${et})+${volState}+技术面偏多${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},未来1-2日有望继续震荡走高,持股待涨或逢低关注`
                 };
             }
             else {
                 s.forecast1_2Day = {
                     direction: '看涨', confidence: '中',
-                    detail: `介入时机尚可(${et})+趋势偏多${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},未来1-2日预计温和上涨,留意位置(${Math.round(pos)}%)压力`
+                    detail: `介入时机尚可(${et})+${volState}+趋势偏多${mfIn ? `+主力流入(${mf.toFixed(1)}亿)` : ''},未来1-2日预计温和上涨,留意位置(${Math.round(pos)}%)压力`
                 };
             }
         }
@@ -1636,64 +1637,65 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const mfOut = mf < -1;
         const mfStrongIn = mf > 5;
         const mfIn = mf > 2;
+        const volState = volumeRatio > 1.5 ? '放量' : volumeRatio > 0.8 ? '平量' : volumeRatio > 0.4 ? '缩量' : '极度缩量';
         if (score >= 12 && jiGouActive && macdGoldenCross && uptrend && pricePosition < 70 && volumeRatio > 0.6) {
             return {
                 direction: '强烈看涨', confidence: '高',
-                detail: `综合评分${score}分,机构活跃,MACD金叉,均线多头排列(趋势值${trendState}),位置${Math.round(pricePosition)}%,量比${volumeRatio.toFixed(2)}${mfStrongIn ? `+主力大幅进场${mf.toFixed(1)}亿` : mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。多指标共振向上+资金面配合,未来1-2日上涨概率高,有望继续走强突破`
+                detail: `综合评分${score}分,机构活跃,${volState}(量比${volumeRatio.toFixed(2)}),MACD金叉,均线多头排列(趋势值${trendState}),位置${Math.round(pricePosition)}%${mfStrongIn ? `+主力大幅进场${mf.toFixed(1)}亿` : mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。多指标共振向上+资金面配合,未来1-2日上涨概率高,有望继续走强突破`
             };
         }
         if (score >= 10 && macdGoldenCross && uptrend && pricePosition < 75 && volumeRatio > 0.5) {
             return {
                 direction: '看涨', confidence: '高',
-                detail: `综合评分${score}分,MACD金叉,均线多头(趋势值${trendState}),位置${Math.round(pricePosition)}%,量比${volumeRatio.toFixed(2)}${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。趋势向好,未来1-2日震荡偏多运行`
+                detail: `综合评分${score}分,MACD金叉,均线多头(趋势值${trendState}),位置${Math.round(pricePosition)}%,${volState}(量比${volumeRatio.toFixed(2)})${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。趋势向好,未来1-2日震荡偏多运行`
             };
         }
         if (score >= 12) {
             return {
                 direction: '看涨', confidence: '中',
-                detail: `综合评分${score}分较高,但趋势(值${trendState})或位置(${Math.round(pricePosition)}%)或量比(${volumeRatio.toFixed(2)})不够理想${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},未来1-2日偏多但介入需等确认`
+                detail: `综合评分${score}分较高,但趋势(值${trendState})或位置(${Math.round(pricePosition)}%)或${volState}(量比${volumeRatio.toFixed(2)})不够理想${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},未来1-2日偏多但介入需等确认`
             };
         }
         if (score >= 9 && isBuySignal && pricePosition < 80) {
             return {
                 direction: '震荡偏强', confidence: '中',
-                detail: `综合评分${score}分,有买入信号加持,位置${Math.round(pricePosition)}%适中${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期多空平衡偏多,未来1-2日有望在震荡中逐步走高`
+                detail: `综合评分${score}分,有买入信号加持,位置${Math.round(pricePosition)}%适中,${volState}(量比${volumeRatio.toFixed(2)})${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期多空平衡偏多,未来1-2日有望在震荡中逐步走高`
             };
         }
         if (score >= 9 && isBuySignal) {
             return {
                 direction: '震荡', confidence: '低',
-                detail: `综合评分${score}分有买入信号,但位置偏高(${Math.round(pricePosition)}%)${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},上方空间有限且获利盘较多,未来1-2日方向不明确`
+                detail: `综合评分${score}分有买入信号,但位置偏高(${Math.round(pricePosition)}%)${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},${volState}(量比${volumeRatio.toFixed(2)}),上方空间有限且获利盘较多,未来1-2日方向不明确`
             };
         }
         if (score >= 9 && isSellSignal) {
             return {
                 direction: '震荡', confidence: '低',
-                detail: `综合评分${score}分尚可但叠加卖出信号${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : ''},多空分歧明显。未来1-2日方向不明朗,需等待信号明朗再决定`
+                detail: `综合评分${score}分尚可但叠加卖出信号,${volState}(量比${volumeRatio.toFixed(2)})${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : ''},多空分歧明显。未来1-2日方向不明朗,需等待信号明朗再决定`
             };
         }
         if (score >= 6 && isBuySignal && pricePosition < 85) {
             return {
                 direction: '震荡偏强', confidence: '低',
-                detail: `综合评分${score}分一般但有买入信号,位置${Math.round(pricePosition)}%尚可${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期有反弹预期但力度存疑,未来1-2日窄幅震荡偏多`
+                detail: `综合评分${score}分一般但有买入信号,位置${Math.round(pricePosition)}%尚可,${volState}(量比${volumeRatio.toFixed(2)})${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期有反弹预期但力度存疑,未来1-2日窄幅震荡偏多`
             };
         }
         if (score >= 6 && !isBuySignal) {
             return {
                 direction: '震荡', confidence: '低',
-                detail: `综合评分${score}分偏低,无明显买卖信号指引。均线${uptrend ? '多头' : '空头或黏合'},量比${volumeRatio.toFixed(2)}${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},未来1-2日大概率延续震荡`
+                detail: `综合评分${score}分偏低,无明显买卖信号指引。均线${uptrend ? '多头' : '空头或黏合'},${volState}(量比${volumeRatio.toFixed(2)})${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''},未来1-2日大概率延续震荡`
             };
         }
         if (score < 6 && (baiXiao || jiGouActive)) {
             return {
                 direction: '震荡偏弱', confidence: '低',
-                detail: `综合评分${score}分偏低,技术面整体偏弱,虽有${baiXiao ? '白消信号' : '机构活跃'}${mfStrongOut ? `但主力大幅出逃${mf.toFixed(1)}亿` : ''},难以支撑反转。未来1-2日有继续调整压力`
+                detail: `综合评分${score}分偏低,技术面整体偏弱,${volState}(量比${volumeRatio.toFixed(2)}),虽有${baiXiao ? '白消信号' : '机构活跃'}${mfStrongOut ? `但主力大幅出逃${mf.toFixed(1)}亿` : ''},难以支撑反转。未来1-2日有继续调整压力`
             };
         }
         if (score < 6) {
             return {
                 direction: '看跌', confidence: '高',
-                detail: `综合评分仅${score}分,MACD${macdGoldenCross ? '金叉' : '死叉或未金叉'},趋势值${trendState},量比${volumeRatio.toFixed(2)}${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。各指标偏空共振,未来1-2日回调风险较大,不宜介入`
+                detail: `综合评分仅${score}分,MACD${macdGoldenCross ? '金叉' : '死叉或未金叉'},趋势值${trendState},${volState}(量比${volumeRatio.toFixed(2)})${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。各指标偏空共振,未来1-2日回调风险较大,不宜介入`
             };
         }
         return { direction: '方向不明', confidence: '--', detail: '综合信号不明确,各指标无法形成一致性判断' };
@@ -2750,6 +2752,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const isVolActive = volRatio > 1.2;
             const isVolShrink = volRatio < 0.7;
             const recentUp5d = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5];
+            const volState = volRatio > 1.5 ? '放量' : volRatio > 0.8 ? '平量' : volRatio > 0.4 ? '缩量' : '极度缩量';
             let ts = 50;
             if (isUptrend)
                 ts += 20;
@@ -2780,30 +2783,30 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (ts >= 75) {
                 return {
                     direction: '看涨', confidence: '较高',
-                    detail: `技术评分${Math.round(ts)}分:趋势${isUptrend ? '向上' : '偏弱'},MACD${hasGoldenCross ? '金叉向好' : '未金叉'},量价${recentUp5d ? '健康上行' : '承压'}${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''},位置${Math.round(pricePos)}%。多指标共振,未来1-2日上涨概率较高`
+                    detail: `技术评分${Math.round(ts)}分:趋势${isUptrend ? '向上' : '偏弱'},${volState}(量比${volRatio.toFixed(2)}),MACD${hasGoldenCross ? '金叉向好' : '未金叉'},量价${recentUp5d ? '健康上行' : '承压'}${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''},位置${Math.round(pricePos)}%。多指标共振,未来1-2日上涨概率较高`
                 };
             }
             if (ts >= 55) {
                 return {
                     direction: '震荡偏强', confidence: '中等',
-                    detail: `技术评分${Math.round(ts)}分:${isUptrend ? '均线多头排列' : '趋势中性'},${hasGoldenCross ? 'MACD金叉' : 'MACD未金叉'},量比${volRatio.toFixed(2)}${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期多方略占优,未来1-2日震荡上行概率偏大`
+                    detail: `技术评分${Math.round(ts)}分:${isUptrend ? '均线多头排列' : '趋势中性'},${volState}(量比${volRatio.toFixed(2)}),${hasGoldenCross ? 'MACD金叉' : 'MACD未金叉'}${mfIn ? `+主力流入${mf.toFixed(1)}亿` : ''}。短期多方略占优,未来1-2日震荡上行概率偏大`
                 };
             }
             if (ts >= 40) {
                 return {
                     direction: '震荡', confidence: '低',
-                    detail: `技术评分${Math.round(ts)}分:趋势方向不明确(${isUptrend ? '偏多' : '偏弱'}),${hasGoldenCross ? 'MACD金叉' : 'MACD未形成金叉'},量比${volRatio.toFixed(2)}${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。多空胶着,未来1-2日大概率横盘`
+                    detail: `技术评分${Math.round(ts)}分:趋势方向不明确(${isUptrend ? '偏多' : '偏弱'}),${volState}(量比${volRatio.toFixed(2)}),${hasGoldenCross ? 'MACD金叉' : 'MACD未形成金叉'}${mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。多空胶着,未来1-2日大概率横盘`
                 };
             }
             if (ts >= 25) {
                 return {
                     direction: '震荡偏弱', confidence: '中等',
-                    detail: `技术评分${Math.round(ts)}分:趋势偏弱(${trendState <= 0 ? '均线空头' : '均线黏合'}),MACD死叉,量比${volRatio.toFixed(2)}缩量${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。短期承压,未来1-2日大概率继续回调寻支撑`
+                    detail: `技术评分${Math.round(ts)}分:趋势偏弱(${trendState <= 0 ? '均线空头' : '均线黏合'}),${volState}(量比${volRatio.toFixed(2)}),MACD死叉${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : mfOut ? `+主力流出${mf.toFixed(1)}亿` : ''}。短期承压,未来1-2日大概率继续回调寻支撑`
                 };
             }
             return {
                 direction: '看跌', confidence: '较高',
-                detail: `技术评分${Math.round(ts)}分:趋势向下(趋势值${trendState}),MACD死叉,位置${Math.round(pricePos)}%偏高${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : ''}。空头主导,未来1-2日大概率继续下行,建议回避`
+                detail: `技术评分${Math.round(ts)}分:趋势向下(趋势值${trendState}),${volState}(量比${volRatio.toFixed(2)}),MACD死叉,位置${Math.round(pricePos)}%偏高${mfStrongOut ? `+主力大幅出逃${mf.toFixed(1)}亿` : ''}。空头主导,未来1-2日大概率继续下行,建议回避`
             };
         })();
         return {
