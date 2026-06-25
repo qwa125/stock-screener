@@ -285,7 +285,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (s.forecast1_2Day)
                 continue;
             const sig = s.suggestion || '';
-            const isSell = ['减仓', '卖出', '不要介入', '观望'].includes(sig);
+            const isSell = ['减仓', '卖出', '不要介入'].includes(sig);
             if (isSell) {
                 s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
                 continue;
@@ -352,7 +352,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 continue;
             }
             if (s.entryTiming < 40 && !s.isGoldenCross) {
-                s.suggestion = '观望';
+                s.suggestion = '持有';
                 s.score = Math.min(s.score, 45);
                 continue;
             }
@@ -373,7 +373,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.suggestion = '减仓';
             }
             else if (baseScore >= 35) {
-                s.suggestion = '观望';
+                s.suggestion = '持有';
             }
             else {
                 s.suggestion = '不要介入';
@@ -2720,7 +2720,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         trendState = 2;
                     else if (pp < 25)
                         trendState = 0;
-                    let newSuggestion = s.suggestion || '观望';
+                    let newSuggestion = s.suggestion || '持有';
                     const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
                     const baiXiaoDays = s.baiXiaoDays ?? 0;
                     if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
@@ -2743,7 +2743,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         newSuggestion = '持有';
                     }
                     else {
-                        newSuggestion = '观望';
+                        newSuggestion = '持有';
                     }
                     const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
                     const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
@@ -2753,7 +2753,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         else if (newSuggestion === '买入')
                             newSuggestion = '轻仓买入';
                         else if (newSuggestion === '轻仓买入')
-                            newSuggestion = '观望';
+                            newSuggestion = '持有';
                     }
                     if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
                         if (newSuggestion === '买入')

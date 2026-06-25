@@ -11,6 +11,7 @@ export declare class DeviceRegistryService implements OnModuleInit {
     onModuleInit(): Promise<void>;
     private initSupabase;
     private createTablesIfNeeded;
+    private warmUpSchema;
     private saveToFile;
     private loadFromFile;
     private loadSettingsFromDB;

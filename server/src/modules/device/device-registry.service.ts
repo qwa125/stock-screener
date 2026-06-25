@@ -46,58 +46,69 @@ export class DeviceRegistryService implements OnModuleInit {
     }
     const supabaseUrl = process.env.COZE_SUPABASE_URL || process.env.SUPABASE_URL || ''
     if (!supabaseUrl) return false
+    // 从 Supabase URL 提取项目 ref
+    const hostname = new URL(supabaseUrl).hostname
+    const parts = hostname.split('.')
+    const ref = parts.length >= 4 ? parts[1] : parts[0]
+
+    const sql = `
+      CREATE TABLE IF NOT EXISTS public.access_devices (
+        id TEXT PRIMARY KEY,
+        ua TEXT NOT NULL DEFAULT '',
+        display_name TEXT NOT NULL DEFAULT '',
+        first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen);
+      CREATE TABLE IF NOT EXISTS public.device_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+      );
+      ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;
+      INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+        ON CONFLICT (key) DO NOTHING;
+    `
     try {
-      const sql = `
-        CREATE TABLE IF NOT EXISTS public.access_devices (
-          id TEXT PRIMARY KEY,
-          ua TEXT NOT NULL DEFAULT '',
-          display_name TEXT NOT NULL DEFAULT '',
-          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_access_devices_first_seen ON public.access_devices (first_seen);
-        CREATE TABLE IF NOT EXISTS public.device_settings (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL DEFAULT ''
-        );
-        ALTER TABLE public.device_settings DISABLE ROW LEVEL SECURITY;
-        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
-          ON CONFLICT (key) DO NOTHING;
-        NOTIFY pgrst, 'reload schema';
-      `
-      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
+      // Supabase Management API SQL 端点 (HTTPS, 无需 pg.Client)
+      const resp = await fetch(`https://api.supabase.com/v1/projects/${ref}/sql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': serviceKey,
           'Authorization': `Bearer ${serviceKey}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ query: sql }),
       })
       if (!resp.ok) {
-        // rpc 端点不可用，降级到 SQL 端点 (pg_query)
-        const sqlResp = await fetch(`${supabaseUrl}/rest/v1/pg_query`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': serviceKey,
-            'Authorization': `Bearer ${serviceKey}`,
-            'Prefer': 'params=single-object',
-          },
-          body: JSON.stringify({ query: sql }),
-        })
-        if (!sqlResp.ok) {
-          const errText = await sqlResp.text()
-          this.logger.warn(`pg_query创建表失败: ${errText}`)
-          return false
-        }
+        const errText = await resp.text()
+        this.logger.warn(`Management API 执行SQL失败: ${resp.status} ${errText}`)
+        // 兜底: 直接尝试读表来预热 schema 缓存
+        await this.warmUpSchema()
+        return false
       }
-      this.logger.log('通过Supabase API创建/确认数据表成功')
-      await new Promise(r => setTimeout(r, 3000)) // 等待 schema 缓存刷新
+      this.logger.log('通过 Supabase Management API 创建/确认数据表成功')
+      // 等待 schema 缓存刷新
+      await new Promise(r => setTimeout(r, 3000))
       return true
     } catch (e) {
       this.logger.warn(`自动创建表失败: ${(e as Error).message}`)
+      // 兜底: 主动预热 schema 缓存
+      await this.warmUpSchema()
       return false
+    }
+  }
+
+  /** 主动预热 PostgREST schema 缓存（避免启动时 3 次重试） */
+  private async warmUpSchema() {
+    if (!this.supabase) return
+    try {
+      // 并发查询所有可能用到的表，触发 PostgREST 加载 schema
+      await Promise.all([
+        this.supabase.from('access_devices').select('id').limit(1),
+        this.supabase.from('device_settings').select('key').limit(1),
+      ])
+      this.logger.log('PostgREST schema 缓存预热完成')
+    } catch {
+      // 预热失败也无所谓，后续查询会自动重试
     }
   }
 

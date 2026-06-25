@@ -394,7 +394,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     for (const s of data) {
       if (s.forecast1_2Day) continue; // 已有最新预测则跳过
       const sig = s.suggestion || '';
-      const isSell = ['减仓','卖出','不要介入','观望'].includes(sig);
+      const isSell = ['减仓','卖出','不要介入'].includes(sig);
       if (isSell) {
         s.forecast1_2Day = { direction: '方向不明', confidence: '低', detail: '卖出信号' };
         continue;
@@ -468,9 +468,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
         continue;
       }
 
-      // 入场时机差 + 死叉 → 观望
+      // 入场时机差 + 死叉 → 持有（无明确买卖信号）
       if (s.entryTiming < 40 && !s.isGoldenCross) {
-        s.suggestion = '观望';
+        s.suggestion = '持有';
         s.score = Math.min(s.score, 45);
         continue;
       }
@@ -488,7 +488,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       } else if (baseScore >= 45) {
         s.suggestion = '减仓';
       } else if (baseScore >= 35) {
-        s.suggestion = '观望';
+        s.suggestion = '持有';
       } else {
         s.suggestion = '不要介入';
       }
@@ -3218,7 +3218,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           else if (pp < 25) trendState = 0;
 
           // 应用三层买入体系逻辑（同 checkOpportunity）
-          let newSuggestion = s.suggestion || '观望';
+          let newSuggestion = s.suggestion || '持有';
           const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
           const baiXiaoDays = s.baiXiaoDays ?? 0;
 
@@ -3234,7 +3234,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           } else if (trendState >= 1 && pp > 15) {
             newSuggestion = '持有';
           } else {
-            newSuggestion = '观望';
+            newSuggestion = '持有';
           }
 
           // 筹码修正：分散+峰高位+未企稳 → 降级
@@ -3243,7 +3243,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (chipDowngrade || chipRisk) {
             if (newSuggestion === '重仓买入') newSuggestion = '买入';
             else if (newSuggestion === '买入') newSuggestion = '轻仓买入';
-            else if (newSuggestion === '轻仓买入') newSuggestion = '观望';
+            else if (newSuggestion === '轻仓买入') newSuggestion = '持有';
           }
           // 筹码集中+峰在下方+低位企稳 → 升级
           if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
