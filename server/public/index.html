@@ -295,20 +295,29 @@ async function handleRescanClick(){
     // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
     setStatus('正在获取热门A股...')
     txt.textContent='获取涨跌幅排行中...'
-    async function fetchNodePages(node,pages){
+    async function fetchNodePages(node,pages,label){
       var all=[]
       for(var p=1;p<=pages;p++){
-        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node)
-          .then(function(r){return r.text()})
-        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-        try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
-          var m=src.match(/\[[\s\S]*\]/)
-          if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+        txt.textContent='获取 '+label+' 涨跌幅排行 '+p+'/'+pages+' 页...'
+        try{
+          var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,
+            {signal:AbortSignal.timeout(10000)}).then(function(r){return r.text()})
+          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+          try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
+            var m=src.match(/\[[\s\S]*\]/)
+            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+          }
+        }catch(e){
+          console.warn('第'+p+'页获取失败:',e.message)
         }
+        if(p<pages)await new Promise(function(r){setTimeout(r,200)})
       }
       return all
     }
-    var [shList,szList]=await Promise.all([fetchNodePages('sh_a',15),fetchNodePages('sz_a',20)])
+    setStatus('正在抓取沪市热门股...')
+    var shList=await fetchNodePages('sh_a',15,'沪市')
+    setStatus('正在抓取深市热门股...')
+    var szList=await fetchNodePages('sz_a',20,'深市')
     // 主板：沪60 + 深00（上限1000）
     var mainBoard=shList.filter(function(s){return s.code&&s.code.startsWith('60')})
     var sz00=szList.filter(function(s){return s.code&&s.code.startsWith('00')})
