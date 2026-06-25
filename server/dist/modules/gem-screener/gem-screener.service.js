@@ -2607,15 +2607,56 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 finalSuggestion = '不要介入';
             }
         }
-        const signals = {
-            baiBu: !!baiXing?.覆盖中?.[closeArr.length - 1],
-            baiXiao: !!baiXing?.baiXiao?.[closeArr.length - 1],
-            jiGouActive: volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 || 1) > 1.5,
-            macdGoldenCross: isGoldenCross,
-            zhuLiChuHuo: !!sanJiao?.zhuLiChuHuo,
-        };
-        const volumeRatio = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5 / (volumeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 || 1);
-        const forecast1_2Day = this.calcScoreForecast(score, signals, finalSuggestion, trendState, isGoldenCross, pricePos, volumeRatio);
+        const forecast1_2Day = (() => {
+            const uptrend = trendState >= 2;
+            const weakTrend = trendState < 1;
+            const goldenCross = !!isGoldenCross;
+            const sc = score;
+            const pos = pricePos ?? 50;
+            const volR = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5 /
+                (volumeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 || 1);
+            const volActive = volR > 1.2;
+            const upDays = closeArr.slice(-5).filter((_, i, arr) => i > 0 && arr[i] > arr[i - 1]).length;
+            const momentum = upDays >= 3 ? 'up' : upDays <= 1 ? 'down' : 'neutral';
+            const oversold = pos < 25;
+            const lowZone = pos < 40;
+            const highZone = pos >= 65;
+            const overbought = pos >= 85;
+            if (uptrend && goldenCross && volActive && momentum === 'up' && sc >= 60 && !highZone) {
+                return { direction: '强烈看涨', confidence: '高', detail: '趋势向上+金叉+放量+动能强,未来1-2日上涨概率高' };
+            }
+            if (uptrend && goldenCross && sc >= 50 && !overbought) {
+                return { direction: '看涨', confidence: '高', detail: '趋势向上+金叉确认,未来1-2日偏多' };
+            }
+            if ((uptrend || goldenCross) && sc >= 40 && !highZone) {
+                return { direction: '震荡偏强', confidence: '中等', detail: '短期偏强,但信号不够集中' };
+            }
+            if (overbought && weakTrend && momentum === 'down') {
+                return { direction: '看跌', confidence: '高', detail: '高位回落+趋势走弱,回调风险较大' };
+            }
+            if (highZone && momentum === 'down' && volActive) {
+                return { direction: '看跌', confidence: '中等', detail: '高位放量下跌,短期调整压力大' };
+            }
+            if ((overbought || highZone) && weakTrend) {
+                return { direction: '震荡偏弱', confidence: '中等', detail: '趋势偏弱+位置偏高,短期谨慎' };
+            }
+            if (weakTrend && momentum === 'down') {
+                return { direction: '震荡偏弱', confidence: '中等', detail: '趋势偏弱+动能向下,观望为宜' };
+            }
+            if (oversold && momentum === 'up' && sc >= 40) {
+                return { direction: '震荡偏强', confidence: '中等', detail: '低位回升+评分尚可,有反弹预期' };
+            }
+            if (lowZone && goldenCross) {
+                return { direction: '震荡偏强', confidence: '低', detail: '低位金叉,关注企稳信号' };
+            }
+            if (sc < 30 && overbought && momentum === 'down') {
+                return { direction: '看跌', confidence: '高', detail: '评分低+超买+动能向下,回调概率高' };
+            }
+            if (sc < 30) {
+                return { direction: '震荡偏弱', confidence: '中等', detail: '评分偏低,短期承压' };
+            }
+            return { direction: '震荡', confidence: '低', detail: '各指标方向不一,短期方向不明朗' };
+        })();
         return {
             code, name: name ?? '',
             forecast1_2Day,
