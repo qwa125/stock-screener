@@ -1692,23 +1692,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const buySignals = ['重仓买入', '买入', '轻仓买入'];
 
       if (buySignals.includes(sug)) {
-        // ═══ 评分系统优化买入信号（只升级，不降级） ═══
-        if (score >= 12) {
-          // 高评分(≥12/16) → 升级为重仓买入
-          return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
-        } else if (score >= 9) {
-          // 中评分(≥9/16) → 确认买入
-          if (sug === '轻仓买入') {
-            return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
-          }
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
-        } else if (score >= 6) {
-          // 偏低评分(≥6/16) → 保持规则信号
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
-        } else {
-          // 低评分(<6/16) → 信号有效但建议谨慎，保持规则信号
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+        // ═══ 评分系统预测驱动优化（未来1-2日预测） ═══
+        // calcScoreForecast 基于 calcMultiScore(0-16分)+信号叠加,做未来1-2日方向判断
+        const forecast = this.calcScoreForecast(score, signals, sug);
+        const dir = forecast.direction;
+        // 强烈看涨(score≥12+buy+机构活跃) → 升级为重仓买入
+        if (dir === '强烈看涨') {
+          return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
         }
+        // 看涨(score≥12+buy/+9+buy) → 升级为买入(轻仓买入→买入),或保持
+        if (dir === '看涨') {
+          if (sug === '轻仓买入') {
+            return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
+          }
+          return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
+        }
+        // 震荡偏强(score≥6+buy) → 保持原信号
+        if (dir === '震荡偏强') {
+          return this.buildResult(s, kline, result, sug, '评分预测震荡偏强·持有');
+        }
+        // 其他震荡/偏弱/看跌/观望 → 保持原信号+谨慎标签
+        return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
       }
 
       // 非买入信号(卖出/减仓/持有)直接返回
@@ -1736,30 +1740,39 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const buySignals = ['重仓买入', '买入', '轻仓买入'];
 
       if (buySignals.includes(sug)) {
-        // 评分系统优化买入信号（宽松模式下阈值略低）
-        if (score >= 11) {
-          return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
-        } else if (score >= 8) {
-          if (sug === '轻仓买入') {
-            return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
-          }
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
-        } else if (score >= 5) {
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
-        } else {
-          return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
+        // 评分系统预测驱动优化（宽松版：阈值略低）
+        const forecast = this.calcScoreForecast(score, signals, sug);
+        const dir = forecast.direction;
+        // 强烈看涨 → 升级为重仓买入(宽松版:score≥11或强烈看涨即可)
+        if (dir === '强烈看涨' || (score >= 11 && dir === '看涨')) {
+          return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
         }
+        // 看涨 → 买入(轻仓买入→买入)
+        if (dir === '看涨') {
+          if (sug === '轻仓买入') {
+            return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
+          }
+          return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
+        }
+        // 震荡偏强 → 保持
+        if (dir === '震荡偏强') {
+          return this.buildResult(s, kline, result, sug, '评分预测震荡偏强');
+        }
+        // 其他方向 → 保持+谨慎
+        return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
       }
 
       return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
     }
 
-    // ═══ 二级: 多因子宽松模式（仅评分极高时兜底） ═══
-    if (score >= 11 && priceIncrease <= 50 && pricePosition < 95) {
-      return this.buildResult(s, kline, result, '轻仓买入', '综合评分高·无规则信号');
+    // ═══ 二级: 多因子宽松模式（评分预测为买入信号兜底） ═══
+    const forecast = this.calcScoreForecast(score, signals, '轻仓买入');
+    const dir = forecast.direction;
+    if ((dir === '强烈看涨' || dir === '看涨') && pricePosition < 95) {
+      return this.buildResult(s, kline, result, '轻仓买入', '评分预测' + dir + '|' + forecast.confidence + '%');
     }
-    if (score >= 9 && priceIncrease <= 30 && pricePosition < 90 && bx.baiXiaoDays > 0) {
-      return this.buildResult(s, kline, result, '轻仓买入', '白消+综合评分中高');
+    if (dir === '震荡偏强' && pricePosition < 90 && bx.baiXiaoDays > 0) {
+      return this.buildResult(s, kline, result, '轻仓买入', '白消+评分预测' + dir);
     }
 
     return null;

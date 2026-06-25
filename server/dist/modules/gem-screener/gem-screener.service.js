@@ -1458,21 +1458,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                if (score >= 12) {
-                    return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+                const forecast = this.calcScoreForecast(score, signals, sug);
+                const dir = forecast.direction;
+                if (dir === '强烈看涨') {
+                    return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
                 }
-                else if (score >= 9) {
+                if (dir === '看涨') {
                     if (sug === '轻仓买入') {
-                        return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+                        return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
                     }
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+                    return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
                 }
-                else if (score >= 6) {
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+                if (dir === '震荡偏强') {
+                    return this.buildResult(s, kline, result, sug, '评分预测震荡偏强·持有');
                 }
-                else {
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
-                }
+                return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
@@ -1493,29 +1493,31 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                if (score >= 11) {
-                    return this.buildResult(s, kline, result, '重仓买入', ruleResult.signalComb + '|评分确认强买');
+                const forecast = this.calcScoreForecast(score, signals, sug);
+                const dir = forecast.direction;
+                if (dir === '强烈看涨' || (score >= 11 && dir === '看涨')) {
+                    return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
                 }
-                else if (score >= 8) {
+                if (dir === '看涨') {
                     if (sug === '轻仓买入') {
-                        return this.buildResult(s, kline, result, '买入', ruleResult.signalComb + '|评分提升');
+                        return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
                     }
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分确认');
+                    return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
                 }
-                else if (score >= 5) {
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
+                if (dir === '震荡偏强') {
+                    return this.buildResult(s, kline, result, sug, '评分预测震荡偏强');
                 }
-                else {
-                    return this.buildResult(s, kline, result, sug, ruleResult.signalComb + '|评分偏低·谨慎');
-                }
+                return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
-        if (score >= 11 && priceIncrease <= 50 && pricePosition < 95) {
-            return this.buildResult(s, kline, result, '轻仓买入', '综合评分高·无规则信号');
+        const forecast = this.calcScoreForecast(score, signals, '轻仓买入');
+        const dir = forecast.direction;
+        if ((dir === '强烈看涨' || dir === '看涨') && pricePosition < 95) {
+            return this.buildResult(s, kline, result, '轻仓买入', '评分预测' + dir + '|' + forecast.confidence + '%');
         }
-        if (score >= 9 && priceIncrease <= 30 && pricePosition < 90 && bx.baiXiaoDays > 0) {
-            return this.buildResult(s, kline, result, '轻仓买入', '白消+综合评分中高');
+        if (dir === '震荡偏强' && pricePosition < 90 && bx.baiXiaoDays > 0) {
+            return this.buildResult(s, kline, result, '轻仓买入', '白消+评分预测' + dir);
         }
         return null;
     }
