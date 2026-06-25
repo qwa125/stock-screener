@@ -385,7 +385,7 @@ function futurePrediction(s){
     else if(dir==='看跌')dirEmoji='📉'
     else dirEmoji='➖'
     var confBadge=conf==='高'?'<span style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">高置信度</span>':conf==='中'?'<span style="background:#eab308;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">中置信度</span>':'<span style="background:#94a3b8;color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">低置信度</span>'
-    var detailHtml=detail?'<br><span style="font-size:11px;color:#94a3b8">'+detail+'</span>':''
+    var detailHtml=detail?'<br><span style="font-size:11px;color:#94a3b8">'+detail.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')+'</span>':''
     return dirEmoji+' '+dir+confBadge+detailHtml
   }
   // 降级：使用trendPrediction
