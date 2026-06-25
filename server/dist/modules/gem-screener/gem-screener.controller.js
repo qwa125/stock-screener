@@ -601,6 +601,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message };
         }
     }
+    async clearCache() {
+        this.gemScreener.clearCache();
+        return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -858,6 +862,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "backtestForecast", null);
+__decorate([
+    (0, common_1.Get)('clear-cache'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "clearCache", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

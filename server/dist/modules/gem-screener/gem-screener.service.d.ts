@@ -90,6 +90,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private loadCacheFromDisk;
     private loadMainBoardCacheFromDisk;
     private loadSectorCacheFromDisk;
+    clearCache(): Promise<void>;
     private saveCacheToDisk;
     private loadSellStateCache;
     private saveSellStateCache;

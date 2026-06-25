@@ -181,6 +181,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ 板块部署包缓存加载失败: ${err.message}`);
         }
     }
+    async clearCache() {
+        this.cache = { data: [], timestamp: 0 };
+        this.mainBoardCache = { data: [], timestamp: 0 };
+        const files = [this.CACHE_FILE, this.MAIN_BOARD_CACHE];
+        for (const p of files) {
+            try {
+                if ((0, fs_1.existsSync)(p))
+                    (0, fs_1.unlinkSync)(p);
+            }
+            catch { }
+        }
+        this.logger.log('🧹 缓存已清空');
+    }
     async saveCacheToDisk() {
         try {
             await fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');

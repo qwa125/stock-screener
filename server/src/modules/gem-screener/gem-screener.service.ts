@@ -4,7 +4,7 @@ import { FormulaEngine } from '../stock/formula-engine';
 import { calcBaiSanJiao } from '../stock/bai-san-jiao';
 import { calcBaiLingXing } from '../stock/bai-ling-xing';
 import { calcXingXing } from '../stock/xing-xing';
-import { promises as fs, existsSync, readFileSync } from 'fs';
+import { promises as fs, existsSync, readFileSync, unlinkSync } from 'fs';
 import { join } from 'node:path';
 import * as iconv from 'iconv-lite';
 import { DataFetcherService } from '../stock/data-fetcher.service';
@@ -261,6 +261,17 @@ export class GemScreenerService implements OnApplicationBootstrap {
     } catch (err) {
       this.logger.warn(`⚠️ 板块部署包缓存加载失败: ${err.message}`);
     }
+  }
+
+  /** 清空缓存（用于重新全量覆盖） */
+  async clearCache() {
+    this.cache = { data: [], timestamp: 0 };
+    this.mainBoardCache = { data: [], timestamp: 0 };
+    const files = [this.CACHE_FILE, this.MAIN_BOARD_CACHE];
+    for (const p of files) {
+      try { if (existsSync(p)) unlinkSync(p); } catch {}
+    }
+    this.logger.log('🧹 缓存已清空');
   }
 
   private async saveCacheToDisk() {

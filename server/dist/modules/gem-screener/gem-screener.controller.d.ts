@@ -312,4 +312,8 @@ export declare class GemScreenerController {
         msg: any;
         data?: undefined;
     }>;
+    clearCache(): Promise<{
+        code: number;
+        msg: string;
+    }>;
 }

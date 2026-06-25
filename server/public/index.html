@@ -152,6 +152,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   </div>
   <div id="coverText" style="font-size:10px;color:#888;margin-top:2px;text-align:center"></div>
 </div>
+<div style="margin:4px 12px 0;text-align:right">
+  <span style="font-size:11px;color:#999;cursor:pointer" onclick="handleClearCache()">🧹 清空缓存</span>
+</div>
 
 <div class="list-header">
   <span class="col-name">名称</span>
@@ -327,6 +330,17 @@ async function handleRescanClick(){
     showBlocked(true)
     return
   }
+}
+function handleClearCache(){
+	if(loading)return
+	setStatus("正在清空后端缓存...")
+	fetch(API+"/gem/clear-cache").then(function(r){return r.json()}).then(function(d){
+		localStorage.clear()
+		setStatus("缓存已清空，正在刷新...")
+		location.reload()
+	}).catch(function(e){
+		setStatus("清空缓存失败: "+e.message)
+	})
 }
 // 全量覆盖扫描：从新浪获取5000+股票，前端拉K线推送到后端分析，结果写入缓存覆盖
 var _coverScanning=false

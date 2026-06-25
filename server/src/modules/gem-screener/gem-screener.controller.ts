@@ -689,4 +689,11 @@ export class GemScreenerController {
       return { code: 500, msg: e.message };
     }
   }
+
+  @Get('clear-cache')
+  @SkipAccessLimit()
+  async clearCache() {
+    this.gemScreener.clearCache();
+    return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
+  }
 }
