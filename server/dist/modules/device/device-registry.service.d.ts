@@ -27,6 +27,7 @@ export declare class DeviceRegistryService {
     getDevices(): Promise<DeviceRegistryEntry[]>;
     registeredCount(): Promise<number>;
     get maxAllowed(): number;
+    getEffectiveMaxSlots(): Promise<number>;
     setMaxSlots(value: number): Promise<{
         success: boolean;
         maxSlots: number;

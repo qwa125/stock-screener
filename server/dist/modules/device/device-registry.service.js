@@ -352,6 +352,10 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     get maxAllowed() {
         return this.maxSlots;
     }
+    async getEffectiveMaxSlots() {
+        await this.ensureLoaded();
+        return this.maxSlots;
+    }
     async setMaxSlots(value) {
         this.maxSlots = value;
         await this.saveSettingsToDB();

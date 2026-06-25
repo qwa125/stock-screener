@@ -90,7 +90,7 @@ export class AuthController {
   @Get('max-slots')
   async getMaxSlots(): Promise<{ maxSlots: number; registered: number }> {
     return {
-      maxSlots: this.deviceRegistry.maxAllowed,
+      maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
       registered: await this.deviceRegistry.registeredCount(),
     };
   }

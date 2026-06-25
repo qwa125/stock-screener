@@ -40,9 +40,10 @@ export class DeviceController {
   @Get('settings')
   @SkipAccessLimit()
   async getSettings() {
+    const maxSlots = await this.deviceRegistry.getEffectiveMaxSlots()
     return {
       code: 200,
-      data: { maxSlots: this.deviceRegistry.maxAllowed }
+      data: { maxSlots }
     }
   }
 
@@ -65,7 +66,7 @@ export class DeviceController {
     return {
       code: 200,
       data: {
-        maxSlots: this.deviceRegistry.maxAllowed,
+        maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
         usedSlots: devices.length,
         devices: devices.map((d, i) => ({
           index: i,

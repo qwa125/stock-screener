@@ -42,9 +42,10 @@ let DeviceController = DeviceController_1 = class DeviceController {
         }
     }
     async getSettings() {
+        const maxSlots = await this.deviceRegistry.getEffectiveMaxSlots();
         return {
             code: 200,
-            data: { maxSlots: this.deviceRegistry.maxAllowed }
+            data: { maxSlots }
         };
     }
     async setSlots(body) {
@@ -59,7 +60,7 @@ let DeviceController = DeviceController_1 = class DeviceController {
         return {
             code: 200,
             data: {
-                maxSlots: this.deviceRegistry.maxAllowed,
+                maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
                 usedSlots: devices.length,
                 devices: devices.map((d, i) => ({
                     index: i,

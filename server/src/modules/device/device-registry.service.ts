@@ -367,6 +367,11 @@ export class DeviceRegistryService {
     return this.maxSlots
   }
 
+  async getEffectiveMaxSlots(): Promise<number> {
+    await this.ensureLoaded()
+    return this.maxSlots
+  }
+
   async setMaxSlots(value: number) {
     this.maxSlots = value
     await this.saveSettingsToDB()

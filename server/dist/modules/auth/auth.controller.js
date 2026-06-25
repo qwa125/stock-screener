@@ -87,7 +87,7 @@ let AuthController = class AuthController {
     }
     async getMaxSlots() {
         return {
-            maxSlots: this.deviceRegistry.maxAllowed,
+            maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
             registered: await this.deviceRegistry.registeredCount(),
         };
     }

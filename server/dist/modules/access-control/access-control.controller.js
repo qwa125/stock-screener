@@ -37,7 +37,7 @@ let AccessControlController = class AccessControlController {
             msg: 'ok',
             data: {
                 ...acStatus,
-                maxSlots: this.deviceRegistry.maxAllowed,
+                maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
                 usedSlots: await this.deviceRegistry.registeredCount(),
             },
         };
@@ -63,7 +63,7 @@ let AccessControlController = class AccessControlController {
     async exportRegistry() {
         const base64 = this.service.exportRegistryAsBase64();
         const used = this.service.getUsedSlots();
-        const max = this.deviceRegistry.maxAllowed;
+        const max = await this.deviceRegistry.getEffectiveMaxSlots();
         this.service['logger'].log(`📤 注册表导出: ${used}/${max} 设备, base64(${base64.length}字符)`);
         return {
             code: 200,
@@ -84,7 +84,7 @@ let AccessControlController = class AccessControlController {
         return {
             code: 200,
             data: {
-                maxSlots: this.deviceRegistry.maxAllowed,
+                maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
                 usedSlots: this.service.getUsedSlots(),
                 devices,
             },
