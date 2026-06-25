@@ -3266,11 +3266,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
           }
 
             // ─── 下跌趋势(MA5<MA10)兜底：下降趋势不持有不买入 ───
-            if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
-              newSuggestion = '不要介入';
-            }
+      if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
+        newSuggestion = '不要介入';
+      }
 
-          // 更新评分
+      // 更新评分
           const BASE: Record<string, number> = {
             '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
           };
@@ -3324,6 +3324,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
     return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 200);
   }
+
+  /** 内部辅助：获取所有缓存股票（买入+持有+卖出全部返回，供前端搜索/详情使用） */
 
   triggerAnalysisPreCacheFromCache() {
     const cachedStocks: string[] = [];
