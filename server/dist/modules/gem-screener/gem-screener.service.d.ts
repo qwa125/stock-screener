@@ -183,6 +183,19 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     checkOpportunity(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     checkOpportunityRelaxed(s: StockCandidate, prevSuggestion?: string | null): Promise<OpportunityStock | null>;
     private buildResult;
+    static computeTechnicalForecast(params: {
+        entryTiming: number;
+        isGoldenCross: boolean;
+        ma5: number;
+        ma10: number;
+        pricePosition: number;
+        mainForceInflow: number;
+        jiGouActiveScore: number;
+    }): {
+        direction: string;
+        confidence: string;
+        detail: string;
+    };
     private calcScoreForecast;
     private calcEntryTiming;
     private calcSafetyScore;
