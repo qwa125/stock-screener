@@ -680,6 +680,7 @@ async function doScan(){
       doFullRescan();return
     }
     stocks=d.data.opportunities
+	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
     // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
     stocks.sort(function(a,b){
