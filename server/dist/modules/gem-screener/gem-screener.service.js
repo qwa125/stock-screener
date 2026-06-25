@@ -1450,7 +1450,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const result = this.calcMultiScore(s, kline);
         if (!result)
             return null;
-        const { signals, bx, score, pricePosition, priceIncrease, detail, trendState, isGoldenCross, volumeRatio } = result;
+        const { signals, bx, score, pricePosition, priceIncrease, detail } = result;
         const ruleResult = this.determineBySignalRule(signals, bx, result);
         if (ruleResult) {
             if (pricePosition >= 95)
@@ -1458,21 +1458,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                const forecast = this.calcScoreForecast(score, signals, sug, trendState, isGoldenCross, pricePosition, volumeRatio);
-                const dir = forecast.direction;
-                if (dir === '强烈看涨') {
-                    return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
-                }
-                if (dir === '看涨') {
-                    if (sug === '轻仓买入') {
-                        return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
-                    }
-                    return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
-                }
-                if (dir === '震荡偏强') {
-                    return this.buildResult(s, kline, result, sug, '评分预测震荡偏强·持有');
-                }
-                return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
+                return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
@@ -1493,21 +1479,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const sug = ruleResult.suggestion;
             const buySignals = ['重仓买入', '买入', '轻仓买入'];
             if (buySignals.includes(sug)) {
-                const forecast = this.calcScoreForecast(score, signals, sug, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio);
-                const dir = forecast.direction;
-                if (dir === '强烈看涨' || (score >= 11 && dir === '看涨')) {
-                    return this.buildResult(s, kline, result, '重仓买入', '评分预测强烈看涨|' + forecast.confidence + '%');
-                }
-                if (dir === '看涨') {
-                    if (sug === '轻仓买入') {
-                        return this.buildResult(s, kline, result, '买入', '评分预测看涨(轻仓→买入)|' + forecast.confidence + '%');
-                    }
-                    return this.buildResult(s, kline, result, sug, '评分预测看涨|' + forecast.confidence + '%');
-                }
-                if (dir === '震荡偏强') {
-                    return this.buildResult(s, kline, result, sug, '评分预测震荡偏强');
-                }
-                return this.buildResult(s, kline, result, sug, '评分预测' + dir + '·谨慎');
+                return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
             }
             return this.buildResult(s, kline, result, sug, ruleResult.signalComb);
         }
