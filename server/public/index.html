@@ -358,7 +358,7 @@ async function handleRescanClick(){
     txt.textContent='分析 '+stocks.length+' 只A股中 (0%)...'
     if(bar)bar.style.width='0%'
     var done=0,total=stocks.length
-    // ③ 分批并行抓取K线并推送到后端，每批20只
+    // ③ 分批并行抓取K线并推送到后端，每批20只，批次间增加间隔避免限流
     var batchSize=20
     for(var i=0;i<total;i+=batchSize){
       var batch=stocks.slice(i,i+batchSize)
@@ -368,12 +368,15 @@ async function handleRescanClick(){
       var pct=Math.round(done/total*100)
       if(bar)bar.style.width=pct+'%'
       txt.textContent='分析中 '+done+'/'+total+' ('+pct+'%)'
+      // 每批后等待200ms，避免东方财富限流
+      if(i+batchSize<total)await new Promise(function(r){setTimeout(r,200)})
     }
-    txt.textContent='扫描完成! '+'共处理 '+done+' 只股票'
+    txt.textContent='全市场扫描完成! '+'已获取 '+total+' 只A股并推送后端分析'
     if(bar)bar.style.width='100%'
-    setStatus('全市场重扫完成!')
-    // ④ 刷新缓存并重新加载
+    setStatus('全市场重扫完成！已分析 '+total+' 只股票，正在刷新机会区...')
+    // ④ 刷新缓存并重新加载（不改变扫描进度显示）
     await doFullRescan()
+    setStatus('全市场重扫完毕 | 已扫描 '+total+' 只A股')
   }catch(e){
     console.error('全市场重扫失败:',e)
     setStatus('全市场重扫失败: '+e.message)
