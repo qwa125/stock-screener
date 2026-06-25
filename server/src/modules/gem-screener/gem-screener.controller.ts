@@ -204,6 +204,7 @@ export class GemScreenerController {
   }
 
   @Get('cache-all')
+  @SkipAccessLimit()
   async getCacheAll() {
     const gem = this.gemScreener.getCacheAll();
     return { code: 200, msg: 'success', data: { total: gem.length, stocks: gem } };
@@ -604,6 +605,7 @@ export class GemScreenerController {
   }
 
   @Post('analyze')
+  @SkipAccessLimit()
   async analyzeWithKLine(@Body() body: { code: string; name?: string; kline: any[]; mainForceInflow?: number }) {
     if (!body.code || !body.kline || !Array.isArray(body.kline)) {
       return { code: 400, msg: '缺少股票代码或K线数据' };
