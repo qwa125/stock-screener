@@ -3104,6 +3104,39 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
 
+      // ═══ 纯K线技术面独立预测：不受任何买卖信号/建议影响 ═══
+      const forecast1_2Day = (() => {
+        const isUptrend = trendState >= 2;
+        const isMidTrend = trendState >= 1;
+        const hasGoldenCross = !!isGoldenCross;
+        const isOversold = pricePos < 30;
+        const isOverbought = pricePos > 75;
+        const isNeutral = pricePos >= 30 && pricePos <= 75;
+        const isVolActive = volRatio > 1.2;
+        const isVolShrink = volRatio < 0.7;
+        const recentUp5d = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5];
+
+        // 多因子技术评分 (0-100)，仅用K线技术指标
+        let ts = 50; // 基准中性
+        if (isUptrend) ts += 20;
+        else if (trendState <= 0) ts -= 18;
+        if (hasGoldenCross) ts += 12;
+        else ts -= 8;
+        if (isOversold) ts += 8;  // 超卖有反弹预期
+        if (isOverbought) ts -= 12; // 超买有回调风险
+        if (isVolActive && isUptrend) ts += 8;
+        if (isVolShrink && !isUptrend) ts -= 5;
+        if (recentUp5d) ts += 5;
+        else ts -= 5;
+        ts = Math.max(0, Math.min(100, ts));
+
+        if (ts >= 75) return { direction: '看涨', confidence: '较高', detail: '趋势向上+MACD向好+量价健康,未来1-2日偏多' };
+        if (ts >= 55) return { direction: '震荡偏强', confidence: '中等', detail: '技术面偏多,短期有望延续升势' };
+        if (ts >= 40) return { direction: '震荡', confidence: '低', detail: '各技术指标方向不一,短期方向不明朗' };
+        if (ts >= 25) return { direction: '震荡偏弱', confidence: '中等', detail: '技术面偏弱,注意回调风险' };
+        return { direction: '看跌', confidence: '较高', detail: '趋势向下+MACD死叉,未来1-2日偏空' };
+      })();
+
       return {
         code, name: name ?? '',
         currentPrice: price,
@@ -3111,6 +3144,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         priceIncrease: Math.round(priceIncrease * 100) / 100,
         mainForceInflow,
       pricePosition: Math.round(pricePos),
+      forecast1_2Day,
       capitalRank: 0,
       baiXiaoDays: 0,
       score,
