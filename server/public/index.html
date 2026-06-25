@@ -142,13 +142,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
-  <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px">🌐 全市场重扫</button>
-</div>
-<div id="progressWrapper" style="display:none;margin:4px 12px 0">
-  <div style="height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden">
-    <div id="progressBar" style="height:100%;width:0%;border-radius:3px;background:#7c3aed;transition:width 0.3s"></div>
-  </div>
-  <span id="progressText" style="font-size:10px;color:#888;margin-top:2px;display:block"></span>
+  <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
+  
 </div>
 
 <div class="list-header">
@@ -330,12 +325,6 @@ async function handleRescanClick(){
 var _klineScanRunning=false
 /* handleKlineScan 已移除 - 全量扫描已完成，后续由定时扫描 + 搜索自动更新覆盖 */
 function setStatus(s){$('status').textContent=s}
-function setProgress(pct,text){
-  var w=$('progressWrapper');var b=$('progressBar');var t=$('progressText')
-  if(w){w.style.display=pct>0?'block':'none'}
-  if(b){b.style.width=pct+'%'}
-  if(t&&text){t.textContent=text}
-}
 function updateScanCount(n){var b=$('scanCountBadge');if(b){b.textContent=n>0?n+'只':'—'}}
 var selectedIdx=-1
 
@@ -755,14 +744,13 @@ async function fetchWithRetry(url,retries){
 async function doFullRescan(){
   var btn=$('rescanBtn');
   // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
-  if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='⏳ 扫描中...'}else if(loading){return}
+  if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
   // 毛玻璃可见时（未注册）不执行任何操作
   var isBlurred=!$('pageBlur').classList.contains('hidden')
   if(isBlurred)return
   loading=true
   stopPriceRefresh()
-  setStatus('🔄 全局扫描中...')
-  setProgress(5,'正在重分析缓存...')
+  setStatus('🔄 按涨幅排行抓取中（东方财富全量：主板+创业板）...')
   
   // 1. 缓存重分析（瞬间）
   var newStocks=[]
@@ -771,8 +759,6 @@ async function doFullRescan(){
     var cd=await cr.json()
     newStocks=(cd.data||[]).slice()
   }catch(e){}
-  
-  setProgress(15,'缓存重分析完成 '+newStocks.length+' 只')
   
   // rescan被拦截(429)时，从localStorage加载上次扫描结果作为缓存
   if(newStocks.length===0){
@@ -796,7 +782,6 @@ async function doFullRescan(){
   // 跳过东方财富（Render US被限流），直接并行抓取Sina全市场（21页约2-3秒）
   var emData=[]
   try{
-  setProgress(30,'抓取实时行情数据...')
   setStatus('🔄 并行抓取Sina全市场数据 (21页，约2-3秒)...')
       // 后端聚合端点（后端内部并行抓21页，更可靠）
       var resp=await fetch(API+'/gem/full-sina-scan')
