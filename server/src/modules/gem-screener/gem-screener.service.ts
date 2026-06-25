@@ -3284,6 +3284,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           }
         }
       }
+      // 刷新搜索结果的未来1-2天预测，与机会区保持一致
+      this.addForecastToCache(matched);
       results.push(...matched);
     } catch (e) {
       this.logger.error(`缓存搜索失败: ${(e as Error).message}`);

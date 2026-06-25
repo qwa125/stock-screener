@@ -375,21 +375,6 @@ export class GemScreenerController {
     return merged;
   }
 
-  @Get('detail')
-  @SkipAccessLimit()
-  async getStockDetail(@Query('code') code: string) {
-    if (!code || code.trim().length === 0) {
-      return { code: 400, msg: '请输入股票代码', data: null };
-    }
-    try {
-      const result = await this.gemScreener.quickAnalyze(code.trim());
-      return { code: 200, msg: 'ok', data: result };
-    } catch (e) {
-      this.logger.error(`个股详情失败: ${e.message}`);
-      return { code: 500, msg: e.message, data: null };
-    }
-  }
-
   @Get('search')
   async searchStock(@Query('q') keyword: string) {
     if (!keyword || keyword.trim().length === 0) {

@@ -181,15 +181,6 @@ export declare class GemScreenerController {
     }>;
     private readHeavyBuyCache;
     private mergeWithHeavyBuy;
-    getStockDetail(code: string): Promise<{
-        code: number;
-        msg: string;
-        data: import("./gem-screener.service").OpportunityStock | null;
-    } | {
-        code: number;
-        msg: any;
-        data: null;
-    }>;
     searchStock(keyword: string): Promise<{
         code: number;
         msg: string;

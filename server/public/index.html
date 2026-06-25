@@ -369,42 +369,9 @@ function todayAdviceText(s,rt){
   return'今日暂无明显买入信号，建议持有'
 }
 
-// 前端计算未来1-2日预测（与后端 computeTechnicalForecast 完全一致）
-function localForecast(s){
-  var et=s.entryTiming||0
-  var gc=s.isGoldenCross||false
-  var ma5=s.ma5||0
-  var ma10=s.ma10||0
-  var pos=s.pricePosition||50
-  var mf=s.mainForceInflow||0
-  var ji=s.jiGouActiveScore||0
-  var downtrend=ma5>0&&ma10>0&&ma5<ma10
-  var overbought=pos>=85
-  var mfStrongOut=mf<-3,mfOut=mf<-1,mfStrongIn=mf>5,mfIn=mf>2
-  var volState=ji>=10?'放量':ji>=5?'平量':ji>=2?'缩量':'极度缩量'
-  // 下跌趋势类
-  if(downtrend&&mfStrongOut&&et<50)return {direction:'下跌趋势',confidence:'高',detail:'均线空头(MA5='+ma5.toFixed(2)+'下穿MA10='+ma10.toFixed(2)+')+'+volState+'+主力大幅出逃('+mf.toFixed(1)+'亿)+介入时机差('+et+'),资金与趋势同步向下,未来1-2日继续探底概率极大,坚决不介入'}
-  if(downtrend&&et<45)return {direction:'下跌趋势',confidence:'高',detail:'均线空头(MA5='+ma5.toFixed(2)+'下穿MA10='+ma10.toFixed(2)+')+'+volState+(mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+'+介入时机差('+et+'),短期空方主导,未来1-2日继续震荡探底概率大,不宜抄底'}
-  if(downtrend&&et<55)return {direction:'震荡偏弱',confidence:'中',detail:'均线空头排列(MA5下穿MA10)+'+volState+(mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+',介入时机中性('+et+'),下跌节奏放缓但未企稳,未来1-2日低位震荡为主,等待均线走平再观察'}
-  if(!gc&&mfStrongOut)return {direction:'看跌',confidence:'高',detail:'MACD死叉+'+volState+'+主力大幅出逃('+mf.toFixed(1)+'亿),资金加速撤离,短期动能在快速减弱,未来1-2日大概率继续回调,下方支撑位是关键'}
-  if(!gc&&et<40)return {direction:'看跌',confidence:'中',detail:'MACD死叉+'+volState+'+介入时机差('+et+')'+(mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+',短期动能偏弱,未来1-2日大概率延续回调,关注下方支撑位'}
-  if(overbought&&et<50)return {direction:'回调风险',confidence:'中',detail:'价格已处于高位(位置'+Math.round(pos)+'%)+'+volState+(mfStrongOut?'+主力明显出逃('+mf.toFixed(1)+'亿)':mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+',介入时机不足('+et+'),获利盘抛压增大,未来1-2日注意冲高回落'}
-  // 中性震荡类
-  if(et<45&&ji<3)return {direction:'震荡',confidence:'低',detail:'介入时机差('+et+')+'+volState+'(活跃度'+ji+'),无人交易无方向,均线'+(downtrend?'空头':'方向不明')+',未来1-2日大概率横盘等待方向,不参与'}
-  if(et<45)return {direction:'震荡',confidence:'低',detail:'介入时机差('+et+')+'+volState+(mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+',均线'+(downtrend?'空头排列':'方向不明')+',未来1-2日大概率横盘整理,等待方向选择'}
-  if(et<55&&!gc)return {direction:'震荡偏弱',confidence:'低',detail:'介入时机一般('+et+')+'+volState+'+MACD未金叉'+(mfOut?'+主力流出('+mf.toFixed(1)+'亿)':'')+',趋势动能偏弱,未来1-2日延续弱势震荡,突破需量能配合'}
-  if(et<55)return {direction:'震荡偏强',confidence:'低',detail:'介入时机中性偏可('+et+')+'+volState+'+MACD金叉向上'+(mfIn?'+主力流入('+mf.toFixed(1)+'亿)':'')+',多方略有优势,未来1-2日震荡中偏多运行'}
-  // 上涨趋势类
-  if(et>=65&&gc&&pos<65&&mfStrongIn)return {direction:'强烈看涨',confidence:'高',detail:'主力大幅进场('+mf.toFixed(1)+'亿)+'+volState+'+MACD金叉确认+介入时机极佳('+et+')+位置适中('+Math.round(pos)+'%),资金+趋势+位置共振向上,未来1-2日大概率强势上攻,积极关注'}
-  if(et>=65&&gc&&pos<65)return {direction:'强烈看涨',confidence:'高',detail:'介入时机极佳('+et+')+'+volState+'+MACD金叉确认+位置适中('+Math.round(pos)+'%)'+(mfIn?'+主力流入('+mf.toFixed(1)+'亿)':'')+',趋势共振向上,未来1-2日大概率延续升势,积极关注'}
-  if(et>=60)return {direction:'看涨',confidence:'高',detail:'介入时机良好('+et+')+'+volState+'+MACD金叉向上'+(mfIn?'+主力流入('+mf.toFixed(1)+'亿)':'')+',短期趋势偏多,未来1-2日有望继续震荡走高,逢低关注'}
-  return {direction:'看涨',confidence:'中',detail:'介入时机可参与('+et+')+'+volState+'+MACD金叉向上'+(mfIn?'+主力流入('+mf.toFixed(1)+'亿)':'')+',趋势偏多,未来1-2日大概率震荡偏多运行,可适当关注'}
-}
-
 // 临时功能：评分分布分析
 function futurePrediction(s){
-  // 前端本地计算（与后端 computeTechnicalForecast 完全一致）
-  var fp=localForecast(s)
+  var fp=typeof s.forecast1_2Day==='string'?JSON.parse(s.forecast1_2Day):s.forecast1_2Day
   if(fp){
     var dir=fp.direction||'方向不明'
     var conf=fp.confidence||'中'
@@ -413,7 +380,6 @@ function futurePrediction(s){
     if(dir==='强烈看涨')dirEmoji='🚀'
     else if(dir==='看涨')dirEmoji='📈'
     else if(dir==='震荡偏强')dirEmoji='↗️'
-    else if(dir==='震荡')dirEmoji='➡️'
     else if(dir==='震荡偏弱')dirEmoji='↘️'
     else if(dir==='看跌')dirEmoji='📉'
     else dirEmoji='➖'
@@ -541,10 +507,10 @@ function showDetail(i){
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
-  // 始终从搜索接口获取最新预测（机会区的forecast基于缓存旧数据，可能与实时搜索不一致）
-  fetch(API+'/gem/detail?code='+s.code).then(function(r){return r.json()}).then(function(d){
-    if(d&&d.data&&d.data.forecast1_2Day){
-      s.forecast1_2Day=d.data.forecast1_2Day
+  // 从搜索接口获取最新预测（确保与搜索区完全一致）
+  fetch(API+'/gem/search?q='+s.code).then(function(r){return r.json()}).then(function(d){
+    if(d&&d.data&&d.data.length&&d.data[0].forecast1_2Day){
+      s.forecast1_2Day=d.data[0].forecast1_2Day
       da.innerHTML=buildDetail(s,rt)
     }
   }).catch(function(e){console.error('获取最新预测失败',e)})

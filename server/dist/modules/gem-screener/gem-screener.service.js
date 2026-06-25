@@ -2760,6 +2760,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                 }
             }
+            this.addForecastToCache(matched);
             results.push(...matched);
         }
         catch (e) {
