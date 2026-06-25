@@ -295,31 +295,11 @@ try{
   }
 }catch(e){}
 
-// 点击扫描按钮：先检查设备权限（2dfdbc9访问模式），通过后隐藏毛玻璃并全市场扫描
+// 立即扫描：与全市场重扫完全相同的逻辑（浏览器拉数据+批量K线+推送后端）
+// 仅在交易时段可点击，休盘时按钮显示"已冻结"
 async function handleScanClick(){
-  try{
-    var regRes=await fetch("/api/device/register",{
-      method:"POST",
-      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-    })
-    console.log('🔍 handleScanClick: httpStatus='+regRes.status+' body='+JSON.stringify(await regRes.clone().json()))
-    // 浏览器打印：看看实际HTTP状态码和body
-    if(regRes.status===429){
-      showBlocked(true)
-      return
-    }
-    if(regRes.status!==200){
-      showBlocked(true)
-      return
-    }
-    // 只有HTTP 200才放行
-    console.log('✅ 设备注册成功，开始全市场重扫')
-    hideBlocked()
-    doFullRescan()
-  }catch(e){
-    console.log('⚠️ 设备注册请求失败，保持拦截:', e.message)
-    showBlocked(true)
-  }
+  hideBlocked()
+  handleRescanClick()
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
