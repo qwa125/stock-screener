@@ -12,6 +12,7 @@ import { StockService } from '../stock/stock.service';
 import { KLine } from '../stock/types';
 import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
+import { pinyin } from 'pinyin-pro';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
 // 合并申万行业 + 热点概念板块
@@ -3260,10 +3261,18 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         return true;
       });
       const kw = keyword.toLowerCase().trim();
-      const matched = deduped.filter(s =>
-        (s.code || '').toLowerCase().includes(kw) ||
-        (s.name || '').toLowerCase().includes(kw)
-      ).slice(0, 5);
+      const matched = deduped.filter(s => {
+        // 代码匹配
+        if ((s.code || '').toLowerCase().includes(kw)) return true;
+        // 名称文字匹配
+        if ((s.name || '').toLowerCase().includes(kw)) return true;
+        // 拼音首字母匹配（如"zgsy"→"中国石油"）
+        try {
+          const py = pinyin(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '');
+          if (py.includes(kw)) return true;
+        } catch (_) {}
+        return false;
+      }).slice(0, 5);
       if (matched.length === 0) return results;
       // 应用信号重算，与机会列表保持一致
       this.recalculateSuggestions(matched);

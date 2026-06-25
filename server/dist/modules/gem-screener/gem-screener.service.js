@@ -24,6 +24,7 @@ const data_fetcher_service_1 = require("../stock/data-fetcher.service");
 const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
+const pinyin_pro_1 = require("pinyin-pro");
 const data_1 = require("../../industry-sectors/data");
 const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
@@ -2739,8 +2740,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return true;
             });
             const kw = keyword.toLowerCase().trim();
-            const matched = deduped.filter(s => (s.code || '').toLowerCase().includes(kw) ||
-                (s.name || '').toLowerCase().includes(kw)).slice(0, 5);
+            const matched = deduped.filter(s => {
+                if ((s.code || '').toLowerCase().includes(kw))
+                    return true;
+                if ((s.name || '').toLowerCase().includes(kw))
+                    return true;
+                try {
+                    const py = (0, pinyin_pro_1.pinyin)(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '');
+                    if (py.includes(kw))
+                        return true;
+                }
+                catch (_) { }
+                return false;
+            }).slice(0, 5);
             if (matched.length === 0)
                 return results;
             this.recalculateSuggestions(matched);
