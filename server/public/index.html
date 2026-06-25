@@ -950,11 +950,11 @@ async function doFullRescan(){
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
             // ─── 信号合并规则 ───
-            // Step ②: 后端建议是减仓/卖出/不要介入 → 保持不动，不受chg影响
-            var BACKEND_SELL=['减仓','卖出','不要介入']
+            // Step ②: 后端建议是持有/减仓/卖出/不要介入 → 保持不动，不受chg影响
+            var BACKEND_SELL=['持有','减仓','卖出','不要介入']
             var backendSug=newStocks[si3].suggestion
             if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
-              // 后端是买入/持有 → 结合评分预测+实时数据做升级
+              // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
               var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
               var upgSug = liveSuggestion  // 默认用实时数据
               var fp = newStocks[si3].forecast1_2Day
@@ -1519,10 +1519,10 @@ async function doSearch(){
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
-        // 用实时涨幅修正信号（只升级不降级，不覆盖后端卖出信号）
+        // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
         var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
         var liveSug=null
-        var BACKEND_SELL=['减仓','卖出','不要介入']
+        var BACKEND_SELL=['持有','减仓','卖出','不要介入']
         if(stockChgP>=9)liveSug='重仓买入'
         else if(stockChgP>=6)liveSug='买入'
         else if(stockChgP>=3)liveSug='轻仓买入'
@@ -1543,9 +1543,9 @@ async function doSearch(){
           if(jiGouFromKdata)o2.jiGouActiveScore=jiGouFromKdata
           o2.currentPrice=o2.currentPrice||stockPrice
           o2.changePercent=o2.changePercent||stockChgP
-          // 用实时涨幅修正信号（只升级不降级，不覆盖后端卖出信号）
+          // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
           var liveSug2=null
-          var BACKEND_SELL2=['减仓','卖出','不要介入']
+          var BACKEND_SELL2=['持有','减仓','卖出','不要介入']
           if(stockChgP>=9)liveSug2='重仓买入'
           else if(stockChgP>=6)liveSug2='买入'
           else if(stockChgP>=3)liveSug2='轻仓买入'
