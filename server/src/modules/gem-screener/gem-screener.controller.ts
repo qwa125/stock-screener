@@ -630,7 +630,7 @@ export class GemScreenerController {
         return { code: 200, msg: 'success', data: [opp] };
       }
       // 即使分析失败也尝试用空信号更新缓存（避免旧数据残留）
-      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0 };
+      const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 0, entryTiming: 0, currentPrice: 0, changePercent: 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0 };
       this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => {});
       return { code: 200, msg: '分析完成', data: [{ code: body.code, name: body.name || '', suggestion: '观望', score: 0 }] };
     } catch (e) {
