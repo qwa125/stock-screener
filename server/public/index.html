@@ -356,6 +356,15 @@ function todayAdviceText(s,rt){
     if(chg<-2) return'今日回调但趋势未破，继续持有观察'
     return'今日走势平稳，建议继续持有'
   }
+  if(sig==='减仓'){
+    return'风险信号出现，今日建议减仓控制风险'
+  }
+  if(sig==='卖出'){
+    return'卖出信号确定，今日建议卖出离场'
+  }
+  if(sig==='不要介入'){
+    return'下跌趋势/卖出锁定中，今日不介入等待企稳'
+  }
   return'今日暂无明显买入信号，建议持有'
 }
 
@@ -567,7 +576,7 @@ function buildDetail(s,rt){
   var btnColor=btnColors[sig]||'#6b7280'
   var icons={'重仓买入':'📈','买入':'📊','轻仓买入':'🔍','持有':'💼','减仓':'📉','卖出':'❌','不要介入':'⛔'}
   var today=todayAdviceText(s,rt)
-  var action='<div style="padding:0 12px 4px;font-size:12px;font-weight:600;color:#666">📌 今日操作建议</div><div class="action-card"><div class="action-btn" style="background:'+btnColor+'"><span class="action-label">'+icons[sig]+' '+sig+'</span><span class="action-reason">'+(sig==='重仓买入'?'全仓买入':sig==='买入'?'半仓买入':sig==='轻仓买入'?'1/3仓位':sig==='持有'?'继续持有':sig==='减仓'?'减仓控制风险':sig==='卖出'?'卖出离场':'继续持有')+'</span></div><div style="font-size:11px;color:#6b7280;padding:6px 4px 0">'+today+'</div></div>'
+  var action='<div style="padding:0 12px 4px;font-size:12px;font-weight:600;color:#666">📌 今日操作建议</div><div class="action-card"><div class="action-btn" style="background:'+btnColor+'"><span class="action-label">'+icons[sig]+' '+sig+'</span><span class="action-reason">'+(sig==='重仓买入'?'全仓买入':sig==='买入'?'半仓买入':sig==='轻仓买入'?'1/3仓位':sig==='持有'?'继续持有':sig==='减仓'?'减仓控制风险':sig==='卖出'?'卖出离场':sig==='不要介入'?'不介入,观望':'继续持有')+'</span></div><div style="font-size:11px;color:#6b7280;padding:6px 4px 0">'+today+'</div></div>'
 
   // 未来预测
   var pred=futurePrediction(s)
