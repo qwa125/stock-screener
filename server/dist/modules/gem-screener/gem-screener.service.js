@@ -1386,6 +1386,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return { suggestion: '卖出', signalComb: '白布+出货' };
         if (!baiBu && hasChuHuo && baiXiaoStart)
             return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
+        const sj = result.sanJiao || {};
+        const lx = result.lingXing || {};
+        if (sj.shortSell || sj.strongSell || lx.shortSell || lx.strongSell) {
+            return { suggestion: '卖出', signalComb: '短线/强化卖出信号' };
+        }
         if (priceIncrease > 60)
             return null;
         const cnb = [];
@@ -1431,27 +1436,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         if (baiBu) {
-            if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
-                return { suggestion: '轻仓买入', signalComb: '白布+机构+突破MA5' };
-            }
-            const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
-                lingXingBuy || xiPanFanZhuan;
-            if (hasRedArrow) {
-                const parts = ['白布'];
-                if (diBuBuy)
-                    parts.push('主力建仓');
-                if (zhuLiShiPan)
-                    parts.push('主力试盘');
-                if (gaoWeiHuiDiao)
-                    parts.push('企稳');
-                if (jiaCang)
-                    parts.push('★加仓');
-                if (lingXingBuy)
-                    parts.push('菱形买入/成立');
-                if (xiPanFanZhuan)
-                    parts.push('洗盘反转');
-                return { suggestion: '轻仓买入', signalComb: parts.join('+') };
-            }
+            return null;
         }
         return null;
     }
@@ -1472,6 +1457,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (priceIncrease > 40)
             return null;
         if (pricePosition >= 92 && score < 10)
+            return null;
+        if (bx.baiBu)
             return null;
         if (bx.baiBu && result.hasStrongSell)
             return this.buildResult(s, kline, result, '卖出', '白布+清仓');
@@ -1497,6 +1484,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (priceIncrease > 50)
             return null;
         if (pricePosition >= 95 && score < 8)
+            return null;
+        if (bx.baiBu)
             return null;
         const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
         if (bx.baiBu && hasStrongSell)

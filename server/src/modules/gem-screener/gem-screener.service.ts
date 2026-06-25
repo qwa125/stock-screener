@@ -1602,6 +1602,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (baiBu && hasChuHuo) return { suggestion: '卖出', signalComb: '白布+出货' };
     // 白消 + 出货 → 减仓（覆盖买入信号）
     if (!baiBu && hasChuHuo && baiXiaoStart) return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
+    // 公式引擎短线卖出/强化卖出 → 卖出（覆盖紧急清仓、空→闭眼卖）
+    const sj = (result as any).sanJiao || {};
+    const lx = (result as any).lingXing || {};
+    if (sj.shortSell || sj.strongSell || lx.shortSell || lx.strongSell) {
+      return { suggestion: '卖出', signalComb: '短线/强化卖出信号' };
+    }
     if (priceIncrease > 60) return null; // 涨幅过大过滤
 
     // ============= 信号分组（按白消状态层级） =============
@@ -1652,25 +1658,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     }
 
-    // ═══ 白布状态 → 轻仓买入 ═══
+    // ═══ 白布状态 - 不产生买入信号 ═══
     if (baiBu) {
-      // 白布 + 机构活跃12+ 突破MA5 + 均线不下
-      if (jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown) {
-        return { suggestion: '轻仓买入', signalComb: '白布+机构+突破MA5' };
-      }
-      // 白布 + 红色箭头 (建仓/企稳/试盘/加仓)
-      const hasRedArrow = diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang ||
-        lingXingBuy || xiPanFanZhuan;
-      if (hasRedArrow) {
-        const parts: string[] = ['白布'];
-        if (diBuBuy)      parts.push('主力建仓');
-        if (zhuLiShiPan)  parts.push('主力试盘');
-        if (gaoWeiHuiDiao) parts.push('企稳');
-        if (jiaCang)      parts.push('★加仓');
-        if (lingXingBuy)  parts.push('菱形买入/成立');
-        if (xiPanFanZhuan) parts.push('洗盘反转');
-        return { suggestion: '轻仓买入', signalComb: parts.join('+') };
-      }
+      return null; // 白布=压力/覆盖盘，不产生任何买入信号
     }
 
     return null; // 无匹配规则
@@ -1695,6 +1685,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ═══ 二级: 多因子评分 (无信号匹配) ═══
     if (priceIncrease > 40) return null;
     if (pricePosition >= 92 && score < 10) return null;
+
+    // 白布状态下不产生买入信号
+    if (bx.baiBu) return null;
 
     // 卖出信号 → 统一返回卖出
     if (bx.baiBu && result.hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
@@ -1724,6 +1717,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // ═══ 二级: 多因子宽松模式 ═══
     if (priceIncrease > 50) return null;
     if (pricePosition >= 95 && score < 8) return null;
+
+    // 白布状态下不产生买入信号
+    if (bx.baiBu) return null;
 
     const hasStrongSell = !!(bx.baoLiangFuGaiQingCang || bx.po5RiXian);
     if (bx.baiBu && hasStrongSell) return this.buildResult(s, kline, result, '卖出', '白布+清仓');
