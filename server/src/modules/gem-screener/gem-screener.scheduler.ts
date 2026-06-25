@@ -151,14 +151,11 @@ export class GemScreenerScheduler implements OnModuleInit {
 
     // 在交易时间内：下一次10分钟整点
     const nextMin = Math.ceil((min + 1) / 10) * 10;
-    const nextHour = Math.floor(nextMin / 60);
+    const nextHourBJ = Math.floor(nextMin / 60);
     const nextM = nextMin % 60;
-    if (nextM === 0) {
-      // 下一小时
-      now.setUTCHours(nextHour, 0, 0, 0);
-    } else {
-      now.setUTCHours(nextHour, nextM, 0, 0);
-    }
+    // 北京时间 → UTC
+    const utcHour = (nextHourBJ - 8 + 24) % 24;
+    now.setUTCHours(utcHour, nextM, 0, 0);
     this.state.nextScanTime = now.getTime();
   }
 

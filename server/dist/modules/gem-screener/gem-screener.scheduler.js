@@ -122,14 +122,10 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
             return;
         }
         const nextMin = Math.ceil((min + 1) / 10) * 10;
-        const nextHour = Math.floor(nextMin / 60);
+        const nextHourBJ = Math.floor(nextMin / 60);
         const nextM = nextMin % 60;
-        if (nextM === 0) {
-            now.setUTCHours(nextHour, 0, 0, 0);
-        }
-        else {
-            now.setUTCHours(nextHour, nextM, 0, 0);
-        }
+        const utcHour = (nextHourBJ - 8 + 24) % 24;
+        now.setUTCHours(utcHour, nextM, 0, 0);
         this.state.nextScanTime = now.getTime();
     }
     async doScan(label) {
