@@ -670,20 +670,9 @@ async function doScan(){
       doFullRescan();return
     }
     stocks=d.data.opportunities
-    // === 未来1-2日预测排序 ===
-    var FORECAST_RANK={'强烈看涨':0,'看涨':1,'震荡偏强':2,'震荡':3,'震荡偏弱':4,'看跌':5,'方向不明':6,'观望':7}
-    var CONF_RANK={'高':0,'中':1,'低':2}
-    // 实时信号排序: 信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
+    // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
     stocks.sort(function(a,b){
-      if(currentView==='forecast'){
-        var fa=FORECAST_RANK[(a.forecast1_2Day&&a.forecast1_2Day.direction)||'方向不明']??9
-        var fb=FORECAST_RANK[(b.forecast1_2Day&&b.forecast1_2Day.direction)||'方向不明']??9
-        if(fa!==fb) return fa-fb
-        var ca=CONF_RANK[(a.forecast1_2Day&&a.forecast1_2Day.confidence)||'低']??9
-        var cb=CONF_RANK[(b.forecast1_2Day&&b.forecast1_2Day.confidence)||'低']??9
-        if(ca!==cb) return ca-cb
-      }
       var pa=PRI[a.suggestion||'持有']??9,pb=PRI[b.suggestion||'持有']??9
       if(pa!==pb) return pa-pb
       var ea=a.entryTiming||0, eb=b.entryTiming||0
