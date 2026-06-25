@@ -292,7 +292,7 @@ async function handleRescanClick(){
       showBlocked(true);return
     }
     hideBlocked()
-    // ② 按涨跌幅排序取热门股（主板前1000 + 创业板前500）
+    // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
     setStatus('正在获取热门A股...')
     txt.textContent='获取涨跌幅排行中...'
     async function fetchNodePages(node,pages){
@@ -312,7 +312,7 @@ async function handleRescanClick(){
     // 主板：沪60 + 深00（上限1000）
     var mainBoard=shList.filter(function(s){return s.code&&s.code.startsWith('60')})
     var sz00=szList.filter(function(s){return s.code&&s.code.startsWith('00')})
-    mainBoard=mainBoard.concat(sz00).slice(0,1000)
+    mainBoard=mainBoard.concat(sz00).slice(0,500)
     // 创业板：深30（上限500）
     var gem=szList.filter(function(s){return s.code&&s.code.startsWith('30')}).slice(0,500)
     var stocks=mainBoard.concat(gem)
@@ -390,11 +390,11 @@ async function autoLightScan(){
         if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}
       }
     }
-    // ③ 筛选主板前1000 + 创业板前500
+    // ③ 筛选主板前500 + 创业板前500
     var mainBoard=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
     var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
     var gem=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
-    mainBoard=mainBoard.concat(sz00).slice(0,1000)
+    mainBoard=mainBoard.concat(sz00).slice(0,500)
     gem=gem.slice(0,500)
     var totalList=mainBoard.concat(gem)
     if(!totalList.length)throw new Error('未获取到热门股票')
