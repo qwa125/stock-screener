@@ -134,6 +134,22 @@ function getTradingSuggestion(f) {
             };
         }
         if (trend >= 2) {
+            if (strongSell) {
+                return {
+                    action: '卖出',
+                    color: 'bg-red-500',
+                    reason: '中位区上升+卖出信号，清仓',
+                    prediction: '未来1-2日预计回落，建议卖出',
+                };
+            }
+            if (hasSellSignal) {
+                return {
+                    action: '减仓',
+                    color: 'bg-orange-500',
+                    reason: '中位区上升+减仓信号，控制风险',
+                    prediction: '未来1-2日可能调整，建议减仓',
+                };
+            }
             return {
                 action: '持有',
                 color: 'bg-yellow-500',
@@ -182,6 +198,22 @@ function getTradingSuggestion(f) {
             };
         }
         if (trend >= 2) {
+            if (strongSell) {
+                return {
+                    action: '卖出',
+                    color: 'bg-red-500',
+                    reason: '中高位上升+卖出信号，清仓',
+                    prediction: '未来1-2日预计回落，建议卖出',
+                };
+            }
+            if (hasSellSignal) {
+                return {
+                    action: '减仓',
+                    color: 'bg-orange-500',
+                    reason: '中高位上升+减仓信号，注意风险',
+                    prediction: '未来1-2日可能调整，建议减仓',
+                };
+            }
             return {
                 action: '持有',
                 color: 'bg-yellow-500',
@@ -266,6 +298,22 @@ function getTradingSuggestion(f) {
             color: 'bg-green-500',
             reason: '高位上升+强信号，强趋势延续',
             prediction: '未来1-2日有望继续上攻，建议轻仓买入',
+        };
+    }
+    if (strongSell) {
+        return {
+            action: '卖出',
+            color: 'bg-red-500',
+            reason: '高位上升+卖出信号，清仓离场',
+            prediction: '未来1-2日预计回落，建议卖出',
+        };
+    }
+    if (hasSellSignal) {
+        return {
+            action: '减仓',
+            color: 'bg-orange-500',
+            reason: '高位上升+减仓信号，控制仓位',
+            prediction: '未来1-2日可能调整，建议减仓',
         };
     }
     return {
