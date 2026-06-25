@@ -480,7 +480,7 @@ export class SectorService implements OnApplicationBootstrap {
       const topForResponse = items.slice(0, 10);
       if (this.cache?.data) {
         for (const sector of topForResponse) {
-          const oldSector = this.cache.data.month1.find(o => o.code === sector.code);
+          const oldSector = this.cache.data.month1?.find(o => o.code === sector.code);
           if (oldSector?.opportunityStocks?.length) {
             const merged = new Map<string, LeadingStock>();
             for (const s of oldSector.opportunityStocks) merged.set(s.code, s);
