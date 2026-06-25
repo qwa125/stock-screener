@@ -199,16 +199,7 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
-// localStorage 版本检查：清空过期缓存
-try{
-  var STORAGE_VER='v3'
-  var storedVer=localStorage.getItem('cacheVer')
-  if(storedVer!==STORAGE_VER){
-    localStorage.removeItem('lastStocks')
-    localStorage.setItem('cacheVer',STORAGE_VER)
-    console.log('🧹 缓存版本更新，已清空旧数据')
-  }
-}catch(e){}
+// localStorage已不再缓存展示数据——每次以最新数据计算为准
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -259,41 +250,8 @@ function showBlocked(isLimited){
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
 }
-// 从本地缓存恢复上次扫描结果（已冻结时也展示）
-function restoreCachedStocks(){
-  try{
-    var ls=localStorage.getItem('lastStocks')
-    if(ls){
-      var cached=JSON.parse(ls)
-      if(cached.length>0){
-        stocks=cached
-        renderList()
-        if(!isTH()){
-          setStatus('📊 已冻结 (非交易时间)')
-          $('scanBtn').textContent='📊 已冻结'
-        }
-        $('footer').textContent='✅ Top'+cached.length+' | 实时行情 | 10分钟自动刷新'
-  if(window._lastScanCount&&window._lastScanCount>0)$('footer').textContent+=' | 已扫描 '+window._lastScanCount+' 只股票'
-        // 缓存恢复时也更新调试面板
-        try{
-          }catch(e){}
-        return true
-      }
-    }
-  }catch(e){}
-  return false
-}
-// 恢复上次扫描结果（冻结时也展示，预加载到内存供点击扫描后展示）
-try{
-  var ls=localStorage.getItem('lastStocks')
-  if(ls){
-    stocks=JSON.parse(ls)
-    console.log('📦 从localStorage预加载 '+stocks.length+' 只（版本 '+localStorage.getItem('cacheVer')+'）')
-    if(stocks.length>0) console.log('  首只:', stocks[0].code, stocks[0].name, stocks[0].suggestion, 'entryTiming='+stocks[0].entryTiming)
-  }else{
-    console.log('📦 localStorage无缓存数据')
-  }
-}catch(e){}
+// 不再从localStorage恢复缓存结果——每次展示都重新拉取最新数据计算
+console.log('📦 已关闭本地缓存，每次展示都以最新数据计算')
 
 // 立即扫描：与全市场重扫完全相同的逻辑（浏览器拉数据+批量K线+推送后端）
 // 仅在交易时段可点击，休盘时按钮显示"已冻结"
@@ -372,7 +330,7 @@ function handleClearCache(){
 	setStatus("正在清空后端缓存...")
 	fetch(API+"/gem/clear-cache").then(function(r){return r.json()}).then(function(d){
 		// 只清缓存数据，保留设备注册信息
-		try{localStorage.removeItem('lastStocks');localStorage.removeItem('cacheVer')}catch(e){}
+		try{localStorage.removeItem('lastStocks')}catch(e){}
 		setStatus("缓存已清空，正在刷新...")
 		location.reload()
 	}).catch(function(e){
@@ -700,7 +658,7 @@ function buildDetail(s,rt){
 function renderList(){
   // 毛玻璃可见时只缓存不渲染UI
   var isBlurred=!$('pageBlur').classList.contains('hidden')
-  if(isBlurred&&stocks.length){try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}return}
+  if(isBlurred&&stocks.length){return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   var scanSummary='✅ Top'+stocks.length+' | 实时行情 | 10分钟自动刷新'
@@ -767,7 +725,7 @@ async function doScan(){
       doFullRescan()
       return
     }
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存供下次展示
+    // 不再缓存到localStorage，每次展示以最新数据计算为准
     // 毛玻璃可见时不显示结果，只缓存
     if(isBlurred){
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -841,12 +799,9 @@ async function doFullRescan(){
     newStocks=(cd.data||[]).slice()
   }catch(e){}
   
-  // rescan被拦截(429)时，从localStorage加载上次扫描结果作为缓存
+  // rescan被拦截(429)时，不再从localStorage回退——数据空则显示空列表
   if(newStocks.length===0){
-    try{
-      var cached=localStorage.getItem('lastStocks')
-      if(cached){var cp=JSON.parse(cached);var hasForecast=cp.some(function(x){return x&&x.forecast1_2Day});if(!hasForecast){localStorage.removeItem('lastStocks');console.warn('🧹 旧缓存无forecast1_2Day，已清除，重新从API获取');cached=null}else{newStocks=cp.slice();for(var sci=0;sci<newStocks.length;sci++) delete newStocks[sci].suggestion;console.log('📦 从缓存加载 '+newStocks.length+' 只，已清除历史信号')}}
-    }catch(e){}
+    console.warn('⚠️ 后端缓存为空，需先执行全市场重扫')
   }
   var cacheCount=newStocks.length  // 记录缓存股数量，用于后续追加
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取涨幅排行...')
@@ -1111,8 +1066,7 @@ async function doFullRescan(){
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
-    renderList() // 先显示
-    try{localStorage.setItem('lastStocks',JSON.stringify(stocks))}catch(e){}  // 缓存结果供下次"已冻结"展示
+    renderList() // 先显示——不缓存到localStorage，以最新数据为准
     // ====== 状态栏显示信号分布摘要 ======
     var sigSummary={};stocks.forEach(function(s){var sg=s.suggestion||'未知';sigSummary[sg]=(sigSummary[sg]||0)+1})
     var sigParts=[]
