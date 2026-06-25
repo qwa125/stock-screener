@@ -601,6 +601,7 @@ __decorate([
 ], GemScreenerController.prototype, "tencentProxy", null);
 __decorate([
     (0, common_1.Post)('refresh'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -609,6 +610,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshWithData", null);
 __decorate([
     (0, common_1.Post)('refresh-main-board'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -617,6 +619,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshMainBoard", null);
 __decorate([
     (0, common_1.Post)('refresh-sector'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -625,6 +628,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshSector", null);
 __decorate([
     (0, common_1.Post)('refresh-heavy-buy'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -699,6 +703,7 @@ __decorate([
 ], GemScreenerController.prototype, "getIndustrySectorsTop10", null);
 __decorate([
     (0, common_1.Post)('seed-cache'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -713,12 +718,14 @@ __decorate([
 ], GemScreenerController.prototype, "searchStock", null);
 __decorate([
     (0, common_1.Get)('rescan'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanMarket", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -727,6 +734,7 @@ __decorate([
 ], GemScreenerController.prototype, "refreshAll", null);
 __decorate([
     (0, common_1.Post)('sync-sell-state'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -735,6 +743,7 @@ __decorate([
 ], GemScreenerController.prototype, "syncSellState", null);
 __decorate([
     (0, common_1.Post)('rescan-batch'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -743,6 +752,7 @@ __decorate([
 ], GemScreenerController.prototype, "rescanBatch", null);
 __decorate([
     (0, common_1.Get)('proxy/stock-list'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
@@ -754,6 +764,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxyStockList", null);
 __decorate([
     (0, common_1.Get)('proxy/eastmoney-list'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('node')),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('num')),
@@ -763,6 +774,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxyEastMoneyList", null);
 __decorate([
     (0, common_1.Get)('proxy/search'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('q')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -770,6 +782,7 @@ __decorate([
 ], GemScreenerController.prototype, "proxySearch", null);
 __decorate([
     (0, common_1.Get)('proxy/sina-us'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('code')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

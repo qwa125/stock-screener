@@ -135,6 +135,7 @@ export class GemScreenerController {
   }
 
   @Post('refresh')
+  @SkipAccessLimit()
   @HttpCode(200)
   async refreshWithData(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanWithFrontendData(body.stocks);
@@ -142,6 +143,7 @@ export class GemScreenerController {
   }
 
   @Post('refresh-main-board')
+  @SkipAccessLimit()
   @HttpCode(200)
   async refreshMainBoard(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanWithFrontendMainBoardData(body.stocks);
@@ -149,6 +151,7 @@ export class GemScreenerController {
   }
 
   @Post('refresh-sector')
+  @SkipAccessLimit()
   @HttpCode(200)
   async refreshSector(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanWithFrontendSectorData(body.stocks);
@@ -156,6 +159,7 @@ export class GemScreenerController {
   }
 
   @Post('refresh-heavy-buy')
+  @SkipAccessLimit()
   async refreshHeavyBuy(@Body() body: { stocks: any[] }): Promise<any> {
     try {
       const stocks = body?.stocks || [];
@@ -325,6 +329,7 @@ export class GemScreenerController {
   }
 
   @Post('seed-cache')
+  @SkipAccessLimit()
   @HttpCode(200)
   async seedCache() {
     const result = await this.gemScreener.generateSeedCache();
@@ -371,6 +376,7 @@ export class GemScreenerController {
   }
 
   @Get('rescan')
+  @SkipAccessLimit()
   async rescanMarket() {
     try {
       const results = await this.gemScreener.rescanMarket();
@@ -382,6 +388,7 @@ export class GemScreenerController {
   }
 
   @Post('refresh-all')
+  @SkipAccessLimit()
   @HttpCode(200)
   async refreshAll(@Body() body: { stocks: any[] }) {
     const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
@@ -389,6 +396,7 @@ export class GemScreenerController {
   }
 
   @Post('sync-sell-state')
+  @SkipAccessLimit()
   @HttpCode(200)
   async syncSellState(@Body() body: { sellStates: { code: string; suggestion: string }[] }) {
     try {
@@ -400,6 +408,7 @@ export class GemScreenerController {
   }
 
   @Post('rescan-batch')
+  @SkipAccessLimit()
   @HttpCode(200)
   async rescanBatch(@Body() body: { codes: string[]; names?: string[] }) {
     if (!body.codes || !body.codes.length) {
@@ -430,6 +439,7 @@ export class GemScreenerController {
   }
 
   @Get('proxy/stock-list')
+  @SkipAccessLimit()
   async proxyStockList(
     @Query('node') node: string,
     @Query('page') page: string,
@@ -457,6 +467,7 @@ export class GemScreenerController {
   }
 
   @Get('proxy/eastmoney-list')
+  @SkipAccessLimit()
   async proxyEastMoneyList(
     @Query('node') node: string,
     @Query('page') page: string,
@@ -502,6 +513,7 @@ export class GemScreenerController {
   }
 
   @Get('proxy/search')
+  @SkipAccessLimit()
   async proxySearch(@Query('q') query: string) {
     if (!query || !query.trim()) {
       return { code: 400, msg: '缺少搜索关键词' };
@@ -519,6 +531,7 @@ export class GemScreenerController {
   }
 
   @Get('proxy/sina-us')
+  @SkipAccessLimit()
   async proxySinaUS(@Query('code') code: string) {
     if (!code || !code.trim()) {
       return { code: 400, msg: '缺少股票代码' };
