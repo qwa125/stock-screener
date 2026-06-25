@@ -2478,9 +2478,22 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         };
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
-        const suggestion = result.action;
+        let suggestion = result.action;
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
+        const baiBuIdx = engine.length - 1;
+        const baiBuState = !!baiXing?.覆盖中?.[baiBuIdx];
+        const hasStrongSell = !!(baiXing?.高开低走清仓?.[baiBuIdx] ||
+            baiXing?.爆量覆盖清仓?.[baiBuIdx] ||
+            baiXing?.白布破5日线?.[baiBuIdx] ||
+            baiXing?.阴跌破位?.[baiBuIdx]);
+        const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
+            lingXing?.zhuShengZhongWeiChuHuo ||
+            lingXing?.zhenShiChuHuo);
+        if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || lingXing?.shortSell || sanJiao?.strongSell || lingXing?.strongSell)) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
+        }
         const NEGATIVE = ['减仓', '不要介入'];
         if (suggestion === '卖出') {
             this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });

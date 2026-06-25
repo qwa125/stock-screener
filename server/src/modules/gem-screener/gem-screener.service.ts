@@ -2946,9 +2946,28 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     const isGoldenCross = macdR?.isGoldenCross ?? false;
     const result = getTradingSuggestion(formulaInput);
-    const suggestion = result.action;
+    let suggestion = result.action;
     const predictionText = result.prediction || '';
     const reasonText = result.reason || '';
+
+    // ─── 白布卖出信号检测（覆盖getTradingSuggestion，与determineBySignalRule一致）───
+    const baiBuIdx = engine.length - 1;
+    const baiBuState = !!(baiXing as any)?.覆盖中?.[baiBuIdx];
+    const hasStrongSell = !!(
+      (baiXing as any)?.高开低走清仓?.[baiBuIdx] ||
+      (baiXing as any)?.爆量覆盖清仓?.[baiBuIdx] ||
+      (baiXing as any)?.白布破5日线?.[baiBuIdx] ||
+      (baiXing as any)?.阴跌破位?.[baiBuIdx]
+    );
+    const hasChuHuo = !!(
+      (sanJiao as any)?.zhuLiChuHuo ||
+      (lingXing as any)?.zhuShengZhongWeiChuHuo ||
+      (lingXing as any)?.zhenShiChuHuo
+    );
+    if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (lingXing as any)?.shortSell || (sanJiao as any)?.strongSell || (lingXing as any)?.strongSell)) {
+      suggestion = '卖出';
+      this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
+    }
 
     const NEGATIVE = ['减仓', '不要介入'];
     // 卖出信号：不直接返回null，先记录锁定，后续会以"不要介入"展示
