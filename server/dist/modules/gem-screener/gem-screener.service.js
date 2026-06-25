@@ -2953,9 +2953,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     return pa - pb;
                 return (b.score || 0) - (a.score || 0);
             });
-            this.cache = { data: updated, timestamp: now };
+            const gemStocks = updated.filter(s => /^30/.test(s.code));
+            const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
+            this.cache = { data: gemStocks, timestamp: now };
+            this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
             try {
                 require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
+            }
+            catch { }
+            try {
+                require('fs').writeFileSync(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
             }
             catch { }
             for (const stock of updated) {
@@ -2970,8 +2977,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         catch (e) {
             this.logger.error(`重新评估失败: ${e.message}`);
         }
-        const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-        return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 200);
+        return [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
     }
     triggerAnalysisPreCacheFromCache() {
         const cachedStocks = [];

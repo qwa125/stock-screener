@@ -3473,9 +3473,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         return (b.score || 0) - (a.score || 0);
       });
 
-      // 保留全部排序结果到缓存（含卖出/不要介入），不丢弃任何股票
-      this.cache = { data: updated, timestamp: now };
+      // 将重分析结果按归属写回对应缓存（GEM→this.cache，主板→this.mainBoardCache）
+      const gemStocks = updated.filter(s => /^30/.test(s.code));
+      const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
+      this.cache = { data: gemStocks, timestamp: now };
+      this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
       try { require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8'); } catch {}
+      try { require('fs').writeFileSync(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8'); } catch {}
 
       // ─── 为结果添加简化趋势预测 + 未来1-2日预测 ───
       for (const stock of updated) {
@@ -3491,8 +3495,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     } catch (e) {
       this.logger.error(`重新评估失败: ${(e as Error).message}`);
     }
-    const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-    return (this.cache?.data || []).filter(r => BUY_ONLY.includes(r.suggestion ?? '')).slice(0, 200);
+    // 返回全部排序结果（前端自行过滤买入信号）
+    return [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
   }
 
   /** 内部辅助：获取所有缓存股票（买入+持有+卖出全部返回，供前端搜索/详情使用） */
