@@ -392,8 +392,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private addForecastToCache(data: OpportunityStock[]) {
     if (!data || data.length === 0) return;
     for (const s of data) {
-      if (s.forecast1_2Day) continue; // 已有最新预测则跳过
-      // ═══ 共享技术面预测：与搜索区 quickAnalyze 使用同一算法 ═══
+      // 无论是否已有预测，都重新计算（确保格式统一为对象，兼容旧缓存的JSON字符串）
       s.forecast1_2Day = GemScreenerService.computeTechnicalForecast({
         entryTiming: s.entryTiming ?? 0,
         isGoldenCross: s.isGoldenCross ?? false,
@@ -1793,8 +1792,16 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       signalCombination: signalCombination || result.detail,
       jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
       trendPrediction: this.calcTrendPrediction(kline, result),
-      // ═══ 多因子评分预测: 基于 calcMultiScore 的 7 因子评分 (0-16分) ═══
-      forecast1_2Day: this.calcScoreForecast(result.score, result.signals, suggestion, result.trendState, result.isGoldenCross, result.pricePosition, result.volumeRatio, s.inflow),
+      // ═══ 共享技术面预测：与addForecastToCache/quickAnalyze完全统一 ═══
+      forecast1_2Day: GemScreenerService.computeTechnicalForecast({
+        entryTiming,
+        isGoldenCross: result.isGoldenCross,
+        ma5: result.ma5,
+        ma10: result.ma10,
+        pricePosition: result.pricePosition,
+        mainForceInflow: s.inflow ?? 0,
+        jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+      }),
     };
   }
 

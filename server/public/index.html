@@ -372,7 +372,7 @@ function todayAdviceText(s,rt){
 function futurePrediction(s){
   // Step ④: 使用评分系统的未来1-2日预测 (calcMultiScore 7因子预测)
   if(s.forecast1_2Day){
-    var fp=s.forecast1_2Day
+    var fp=typeof s.forecast1_2Day==='string'?JSON.parse(s.forecast1_2Day):s.forecast1_2Day
     var dir=fp.direction||'方向不明'
     var conf=fp.confidence||'中'
     var detail=fp.detail||''
