@@ -146,10 +146,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
   <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
 </div>
 
-<div style="display:flex;gap:8px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;align-items:center">
-  <button id="viewSignalBtn" class="btn-scan" onclick="switchView('signal')" style="flex:1;background:#3b82f6;padding:4px 8px;font-size:12px;min-width:0">📊 实时信号</button>
-  <button id="viewForecastBtn" class="btn-scan" onclick="switchView('forecast')" style="flex:1;background:#94a3b8;padding:4px 8px;font-size:12px;min-width:0">🔮 未来预测</button>
-</div>
 <div class="list-header">
   <span class="col-name">名称</span>
   <span class="col-action">操作</span>
@@ -470,7 +466,7 @@ function chipDisplay(s){
     return{conc:s._chipConc,peak:s._chipPeak,pattern:s._chipPattern}
   }
   // 用价位和趋势等信息估算
-  var pos=s.pricePosition||50
+  var pos=s.pricePosition??50
   // 低位区(0-20)且无企稳→筹码分散在下方
   if(pos<20) return{conc:10,peak:'low',pattern:'dispersed'}
   // 低位偏上(20-40)→筹码部分集中
@@ -533,7 +529,7 @@ function buildDetail(s,rt){
   var price=rt.price||s.currentPrice||0
   var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
   var chgClr=chg>=0?'#ef4444':'#22c55e'
-  var p=s.entryTiming||s.pricePosition||0
+  var p=s.pricePosition??50
   var posTag=posLabel(p)
   var posTClr=TAG_COLORS[posTag]||'#6b7280'
   var entry=s.entryTiming||0
@@ -624,7 +620,7 @@ function renderList(){
     var price=rt.price||s.currentPrice||0
     var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
     var chgClr=chg>=0?'#ef4444':'#22c55e'
-    var p=s.entryTiming||s.pricePosition||0
+    var p=s.pricePosition??50
     var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
     var sg=sigColor(s)
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
