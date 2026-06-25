@@ -860,13 +860,39 @@ async function doFullRescan(){
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
-  // 不通过后端代理获取Sina数据（Render US无法访问国内API）
-  // 直接用缓存数据展示结果
+  // 浏览器直连新浪获取实时行情（不经过后端代理，避免US超时）
   var emData=[]
-  var scanCount=newStocks.length
-  window._lastScanCount=scanCount
-  updateScanCount(scanCount)
-  setStatus('🔄 '+newStocks.length+' 只缓存，按信号+评分排序中...')
+  var scanCount=0
+  try{
+    setStatus('🔄 浏览器拉取Sina全市场行情...')
+    var sinaUrl='https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=5000&sort=symbol&asc=1&node=hs_a'
+    var src=await fetch(sinaUrl).then(function(r){return r.text()})
+    src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+    var list
+    try{list=JSON.parse(src)}catch(e){
+      var m=src.match(/\[[\s\S]*\]/)
+      if(m)list=JSON.parse(m[0]);else throw e
+    }
+    if(list&&list.length){
+      var seenCodes={}
+      for(var si=0;si<list.length;si++){
+        var sc=list[si],c=String(sc.symbol||'')
+        if(!c||seenCodes[c])continue
+        seenCodes[c]=1
+        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0})
+      }
+    }
+    scanCount=emData.length
+    window._lastScanCount=scanCount
+    updateScanCount(scanCount)
+    setStatus('✅ 浏览器拉取Sina '+scanCount+' 只，与缓存合并排序中...')
+  }catch(e){
+    console.log('⚠️ 浏览器Sina拉取失败:',e.message)
+    scanCount=newStocks.length
+    window._lastScanCount=scanCount
+    updateScanCount(scanCount)
+    setStatus('🔄 '+newStocks.length+' 只缓存，按信号+评分排序中...')
+  }
   
   var seen={}
   for(var si2=0;si2<newStocks.length;si2++)if(newStocks[si2].code)seen[newStocks[si2].code]=1
