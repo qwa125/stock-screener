@@ -143,13 +143,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
   <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
-  <button class="btn-scan" id="badBtn" onclick="showBadStocks()" style="flex:1;min-width:100px;background:#dc2626">⚠️ 不要介入</button>
+  <button class="btn-scan" id="badBtn" onclick="showBadStocks()" style="flex:1;min-width:100px;background:#dc2626">📊 评分分析</button>
 </div>
 
 <div id="badModal" class="modal-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:999;overflow-y:auto">
   <div style="margin:20px auto;max-width:500px;background:#fff;border-radius:16px;padding:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <span class="block" style="font-size:18px;font-weight:700;color:#dc2626">⚠️ 不要介入股票</span>
+      <span class="block" style="font-size:18px;font-weight:700;color:#dc2626">📊 缓存评分分析</span>
       <span class="block" id="badCount" style="font-size:14px;color:#666">加载中...</span>
     </div>
     <div id="badList" style="max-height:70vh;overflow-y:auto"></div>
@@ -371,17 +371,67 @@ function todayAdviceText(s,rt){
   return'今日暂无明显买入信号，建议观望'
 }
 
-// 临时功能：显示不要介入的股票
+// 临时功能：评分分布分析
 async function showBadStocks(){
   const btn=event.target;btn.disabled=true;btn.textContent='加载中...'
   try{
     const r=await fetch('/api/gem/cache-all')
     const j=await r.json()
-    const s=(j.data?.stocks||j.stocks||[]).filter(x=>x.suggestion==='不要介入')
-    if(!s.length){alert('❌ 当前缓存中没有「不要介入」的股票');return}
-    alert('共 '+s.length+' 只「不要介入」股票:\n'+s.map(x=>x.code+' '+x.name+' ('+x.score+'分)').join('\n'))
+    const all=j.data?.stocks||j.stocks||[]
+    
+    // 评分直方图
+    const hist={}
+    for(const s of all){
+      const sc=s.score
+      if(sc==null) hist['null']=(hist['null']||0)+1
+      else{
+        const b=Math.floor(sc/10)*10
+        hist[b]= (hist[b]||0)+1
+      }
+    }
+    
+    // 按评分排序取最低的20只
+    const sorted=[...all].sort((a,b)=>(a.score||999)-(b.score||999))
+    const bottom=sorted.slice(0,20)
+    
+    // 统计信号分布
+    const sigCnt={}
+    for(const s of all) sigCnt[s.suggestion]=(sigCnt[s.suggestion]||0)+1
+    
+    document.getElementById('badCount').textContent='共'+all.length+'只 ｜ 最低分:'+(bottom[0]?.score??'无')+' 最高分:'+(sorted[sorted.length-1]?.score??'无')
+    
+    var html=''
+    html+='<div style="font-size:14px;color:#333;margin-bottom:12px">'
+    html+='<b>信号分布</b>: '+Object.entries(sigCnt).sort((a,b)=>b[1]-a[1]).map(([k,v])=>k+' '+v).join(' ｜ ')
+    html+='</div>'
+    
+    html+='<div style="font-size:13px;color:#666;margin-bottom:12px;background:#f8fafc;padding:10px;border-radius:8px">'
+    html+='<b>评分直方图</b><br>'
+    const buckets=Object.entries(hist).sort((a,b)=>{
+      if(a[0]==='null')return 1;if(b[0]==='null')return -1
+      return parseInt(a[0])-parseInt(b[0])
+    })
+    for(const [k,v] of buckets){
+      const bar=Math.min(30,Math.round(v/5))
+      const label=k==='null'?'无score':k+'-'+(parseInt(k)+9)
+      html+=label+': '+'█'.repeat(bar)+' '+v+'<br>'
+    }
+    html+='</div>'
+    
+    html+='<b style="font-size:14px;color:#dc2626">📉 评分最低的20只</b>'
+    for(const s of bottom){
+      const sc=s.score??'无'
+      const sug=s.suggestion||''
+      html+='<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px">'
+      html+='<span>'+s.code+' '+s.name+'</span>'
+      html+='<span style="color:'+(sc<35?'#dc2626':sc<55?'#f59e0b':'#10b981')+'">'+sug+' '+sc+'分</span>'
+      html+='</div>'
+    }
+    
+    document.getElementById('badList').innerHTML=html
+    document.getElementById('badModal').style.display='block'
   }catch(e){alert('查询失败: '+e.message)}
-  finally{btn.disabled=false;btn.textContent='🔍 只看不要介入'}
+  finally{btn.disabled=false;btn.textContent='📊 评分分析'}
 }
 
 function futurePrediction(s){
