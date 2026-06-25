@@ -2083,6 +2083,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 trendState = 2;
             else if (ma5 < ma10 && ma10 < ma20)
                 trendState = 0;
+            else if (ma5 < ma10)
+                trendState = 0;
             const klineO = klineV.map((k) => Number(k.open));
             const klineH = klineV.map((k) => Number(k.high));
             const klineL = klineV.map((k) => Number(k.low));
@@ -2425,6 +2427,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else if (ma5 > ma10 && ma5Up)
             trendState = 2;
         else if (ma5 < ma10 && ma10 < ma20)
+            trendState = 0;
+        else if (ma5 < ma10)
             trendState = 0;
         const klineO = klineV.map((k) => Number(k.open));
         const klineH = klineV.map((k) => Number(k.high));

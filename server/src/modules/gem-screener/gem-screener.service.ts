@@ -2443,6 +2443,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
       else if (ma5 > ma10 && ma5Up) trendState = 2;
       else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
+      else if (ma5 < ma10) trendState = 0; // ma5<ma10即为短期走弱（即使ma20未拐头）
 
       const klineO: number[] = klineV.map((k: any) => Number(k.open));
       const klineH: number[] = klineV.map((k: any) => Number(k.high));
@@ -2856,6 +2857,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
     else if (ma5 > ma10 && ma5Up) trendState = 2;
     else if (ma5 < ma10 && ma10 < ma20) trendState = 0;
+    else if (ma5 < ma10) trendState = 0; // ma5<ma10即为短期走弱（即使ma20未拐头）
 
     const klineO: number[] = klineV.map((k: any) => Number(k.open));
     const klineH: number[] = klineV.map((k: any) => Number(k.high));
