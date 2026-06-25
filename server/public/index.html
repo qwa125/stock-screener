@@ -199,7 +199,19 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
-// localStorage已不再缓存展示数据——每次以最新数据计算为准
+// ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
+var FROZEN_KEY='frozenSnapshot'
+function saveFrozenSnapshot(arr){
+  try{localStorage.setItem(FROZEN_KEY,JSON.stringify({time:Date.now(),data:arr}))}catch(e){}
+}
+function loadFrozenSnapshot(){
+  try{
+    var raw=localStorage.getItem(FROZEN_KEY)
+    if(raw){var obj=JSON.parse(raw);if(obj&&obj.data&&obj.data.length)return obj.data}
+  }catch(e){}
+  return null
+}
+// 在页面底部 init 时使用: 交易时段走 doScan()，休盘时恢复冻结快照
 
 // ========== 设备 ID 管理 ==========
 function getOrCreateDeviceId(){
@@ -752,6 +764,7 @@ async function doScan(){
       })
     }catch(e){}
     setStatus('✅ 实时数据已更新')
+    saveFrozenSnapshot(stocks) // 保存冻结快照（休盘后展示）
     startPriceRefresh(stocks)
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
@@ -1115,6 +1128,8 @@ async function doFullRescan(){
     }
   }catch(e){}
   // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
+  // ─── 保存冻结快照（休盘后展示） ───
+  saveFrozenSnapshot(stocks)
   // ─── 启动2秒实时价格刷新 ───
   startPriceRefresh(stocks)
 }
@@ -1529,13 +1544,26 @@ setInterval(function(){
   fetchMarketState() // 每分钟刷新市场状态
 },60000)
 
-// 首次加载 + 自动扫描（延迟2秒等初始化完成后执行）
+// 首次加载（延迟3秒等初始化完成）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   fetchMarketState() // 首次加载市场状态
-  // 自动拉取机会列表并启动2秒刷新
-  if(isTH()&&!loading){doScan()}
+  if(isTH()){
+    // 交易时段 → 自动拉取最新数据
+    doScan()
+  }else{
+    // 休盘/周末 → 恢复最后一次冻结快照（不重新拉取）
+    var snap=loadFrozenSnapshot()
+    if(snap&&snap.length){
+      stocks=snap
+      renderList()
+      setStatus('📊 已冻结 — '+freezeMsg()+' | 展示最后一次扫描结果')
+      $('footer').textContent='✅ 已冻结 '+snap.length+' 只 | '+lastScanTime
+    }else{
+      setStatus('⏸️ 等待扫描')
+    }
+  }
 },3000)
 
 // 个股股价每2秒刷新
