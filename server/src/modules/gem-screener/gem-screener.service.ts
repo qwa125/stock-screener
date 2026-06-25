@@ -1821,11 +1821,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const volState = jiScore >= 10 ? '放量' : jiScore >= 5 ? '平量' : jiScore >= 2 ? '缩量' : '极度缩量';
     // 下跌趋势类
     if (downtrend && mfStrongOut && et < 50)
-      return { direction: '下跌趋势', confidence: '高', detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})+${volState}+主力大幅出逃(${mf.toFixed(1)}亿)+介入时机差(${et}),资金与趋势同步向下,未来1-2日继续探底概率极大,坚决不介入` };
+      return { direction: '下跌趋势', confidence: '高', detail: `均线空头(MA5=${ma5.toFixed(2)}下穿MA10=${ma10.toFixed(2)})+${volState}+主力大幅出逃(${mf.toFixed(1)}亿)+介入时机差(${et}),资金与趋势同步向下,未来1-2日继续探底概率极大,坚决不介入` };
     if (downtrend && et < 45)
-      return { direction: '下跌趋势', confidence: '高', detail: `均线空头(MA5=${ma5.toFixed(2)}<MA10=${ma10.toFixed(2)})+${volState}${mfOut?`+主力流出(${mf.toFixed(1)}亿)`:''}+介入时机差(${et}),短期空方主导,未来1-2日继续震荡探底概率大,不宜抄底` };
+      return { direction: '下跌趋势', confidence: '高', detail: `均线空头(MA5=${ma5.toFixed(2)}下穿MA10=${ma10.toFixed(2)})+${volState}${mfOut?`+主力流出(${mf.toFixed(1)}亿)`:''}+介入时机差(${et}),短期空方主导,未来1-2日继续震荡探底概率大,不宜抄底` };
     if (downtrend && et < 55)
-      return { direction: '震荡偏弱', confidence: '中', detail: `均线空头排列(MA5<MA10)+${volState}${mfOut?`+主力流出(${mf.toFixed(1)}亿)`:''},介入时机中性(${et}),下跌节奏放缓但未企稳,未来1-2日低位震荡为主,等待均线走平再观察` };
+      return { direction: '震荡偏弱', confidence: '中', detail: `均线空头排列(MA5下穿MA10)+${volState}${mfOut?`+主力流出(${mf.toFixed(1)}亿)`:''},介入时机中性(${et}),下跌节奏放缓但未企稳,未来1-2日低位震荡为主,等待均线走平再观察` };
     if (!gc && mfStrongOut)
       return { direction: '看跌', confidence: '高', detail: `MACD死叉+${volState}+主力大幅出逃(${mf.toFixed(1)}亿),资金加速撤离,短期动能在快速减弱,未来1-2日大概率继续回调,下方支撑位是关键` };
     if (!gc && et < 40)
