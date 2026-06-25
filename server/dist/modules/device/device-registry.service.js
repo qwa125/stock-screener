@@ -125,57 +125,67 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
     }
     async loadSettingsFromDB() {
-        if (!this.supabase)
-            return;
-        try {
-            const { data, error } = await this.supabase
-                .from('device_settings')
-                .select('value')
-                .eq('key', 'max_slots')
-                .single();
-            if (!error && data) {
-                const val = parseInt(data.value, 10);
-                if (val > 0) {
-                    this.maxSlots = val;
-                    this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`);
-                    return;
+        let loaded = false;
+        if (this.supabase) {
+            try {
+                const { data, error } = await this.supabase
+                    .from('device_settings')
+                    .select('value')
+                    .eq('key', 'max_slots')
+                    .maybeSingle();
+                if (!error && data) {
+                    const val = parseInt(data.value, 10);
+                    if (val > 0) {
+                        this.maxSlots = val;
+                        this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`);
+                        loaded = true;
+                    }
+                }
+                else if (error) {
+                    this.logger.warn(`数据库加载设置失败: ${error.message} (code=${error.code})`);
+                }
+            }
+            catch (e) {
+                this.logger.warn(`数据库加载设置异常: ${e.message}`);
+            }
+        }
+        if (!loaded) {
+            const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json');
+            for (const fp of [projectSettingsPath, this.settingsPath]) {
+                try {
+                    if (fs.existsSync(fp)) {
+                        const raw = fs.readFileSync(fp, 'utf-8');
+                        const data = JSON.parse(raw);
+                        if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+                            this.maxSlots = data.maxSlots;
+                            this.logger.log(`⚙️ 从文件加载(兜底): 设备限额 ${this.maxSlots} (${fp})`);
+                            loaded = true;
+                            break;
+                        }
+                    }
+                }
+                catch (e) {
+                    this.logger.warn(`设置文件加载失败 (${fp}): ${e.message}`);
                 }
             }
         }
-        catch (e) {
-            this.logger.warn(`数据库加载设置失败: ${e.message}`);
-        }
-        try {
-            if (fs.existsSync(this.settingsPath)) {
-                const raw = fs.readFileSync(this.settingsPath, 'utf-8');
-                const data = JSON.parse(raw);
-                if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
-                    this.maxSlots = data.maxSlots;
-                    this.logger.log(`⚙️ 从设置文件加载(兜底): 设备限额 ${this.maxSlots}`);
-                }
-            }
-        }
-        catch (e) {
-            this.logger.warn(`设置文件加载失败: ${e.message}`);
+        if (!loaded) {
+            this.logger.log(`⚙️ 未找到已持久化的设备限额，使用默认值: ${this.maxSlots}`);
         }
     }
     async saveSettingsToDB() {
         if (!this.supabase) {
-            try {
-                fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
-            }
-            catch (e) {
-                this.logger.warn(`设置文件写入失败: ${e.message}`);
-            }
+            await this.writeSettingsFileFallback();
             return;
         }
         try {
+            await this.ensureTable();
             const { error } = await this.supabase
                 .from('device_settings')
                 .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' });
             if (error) {
                 this.logger.warn(`数据库写入设置失败: ${error.message}，降级到文件`);
-                fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
+                await this.writeSettingsFileFallback();
             }
             else {
                 this.logger.log(`⚙️ 设备限额已持久化到数据库: ${this.maxSlots}`);
@@ -183,10 +193,22 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         }
         catch (e) {
             this.logger.warn(`数据库写入设置异常: ${e.message}，降级到文件`);
-            try {
-                fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
-            }
-            catch (e2) { }
+            await this.writeSettingsFileFallback();
+        }
+        await this.writeSettingsFileFallback();
+    }
+    async writeSettingsFileFallback() {
+        const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json');
+        try {
+            fs.writeFileSync(projectSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
+        }
+        catch (e) {
+            this.logger.warn(`设置文件写入失败 (${projectSettingsPath}): ${e.message}`);
+        }
+        try {
+            fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
+        }
+        catch {
         }
     }
     async ensureLoaded() {

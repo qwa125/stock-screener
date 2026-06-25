@@ -121,64 +121,93 @@ export class DeviceRegistryService {
   }
 
   private async loadSettingsFromDB() {
-    if (!this.supabase) return
-    try {
-      const { data, error } = await this.supabase
-        .from('device_settings')
-        .select('value')
-        .eq('key', 'max_slots')
-        .single()
-      if (!error && data) {
-        const val = parseInt(data.value, 10)
-        if (val > 0) {
-          this.maxSlots = val
-          this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`)
-          return
+    let loaded = false
+    // ① 优先从 Supabase 加载
+    if (this.supabase) {
+      try {
+        // .maybeSingle() 在 0 行时返回 { data: null, error: null }，不会抛 PGRST116
+        const { data, error } = await this.supabase
+          .from('device_settings')
+          .select('value')
+          .eq('key', 'max_slots')
+          .maybeSingle()
+        if (!error && data) {
+          const val = parseInt(data.value, 10)
+          if (val > 0) {
+            this.maxSlots = val
+            this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`)
+            loaded = true
+          }
+        } else if (error) {
+          this.logger.warn(`数据库加载设置失败: ${error.message} (code=${error.code})`)
         }
+      } catch (e) {
+        this.logger.warn(`数据库加载设置异常: ${(e as Error).message}`)
       }
-    } catch (e) {
-      this.logger.warn(`数据库加载设置失败: ${(e as Error).message}`)
     }
-    // 兜底：读文件
-    try {
-      if (fs.existsSync(this.settingsPath)) {
-        const raw = fs.readFileSync(this.settingsPath, 'utf-8')
-        const data = JSON.parse(raw)
-        if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
-          this.maxSlots = data.maxSlots
-          this.logger.log(`⚙️ 从设置文件加载(兜底): 设备限额 ${this.maxSlots}`)
+    // ② 兜底：读项目根目录文件（同会话内重启可恢复）
+    if (!loaded) {
+      const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
+      for (const fp of [projectSettingsPath, this.settingsPath]) {
+        try {
+          if (fs.existsSync(fp)) {
+            const raw = fs.readFileSync(fp, 'utf-8')
+            const data = JSON.parse(raw)
+            if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+              this.maxSlots = data.maxSlots
+              this.logger.log(`⚙️ 从文件加载(兜底): 设备限额 ${this.maxSlots} (${fp})`)
+              loaded = true
+              break
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`设置文件加载失败 (${fp}): ${(e as Error).message}`)
         }
       }
-    } catch (e) {
-      this.logger.warn(`设置文件加载失败: ${(e as Error).message}`)
+    }
+    if (!loaded) {
+      this.logger.log(`⚙️ 未找到已持久化的设备限额，使用默认值: ${this.maxSlots}`)
     }
   }
 
   private async saveSettingsToDB() {
     if (!this.supabase) {
-      // 无数据库时写入文件兜底
-      try {
-        fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
-      } catch (e) {
-        this.logger.warn(`设置文件写入失败: ${(e as Error).message}`)
-      }
+      await this.writeSettingsFileFallback()
       return
     }
     try {
+      // 先确保表存在（首次使用时可能会被跳过）
+      await this.ensureTable()
       const { error } = await this.supabase
         .from('device_settings')
         .upsert({ key: 'max_slots', value: String(this.maxSlots) }, { onConflict: 'key' })
       if (error) {
         this.logger.warn(`数据库写入设置失败: ${error.message}，降级到文件`)
-        fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
+        await this.writeSettingsFileFallback()
       } else {
         this.logger.log(`⚙️ 设备限额已持久化到数据库: ${this.maxSlots}`)
       }
     } catch (e) {
       this.logger.warn(`数据库写入设置异常: ${(e as Error).message}，降级到文件`)
-      try {
-        fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
-      } catch (e2) {}
+      await this.writeSettingsFileFallback()
+    }
+    // 同步写入文件（双保险）
+    await this.writeSettingsFileFallback()
+  }
+
+  private async writeSettingsFileFallback() {
+    // 写入项目根目录（同会话内重启可恢复）
+    const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
+    try {
+      fs.writeFileSync(projectSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
+    } catch (e) {
+      this.logger.warn(`设置文件写入失败 (${projectSettingsPath}): ${(e as Error).message}`)
+    }
+    // 也写 /tmp 作额外兜底
+    try {
+      fs.writeFileSync(this.settingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
+    } catch {
+      // /tmp 不可用时忽略
     }
   }
 

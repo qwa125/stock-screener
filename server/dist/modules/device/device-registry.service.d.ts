@@ -13,6 +13,7 @@ export declare class DeviceRegistryService {
     private loadFromFile;
     private loadSettingsFromDB;
     private saveSettingsToDB;
+    private writeSettingsFileFallback;
     private ensureLoaded;
     private loadRegistry;
     touchDevice(deviceId: string, ua: string): Promise<{
