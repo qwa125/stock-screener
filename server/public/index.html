@@ -792,7 +792,8 @@ function buildEntrySection(s,rt,ta){
       else if(nearResist){tagText="等回调";tagClr="#ca8a04";msg="接近阻力位，等回调";bestPrice=support}
       else{tagText="部分介入";tagClr="#2563eb";msg="可部分介入或等回调";bestPrice=support}
     }else if(trend==="down"){
-      if((nearLow||bbPos<0.25)&&ta.kdj.j<30){tagText="轻仓试探";tagClr="#16a34a";msg="超跌反弹机会，轻仓试探";bestPrice=cp}
+      if(cp<support||cp<(bb&&bb.lower||0)){tagText="不介入";tagClr="#6b7280";msg="跌破支撑位，不建议介入，等企稳";bestPrice=ta.bestEntryPrice||support}
+      else if((nearLow||bbPos<0.25)&&ta.kdj.j<30){tagText="轻仓试探";tagClr="#16a34a";msg="超跌反弹机会，轻仓试探";bestPrice=cp}
       else{tagText="等企稳";tagClr="#6b7280";msg="不建议抄底，等企稳";bestPrice=ta.bestEntryPrice||support}
     }else{
       if(nearSupport||nearLow){tagText="低吸";tagClr="#16a34a";msg="接近支撑，低吸";bestPrice=cp}
