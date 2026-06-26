@@ -891,19 +891,19 @@ function buildDetail(s,rt,ta){
           if(!cp||!sup||!res) return '<div style="font-size:10px;color:#6b7280">数据不足</div>'
           // 上涨趋势中的回调（空中加油）
           if(ta.macd&&ta.macd.hist>0&&ta.kdj.k>ta.kdj.d){
-            if(cp<=sup*1.04) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 上涨趋势中回调至支撑位附近 → 空中加油入场点，可介入</div>'
-            if(cp>=res*0.97) return '<div style="font-size:10px;color:#ca8a04;font-weight:500">⚠️ 接近阻力位，等待回调后再介入</div>'
-            return '<div style="font-size:10px;color:#2563eb;font-weight:500">⏳ 趋势向上，当前位置适中，可部分介入或等待回调</div>'
+            if(cp<=sup*1.04) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 上涨趋势回调至支撑 <span class=\"num-badge\">'+sup.toFixed(2)+'</span> 附近→空中加油，可介入（挂单 <span class=\"num-badge\">'+dip.toFixed(2)+'</span>）</div>'
+            if(cp>=res*0.97) return '<div style="font-size:10px;color:#ca8a04;font-weight:500">⚠️ 接近阻力 <span class=\"num-badge\">'+res.toFixed(2)+'</span>，等回调至 <span class=\"num-badge\">'+sup.toFixed(2)+'</span> 附近介入</div>'
+            return '<div style="font-size:10px;color:#2563eb;font-weight:500">⏳ 趋势向上，当前位置适中，可部分介入或等待回调至 <span class=\"num-badge\">'+dip.toFixed(2)+'</span></div>'
           }
           // 下跌趋势（超跌反弹机会）
           if(ta.kdj&&ta.kdj.j<25){
-            if(cp<=dip*1.03) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 超跌区+接近技术支撑，短线反弹机会，可轻仓试探</div>'
-            return '<div style="font-size:10px;color:#dc2626;font-weight:500">⚠️ 下跌趋势中，不建议抄底，等企稳反弹信号</div>'
+            if(cp<=dip*1.03) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 超跌区+接近技术支撑 <span class=\"num-badge\">'+dip.toFixed(2)+'</span>，短线反弹机会，可轻仓试探（挂单 <span class=\"num-badge\">'+(dip*0.99).toFixed(2)+'</span>）</div>'
+            return '<div style="font-size:10px;color:#dc2626;font-weight:500">⚠️ 下跌趋势中，不建议抄底（当前 <span class=\"num-badge\">'+cp.toFixed(2)+'</span> > 支撑 <span class=\"num-badge\">'+dip.toFixed(2)+'</span>），等回调至支撑附近</div>'
           }
           // 震荡区间
-          if(cp<=sup*1.03) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 接近支撑位，可低吸</div>'
-          if(cp>=res*0.97) return '<div style="font-size:10px;color:#ca8a04;font-weight:500">⚠️ 接近阻力位，等回调</div>'
-          return '<div style="font-size:10px;color:#6b7280;font-weight:500">⏳ 震荡区间内，等待方向明确</div>'
+          if(cp<=sup*1.03) return '<div style="font-size:10px;color:#16a34a;font-weight:500">✅ 接近支撑 <span class=\"num-badge\">'+sup.toFixed(2)+'</span>，可低吸（挂单 <span class=\"num-badge\">'+dip.toFixed(2)+'</span>）</div>'
+          if(cp>=res*0.97) return '<div style="font-size:10px;color:#ca8a04;font-weight:500">⚠️ 接近阻力 <span class=\"num-badge\">'+res.toFixed(2)+'</span>，等回调至 <span class=\"num-badge\">'+sup.toFixed(2)+'</span> 附近</div>'
+          return '<div style="font-size:10px;color:#6b7280;font-weight:500">⏳ 震荡区间内（支撑 <span class=\"num-badge\">'+sup.toFixed(2)+'</span> ~ 阻力 <span class=\"num-badge\">'+res.toFixed(2)+'</span>），等待方向明确</div>'
         })()
       +'</div>'
     +'</div>'
@@ -958,6 +958,25 @@ function buildDetail(s,rt,ta){
       +'</div>'
       +'<div style="font-size:11px;color:#374151;margin-bottom:3px">'+actionAdvice+'</div>'
       +'<div style="font-size:10px;color:#6b7280">挂单参考：'+(intraPos<40?'现价附近可分笔介入，挂单 <span class="num-badge">'+(cp*0.99).toFixed(2)+'</span>～<span class="num-badge">'+cp.toFixed(2)+'</span>':intraPos<70?'等待回调，挂单 <span class="num-badge">'+(estSup+(estRes-estSup)*0.25).toFixed(2)+'</span> 附近':'今日观望为宜')+'</div>'
+    +'</div>'
+  }else if(rt.price){
+    var cp=rt.price||s.price||0
+    var estLow=rt.low||cp*0.97
+    var estHigh=rt.high||cp*1.03
+    var intraPos=estHigh>estLow?((cp-estLow)/(estHigh-estLow)*100):50
+    entryHtml+='<div class="detail-entry"><div class="section-title">📌 当前价格</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">当前价: <span class=\"num-badge\">'+cp.toFixed(2)+'</span>'
+      +(rt.low?' 日内区间: <span class=\"num-badge\">'+rt.low.toFixed(2)+'</span>～<span class=\"num-badge\">'+rt.high.toFixed(2)+'</span>':'')
+      +'</div>'
+      +'<div class="position-bar" style="position:relative;height:8px;background:#e5e7eb;border-radius:4px;margin-bottom:8px">'
+      +'<div style="position:absolute;top:0;left:0;height:100%;border-radius:4px;width:'+Math.max(2,Math.min(100,intraPos))+'%;background:linear-gradient(90deg,#22c55e,#eab308,#ef4444)"></div>'
+      +'<div style="position:absolute;top:-4px;left:'+Math.max(0,Math.min(100,intraPos))+'%;width:16px;height:16px;background:#1d4ed8;border:2px solid #fff;border-radius:50%;transform:translateX(-50%)"></div>'
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:6px">'
+      +'<span>低 <b>'+(rt.low?rt.low.toFixed(2):'-')+'</b></span>'
+      +'<span>高 <b>'+(rt.high?rt.high.toFixed(2):'-')+'</b></span>'
+      +'</div>'
+      +'<div style="font-size:10px;color:#6b7280;line-height:1.5">⏳ 昨收价加载中，将根据技术分析和昨收价自动评估当前位置</div>'
     +'</div>'
   }
 
