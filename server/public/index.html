@@ -2259,7 +2259,6 @@ function verifyAdminToken(tok){
     }
   }).catch(function(){if(st)st.innerHTML='<span style="color:#999">⏳ 验证失败</span>'})
 }
-}
 
 async function removeDevice(idx){
   if(!confirm('确定删除设备 #'+(idx+1)+'？'))return
