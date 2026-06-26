@@ -350,6 +350,19 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: [] };
         }
     }
+    async updateUpgraded(body) {
+        try {
+            const list = body?.data || [];
+            if (!list.length)
+                return { code: 200, msg: 'empty', data: [] };
+            this.gemScreener.updateUpgradedCache(list);
+            return { code: 200, msg: `updated ${list.length} stocks`, data: list.length };
+        }
+        catch (e) {
+            this.logger.error(`更新升级缓存失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: 0 };
+        }
+    }
     async refreshAll(body) {
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
         return { code: 200, msg: 'success', data: { opportunities, timestamp: Date.now() } };
@@ -764,6 +777,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanMarket", null);
+__decorate([
+    (0, common_1.Post)('update-upgraded'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "updateUpgraded", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

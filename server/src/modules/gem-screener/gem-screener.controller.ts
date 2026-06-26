@@ -402,6 +402,20 @@ export class GemScreenerController {
     }
   }
 
+  @Post('update-upgraded')
+  @SkipAccessLimit()
+  async updateUpgraded(@Body() body: { data?: any[] }) {
+    try {
+      const list = body?.data || [];
+      if (!list.length) return { code: 200, msg: 'empty', data: [] };
+      this.gemScreener.updateUpgradedCache(list);
+      return { code: 200, msg: `updated ${list.length} stocks`, data: list.length };
+    } catch (e) {
+      this.logger.error(`更新升级缓存失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: 0 };
+    }
+  }
+
   @Post('refresh-all')
   @SkipAccessLimit()
   @HttpCode(200)

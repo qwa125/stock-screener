@@ -392,6 +392,49 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return true;
         });
     }
+    updateUpgradedCache(list) {
+        if (!list?.length)
+            return;
+        const map = new Map();
+        for (const s of list)
+            if (s?.code)
+                map.set(s.code, s);
+        if (this.mainBoardCache?.data?.length) {
+            let changed = false;
+            for (let i = 0; i < this.mainBoardCache.data.length; i++) {
+                const item = this.mainBoardCache.data[i];
+                const upgraded = map.get(item.code);
+                if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                    item.suggestion = upgraded.suggestion;
+                    if (upgraded.score !== undefined)
+                        item.score = upgraded.score;
+                    if (upgraded.entryTiming !== undefined)
+                        item.entryTiming = upgraded.entryTiming;
+                    changed = true;
+                }
+            }
+            if (changed)
+                this.saveMainBoardCacheToDisk().catch(() => { });
+        }
+        if (this.cache?.data?.length) {
+            let changed = false;
+            for (let i = 0; i < this.cache.data.length; i++) {
+                const item = this.cache.data[i];
+                const upgraded = map.get(item.code);
+                if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                    item.suggestion = upgraded.suggestion;
+                    if (upgraded.score !== undefined)
+                        item.score = upgraded.score;
+                    if (upgraded.entryTiming !== undefined)
+                        item.entryTiming = upgraded.entryTiming;
+                    changed = true;
+                }
+            }
+            if (changed)
+                this.saveCacheToDisk().catch(() => { });
+        }
+        this.logger.log(`前端升级信号已回写: ${list.length}只`);
+    }
     async updateSingleStockInCache(opp) {
         const code = opp.code;
         const isMainBoardStock = /^60/.test(code) || /^00/.test(code);
@@ -955,11 +998,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = deduped.slice(0, 30);
-        this.cache = { data: finalResults, timestamp: Date.now() };
+        this.cache = { data: deduped, timestamp: Date.now() };
         this.saveCacheToDisk();
-        this.logger.log(`✅ 前端数据扫描完成, 累加合并后 ${finalResults.length} 只`);
-        return finalResults;
+        this.logger.log(`✅ 前端数据扫描完成, 全量存储 ${deduped.length} 只`);
+        return deduped.slice(0, 30);
     }
     async scanWithFrontendMainBoardData(stocks) {
         const results = [];
@@ -1016,7 +1058,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        const finalResults = dedupedMain.slice(0, 30);
+        const finalResults = dedupedMain;
         this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
         this.saveMainBoardCacheToDisk();
         this.logger.log(`✅ 前端主板数据推送完成, 累加合并后 ${finalResults.length} 只`);

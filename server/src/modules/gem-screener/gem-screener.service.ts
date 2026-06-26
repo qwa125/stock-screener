@@ -511,6 +511,48 @@ export class GemScreenerService implements OnApplicationBootstrap {
     });
   }
 
+
+  /** 接收前端升级后的信号并更新缓存 */
+  updateUpgradedCache(list: any[]) {
+    if (!list?.length) return;
+    const map = new Map<string, any>();
+    for (const s of list) if (s?.code) map.set(s.code, s);
+
+    // 更新主板缓存
+    if (this.mainBoardCache?.data?.length) {
+      let changed = false;
+      for (let i = 0; i < this.mainBoardCache.data.length; i++) {
+        const item = this.mainBoardCache.data[i];
+        const upgraded = map.get(item.code);
+        if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+          item.suggestion = upgraded.suggestion;
+          if (upgraded.score !== undefined) item.score = upgraded.score;
+          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+          changed = true;
+        }
+      }
+      if (changed) this.saveMainBoardCacheToDisk().catch(() => {});
+    }
+
+    // 更新GEM缓存
+    if (this.cache?.data?.length) {
+      let changed = false;
+      for (let i = 0; i < this.cache.data.length; i++) {
+        const item = this.cache.data[i];
+        const upgraded = map.get(item.code);
+        if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+          item.suggestion = upgraded.suggestion;
+          if (upgraded.score !== undefined) item.score = upgraded.score;
+          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+          changed = true;
+        }
+      }
+      if (changed) this.saveCacheToDisk().catch(() => {});
+    }
+
+    this.logger.log(`前端升级信号已回写: ${list.length}只`);
+  }
+
   /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
   async updateSingleStockInCache(opp: OpportunityStock): Promise<void> {
     const code = opp.code;
@@ -1081,11 +1123,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
           : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
           : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
-    const finalResults = deduped.slice(0, 30);
-    this.cache = { data: finalResults, timestamp: Date.now() };
+    // 全量存储所有分析结果，不限量（Top30只用于机会区快速展示）
+    this.cache = { data: deduped, timestamp: Date.now() };
     this.saveCacheToDisk();
-    this.logger.log(`✅ 前端数据扫描完成, 累加合并后 ${finalResults.length} 只`);
-    return finalResults;
+    this.logger.log(`✅ 前端数据扫描完成, 全量存储 ${deduped.length} 只`);
+    return deduped.slice(0, 30); // 函数返回值仍是Top30（旧兼容）
   }
 
   /**
@@ -1144,7 +1186,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
         : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
     });
-    const finalResults = dedupedMain.slice(0, 30);
+    // 全量存储所有分析结果，不限量（Top30只用于机会区快速展示）
+    const finalResults = dedupedMain; // 不再slice(0,30)，全量保存供前端升级使用
     this.mainBoardCache = { data: finalResults, timestamp: Date.now() };
     this.saveMainBoardCacheToDisk();
     this.logger.log(`✅ 前端主板数据推送完成, 累加合并后 ${finalResults.length} 只`);

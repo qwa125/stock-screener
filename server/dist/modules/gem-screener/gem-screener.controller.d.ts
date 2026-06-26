@@ -199,6 +199,17 @@ export declare class GemScreenerController {
         msg: any;
         data: never[];
     }>;
+    updateUpgraded(body: {
+        data?: any[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: never[];
+    } | {
+        code: number;
+        msg: any;
+        data: number;
+    }>;
     refreshAll(body: {
         stocks: any[];
     }): Promise<{

@@ -1334,7 +1334,26 @@ async function doFullRescan(){
     setStatus('❌ 重扫无结果')
   }
   loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
-  // ─── Step ③: 前端同步卖出锁定到后端持久化 ───
+  // ─── Step ③: 前端升级信号回写到后端 ───
+  try{
+    var upgradeList=[]
+    for(var si=0;si<newStocks.length;si++){
+      var us=newStocks[si]
+      if(us.suggestion&&['重仓买入','买入','轻仓买入'].indexOf(us.suggestion)>=0){
+        upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
+      }
+    }
+    if(upgradeList.length>0){
+      fetch(API+'/gem/update-upgraded',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({list:upgradeList})
+      }).then(function(r){return r.json()}).then(function(j){
+        if(j.code===200)console.log('📤 前端升级信号已回写 '+upgradeList.length+' 只到后端缓存')
+      }).catch(function(){})
+    }
+  }catch(e){}
+  // ─── Step ④: 前端同步卖出锁定到后端持久化 ───
   try{
     var sellStates=[]
     for(var si=0;si<newStocks.length;si++){
