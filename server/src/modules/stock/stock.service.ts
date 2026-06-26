@@ -354,7 +354,7 @@ export class StockService {
       ma5Up, ma10Up,
     };
     const stockSuggestion = getTradingSuggestion(stockInput);
-    const suggestion = stockSuggestion.action;
+    const suggestion = stockSuggestion.suggestion;
     const prediction = stockSuggestion.prediction || '';
     const reason = stockSuggestion.reason || '';
 

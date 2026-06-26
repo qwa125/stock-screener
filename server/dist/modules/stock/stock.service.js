@@ -294,7 +294,7 @@ let StockService = StockService_1 = class StockService {
             ma5Up, ma10Up,
         };
         const stockSuggestion = (0, trading_suggestion_1.getTradingSuggestion)(stockInput);
-        const suggestion = stockSuggestion.action;
+        const suggestion = stockSuggestion.suggestion;
         const prediction = stockSuggestion.prediction || '';
         const reason = stockSuggestion.reason || '';
         if (usesRealKline) {
