@@ -376,6 +376,7 @@ export class GemScreenerController {
   }
 
   @Get('search')
+  @SkipAccessLimit()
   async searchStock(@Query('q') keyword: string) {
     if (!keyword || keyword.trim().length === 0) {
       return { code: 400, msg: '请输入搜索关键词', data: [] };
@@ -399,6 +400,21 @@ export class GemScreenerController {
     } catch (e) {
       this.logger.error(`读取缓存失败: ${e.message}`);
       return { code: 500, msg: e.message, data: [] };
+    }
+  }
+
+  @Get('detail')
+  @SkipAccessLimit()
+  async getStockDetail(@Query('code') code: string) {
+    if (!code) {
+      return { code: 400, msg: '请输入股票代码', data: null };
+    }
+    try {
+      const result = await this.gemScreener.getStockDetail(code.trim());
+      return { code: 200, msg: 'ok', data: result };
+    } catch (e) {
+      this.logger.error(`获取详情失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: null };
     }
   }
 
@@ -433,6 +449,43 @@ export class GemScreenerController {
       return { code: 200, msg: 'success' };
     } catch (e) {
       return { code: 500, msg: e.message };
+    }
+  }
+
+  /**
+   * 接收前端推送的原始股票数据 + 120日K线，全量分析并缓存
+   * POST /api/gem/cache-data
+   */
+  @Post('cache-data')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async cacheData(@Body() body: { stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: any[] }[] }) {
+    try {
+      const stocks = body?.stocks || [];
+      if (stocks.length === 0) {
+        return { code: 400, msg: 'no stocks data', data: { all: [], opportunities: [] } };
+      }
+      this.logger.log(`📥 接收前端全量数据: ${stocks.length} 只股票`);
+      const result = await this.gemScreener.cacheAllData(stocks);
+      return { code: 200, msg: 'success', data: result };
+    } catch (e: any) {
+      this.logger.error(`❌ cache-data 分析失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: { all: [], opportunities: [] } };
+    }
+  }
+
+  /**
+   * 获取机会区结果（仅重仓买入/买入）
+   * GET /api/gem/scan-result
+   */
+  @Get('scan-result')
+  @SkipAccessLimit()
+  async getScanResult() {
+    try {
+      const result = await this.gemScreener.getScanResult();
+      return { code: 200, msg: 'success', data: result };
+    } catch (e: any) {
+      return { code: 500, msg: e.message, data: { opportunities: [], timestamp: Date.now() } };
     }
   }
 

@@ -1,349 +1,1204 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import Taro from '@tarojs/taro'
-import { View, Text, ScrollView } from '@tarojs/components'
-import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react-taro'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import './index.css'
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView } from '@tarojs/components';
+import { Network } from '@/network';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Info } from 'lucide-react-taro';
+import { Separator } from '@/components/ui/separator';
 
-const ACTION_BADGE_COLOR: Record<string, string> = {
-  '重仓买入': '#dc2626', '买入🏆': '#16a34a', '买入': '#2563eb',
-  '轻仓买入': '#ca8a04', '持有': '#6b7280',
+// ===== 类型定义 =====
+interface StockInfo {
+  code: string;
+  name: string;
+  market: number;
 }
-const ACTION_ORDER = ['重仓买入', '买入🏆', '买入', '轻仓买入']
-function getActionPriority(a: string): number { const i = ACTION_ORDER.indexOf(a); return i >= 0 ? i : 999 }
-function getBJ(): Date { const n = new Date(); return new Date(n.getTime() + n.getTimezoneOffset() * 60000 + 28800000) }
-function isTH(): boolean { const b = getBJ(); if (b.getDay() === 0 || b.getDay() === 6) return false; const m = b.getHours() * 60 + b.getMinutes(); return m >= 540 && m < 900 }
-function freezeMsg(): string {
-  const b = getBJ(); const d = b.getDay(); const m = b.getHours() * 60 + b.getMinutes()
-  if (d === 0 || d === 6) return '周末休市，已冻结至周一 9:00'
-  if (m >= 900) return d === 5 ? '周五收盘，已冻结至下周一 9:00' : '收盘已冻结，明早 9:00 恢复'
-  if (m < 540) return '盘前已冻结，9:00 恢复'; return ''
+
+interface FormulaResult {
+  pricePosition: number;
+  positionZone: string;
+  trendState: number;
+  trendStrength: number;
+  concentration: number;
+  volumeStructure: number;
+  shortBuy: boolean;
+  shortSell: boolean;
+  strictBuy: boolean;
+  strongSell: boolean;
+  zhuLiXiChou: boolean;
+  zhuLiChuHuo: boolean;
+  xiPanSignal: boolean;
+  bestBuyPoints: string[];
+  baiXiao: boolean;
+  baiBu: boolean;
+  baiXiaoDays: number;
+  baiXiaoPureDays: number;
+  diff: number;
+  dea: number;
+  lifeLine: number;
+  pressure: number;
+  diBuBuy: boolean;
+  gaoWeiHuiDiaoBuy: boolean;
+  zhuLiShiPan: boolean;
+  jiaCang: boolean;
+  gaoKaiDiZouQingCang: boolean;
+  baoLiangFuGaiQingCang: boolean;
+  po5RiXian: boolean;
+  yinDiePoWei: boolean;
+  baiXiaoBuy1: boolean;
+  baiXiaoBuy2: boolean;
+  qiangShiHuiCai: boolean;
+  jiGouHuoYueDu: number;
+  safe: boolean;
+  conflict: string | null;
+  concentrationDisplay: number;
+  backtestStats?: BacktestStats;
+  signals?: SignalEntry[];
+  entryScore?: number;
+  entryLevel?: string;
+  supportLevel?: number;
+  resistanceLevel?: number;
+  bestEntryPrice?: number;
+  reasoning?: string[];
 }
-async function fetchKlines(code: string, minL = 20): Promise<any[]> {
-  for (const src of [
-    `http://d.10jqka.com.cn/v2/line/hs_${code}/01/last.js`,
-    `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code.startsWith('6')?'sh':'sz'}${code},day,,,100,qfq`,
-    `http://push2.eastmoney.com/api/qt/stock/kline/get?secid=${(code.startsWith('6')||code.startsWith('68'))?1:0}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101`,
-  ]) {
-    try {
-      const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 5000)
-      const r = await fetch(src, { signal: ac.signal }); clearTimeout(tid); const txt = await r.text()
-      let kl: any[] = []
-      if (src.includes('10jqka')) {
-        const m = txt.match(/\{.*\}/)
-        if (m) { const j = JSON.parse(m[0]); kl = (j?.data||'').split(';').filter(Boolean).map((s: string) => { const p = s.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} }) }
-      } else if (src.includes('gtimg')) {
-        const pk = (code.startsWith('6')?'sh':'sz')+code; const j = JSON.parse(txt)
-        kl = (j?.data?.[pk]?.qfqday || []).map((k: any) => ({d:k[0],o:+k[1],c:+k[2],h:+k[3],l:+k[4],v:+k[5]}))
-      } else {
-        const j = JSON.parse(txt)
-        kl = (j?.data?.klines || []).map((k: string) => { const p = k.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} })
+
+interface BacktestStats {
+  totalOccurrences: number;
+  upCount: number;
+  downCount: number;
+  upProbability: number;
+  avgReturn: number;
+  maxReturn: number;
+  minReturn: number;
+  avgWinReturn: number;
+  avgLossReturn: number;
+  winLossRatio: number;
+}
+
+interface SignalEntry {
+  name: string;
+  type: 'positive' | 'negative' | 'neutral';
+}
+
+interface StockResult {
+  stock: StockInfo;
+  currentPrice: number;
+  changePercent: number;
+  high?: number;
+  low?: number;
+  klineCount: number;
+  formula: FormulaResult;
+}
+
+// ===== 板块热点类型 =====
+interface LeadingStock {
+  code: string;
+  name: string;
+  price: number;
+  changePercent: number;
+  weight: number;
+  baiXiao?: boolean;
+}
+
+interface SectorRankItem {
+  code: string;
+  name: string;
+  price: number;
+  changePercent: number;
+  changeAmount: number;
+  leadingStocks: LeadingStock[];
+  opportunityStocks: LeadingStock[];
+}
+
+interface SectorHotData {
+  month1: SectorRankItem[];
+  quarter1: SectorRankItem[];
+  halfYear: SectorRankItem[];
+  year1: SectorRankItem[];
+  updateTime: string;
+}
+
+interface OpportunityStock {
+  code: string;
+  name?: string;
+  mainForceInflow: number;
+  baiXiaoDays: number;
+  currentPrice: number;
+  changePercent: number;
+  pricePosition: number;
+  priceIncrease: number;
+  score: number;
+}
+
+const TAB_LIST = ['近1月', '近1季', '近半年', '近1年'];
+
+// ===== 辅助函数 =====
+const trendText = (state: number): string => {
+  switch (state) {
+    case 3: return '主升浪';
+    case 2: return '上升';
+    case 1: return '震荡';
+    default: return '下降';
+  }
+};
+
+const trendColor = (state: number): string => {
+  switch (state) {
+    case 3: return '#ff4d4f';
+    case 2: return '#ff7a45';
+    case 1: return '#faad14';
+    default: return '#52c41a';
+  }
+};
+
+const zoneColor = (zone: string): string => {
+  switch (zone) {
+    case '低位区': return '#52c41a';
+    case '中位区': return '#faad14';
+    case '高位警戒区': return '#ff7a45';
+    case '高风险区': return '#ff4d4f';
+    case '极端风险区': return '#eb2f96';
+    default: return '#999';
+  }
+};
+
+const formatPercent = (v: number): string => {
+  const sign = v >= 0 ? '+' : '';
+  return `${sign}${v.toFixed(2)}%`;
+};
+
+/** 中性信号名称映射 */
+const signalDisplayMap: Record<string, string> = {
+  shortBuy: '短线信号',
+  shortSell: '短线风险',
+  strictBuy: '强势信号',
+  strongSell: '强力信号',
+  zhuLiXiChou: '吸筹信号',
+  zhuLiChuHuo: '出货信号',
+  xiPanSignal: '洗盘信号',
+  diBuBuy: '底部信号',
+  gaoWeiHuiDiaoBuy: '企稳信号',
+  zhuLiShiPan: '试盘信号',
+  jiaCang: '仓位信号',
+  gaoKaiDiZouQingCang: '高开低走',
+  baoLiangFuGaiQingCang: '放量覆盖',
+  po5RiXian: '5日线破位',
+  yinDiePoWei: '阴跌破位',
+  baiXiaoBuy1: '启动信号',
+  baiXiaoBuy2: '横盘信号',
+  qiangShiHuiCai: '回踩信号',
+};
+
+/** 信号类型映射 */
+const signalTypeMap: Record<string, 'positive' | 'negative' | 'neutral'> = {
+  shortBuy: 'positive',
+  shortSell: 'negative',
+  strictBuy: 'positive',
+  strongSell: 'negative',
+  zhuLiXiChou: 'positive',
+  zhuLiChuHuo: 'negative',
+  xiPanSignal: 'neutral',
+  diBuBuy: 'positive',
+  gaoWeiHuiDiaoBuy: 'positive',
+  zhuLiShiPan: 'neutral',
+  jiaCang: 'positive',
+  gaoKaiDiZouQingCang: 'negative',
+  baoLiangFuGaiQingCang: 'negative',
+  po5RiXian: 'negative',
+  yinDiePoWei: 'negative',
+  baiXiaoBuy1: 'positive',
+  baiXiaoBuy2: 'positive',
+  qiangShiHuiCai: 'positive',
+};
+
+function getActiveSignals(f: FormulaResult): { key: string; name: string; type: string }[] {
+  const result: { key: string; name: string; type: string }[] = [];
+  const fields: Record<string, boolean | string[]> = {
+    shortBuy: f.shortBuy,
+    shortSell: f.shortSell,
+    strictBuy: f.strictBuy,
+    strongSell: f.strongSell,
+    zhuLiXiChou: f.zhuLiXiChou,
+    zhuLiChuHuo: f.zhuLiChuHuo,
+    xiPanSignal: f.xiPanSignal,
+    diBuBuy: f.diBuBuy,
+    gaoWeiHuiDiaoBuy: f.gaoWeiHuiDiaoBuy,
+    zhuLiShiPan: f.zhuLiShiPan,
+    jiaCang: f.jiaCang,
+    gaoKaiDiZouQingCang: f.gaoKaiDiZouQingCang,
+    baoLiangFuGaiQingCang: f.baoLiangFuGaiQingCang,
+    po5RiXian: f.po5RiXian,
+    yinDiePoWei: f.yinDiePoWei,
+    baiXiaoBuy1: f.baiXiaoBuy1,
+    baiXiaoBuy2: f.baiXiaoBuy2,
+    qiangShiHuiCai: f.qiangShiHuiCai,
+  };
+  for (const [key, val] of Object.entries(fields)) {
+    if (val) {
+      result.push({ key, name: signalDisplayMap[key] || key, type: signalTypeMap[key] || 'neutral' });
+    }
+  }
+  return result;
+}
+
+const signalBadgeColor = (type: string): string => {
+  switch (type) {
+    case 'positive': return '#ff4d4f';
+    case 'negative': return '#52c41a';
+    default: return '#faad14';
+  }
+};
+
+// ===== 组件 =====
+/** 信息行 */
+const InfoItem = ({ label, value }: { label: string; value: string }) => (
+  <View className="flex flex-row items-center justify-between py-2">
+    <Text className="block text-xs text-gray-500">{label}</Text>
+    <Text className="block text-xs font-medium text-gray-900">{value}</Text>
+  </View>
+);
+
+/** MACD DIFF/DEA 可视化条 */
+const MacdBar = ({ diff, dea }: { diff: number; dea: number }) => {
+  const maxVal = Math.max(Math.abs(diff * 1.2), Math.abs(dea * 1.2), 1);
+  const diffPct = (diff / maxVal) * 50;
+  const deaPct = (dea / maxVal) * 50;
+  return (
+    <View className="pt-2">
+      <View className="flex flex-row items-center gap-2 mb-1">
+        <Text className="block text-xs w-8 text-gray-400 text-right">DIFF</Text>
+        <View className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden relative">
+          <View className="absolute inset-0 flex flex-row items-center">
+            <View className="flex-1" />
+            <View
+              className="h-3 rounded-full"
+              style={{
+                width: `${Math.abs(diffPct)}%`,
+                backgroundColor: diff >= 0 ? '#ff4d4f' : '#52c41a',
+                marginLeft: diff >= 0 ? '0' : 'auto',
+                marginRight: diff >= 0 ? 'auto' : '0',
+              }}
+            />
+            <View className="flex-1" />
+          </View>
+        </View>
+        <Text className="block text-xs w-16 text-gray-700 font-mono">{diff.toFixed(2)}</Text>
+      </View>
+      <View className="flex flex-row items-center gap-2">
+        <Text className="block text-xs w-8 text-gray-400 text-right">DEA</Text>
+        <View className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden relative">
+          <View className="absolute inset-0 flex flex-row items-center">
+            <View className="flex-1" />
+            <View
+              className="h-3 rounded-full"
+              style={{
+                width: `${Math.abs(deaPct)}%`,
+                backgroundColor: dea >= 0 ? '#ff4d4f' : '#52c41a',
+                marginLeft: dea >= 0 ? '0' : 'auto',
+                marginRight: dea >= 0 ? 'auto' : '0',
+              }}
+            />
+            <View className="flex-1" />
+          </View>
+        </View>
+        <Text className="block text-xs w-16 text-gray-700 font-mono">{dea.toFixed(2)}</Text>
+      </View>
+      <View className="flex flex-row items-center gap-2 mt-1">
+        <Text className="block text-xs w-8 text-gray-400 text-right">差值</Text>
+        <Text
+          className="block text-xs font-bold"
+          style={{ color: diff >= dea ? '#ff4d4f' : '#52c41a' }}
+        >
+          {diff >= dea ? `DIFF在上方 +${(diff - dea).toFixed(2)}` : `DEA在上方 ${(diff - dea).toFixed(2)}`}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+/** 价格位置指示器 */
+const PositionBar = ({ position, zone }: { position: number; zone: string }) => {
+  const barColor = zoneColor(zone);
+  return (
+    <View className="pt-2">
+      <View className="flex flex-row items-center justify-between mb-1">
+        <Text className="block text-xs text-gray-400">价格位置</Text>
+        <Text className="block text-xs font-medium" style={{ color: barColor }}>{zone}</Text>
+      </View>
+      <View className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <View
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.min(position, 100)}%`,
+            backgroundColor: barColor,
+          }}
+        />
+      </View>
+      <Text className="block text-xs text-gray-500 text-right mt-1">{position.toFixed(1)}%</Text>
+    </View>
+  );
+};
+
+
+
+/** 回测统计展示 */
+const BacktestStatsCard = ({ stats }: { stats: BacktestStats }) => (
+  <View className="p-3 bg-blue-50 rounded-xl">
+    <View className="flex flex-row items-center gap-1 mb-2">
+      <Info size={14} color="#1890ff" />
+      <Text className="block text-xs font-bold text-blue-700">形态历史统计</Text>
+    </View>
+    <Text className="block text-xs text-blue-700 mb-2 leading-relaxed">
+      历史上出现此形态{stats.totalOccurrences}次，{stats.upCount}日后上涨{stats.upCount}次，
+      上涨概率{stats.upProbability}%，盈亏比{stats.winLossRatio.toFixed(2)}:1
+    </Text>
+    <View className="flex flex-row gap-3">
+      <View className="flex-1 p-2 bg-white rounded-lg">
+        <Text className="block text-xs text-gray-500 text-center">上涨概率</Text>
+        <Text className="block text-sm font-bold text-red-500 text-center">{stats.upProbability.toFixed(0)}%</Text>
+      </View>
+      <View className="flex-1 p-2 bg-white rounded-lg">
+        <Text className="block text-xs text-gray-500 text-center">平均收益</Text>
+        <Text className="block text-sm font-bold text-center" style={{ color: stats.avgReturn >= 0 ? '#ff4d4f' : '#52c41a' }}>
+          {stats.avgReturn >= 0 ? '+' : ''}{stats.avgReturn.toFixed(2)}%
+        </Text>
+      </View>
+      <View className="flex-1 p-2 bg-white rounded-lg">
+        <Text className="block text-xs text-gray-500 text-center">盈亏比</Text>
+        <Text className="block text-sm font-bold text-blue-500 text-center">{stats.winLossRatio.toFixed(2)}</Text>
+      </View>
+    </View>
+    <Text className="block text-xs text-blue-400 mt-2">* 仅为历史统计，不构成对未来走势的预测</Text>
+  </View>
+);
+
+const IndexPage = () => {
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<StockResult | null>(null);
+  const [error, setError] = useState('');
+
+  // 板块热点状态
+  const [sectorData, setSectorData] = useState<SectorHotData | null>(null);
+  const [sectorLoading, setSectorLoading] = useState(true);
+  const [sectorTab, setSectorTab] = useState(0);
+  const [sectorAutoScroll, setSectorAutoScroll] = useState(true);
+  const sectorTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 创业板机会区状态
+  const [oppData, setOppData] = useState<OpportunityStock[] | null>(null);
+  const [oppTimestamp, setOppTimestamp] = useState<number>(0);
+
+  // 设备访问控制
+  const [accessChecking, setAccessChecking] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [denyReason, setDenyReason] = useState('');
+
+  // 注册设备指纹（单次、3秒超时，失败则禁止访问）
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // 生成设备ID
+      let deviceId = '';
+      try { deviceId = localStorage.getItem('_device_id') || ''; } catch {}
+      if (!deviceId) {
+        deviceId = 'd_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+        try { localStorage.setItem('_device_id', deviceId); } catch {}
       }
-      if (kl.length >= minL) return kl
-    } catch(e) {}
-  }
-  return []
-}
-async function fetchEMList(fs: string): Promise<any[]> {
-  const all: any[] = []
-  for (let pn = 1; pn <= 3; pn++) {
-    try {
-      const r = await fetch(`http://push2.eastmoney.com/api/qt/clist/get?pn=${pn}&pz=5000&po=1&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f2,f3`)
-      const j = await r.json(); (j?.data?.diff || []).forEach((x: any) => { if (x.f12) all.push({c:String(x.f12),n:x.f14,p:x.f2||0,cp:x.f3||0}) })
-      if ((j?.data?.diff || []).length < 5000) break
-    } catch(e) { break }
-  }
-  return all
-}
-async function fetchQ(codes: string[]): Promise<Record<string, any>> {
-  const qm: Record<string, any> = {}
-  for (let i = 0; i < codes.length; i += 200) {
-    const q = codes.slice(i, i+200).map(c => (c.startsWith('6')?'sh':'sz')+c).join(',')
-    try {
-      const r = await fetch('http://qt.gtimg.cn/q='+q); const buf = await r.arrayBuffer()
-      new TextDecoder('gbk').decode(buf).split(';').forEach(line => {
-        const t = line.trim(); if (!t || !t.includes('~')) return; const p = t.split('~'); if (p.length < 40) return
-        qm[p[2]] = {p:+p[3]||0,cp:+p[32]||0}
-      })
-    } catch(e) {}
-  }
-  return qm
-}
 
-export default function Index() {
-  const [sc, setSc] = useState('')
-  const [sr, setSr] = useState<any>(null)
-  const [stocks, setStocks] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState('')
-  const [frozen, setFrozen] = useState(false)
-  const [fmsg, setFmsg] = useState('')
-  const frozenR = useRef(false)
-  const intR = useRef<number | null>(null)
+      try {
+        // 用 AbortController 加 3s 超时，URL 使用 window.location.origin 避免域名问题
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-  const scan = useCallback(async () => {
-    if (frozenR.current) { setStatus('⏸️ 非交易时间，数据已冻结'); return }
-    setLoading(true); setStatus('🔄 获取全市场股票列表...')
-    try {
-      const g = await fetchEMList('m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23')
-      const m = await fetchEMList('m:1+t:1,m:1+t:2,m:0+t:6')
-      const all = Array.from(new Map([...g, ...m].map(s => [s.c, s])).values())
-      setStatus(`✅ ${all.length} 只，获取批量行情...`)
-      const qm = await fetchQ(all.map(s => s.c))
-      const wq = all.map(s => ({...s, ...(qm[s.c]||{})}))
-      setStatus('🔄 K线分析中...')
-      const res: any[] = []
-      for (let i = 0; i < wq.length; i += 30) {
-        const rs = await Promise.all(wq.slice(i, i+30).map(async (s) => {
-          try {
-            const kl = await fetchKlines(s.c, 20); if (kl.length < 20) return null
-            const c = kl.map(x => x.c), v = kl.map(x => x.v), o = kl.map(x => x.o)
-            const lc = c[c.length-1]
-            const lo = Math.min(...c), hi = Math.max(...c)
-            const pp = ((lc-lo)/(hi-lo||1))*100
+        const base = typeof window !== 'undefined' ? window.location.origin : '';
+        const res = await fetch(`${base}/api/access/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-            // 均线
-            const ma5 = c.slice(-5).reduce((a,b)=>a+b,0)/5
-            const ma10 = c.slice(-10).reduce((a,b)=>a+b,0)/10
-            const ma20 = c.length >= 20 ? c.slice(-20).reduce((a,b)=>a+b,0)/20 : ma10
+        const apiData = await res.json();
+        console.log('[设备注册] 响应:', apiData);
 
-            // 趋势状态 0-3（与后端一致）
-            const ma5Up = c[c.length-1] > c[c.length-6]
-            const ma10_1dAgo = c.length > 11 ? c.slice(-11,-1).reduce((a,b)=>a+b,0)/10 : 0
-            const ma10Up = ma10 >= ma10_1dAgo * 0.995
-            let trend = 1
-            if (ma5 > ma10 && ma5Up && ma10Up) trend = 3
-            else if (ma5 > ma10 && ma10Up) trend = 2
-            else if (ma5 > ma10 && ma5Up) trend = 2
-            else if (ma5 < ma10 && ma10 < ma20) trend = 0
-            else if (ma5 < ma10) trend = 0
-
-            // DIFF/DEA（EMA12-EMA26）
-            const ema12 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-            const ema26 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-            const diff = ema12 - ema26
-            // DEA近似计算
-            let deaAcc = 0
-            for (let idx = 0; idx < c.length; idx++) {
-              const e12 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-              const e26 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-              const curDiff = e12 - e26
-              deaAcc = idx === 0 ? curDiff : deaAcc + (curDiff - deaAcc) * 2 / 9
+        if (!cancelled) {
+          if (apiData?.code === 200 && apiData?.data) {
+            if (!apiData.data.allowed) {
+              setAccessDenied(true);
+              setDenyReason(apiData.data.message || '访问名额已满');
             }
-            const macdBullish = diff > deaAcc
-            const macdGoldenCross = macdBullish && diff > 0
-
-            // 成交量结构
-            const avgVol5 = v.slice(-5).reduce((a,b)=>a+b,0)/5
-            const avgVol20 = v.length >= 20 ? v.slice(-20).reduce((a,b)=>a+b,0)/20 : avgVol5
-            const volRatio = avgVol5 / (avgVol20 || 1)
-            const volActive = Math.min(Math.max(volRatio, 0) * 6, 20)
-
-            // 买入信号
-            const sb = c.slice(-3).every((p,j) => p > o[o.length - 3 + j])
-            const jcFlag = kl.slice(-2).every((x,j) => {
-              const pc = j===0 ? c[c.length-3] : c[c.length-2]
-              return x.h > Math.max(x.o, pc) && x.c > x.o
-            })
-            const strict = sb && v[v.length-1] > v[v.length-2]
-            const shortBuy = sb || strict || jcFlag
-            const strictBuy = strict
-            const hasBuySignal = shortBuy || strictBuy || macdBullish
-
-            // MA10下跌趋势判断
-            const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995
-
-            // 深度洗盘
-            const deepWashout = ma5 < ma10 && ma10TurnUp && lc > ma5 && volActive > 7
-
-            // ─── port getTradingSuggestion ───
-            const volumeBullish = volRatio > 1.2
-            const strongBuy = (macdGoldenCross && volumeBullish) || (shortBuy && volumeBullish)
-
-            let sug = '观望'
-            // 低位区 <25%
-            if (pp < 25) {
-              if (trend >= 1 && strongBuy) sug = '重仓买入'
-              else if (trend >= 1 && hasBuySignal) sug = '买入'
-              else if (trend >= 1) sug = '持有'
-              else sug = '观望'
-            }
-            // 中低位区 25-45%
-            else if (pp < 45) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 1 && strongBuy) sug = '买入'
-              else if (trend >= 1 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else sug = '观望'
-            }
-            // 中位区 45-55%
-            else if (pp < 55) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && (strongBuy || hasBuySignal)) sug = '持有'
-              else sug = '观望'
-            }
-            // 中高位区 55-75%
-            else if (pp < 75) {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-            // 高位区 >=75%
-            else {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-
-            //             // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 -> 轻仓买入
-            if ((sug === '观望' || sug === '持有') && deepWashout) {
-              sug = '轻仓买入'
-            }
-
-            // 涨跌幅升级: 后端判断为 重仓买入/买入/轻仓买入/持有 时, 根据实际涨跌幅可升级
-            if (['观望', '持有', '轻仓买入', '买入'].indexOf(sug) >= 0) {
-              const cpVal = qm[s.c]?.cp ?? s.cp ?? 0
-              if (sug === '持有' && cpVal >= 5) sug = '买入'
-              else if (sug === '持有' && cpVal >= 3) sug = '轻仓买入'
-              else if (sug === '轻仓买入' && cpVal >= 7) sug = '重仓买入'
-              else if (sug === '轻仓买入' && cpVal >= 4) sug = '买入'
-              else if (sug === '买入' && cpVal >= 5) sug = '重仓买入'
-            }
-
-            return {c:s.c, n:s.n, p:s.p||0, cp:s.cp||0, curP:qm[s.c]?.p||s.p||0, sug, pp, trend, ma5, ma10}
-          } catch(e) { return null }
-        }))
-        res.push(...rs.filter(Boolean))
-        if (i % 600 === 0) setStatus(`🔄 分析中: ${res.length}/${wq.length}`)
+          } else {
+            // 接口返回异常
+            setAccessDenied(true);
+            setDenyReason('服务暂不可用');
+          }
+        }
+      } catch (e) {
+        console.error('[设备注册] 失败:', e);
+        if (!cancelled) {
+          setAccessDenied(true);
+          setDenyReason('无法连接到服务器');
+        }
+      } finally {
+        if (!cancelled) setAccessChecking(false);
       }
-      const valid = res.filter(x => x && x.sug !== '观望')
-      valid.sort((a, b) => {
-        const pa = getActionPriority(a.sug), pb = getActionPriority(b.sug)
-        return pa !== pb ? pa - pb : Math.abs(b.pp - 50) - Math.abs(a.pp - 50)
-      })
-      setStocks(valid.slice(0, 20))
-      setStatus('✅ Top 20 已更新')
-    } catch(e: any) { setStatus('❌ 失败: ' + (e.message||'未知错误')) }
-    setLoading(false)
-  }, [])
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
+
+  // 页面加载时获取板块热点数据
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await Network.request({ url: '/api/sector/hot', method: 'GET' });
+        console.log('[板块热点] 响应:', res.data);
+        const apiData = res.data as { code: number; data: SectorHotData };
+        if (apiData.code === 200 && apiData.data) {
+          setSectorData(apiData.data);
+        }
+      } catch (e) {
+        console.error('[板块热点] 加载失败:', e);
+      } finally {
+        setSectorLoading(false);
+      }
+    })();
+  }, []);
+
+  // 获取创业板机会区数据（首次 + 每 15s 轮询）
+  const fetchOpportunities = useCallback(async () => {
+    try {
+      const res = await Network.request({ url: '/api/gem/scan-result' });
+      const d = (res.data as any);
+      if (d.code === 200 && d.data?.opportunities) {
+        setOppData(d.data.opportunities);
+        setOppTimestamp(d.data.timestamp ?? 0);
+      }
+    } catch (e) {
+      console.error('获取机会区失败:', e);
+    }
+  }, []);
 
   useEffect(() => {
-    const check = () => { const f = !isTH(); setFrozen(f); frozenR.current = f; setFmsg(freezeMsg()) }
-    check(); const tt = setInterval(check, 60000)
-    if (isTH()) setTimeout(() => scan(), 3000)
-    intR.current = window.setInterval(() => { if (isTH()) scan() }, 600000)
-    return () => { clearInterval(tt); if (intR.current) clearInterval(intR.current) }
-  }, [scan])
+    fetchOpportunities();
+    const timer = setInterval(fetchOpportunities, 15000);
+    return () => clearInterval(timer);
+  }, [fetchOpportunities]);
 
-  const hSearch = useCallback(async () => {
-    if (!sc.trim()) return; setSr(null)
+  // 板块热点自动滚动
+  useEffect(() => {
+    if (sectorData && sectorAutoScroll) {
+      const timer = setInterval(() => {
+        setSectorTab(prev => (prev + 1) % 4);
+      }, 5000);
+      sectorTimerRef.current = timer;
+      return () => {
+        clearInterval(timer);
+        sectorTimerRef.current = null;
+      };
+    }
+  }, [sectorData, sectorAutoScroll]);
+
+  // 点击板块时停止自动滚动
+  const handleSectorClick = useCallback((tabIndex: number) => {
+    setSectorAutoScroll(false);
+    setSectorTab(tabIndex);
+    if (sectorTimerRef.current) {
+      clearInterval(sectorTimerRef.current);
+      sectorTimerRef.current = null;
+    }
+  }, []);
+
+  // 搜索建议状态
+  const [suggestions, setSuggestions] = useState<{ code: string; name: string }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // 防抖拼音搜索
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await Network.request({
+          url: '/api/gem/search',
+          method: 'GET',
+          data: { q },
+        });
+        const apiData = res.data as { code: number; data: { code: string; name: string }[] };
+        if (apiData.code === 200 && apiData.data?.length > 0) {
+          setSuggestions(apiData.data);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const selectSuggestion = (code: string) => {
+    setShowSuggestions(false);
+    handleSearchByCode(code);
+  };
+
+  const handleInput = (e: any) => {
+    const val = (e.detail?.value || '').replace(/\s/g, '');
+    setQuery(val);
+    setError('');
+    setResult(null);
+  };
+
+  const handleSearch = async () => {
+    const q = query.trim();
+    if (!q) {
+      setError('请输入股票代码或名称');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    setResult(null);
+
     try {
-      const q = await fetchQ([sc.trim()]); const r = q[sc.trim()]
-      if (!r) { setSr({error:'未找到'}); return }
-      setSr({c:sc.trim(), p:r.p, cp:r.cp})
-    } catch(e) { setSr({error:'查询失败'}) }
-  }, [sc])
+      const res = await Network.request({
+        url: '/api/gem/detail',
+        method: 'GET',
+        data: { code: q },
+      });
+      console.log('[股票查询] 响应结果:', res.data);
+
+      const apiData = res.data as any;
+      if (apiData.code === 200 && apiData.data?.stock) {
+        const { stock, technical } = apiData.data;
+        const r: StockResult = {
+          stock: { name: stock.name ?? "", code: stock.code ?? q, market: 0 },
+          currentPrice: stock.currentPrice ?? stock.price ?? 0,
+          changePercent: stock.changePercent ?? stock.priceIncrease ?? 0,
+          klineCount: 120,
+          formula: {
+            diff: technical?.macd?.diff ?? stock.diff ?? 0,
+            dea: technical?.macd?.dea ?? stock.dea ?? 0,
+            pricePosition: stock.pricePosition ?? 0,
+            positionZone: stock.positionZone ?? '',
+            lifeLine: stock.lifeLine ?? 0,
+            pressure: stock.pressure ?? 0,
+            baiXiao: stock.baiXiao ?? '',
+            baiXiaoDays: stock.baiXiaoDays ?? 0,
+            trendStrength: stock.trendStrength ?? 3,
+            jiGouHuoYueDu: stock.jiGouHuoYueDu ?? 0,
+            conflict: stock.conflict ?? '',
+            signalComb: stock.signalComb ?? '',
+            suggestion: stock.suggestion ?? '',
+            prediction: stock.prediction ?? '',
+            entryScore: technical?.entryScore ?? 0,
+            entryLevel: technical?.entryLevel ?? '',
+            backtestStats: null,
+            safe: stock.safe ?? false,
+            supportLevel: technical?.supportLevel ?? 0,
+            resistanceLevel: technical?.resistanceLevel ?? 0,
+            bestEntryPrice: technical?.bestEntryPrice ?? 0,
+            reasoning: technical?.reasoning ?? [],
+          } as any,
+        };
+        setResult(r);
+      } else {
+        setError(apiData.msg || '未找到该股票数据');
+      }
+    } catch (e: any) {
+      console.error('[股票查询] 请求失败:', e);
+      setError('网络请求失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchByCode = async (code: string) => {
+    // 点击任何股票时停止板块自动滚动
+    setSectorAutoScroll(false);
+    if (sectorTimerRef.current) {
+      clearInterval(sectorTimerRef.current);
+      sectorTimerRef.current = null;
+    }
+    setQuery(code);
+    setError('');
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await Network.request({
+        url: '/api/gem/detail',
+        method: 'GET',
+        data: { code },
+      });
+      console.log('[快捷查询] 响应结果:', res.data);
+
+      const apiData = res.data as any;
+      if (apiData.code === 200 && apiData.data?.stock) {
+        const { stock, technical } = apiData.data;
+        const r: StockResult = {
+          stock: { name: stock.name ?? '', code: stock.code ?? code, market: 0 },
+          currentPrice: stock.currentPrice ?? stock.price ?? 0,
+          changePercent: stock.changePercent ?? stock.priceIncrease ?? 0,
+          klineCount: 120,
+          formula: {
+            diff: technical?.macd?.diff ?? stock.diff ?? 0,
+            dea: technical?.macd?.dea ?? stock.dea ?? 0,
+            pricePosition: stock.pricePosition ?? 0,
+            positionZone: stock.positionZone ?? '',
+            lifeLine: stock.lifeLine ?? 0,
+            pressure: stock.pressure ?? 0,
+            baiXiao: stock.baiXiao ?? '',
+            baiXiaoDays: stock.baiXiaoDays ?? 0,
+            trendStrength: stock.trendStrength ?? 3,
+            jiGouHuoYueDu: stock.jiGouHuoYueDu ?? 0,
+            conflict: stock.conflict ?? '',
+            signalComb: stock.signalComb ?? '',
+            suggestion: stock.suggestion ?? '',
+            prediction: stock.prediction ?? '',
+            entryScore: technical?.entryScore ?? 0,
+            entryLevel: technical?.entryLevel ?? '',
+            backtestStats: null,
+            safe: stock.safe ?? false,
+            supportLevel: technical?.supportLevel ?? 0,
+            resistanceLevel: technical?.resistanceLevel ?? 0,
+            bestEntryPrice: technical?.bestEntryPrice ?? 0,
+            reasoning: technical?.reasoning ?? [],
+          } as any,
+        };
+        setResult(r);
+        // 用分析结果更新板块数据中的涨跌幅，确保显示一致
+        const freshChangePercent = r.changePercent;
+        if (freshChangePercent !== undefined && freshChangePercent !== null) {
+          setSectorData(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            const stockCode = code;
+            for (const key of ['month1', 'quarter1', 'halfYear', 'year1'] as const) {
+              const sectors = updated[key];
+              if (!sectors) continue;
+              updated[key] = sectors.map(sector => {
+                const newLeading = sector.leadingStocks.map(s =>
+                  s.code === stockCode ? { ...s, changePercent: freshChangePercent } : s
+                );
+                const newOpportunity = sector.opportunityStocks.map(s =>
+                  s.code === stockCode ? { ...s, changePercent: freshChangePercent } : s
+                );
+                return { ...sector, leadingStocks: newLeading, opportunityStocks: newOpportunity };
+              });
+            }
+            return updated;
+          });
+        }
+      } else {
+        setError(apiData.msg || '查询失败');
+      }
+    } catch (e: any) {
+      console.error('[快捷查询] 请求失败:', e);
+      setError('网络请求失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const f = result?.formula;
+  const currentSectors: SectorRankItem[] = sectorData
+    ? [sectorData.month1, sectorData.quarter1, sectorData.halfYear, sectorData.year1][sectorTab]
+    : [];
 
   return (
-    <View className="flex flex-col h-full bg-gray-50">
-      <View className="sticky top-0 bg-white z-10 px-3 py-2 border-b border-gray-100">
-        <View className="flex flex-row items-center justify-between">
-          <Text className="block text-base font-bold">A股优选 Top20</Text>
-          <Text className="block text-xs text-gray-400">{status}</Text>
+    <View
+      className="h-full"
+      style={{
+        backgroundColor: '#f0f2f5',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #f0f2f5 100%)',
+      }}
+    >
+      {accessDenied ? (
+        <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '40vh' }}>
+          <Info size={56} color="#ff4d4f" />
+          <Text className="block text-lg font-bold text-gray-800 mt-4 text-center">访问受限</Text>
+          <Text className="block text-sm text-gray-500 mt-2 text-center leading-relaxed">
+            {denyReason || '该页面已达到最大设备访问数量'}
+          </Text>
+          <Text className="block text-xs text-gray-400 mt-4 text-center">
+            如需增加访问名额，请联系开发者
+          </Text>
         </View>
-        {fmsg ? <View className="mt-1 px-2 py-1 bg-yellow-50 rounded-lg border border-yellow-200"><Text className="block text-xs text-yellow-700">{fmsg}</Text></View> : null}
-      </View>
-
-      <View className="px-3 py-2 bg-white border-b border-gray-100">
-        <View style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'8px'}} className="bg-gray-50 rounded-lg px-3 py-2">
-          <Search size={16} color="#999" />
-          <View style={{flex:1}}><Input className="w-full text-xs bg-transparent" placeholder="输入代码搜索" value={sc}
-            onInput={e => setSc(e.detail.value)} onConfirm={() => hSearch()}
-          /></View>
-          <Button className="bg-blue-500 text-white text-xs px-3 py-1 rounded-md"
-            onClick={() => hSearch()}
-          >
-            <Text className="block text-xs">搜索</Text>
-          </Button>
+      ) : accessChecking ? (
+        <View className="flex flex-col items-center justify-center h-full" style={{ paddingTop: '45vh' }}>
+          <Skeleton className="h-4 w-32 mb-2" />
+          <Skeleton className="h-3 w-48" />
         </View>
-        {sr ? (sr.error ? <Text className="block text-xs text-red-500 mt-1">{sr.error}</Text>
-          : <View className="mt-1 px-2 py-1 bg-gray-50 rounded-lg"><Text className="block text-xs">{sr.c} ¥{sr.p} {(sr.cp||0)>=0?'+':''}{sr.cp}%</Text></View>
-        ) : null}
-      </View>
+      ) : (
+        <ScrollView className="h-full" style={{ background: 'transparent' }}>
+      <View className="p-4">
+        {/* 标题 */}
+        <View className="mb-6">
+          <Text className="block text-2xl font-bold text-gray-900">
+            股票技术分析
+          </Text>
+          <Text className="block text-sm text-gray-500 mt-1">
+            输入股票代码或名称，查看技术指标与数据统计
+          </Text>
+        </View>
 
-      <View className="px-3 py-1 flex flex-row gap-2">
-        <Button className="bg-blue-500 text-white text-xs px-4 py-2 rounded-lg flex-1"
-          onClick={() => { if (!frozenR.current) scan(); else Taro.showToast({title:'非交易时间',icon:'none'}) }}
-          disabled={loading}
-        >
-          <Text className="block text-xs">{loading ? '扫描中...' : (frozen ? '📊 已冻结' : '🔄 立即扫描')}</Text>
-        </Button>
-      </View>
-
-      <ScrollView className="flex-1 px-3" scrollY>
-        <View className="py-2">
-          <View className="flex flex-row items-center px-2 py-1 mb-1">
-            <View style={{flex:1.1}}><Text className="block text-xs text-gray-400 font-medium">名称</Text></View>
-            <View style={{flex:0.55}} className="text-center"><Text className="block text-xs text-gray-400">操作</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">价格</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">涨幅</Text></View>
-            <View style={{flex:0.9}} className="text-right"><Text className="block text-xs text-gray-400">位置</Text></View>
+        {/* 搜索栏 */}
+        <View className="mb-6">
+          <View style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+            <View style={{ flex: 1, position: 'relative' }}>
+              <View style={{ backgroundColor: 'rgba(245,245,245,0.8)', borderRadius: '10px', padding: '8px 12px', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                <Input
+                  placeholder="输入代码名称或拼音，如600519"
+                  value={query}
+                  onInput={handleInput}
+                  onConfirm={handleSearch}
+                  style={{ width: '100%', fontSize: '14px', backgroundColor: 'transparent' }}
+                />
+              </View>
+              {/* 搜索建议下拉 */}
+              {showSuggestions && suggestions.length > 0 && (
+                <View
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0,
+                    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: '10px',
+                    backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 1000, maxHeight: '280px', overflow: 'scroll',
+                    marginTop: '4px', borderWidth: '1px', borderColor: '#f0f0f0', borderStyle: 'solid',
+                  }}
+                >
+                  {suggestions.map((item, idx) => (
+                    <View
+                      key={idx}
+                      onClick={() => selectSuggestion(item.code)}
+                      style={{
+                        display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        borderBottomWidth: idx < suggestions.length - 1 ? '1px' : '0',
+                        borderBottomColor: '#f5f5f5', borderBottomStyle: 'solid',
+                      }}
+                    >
+                      <Text className="block text-sm text-gray-900 font-medium">{item.name}</Text>
+                      <Text className="block text-xs text-gray-400">{item.code}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+            <View style={{ flexShrink: 0 }}>
+              <Button onClick={handleSearch} disabled={loading}>
+                <Text className="block text-sm font-medium">
+                  {loading ? '加载中...' : '查询'}
+                </Text>
+              </Button>
+            </View>
           </View>
+          {error && (
+            <Text className="block text-xs text-red-500 mt-2">{error}</Text>
+          )}
+        </View>
 
-          {loading && stocks.length === 0 ? (
-            <View className="flex flex-col gap-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="w-full h-12 rounded-xl" />)}</View>
-          ) : stocks.length === 0 ? (
-            <View className="flex items-center justify-center py-12"><Text className="block text-sm text-gray-400">{frozen ? fmsg : '点击上方按钮开始扫描'}</Text></View>
-          ) : (
+        {/* 加载态 */}
+        {loading && (
+          <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+            <CardContent className="p-4">
+              <View className="flex flex-col gap-3">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-12 w-40" />
+              </View>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 结果展示 */}
+        {result && f && (
+          <View className="flex flex-col gap-4">
+            {/* 股票信息卡片 */}
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+              <CardContent className="p-4">
+                <View className="flex flex-row items-center justify-between mb-3">
+                  <View>
+                    <Text className="block text-lg font-bold text-gray-900">
+                      {result.stock.name}
+                    </Text>
+                    <Text className="block text-sm text-gray-500">
+                      {result.stock.code}
+                    </Text>
+                  </View>
+                  <View className="text-right">
+                    <Text className="block text-2xl font-bold text-gray-900">
+                      {result.currentPrice.toFixed(2)}
+                    </Text>
+                    <Text
+                      className="block text-sm font-medium"
+                      style={{ color: result.changePercent >= 0 ? '#ff4d4f' : '#52c41a' }}
+                    >
+                      {formatPercent(result.changePercent)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="flex flex-row gap-2 flex-wrap">
+                  <Badge style={{ backgroundColor: zoneColor(f.positionZone), color: '#fff' }}>
+                    <Text className="block text-xs">{f.positionZone}</Text>
+                  </Badge>
+                  <Badge style={{ backgroundColor: trendColor(f.trendState), color: '#fff' }}>
+                    <Text className="block text-xs">{trendText(f.trendState)}</Text>
+                  </Badge>
+                  <Badge style={{ backgroundColor: f.baiXiao ? '#722ed1' : '#13c2c2', color: '#fff' }}>
+                    <Text className="block text-xs">{f.baiXiao ? '白消信号' : '无白消'}</Text>
+                  </Badge>
+                  {f.safe && (
+                    <Badge style={{ backgroundColor: '#faad14', color: '#fff' }}>
+                      <Text className="block text-xs">安全线</Text>
+                    </Badge>
+                  )}
+                </View>
+              </CardContent>
+            </Card>
+
+            {/* 技术指标卡片 */}
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+              <CardContent className="p-4">
+                <Text className="block text-base font-bold text-gray-900 mb-3">
+                  技术指标
+                </Text>
+
+                {/* MACD 交叉图 */}
+                <View className="mb-3 p-3 bg-gray-50 rounded-xl">
+                  <Text className="block text-xs font-medium text-gray-600 mb-2">MACD 差值状态</Text>
+                  <MacdBar diff={f.diff} dea={f.dea} />
+                </View>
+
+                {/* 价格位置 */}
+                <PositionBar position={f.pricePosition} zone={f.positionZone} />
+
+                <Separator className="my-3" />
+
+                {/* 指标网格 */}
+                <View className="grid grid-cols-2 gap-1">
+                  <InfoItem label="趋势强度" value={`${f.trendStrength.toFixed(1)}`} />
+                  <InfoItem label="机构活跃度" value={`${f.jiGouHuoYueDu.toFixed(1)}`} />
+                  <InfoItem label="生命线" value={`${f.lifeLine.toFixed(2)}`} />
+                  <InfoItem label="压力位" value={`${f.pressure.toFixed(2)}`} />
+                </View>
+
+                {/* 白消天数 */}
+                {f.baiXiao && (
+                  <View className="mt-3 pt-3 border-t border-gray-100">
+                    <Text className="block text-xs text-gray-600">
+                      DIFF 上穿 DEA 第 {f.baiXiaoPureDays || f.baiXiaoDays} 天
+                    </Text>
+                    <Text className="block text-xs text-gray-400 mt-1">
+                      DIFF在DEA{f.diff >= f.dea ? '上方' : '下方'}，差{(f.diff - f.dea).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+
+                <Separator className="my-3" />
+
+                {/* 关键信号标识（中性展示） */}
+                <Text className="block text-xs font-medium text-gray-600 mb-2">触发信号</Text>
+                <View className="flex flex-row flex-wrap gap-2">
+                  {getActiveSignals(f).length > 0 ? (
+                    getActiveSignals(f).map((item, idx) => (
+                      <Badge key={idx} style={{ backgroundColor: signalBadgeColor(item.type), color: '#fff' }}>
+                        <Text className="block text-xs">{item.name}</Text>
+                      </Badge>
+                    ))
+                  ) : (
+                    <Text className="block text-xs text-gray-400">暂无触发信号</Text>
+                  )}
+                </View>
+
+                {/* 冲突信号 */}
+                {f.conflict && (
+                  <View className="mt-2 p-2 bg-yellow-50 rounded-lg">
+                    <Text className="block text-xs text-yellow-700">{f.conflict}</Text>
+                  </View>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 回测统计卡片 */}
+            {f.backtestStats && (
+              <Card>
+                <CardContent className="p-4">
+                  <BacktestStatsCard stats={f.backtestStats} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* DIFF vs 压力位对比 */}
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+              <CardContent className="p-4">
+                <Text className="block text-xs font-medium text-gray-600 mb-2">关键水平对比</Text>
+                <View className="flex flex-col gap-2">
+                  <View className="flex flex-row items-center justify-between p-2 bg-gray-50 rounded-lg">
+                    <View className="flex flex-row items-center gap-2">
+                      <View className="w-2 h-2 rounded-full bg-red-400" />
+                      <Text className="block text-xs text-gray-600">DIFF</Text>
+                    </View>
+                    <Text className="block text-xs font-mono font-medium text-gray-900">{f.diff.toFixed(2)}</Text>
+                  </View>
+                  <View className="flex flex-row items-center justify-between p-2 bg-gray-50 rounded-lg">
+                    <View className="flex flex-row items-center gap-2">
+                      <View className="w-2 h-2 rounded-full bg-orange-400" />
+                      <Text className="block text-xs text-gray-600">DEA</Text>
+                    </View>
+                    <Text className="block text-xs font-mono font-medium text-gray-900">{f.dea.toFixed(2)}</Text>
+                  </View>
+                  <View className="flex flex-row items-center justify-between p-2 bg-gray-50 rounded-lg">
+                    <View className="flex flex-row items-center gap-2">
+                      <View className="w-2 h-2 rounded-full bg-purple-400" />
+                      <Text className="block text-xs text-gray-600">压力位</Text>
+                    </View>
+                    <Text className="block text-xs font-mono font-medium text-gray-900">{f.pressure.toFixed(2)}</Text>
+                  </View>
+                  <View className="flex flex-row items-center justify-between p-2 bg-gray-50 rounded-lg">
+                    <View className="flex flex-row items-center gap-2">
+                      <View className="w-2 h-2 rounded-full bg-blue-400" />
+                      <Text className="block text-xs text-gray-600">生命线</Text>
+                    </View>
+                    <Text className="block text-xs font-mono font-medium text-gray-900">{f.lifeLine.toFixed(2)}</Text>
+                  </View>
+                </View>
+                {/* 关系描述（纯数据描述，非建议） */}
+                <View className="mt-2 p-2 bg-gray-50 rounded-lg">
+                  <Text className="block text-xs text-gray-500 leading-relaxed">
+                    DIFF与DEA差值{(f.diff - f.dea).toFixed(2)}，
+                    {f.diff > f.dea ? 'DIFF位于DEA上方' : 'DIFF位于DEA下方'}
+                    {f.baiXiao ? '，DIFF上穿DEA形态持续中' : ''}
+                    {f.diff > f.pressure ? '，DIFF高于压力位' : '，DIFF低于压力位'}
+                    {f.diff > f.lifeLine ? '，DIFF高于生命线' : '，DIFF低于生命线'}
+                  </Text>
+                </View>
+              </CardContent>
+            </Card>
+          </View>
+        )}
+
+        {/* 创业板机会区 */}
+        <View className="mt-4">
+          <View className="flex flex-row items-center gap-2 mb-2">
+            <Text className="block text-sm font-semibold">创业板机会区</Text>
+            <Text className="block text-xs text-gray-400">
+              {oppTimestamp ? (() => {
+                const diff = Math.floor((Date.now() - oppTimestamp) / 60000);
+                if (diff < 1) return '刚刚更新';
+                return `${diff} 分钟前更新`;
+              })() : '自动刷新中'}
+            </Text>
+          </View>
+          {oppData === null ? (
             <View className="flex flex-col gap-2">
-              {stocks.map((item, idx) => (
-                <Card key={item.c} className="overflow-hidden">
-                  <CardContent className="p-2">
-                    <View className="flex flex-row items-center">
-                      <View style={{flex:1.1}}>
-                        <View className="flex flex-row items-center gap-1">
-                          <Badge className={'px-1 py-0 flex-shrink-0 ' + (idx < 3 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200')}>
-                            <Text className="block text-xs">#{idx+1}</Text>
-                          </Badge>
-                          <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{item.n}</Text>
-                            <Text className="block text-xs text-gray-400">{item.c}</Text>
-                          </View>
-                        </View>
+              {[1, 2, 3].map(i => (
+                <Card key={i} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                  <CardContent className="p-3">
+                    <Skeleton className="h-5 w-32 mb-2" />
+                    <Skeleton className="h-3 w-48" />
+                  </CardContent>
+                </Card>
+              ))}
+            </View>
+          ) : oppData.length > 0 ? (
+            <View className="flex flex-col gap-2">
+              {oppData.map((stock, idx) => (
+                <Card key={stock.code} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                  <CardContent className="p-3">
+                    <View className="flex flex-row items-center gap-2" onClick={() => handleSearchByCode(stock.code)}>
+                      <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0">
+                        <Text className="block text-xs">#{idx + 1}</Text>
+                      </Badge>
+                      <View className="flex-1 min-w-0">
+                        <Text className="block text-xs font-medium truncate">{stock.name}</Text>
+                        <Text className="block text-xs text-gray-400">{stock.code}</Text>
                       </View>
-                      <View style={{flex:0.55}} className="text-center">
-                        <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{backgroundColor:ACTION_BADGE_COLOR[item.sug]??'#999'}}>{item.sug||'-'}</Text>
+                      <View className="flex-shrink-0 text-right">
+                        <Text className="block text-xs font-medium">{stock.currentPrice?.toFixed(2)}</Text>
+                        <Text className="block text-xs" style={{ color: stock.changePercent >= 0 ? '#ef4444' : '#22c55e' }}>
+                          {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                        </Text>
                       </View>
-                      <View style={{flex:0.8}} className="text-center"><Text className="block text-xs font-medium">{item.curP?.toFixed(2)}</Text></View>
-                      <View style={{flex:0.8}} className="text-center">
-                        <Text className="block text-xs font-bold" style={{color:(item.cp??0)>=0?'#ef4444':'#22c55e'}}>{(item.cp??0)>=0?'+':''}{item.cp?.toFixed(2)}%</Text>
+                      <View className="flex-shrink-0 text-right ml-1">
+                        <Text className="block text-xs" style={{ color: stock.priceIncrease <= 10 ? '#22c55e' : '#eab308' }}>
+                          +{stock.priceIncrease?.toFixed(1)}%
+                        </Text>
                       </View>
-                      <View style={{flex:0.9}} className="text-right">
-                        <Text className="block text-xs font-bold" style={{color:(item.pp??0)<50?'#22c55e':(item.pp??0)<80?'#eab308':'#ef4444'}}>位置{(item.pp??0).toFixed(0)}%</Text>
+                      <View className="flex-shrink-0 text-right ml-2">
+                        <Text className="block text-xs text-green-600 font-medium">位置{stock.pricePosition?.toFixed(0)}%</Text>
+                        <Text className="block text-xs text-gray-400">{stock.mainForceInflow >= 100000000 ? `${(stock.mainForceInflow / 100000000).toFixed(2)}亿` : `${(stock.mainForceInflow / 10000).toFixed(0)}万`}</Text>
                       </View>
                     </View>
                   </CardContent>
                 </Card>
               ))}
             </View>
+          ) : (
+            <View className="p-4 rounded-xl backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)' }}>
+              <Text className="block text-xs text-gray-400 text-center">
+                暂无符合条件的信号
+              </Text>
+            </View>
           )}
         </View>
-      </ScrollView>
 
-      <View className="bg-white px-3 py-2 border-t border-gray-100">
-        <Text className="block text-xs text-gray-400">
-          {loading ? '⏳ 扫描中...' : (frozen ? fmsg : stocks.length > 0 ? '✅ Top20 | 10分钟自动刷新' : '⏸️ 等待扫描')}
-        </Text>
+        {/* 板块热点 */}
+        <View className="mt-6">
+          {/* 板块热点标题 */}
+          <View className="flex flex-row items-center justify-between mb-3">
+            <Text className="block text-base font-bold text-gray-900">
+              板块热点
+            </Text>
+            <Badge style={{ backgroundColor: '#f5f5f5', color: '#999', borderWidth: '1px', borderColor: '#e5e5e5', borderStyle: 'solid' }}>
+              <Text className="block text-xs">数据工具</Text>
+            </Badge>
+          </View>
+
+          {/* 板块热点 Tab */}
+          <View className="flex flex-row gap-2 mb-3">
+            {TAB_LIST.map((tab, idx) => (
+              <View
+                key={tab}
+                onClick={() => handleSectorClick(idx)}
+                className="px-3 py-2 rounded-lg"
+                style={{
+                  backgroundColor: sectorTab === idx ? '#1890ff' : '#f5f5f5',
+                }}
+              >
+                <Text
+                  className="block text-xs font-medium"
+                  style={{ color: sectorTab === idx ? '#fff' : '#666' }}
+                >
+                  {tab}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* 板块数据展示 */}
+          {sectorLoading ? (
+            <View className="flex flex-col gap-2">
+              {[1, 2, 3].map(i => (
+                <Card key={i}>
+                  <CardContent className="p-3">
+                    <Skeleton className="h-5 w-24 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </View>
+          ) : currentSectors.length > 0 ? (
+            <View style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {currentSectors.slice(0, 5).map((sector, idx) => (
+                <Card key={idx} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                  <CardContent className="p-3">
+                    <View className="flex flex-row items-center justify-between mb-2">
+                      <Text className="block text-sm font-bold text-gray-900">{sector.name}</Text>
+                      <Text
+                        className="block text-xs font-medium"
+                        style={{ color: sector.changePercent >= 0 ? '#ff4d4f' : '#52c41a' }}
+                      >
+                        {formatPercent(sector.changePercent)}
+                      </Text>
+                    </View>
+                    {/* 龙头股 */}
+                    <Text className="block text-xs text-gray-400 mb-1">权重股 TOP5</Text>
+                    <View className="flex flex-row flex-wrap gap-1 mb-2">
+                      {(sector.leadingStocks || []).slice(0, 3).map((ls, li) => (
+                        <Badge
+                          key={li}
+                          onClick={() => handleSearchByCode(ls.code)}
+                          style={{
+                            backgroundColor: ls.changePercent >= 0 ? '#fff1f0' : '#f6ffed',
+                            color: ls.changePercent >= 0 ? '#ff4d4f' : '#52c41a',
+                            borderWidth: '1px',
+                            borderColor: ls.changePercent >= 0 ? '#ffccc7' : '#b7eb8f',
+                            borderStyle: 'solid',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Text className="block text-xs">
+                            {ls.name} {formatPercent(ls.changePercent)}
+                          </Text>
+                        </Badge>
+                      ))}
+                    </View>
+                    {/* 机会股票 */}
+                    {(sector.opportunityStocks || []).length > 0 && (
+                      <View className="pt-2 border-t border-gray-50">
+                        <Text className="block text-xs text-gray-400 mb-1">DIFF上穿DEA形态</Text>
+                        <View className="flex flex-row flex-wrap gap-1">
+                          {(sector.opportunityStocks || []).slice(0, 3).map((os, oi) => (
+                            <Badge
+                              key={oi}
+                              onClick={() => handleSearchByCode(os.code)}
+                              style={{
+                                backgroundColor: '#f9f0ff',
+                                color: '#722ed1',
+                                borderWidth: '1px',
+                                borderColor: '#d3adf7',
+                                borderStyle: 'solid',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Text className="block text-xs">
+                                {os.name} {os.baiXiao ? '形态中' : ''}
+                              </Text>
+                            </Badge>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </View>
+          ) : (
+            <View className="p-4 rounded-xl backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)' }}>
+              <Text className="block text-sm text-gray-400 text-center">
+                板块数据加载中，请稍候...
+              </Text>
+            </View>
+          )}
+
+          {/* 数据更新时间 */}
+          {sectorData && (
+            <Text className="block text-xs text-gray-400 text-right mt-1">
+              更新于 {sectorData.updateTime}
+            </Text>
+          )}
+
+          {/* 底部信息 */}
+          <View className="mt-6 pt-4 border-t border-gray-100">
+            <Text className="block text-xs text-gray-400 text-center">
+              开发者：呱呱小白狗
+            </Text>
+            <Text className="block text-xs text-gray-300 text-center mt-1">
+              所有数据仅供技术分析参考，不构成投资建议
+            </Text>
+          </View>
+        </View>
       </View>
+    </ScrollView>
+      )}
     </View>
-  )
-}
+  );
+};
+
+export default IndexPage;

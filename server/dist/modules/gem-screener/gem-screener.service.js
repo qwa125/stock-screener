@@ -123,6 +123,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             '重仓买入': 1, '买入': 2, '轻仓买入': 3,
             '持有': 4, '减仓': 5, '卖出': 6, '不要介入': 7,
         };
+        this.fullCache = null;
+        this.FULL_CACHE_PATH = '/tmp/full-scan-cache.json';
         this.cache = null;
         this.refreshPromise = null;
         this.mainBoardCache = null;
@@ -1628,7 +1630,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         if (ma10Up)
-            return { suggestion: '持有', signalComb: '10日线往上' };
+            return { suggestion: '持有', signalComb: '10日线往上/走平' };
         return { suggestion: '不要介入', signalComb: '10日线往下' };
     }
     async checkOpportunity(s, prevSuggestion) {
@@ -3015,7 +3017,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async searchStocks(keyword) {
         const results = [];
         try {
-            const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+            const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
             const seen = new Set();
             const deduped = allCached.filter(s => {
                 const key = s.code;
@@ -3064,6 +3066,25 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.error(`缓存搜索失败: ${e.message}`);
         }
         return results;
+    }
+    async getStockDetail(code) {
+        const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+        const stock = allCached.find(s => s.code === code);
+        if (!stock) {
+            return { stock: null, technical: null, message: '该股票不在缓存中，请稍后扫描后再试' };
+        }
+        let technical = null;
+        try {
+            const klines = this.dataFetcher.getCachedKlines(code);
+            if (klines && klines.length >= 20) {
+                const { analyzeTechnical, KLine } = require('../utils/technical-analysis');
+                technical = analyzeTechnical(klines, stock.currentPrice);
+            }
+        }
+        catch (e) {
+            this.logger.warn(`技术分析失败 ${code}: ${e.message}`);
+        }
+        return { stock, technical };
     }
     async rescanMarket() {
         const now = Date.now();
@@ -3496,6 +3517,109 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.saveCacheToDisk();
         this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
         return finalResults;
+    }
+    async cacheAllData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 20) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code, name: s.name, inflow: s.inflow ?? 0,
+                    changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result)
+                    results.push(result);
+            }
+            catch { }
+        }
+        if (results.filter(r => ['重仓买入', '买入', '轻仓买入'].includes(r.suggestion ?? '')).length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code, name: s.name, inflow: s.inflow ?? 0,
+                        changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find(ex => ex.code === result.code))
+                        results.push(result);
+                }
+                catch { }
+            }
+        }
+        const SELL_LOCK = ['卖出'];
+        const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
+        for (const r of results) {
+            const code = r.code;
+            if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
+                this.soldOutStocks.delete(code);
+            }
+            else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
+                this.soldOutStocks.add(code);
+            }
+            else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
+                if (this.soldOutStocks.has(code)) {
+                    r.suggestion = '不要介入';
+                }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const buyResults = results.filter(r => BUY_SIGNALS.includes(r.suggestion ?? ''));
+        this.upgradeCacheFields(results);
+        this.addForecastToCache(results);
+        const ts = Date.now();
+        this.fullCache = { data: results, timestamp: ts };
+        try {
+            const dir = require('path').dirname(this.FULL_CACHE_PATH);
+            if (!require('fs').existsSync(dir))
+                require('fs').mkdirSync(dir, { recursive: true });
+            require('fs').writeFileSync(this.FULL_CACHE_PATH, JSON.stringify(this.fullCache, null, 2));
+        }
+        catch { }
+        this.cache = { data: buyResults.slice(0, 30), timestamp: ts };
+        this.saveCacheToDisk();
+        this.logger.log(`✅ 全量数据分析完成: ${results.length} 只有效, ${buyResults.length} 只买入信号`);
+        return { all: results, opportunities: buyResults.slice(0, 30), timestamp: ts };
+    }
+    async getScanResult() {
+        if (this.fullCache && this.fullCache.data?.length > 0) {
+            const buyResults = this.fullCache.data.filter(r => ['重仓买入', '买入'].includes(r.suggestion ?? ''));
+            return { opportunities: buyResults.slice(0, 30), timestamp: this.fullCache.timestamp };
+        }
+        const allCached = [];
+        let latestTs = 0;
+        if (this.cache && this.cache.data?.length > 0) {
+            allCached.push(...this.cache.data);
+            if (this.cache.timestamp > latestTs)
+                latestTs = this.cache.timestamp;
+        }
+        if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
+            const gemCodes = new Set();
+            for (const s of this.cache?.data || [])
+                gemCodes.add(s.code);
+            for (const s of this.mainBoardCache.data) {
+                if (!gemCodes.has(s.code))
+                    allCached.push(s);
+            }
+            if (this.mainBoardCache.timestamp > latestTs)
+                latestTs = this.mainBoardCache.timestamp;
+        }
+        if (allCached.length > 0) {
+            const buyResults = allCached.filter(r => ['重仓买入', '买入'].includes(r.suggestion ?? ''));
+            return { opportunities: buyResults.slice(0, 30), timestamp: latestTs };
+        }
+        return { opportunities: [], timestamp: Date.now() };
     }
     async runBacktest() {
         const allCodes = [];

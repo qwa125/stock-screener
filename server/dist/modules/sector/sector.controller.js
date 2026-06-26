@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SectorController = void 0;
 const common_1 = require("@nestjs/common");
 const sector_service_1 = require("./sector.service");
+const access_limit_guard_1 = require("../../guards/access-limit.guard");
 let SectorController = class SectorController {
     constructor(sectorService) {
         this.sectorService = sectorService;
@@ -24,6 +25,7 @@ let SectorController = class SectorController {
 exports.SectorController = SectorController;
 __decorate([
     (0, common_1.Get)('hot'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
