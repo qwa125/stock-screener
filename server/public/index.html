@@ -733,7 +733,7 @@ function showDetail(i){
         if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
         o.name=s.name;o.currentPrice=o.currentPrice||rt.price||s.currentPrice||0;o.changePercent=o.changePercent||rt.chgP||s.changePercent||0
         // 用实时涨幅修正信号（与搜索逻辑一致）
-        var chg=o.changePercent||0, LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'], BACKEND_SELL=['观望','持有','减仓','卖出','不要介入'], liveSug=null
+        var chg=o.changePercent||0, LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'], BACKEND_SELL=['减仓','卖出','不要介入'], liveSug=null
         if(chg>=9)liveSug='重仓买入';else if(chg>=6)liveSug='买入';else if(chg>=3)liveSug='轻仓买入'
         if(liveSug&&o.suggestion&&!BACKEND_SELL.includes(o.suggestion)&&LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){o.suggestion=liveSug}
         // 更新显示
@@ -1103,7 +1103,7 @@ async function doFullRescan(){
             newStocks[si3].entryTiming=liveEntryTiming
             // ─── 信号合并规则 ───
             // Step ②: 后端建议是观望/持有/减仓/卖出/不要介入 → 保持不动，不受chg影响
-            var BACKEND_SELL=['观望','持有','减仓','卖出','不要介入']
+            var BACKEND_SELL=['减仓','卖出','不要介入']
             var backendSug=newStocks[si3].suggestion
             if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
@@ -1707,10 +1707,10 @@ async function doSearch(){
         o.name=stockName
         o.currentPrice=o.currentPrice||stockPrice
         o.changePercent=o.changePercent||stockChgP
-        // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
+        // 用实时涨幅修正信号（只升级不降级，不覆盖后端减仓/卖出信号）
         var LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
         var liveSug=null
-        var BACKEND_SELL=['观望','持有','减仓','卖出','不要介入']
+        var BACKEND_SELL=['减仓','卖出','不要介入']
         if(stockChgP>=9)liveSug='重仓买入'
         else if(stockChgP>=6)liveSug='买入'
         else if(stockChgP>=3)liveSug='轻仓买入'
@@ -1735,9 +1735,9 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
           if(jiGouFromKdata)o2.jiGouActiveScore=jiGouFromKdata
           o2.currentPrice=o2.currentPrice||stockPrice
           o2.changePercent=o2.changePercent||stockChgP
-          // 用实时涨幅修正信号（只升级不降级，不覆盖后端持有/卖出信号）
+          // 用实时涨幅修正信号（只升级不降级，不覆盖后端减仓/卖出信号）
           var liveSug2=null
-          var BACKEND_SELL2=['观望','持有','减仓','卖出','不要介入']
+          var BACKEND_SELL2=['减仓','卖出','不要介入']
           if(stockChgP>=9)liveSug2='重仓买入'
           else if(stockChgP>=6)liveSug2='买入'
           else if(stockChgP>=3)liveSug2='轻仓买入'
