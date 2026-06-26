@@ -719,7 +719,13 @@ const IndexPage = () => {
     : [];
 
   return (
-    <View className="h-full bg-gray-50">
+    <View
+      className="h-full"
+      style={{
+        backgroundColor: '#f0f2f5',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #f0f2f5 100%)',
+      }}
+    >
       {accessDenied ? (
         <View className="flex flex-col items-center justify-center h-full px-8" style={{ paddingTop: '40vh' }}>
           <Info size={56} color="#ff4d4f" />
@@ -737,7 +743,7 @@ const IndexPage = () => {
           <Skeleton className="h-3 w-48" />
         </View>
       ) : (
-        <ScrollView className="h-full bg-gray-50">
+        <ScrollView className="h-full" style={{ background: 'transparent' }}>
       <View className="p-4">
         {/* 标题 */}
         <View className="mb-6">
@@ -753,7 +759,7 @@ const IndexPage = () => {
         <View className="mb-6">
           <View style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
             <View style={{ flex: 1, position: 'relative' }}>
-              <View style={{ backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '8px 12px' }}>
+              <View style={{ backgroundColor: 'rgba(245,245,245,0.8)', borderRadius: '10px', padding: '8px 12px', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
                 <Input
                   placeholder="输入代码名称或拼音，如600519"
                   value={query}
@@ -767,7 +773,8 @@ const IndexPage = () => {
                 <View
                   style={{
                     position: 'absolute', top: '100%', left: 0, right: 0,
-                    backgroundColor: '#fff', borderRadius: '10px',
+                    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: '10px',
+                    backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                     zIndex: 1000, maxHeight: '280px', overflow: 'scroll',
                     marginTop: '4px', borderWidth: '1px', borderColor: '#f0f0f0', borderStyle: 'solid',
@@ -806,7 +813,7 @@ const IndexPage = () => {
 
         {/* 加载态 */}
         {loading && (
-          <Card>
+          <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
             <CardContent className="p-4">
               <View className="flex flex-col gap-3">
                 <Skeleton className="h-6 w-48" />
@@ -822,7 +829,7 @@ const IndexPage = () => {
         {result && f && (
           <View className="flex flex-col gap-4">
             {/* 股票信息卡片 */}
-            <Card>
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
               <CardContent className="p-4">
                 <View className="flex flex-row items-center justify-between mb-3">
                   <View>
@@ -866,7 +873,7 @@ const IndexPage = () => {
             </Card>
 
             {/* 技术指标卡片 */}
-            <Card>
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
               <CardContent className="p-4">
                 <Text className="block text-base font-bold text-gray-900 mb-3">
                   技术指标
@@ -938,7 +945,7 @@ const IndexPage = () => {
             )}
 
             {/* DIFF vs 压力位对比 */}
-            <Card>
+            <Card className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
               <CardContent className="p-4">
                 <Text className="block text-xs font-medium text-gray-600 mb-2">关键水平对比</Text>
                 <View className="flex flex-col gap-2">
@@ -1001,7 +1008,7 @@ const IndexPage = () => {
           {oppData === null ? (
             <View className="flex flex-col gap-2">
               {[1, 2, 3].map(i => (
-                <Card key={i}>
+                <Card key={i} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
                   <CardContent className="p-3">
                     <Skeleton className="h-5 w-32 mb-2" />
                     <Skeleton className="h-3 w-48" />
@@ -1012,7 +1019,7 @@ const IndexPage = () => {
           ) : oppData.length > 0 ? (
             <View className="flex flex-col gap-2">
               {oppData.map((stock, idx) => (
-                <Card key={stock.code}>
+                <Card key={stock.code} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center gap-2" onClick={() => handleSearchByCode(stock.code)}>
                       <Badge className="px-1 bg-purple-50 text-purple-700 border-purple-200 flex-shrink-0">
@@ -1043,7 +1050,7 @@ const IndexPage = () => {
               ))}
             </View>
           ) : (
-            <View className="p-4 bg-gray-50 rounded-xl">
+            <View className="p-4 rounded-xl backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)' }}>
               <Text className="block text-xs text-gray-400 text-center">
                 暂无符合条件的信号
               </Text>
@@ -1099,7 +1106,7 @@ const IndexPage = () => {
           ) : currentSectors.length > 0 ? (
             <View style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {currentSectors.slice(0, 5).map((sector, idx) => (
-                <Card key={idx}>
+                <Card key={idx} className="backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
                   <CardContent className="p-3">
                     <View className="flex flex-row items-center justify-between mb-2">
                       <Text className="block text-sm font-bold text-gray-900">{sector.name}</Text>
@@ -1163,7 +1170,7 @@ const IndexPage = () => {
               ))}
             </View>
           ) : (
-            <View className="p-4 bg-gray-50 rounded-xl">
+            <View className="p-4 rounded-xl backdrop-blur" style={{ backgroundColor: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.3)' }}>
               <Text className="block text-sm text-gray-400 text-center">
                 板块数据加载中，请稍候...
               </Text>

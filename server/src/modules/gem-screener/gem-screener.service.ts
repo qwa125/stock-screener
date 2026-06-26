@@ -4235,13 +4235,31 @@ export class GemScreenerService implements OnApplicationBootstrap {
       );
       return { opportunities: buyResults.slice(0, 30), timestamp: this.fullCache.timestamp };
     }
-    // 降级到旧缓存
+
+    // 查询合并所有缓存（创业板 + 主板）
+    const allCached: OpportunityStock[] = [];
+    let latestTs = 0;
+
     if (this.cache && this.cache.data?.length > 0) {
-      const buyResults = this.cache.data.filter(r =>
+      allCached.push(...this.cache.data);
+      if (this.cache.timestamp > latestTs) latestTs = this.cache.timestamp;
+    }
+    if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
+      const gemCodes = new Set<string>();
+      for (const s of this.cache?.data || []) gemCodes.add(s.code);
+      for (const s of this.mainBoardCache.data) {
+        if (!gemCodes.has(s.code)) allCached.push(s);
+      }
+      if (this.mainBoardCache.timestamp > latestTs) latestTs = this.mainBoardCache.timestamp;
+    }
+
+    if (allCached.length > 0) {
+      const buyResults = allCached.filter(r =>
         ['重仓买入', '买入'].includes(r.suggestion ?? '')
       );
-      return { opportunities: buyResults.slice(0, 30), timestamp: this.cache.timestamp };
+      return { opportunities: buyResults.slice(0, 30), timestamp: latestTs };
     }
+
     return { opportunities: [], timestamp: Date.now() };
   }
 
