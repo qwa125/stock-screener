@@ -1624,7 +1624,7 @@ async function doSearch(){
       // ★ 备选1：浏览器直调东方财富（跨域CORS兜底）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
-        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500'
+        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=120'
         var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000),mode:'cors'})
         if(ekr2.ok){
           try{var ekd2=await ekr2.json()}catch(ee){ekd2=null}
@@ -1641,7 +1641,7 @@ async function doSearch(){
       // ★ 备选2：新浪行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var sinaPrefix=prefix==='sz'?'sz':'sh'
-        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=500'
+        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=120'
         var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)})
         if(srr.ok||srr.status===0){
           try{var srd=await srr.json()}catch(ee){srd=null}
