@@ -288,7 +288,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.trendPrediction = this.calcSimpleTrendPrediction(s);
             }
             this.saveSellStateCache();
-            this.logger.log(`🕵️ [DEBUG 最终结果] ${name}(${code}) finalSuggestion=${finalSuggestion} chipPat=${chipPattern} chipPeak=${chipPeakPosition} pp=${pricePos.toFixed(1)} crossSug=${crossSuggestion} baiBu=${baiBuState} sellLock=${!!sellEntry}`);
             return { opportunities: allData, timestamp: latestTs };
         }
         return { opportunities: [], timestamp: Date.now() };
@@ -2624,6 +2623,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (volActive > 12) {
                 suggestion = '轻仓买入';
                 this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
+                if (this.sellStateCache.has(code)) {
+                    this.sellStateCache.delete(code);
+                    this.logger.log(`🔓 [深度洗盘] ${name}(${code}) 洗盘结束信号，解除卖出锁定`);
+                }
             }
             else {
                 suggestion = '持有';
@@ -2738,6 +2741,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
             }
             else {
+                this.logger.log(`🕵️ [DEBUG 卖出锁] ${name}(${code}) sellLock=卖出锁定, finalSug=${finalSuggestion} gc=${isGoldenCross} et=${entryTiming} → 覆盖为不要介入`);
                 finalSuggestion = '不要介入';
             }
         }
