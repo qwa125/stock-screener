@@ -1282,6 +1282,8 @@ async function doFullRescan(){
     if(stocks.length===0){
       setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
     }
+    // 持久化到浏览器本地，服务器重启后可恢复
+    try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:newStocks,ts:Date.now()}))}catch(e){}
     // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
@@ -1792,8 +1794,65 @@ setTimeout(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   fetchMarketState() // 首次加载市场状态
   if(isTH()){
-    // 交易时段 → 渐进式自动扫描（不会因后端空缓存而全量重扫）
-    if(!_autoScanning&&!loading) autoLightScan()
+    // 交易时段 → 先读后端缓存直接展示，后台渐进式刷新
+    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d.code===200&&d.data&&d.data.length){
+          var ALLOWED={'重仓买入':1,'买入':1}
+          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          if(stocks.length){
+            // 持久化到浏览器本地，下次后端无缓存时可直接展示
+            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
+            renderList()
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
+          }else{
+            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+          }
+        }else{
+          // 后端无缓存 → 尝试恢复浏览器端本地快照
+          try{
+            var snap=localStorage.getItem('cache_snapshot')
+            if(snap){
+              var s=JSON.parse(snap)
+              if(s&&s.stocks&&s.stocks.length){
+                var ALLOWED={'重仓买入':1,'买入':1}
+                stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
+                if(stocks.length){
+                  renderList()
+                  setStatus('📋 本地快照恢复 '+stocks.length+' 只（服务器已重启，后台重建缓存中...）')
+                  return // 跳过下面的setStatus
+                }
+              }
+            }
+          }catch(e){}
+          setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
+        }
+      })
+      .catch(function(e){
+        console.log('⚠️ 读缓存失败:',e.message)
+        // 网络异常时也尝试恢复本地快照
+        try{
+          var snap=localStorage.getItem('cache_snapshot')
+          if(snap){
+            var s=JSON.parse(snap)
+            if(s&&s.stocks&&s.stocks.length){
+              var ALLOWED={'重仓买入':1,'买入':1}
+              stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
+              if(stocks.length){
+                renderList()
+                setStatus('📋 本地快照恢复（网络异常，后台重试中...）')
+              }
+            }
+          }
+        }catch(e2){}
+      })
+      .finally(function(){
+        // 无论有无缓存，后台启动渐进式扫描（构建新缓存 / 更新已有缓存）
+        setTimeout(function(){
+          if(!_autoScanning&&!loading) autoLightScan()
+        },1000)
+      })
   }else{
     // 休盘/周末 → 恢复最后一次冻结快照（不重新拉取）
     var snap=loadFrozenSnapshot()
