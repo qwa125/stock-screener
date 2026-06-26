@@ -1,4 +1,4 @@
-<!-- Core v20250627-trend1 -->
+<!-- Core v20250627-trend2 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -719,9 +719,6 @@ function showDetail(i){
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
   da.style.display='block'
-  $('scanBtn').style.display='none'
-  $('listHeader').style.display='none'
-  $('stockList').style.display='none'
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
