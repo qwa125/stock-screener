@@ -143,7 +143,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
-  <button class="btn-scan" id="rescanBtn" onclick="handleRescanClick()" style="flex:1;min-width:100px;background:#2563eb">🌐 全市场重扫</button>
 </div>
 <div id="rescanProgress" style="display:none;margin:4px 12px 0">
   <div style="background:#eee;border-radius:3px;height:8px;overflow:hidden">
@@ -260,11 +259,10 @@ function showBlocked(isLimited){
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
 }
-// 不再从localStorage恢复缓存结果——每次展示都重新拉取最新数据计算
-console.log('📦 已关闭本地缓存，每次展示都以最新数据计算')
+// 点击仅进入页面，后台autoLightScan每10分钟自然刷新
+console.log('📦 页面初始化完成')
 
-// 立即扫描：与全市场重扫完全相同的逻辑（浏览器拉数据+批量K线+推送后端）
-// 仅在交易时段可点击，休盘时按钮显示"已冻结"
+// 立即扫描：点击进入页面，不自动触发扫描，后台autoLightScan每10分钟自然刷新
 async function handleScanClick(){
   hideBlocked()
   // 仅关闭毛玻璃展示页面，不要自动触发全市场重扫
@@ -876,9 +874,9 @@ async function doScan(){
     var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
     var d=await r.json()
     if(d.code!==200||!d.data||!d.data.opportunities){
-      if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';return}
+      if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
       // 后端无数据→自动切全市场重扫
-      setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结';
+      setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
       doFullRescan();return
     }
     stocks=d.data.opportunities
@@ -898,14 +896,14 @@ async function doScan(){
       console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
       setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
       // 不存2只到缓存（避免页面加载时显示过时数据）
-      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
       doFullRescan()
       return
     }
     // 不再缓存到localStorage，每次展示以最新数据计算为准
     // 毛玻璃可见时不显示结果，只缓存
     if(isBlurred){
-      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
       return
     }
     setStatus('🔄 获取实时行情...')
@@ -932,7 +930,7 @@ async function doScan(){
     saveFrozenSnapshot(stocks) // 保存冻结快照（休盘后展示）
     startPriceRefresh(stocks)
   }catch(e){setStatus('❌ '+e.message)}
-  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
 
 /** 带重试的fetch，处理429限流+502偶尔打不开+网络闪断 */
@@ -1781,18 +1779,18 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
 setInterval(function(){
   if(isTH()&&!loading){autoLightScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
 },600000)
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
   fetchMarketState() // 每分钟刷新市场状态
 },60000)
 
 // 首次加载（延迟3秒等初始化完成）
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
   fetchMarketState() // 首次加载市场状态
   if(isTH()){
     // 交易时段 → 先读后端缓存直接展示，后台渐进式刷新
@@ -1927,7 +1925,8 @@ function startPriceRefresh(stks){
     priceTimer=setInterval(function(){
       if(!isTH()){
         // 非交易时间停止价格刷新，但继续更新市场状态
-        $('scanBtn').textContent='📊 已冻结'
+        // 非交易时间停止价格刷新，但按钮仍可手动点击
+        $('scanBtn').textContent='🔄 立即扫描'
         return
       }
       if(stocks.length>0){
@@ -1968,7 +1967,7 @@ function stopPriceRefresh(){
 // 仅更新冻结横幅
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
-  $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
+  $('scanBtn').textContent='🔄 立即扫描'
 },3000)
 
 // ========== Admin Panel ==========
