@@ -277,4 +277,5 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     }[]): Promise<any[]>;
     runBacktest(): Promise<any>;
     runForecastBacktest(): Promise<any>;
+    technicalAnalysis(code: string): Promise<any>;
 }

@@ -697,6 +697,16 @@ function showDetail(i){
     }).catch(function(){})
   }
   renderList()
+  // ★ 异步拉取技术指标分析（MACD/KDJ/布林带/RSI/量比→最佳介入价）
+  ;(async function(){
+    try{
+      var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
+      var tj=await tr.json()
+      if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
+        da.innerHTML=buildDetail(s,rt,tj.data)
+      }
+    }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
+  })()
 }
 
 // ---------- 腾讯实时行情 ----------
@@ -724,7 +734,7 @@ async function fetchRealtime(codes){
 }
 
 // ---------- 构建分析详情HTML（仿旧版模板） ----------
-function buildDetail(s,rt){
+function buildDetail(s,rt,ta){
   var rt=rt||{}
   var price=rt.price||s.currentPrice||0
   var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
@@ -784,9 +794,65 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
-  // 🕐 日内介入点建议
+  // 🕐 技术指标分析（含日内介入点建议）
   var entryHtml=''
-  if(rt.high!=null&&rt.low!=null&&rt.high>=rt.low&&rt.high>0){
+  if(ta&&ta.entryScore!=null){
+    // ———— 全量技术指标分析 ————
+    var sc=ta.entryScore
+    var scClr=sc>=75?'#16a34a':sc>=55?'#ca8a04':sc>=35?'#6b7280':'#dc2626'
+    var scLbl=sc>=75?'极佳介入点 ⭐':sc>=55?'良好介入点 ✓':sc>=35?'观望区 −':'不建议介入 ✗'
+    var bb=ta.bollinger
+    var posStr=''
+    if(rt.price&&bb){
+      if(rt.price<=bb.lower) posStr='触及下轨，超卖区'
+      else if(rt.price<=bb.lower+(bb.middle-bb.lower)*0.5) posStr='下轨附近，偏低区'
+      else if(rt.price<=bb.middle+(bb.upper-bb.middle)*0.3) posStr='中轨附近，均衡区'
+      else if(rt.price<=bb.upper) posStr='上轨附近，偏高区'
+      else posStr='突破上轨，超买区'
+    }
+    entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">📊 技术指标综合评定</div>'
+      // 评分大标签
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span style="background:'+scClr+';color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">'+scLbl+'（'+sc.toFixed(0)+'分）</span>'
+      +'</div>'
+      // 布林带位置
+      +(bb?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'
+        +'<span style="background:#1f2937;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">布林中轨 '+bb.middle.toFixed(2)+'</span>'
+        +'<span style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">下轨 '+bb.lower.toFixed(2)+'</span>'
+        +'<span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">上轨 '+bb.upper.toFixed(2)+'</span>'
+      +'</div>':'')
+      // 布林带可视化长条
+      +(bb?'<div style="position:relative;margin-bottom:4px;height:20px;background:linear-gradient(to right,#22c55e 0%,#86efac 25%,#fef08a 50%,#fca5a5 75%,#ef4444 100%);border-radius:6px">'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-4px;width:0;height:0;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid #1f2937;z-index:2"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:0;width:2px;height:20px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-20px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
+      +'</div>':'')
+      // 布林带文字描述
+      +(posStr?'<div style="color:#374151;font-size:10px;margin-bottom:5px">📍 价格位置：'+posStr+'</div>':'')
+      // 指标网格
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:5px">'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">MACD</span><br><span style="font-weight:600">DIF '+ta.macd.dif.toFixed(3)+'<br>DEA '+ta.macd.dea.toFixed(3)+'<br>柱 '+(ta.macd.hist>=0?'+':'')+ta.macd.hist.toFixed(3)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">KDJ</span><br><span style="font-weight:600">K '+ta.kdj.k.toFixed(1)+'<br>D '+ta.kdj.d.toFixed(1)+'<br>J '+ta.kdj.j.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">RSI</span><br><span style="font-weight:600;color:'+(ta.rsi>=70?'#ef4444':ta.rsi<=30?'#22c55e':'#1f2937')+'">RSI(14) '+ta.rsi.toFixed(1)+'<br>RSI(6) '+ta.rsi6.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">量比</span><br><span style="font-weight:600;color:'+(ta.volumeRatio>=1.5?'#ef4444':ta.volumeRatio>=0.8?'#ca8a04':'#6b7280')+'">'+(ta.volumeRatio>0?ta.volumeRatio.toFixed(2)+'x':'-')+'</span></div>'
+      +'</div>'
+      // 综合理由
+      +'<div style="background:#fff;border-radius:4px;padding:5px 6px;margin-bottom:5px">'
+        +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
+        +'<ul style="list-style:none;padding:0;margin:0">'
+          +ta.reasoning.map(function(r){return '<li style="font-size:9px;color:#6b7280;line-height:1.7;padding-left:10px;position:relative">• '+r+'</li>'}).join('')
+        +'</ul>'
+      +'</div>'
+      // 最佳介入价
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">✅ 最佳介入价</span>'
+        +'<span style="font-size:15px;font-weight:700;color:#16a34a">'+ta.bestEntryPrice.toFixed(2)+'</span>'
+        +'<span style="font-size:10px;color:#6b7280">⬇ 支撑 '+ta.supportLevel.toFixed(2)+' | ⬆ 压力 '+ta.resistanceLevel.toFixed(2)+'</span>'
+      +'</div>'
+    +'</div>'
+  }else if(rt.high!=null&&rt.low!=null&&rt.high>=rt.low&&rt.high>0){
+    // ———— 降级：纯日内位置（无技术分析时） ————
     var intraPos=((rt.price-rt.low)/(rt.high-rt.low))*100
     var sugg='', bestPrice='', hangAdvice=''
     if(intraPos<20){
@@ -814,19 +880,13 @@ function buildDetail(s,rt){
     }
     entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
       +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考</div>'
-      // 矩形长条：低——当前价——高
       +'<div style="position:relative;margin-bottom:4px">'
-        // 渐变长条背景（绿→黄→红）
         +'<div style="height:24px;border-radius:6px;background:linear-gradient(to right,#22c55e 0%,#eab308 50%,#ef4444 100%);position:relative;overflow:visible">'
-          // 当前价三角标记
           +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-6px;width:0;height:0;margin-left:-6px;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #1f2937;z-index:2"></div>'
-          // 当前价竖线
           +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:0;width:2px;height:24px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
-          // 当前价标签
           +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-22px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
         +'</div>'
       +'</div>'
-      // 低位/高位标签
       +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
         +'<div style="color:#16a34a;font-size:10px;font-weight:500">⬆低 '+rt.low.toFixed(2)+'</div>'
         +'<div style="color:#dc2626;font-size:10px;font-weight:500">高 '+rt.high.toFixed(2)+' ⬆</div>'

@@ -352,4 +352,13 @@ export declare class GemScreenerController {
         code: number;
         msg: string;
     }>;
+    technicalAnalysis(code: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    } | {
+        code: number;
+        msg: any;
+        data: null;
+    }>;
 }

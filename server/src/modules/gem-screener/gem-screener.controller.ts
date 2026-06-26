@@ -717,4 +717,21 @@ export class GemScreenerController {
     this.gemScreener.clearCache();
     return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
   }
+
+  /**
+   * 技术指标分析：MACD/KDJ/布林带/RSI/量比 → 最佳介入价
+   * GET /api/gem/technical-analysis?code=300750
+   */
+  @Get('technical-analysis')
+  @SkipAccessLimit()
+  async technicalAnalysis(@Query('code') code: string) {
+    if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    try {
+      const result = await this.gemScreener.technicalAnalysis(code);
+      return { code: 200, msg: 'success', data: result };
+    } catch (e) {
+      this.logger.warn(`技术指标分析失败 ${code}: ${(e as Error).message}`);
+      return { code: 500, msg: e.message, data: null };
+    }
+  }
 }

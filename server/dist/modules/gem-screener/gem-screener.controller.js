@@ -623,6 +623,18 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.gemScreener.clearCache();
         return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
     }
+    async technicalAnalysis(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const result = await this.gemScreener.technicalAnalysis(code);
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            this.logger.warn(`技术指标分析失败 ${code}: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -895,6 +907,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "clearCache", null);
+__decorate([
+    (0, common_1.Get)('technical-analysis'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "technicalAnalysis", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

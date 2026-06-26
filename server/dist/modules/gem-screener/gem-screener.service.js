@@ -24,6 +24,7 @@ const data_fetcher_service_1 = require("../stock/data-fetcher.service");
 const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
+const technical_analysis_1 = require("../../utils/technical-analysis");
 const pinyin_pro_1 = require("pinyin-pro");
 const data_1 = require("../../industry-sectors/data");
 const postgres = require('postgres');
@@ -3698,6 +3699,36 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 winRate1D: midRecords.length > 0 ? midWin1.toFixed(1) + '%' : 'N/A',
             },
         };
+    }
+    async technicalAnalysis(code) {
+        const kline = await this.dataFetcher.getKLineData(code);
+        if (!kline || kline.length < 30) {
+            return {
+                code,
+                currentPrice: 0,
+                entryScore: 0,
+                entryLevel: '数据不足',
+                bestEntryPrice: 0,
+                reasoning: ['K线数据不足30条，无法进行技术分析'],
+                macd: null,
+                kdj: null,
+                bollinger: null,
+                rsi: null,
+                volumeRatio: null,
+            };
+        }
+        const taKlines = kline.map(k => ({
+            date: String(k.day || k.date || ''),
+            open: k.open || 0,
+            close: k.close || 0,
+            high: k.high || 0,
+            low: k.low || 0,
+            volume: k.volume || 0,
+            amount: k.amount || 0,
+        }));
+        const currentPrice = taKlines[taKlines.length - 1].close;
+        const result = (0, technical_analysis_1.analyzeTechnical)(taKlines, currentPrice);
+        return { code, ...result };
     }
 };
 exports.GemScreenerService = GemScreenerService;

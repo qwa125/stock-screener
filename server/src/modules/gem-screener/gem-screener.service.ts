@@ -12,6 +12,7 @@ import { StockService } from '../stock/stock.service';
 import { KLine } from '../stock/types';
 import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
+import { analyzeTechnical, KLine as TAKLine } from '../../utils/technical-analysis';
 import { pinyin } from 'pinyin-pro';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 const postgres = require('postgres');
@@ -4292,6 +4293,42 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         winRate1D: midRecords.length > 0 ? midWin1.toFixed(1) + '%' : 'N/A',
       },
     };
+  }
+
+  /**
+   * 技术指标综合分析：获取K线 → MACD/KDJ/布林带/RSI/量比 → 最佳介入价
+   */
+  async technicalAnalysis(code: string): Promise<any> {
+    const kline: any[] = await this.dataFetcher.getKLineData(code) as any;
+    if (!kline || kline.length < 30) {
+      return {
+        code,
+        currentPrice: 0,
+        entryScore: 0,
+        entryLevel: '数据不足',
+        bestEntryPrice: 0,
+        reasoning: ['K线数据不足30条，无法进行技术分析'],
+        macd: null,
+        kdj: null,
+        bollinger: null,
+        rsi: null,
+        volumeRatio: null,
+      };
+    }
+    // 转换为technical-analysis需要的格式
+    const taKlines: TAKLine[] = kline.map(k => ({
+      date: String(k.day || k.date || ''),
+      open: k.open || 0,
+      close: k.close || 0,
+      high: k.high || 0,
+      low: k.low || 0,
+      volume: k.volume || 0,
+      amount: k.amount || 0,
+    }));
+    // 取当前价（用最新收盘价）
+    const currentPrice = taKlines[taKlines.length - 1].close;
+    const result = analyzeTechnical(taKlines, currentPrice);
+    return { code, ...result };
   }
 
 }
