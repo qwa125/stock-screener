@@ -244,8 +244,7 @@ window.fetch=function(u,o){
     // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
     if(typeof u==='string'&&u.indexOf('/api/')===0){
       if(r.status===429){
-        // 设备限额已满，不阻塞用户，只打日志
-        console.warn('[api] 429 名额已满，用户已放行')
+        showBlocked(true)
       }
     }
     return r
@@ -265,18 +264,13 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 毛玻璃按钮：永远进页面，注册后台静默执行
+// 毛玻璃按钮：一键隐退，注册在后台静默执行
 async function handleBlurClick(){
   var btn=$("pageBlur").querySelector('.blur-btn')
   if(btn.disabled)return
-
-  // ① 先隐退毛玻璃（永远让用户进页面）
-  hideBlocked()
-
-  // ② 如果已注册，无需重复请求
-  if(localStorage.getItem('deviceRegistered')==='1') return
-
-  // ③ 后台静默注册（失败也不阻塞用户）
+  if(localStorage.getItem('deviceRegistered')==='1'){
+    hideBlocked();return
+  }
   btn.disabled=true;btn.textContent='⏳ 验证中...'
   try{
     var regRes=await fetch("/api/device/register",{
@@ -284,17 +278,16 @@ async function handleBlurClick(){
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
     if(regRes.status===429){
-      // 名额已满，用户仍可正常使用
-      console.warn('设备注册名额已满，用户已放行')
-      btn.disabled=false;btn.textContent='📊 点击进入'
-      return
+      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+      showBlocked(true);return
     }
     localStorage.setItem('deviceRegistered','1')
-    console.log('设备注册成功')
+    hideBlocked()
   }catch(e){
-    console.warn('设备注册失败（已放行用户）:',e)
+    console.warn('设备注册失败:',e)
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    $("blurMsg").innerHTML="⚠️ 服务器连接失败，请检查网络后重试"
   }
-  btn.disabled=false;btn.textContent='📊 点击进入'
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
@@ -319,7 +312,7 @@ async function handleRescanClick(){
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
     if(regRes.status===429||regRes.status!==200){
-      console.warn('设备注册未通过，全市场重扫描放行')
+      showBlocked(true);return
     }
     hideBlocked()
     // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
@@ -1644,7 +1637,7 @@ async function doSearch(){
   // 先检查设备权限：搜股票也要经过后端 guard 验证
   try{
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
-    if(_reg.status===429){console.warn('设备注册名额已满，搜索放行');/* 放行，不阻断用户 */}
+    if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none'
 
