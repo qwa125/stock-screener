@@ -1265,6 +1265,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const bx = (0, bai_xing_1.calcBaiXing)(engine);
         const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
         const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
+        const xingXing = (0, xing_xing_1.calcXingXing)(engine);
         const bxDays = bx.baiXiaoDays || 0;
         const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
         const hasBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai || bx.diBuBuy || bx.zhuLiShiPan || bx.jiaCang);
@@ -1310,7 +1311,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             || !!bx.jiaCang;
         const hasZhenDang = (sanJiao.bestBuyPoints || []).includes('震荡买点');
         const hengPo = !!bx.baiXiaoBuy2;
-        const hasJiGouActive = bx.jiGouHuoYueDu >= 12;
+        const hasJiGouActive = xingXing.jiGouHuoYueDu >= 12;
         const firstBreakMA5 = currentClose > ma5 && (len >= 2 ? closeArr[len - 2] <= (len >= 6 ? closeArr.slice(len - 6, len - 1).reduce((a, b) => a + b, 0) / 5 : ma5) : true);
         const ma5NotDown = ma5 >= (len >= 6 ? closeArr.slice(len - 6, len - 1).reduce((a, b) => a + b, 0) / 5 : ma5);
         const ma10NotDown = ma10 >= (len >= 11 ? closeArr.slice(len - 11, len - 1).reduce((a, b) => a + b, 0) / 10 : ma10);
@@ -1327,7 +1328,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             gaoWeiHuiDiao: !!bx.gaoWeiHuiDiaoBuy,
             hengPo, hasMainRise, hasZhenDang,
             baiXiaoDays: bxDays, baiXiao: !!bx.baiXiao, baiBu: !!bx.baiBu,
-            jiGouActive: hasJiGouActive, jiGouHuoYueDu: bx.jiGouHuoYueDu || 0,
+            jiGouActive: hasJiGouActive, jiGouHuoYueDu: xingXing.jiGouHuoYueDu || 0,
             firstBreakMA5, ma5NotDown, ma10NotDown,
             lingXingBuy: !!lingXing.buySignalDiamond,
             xiPanFanZhuan: !!lingXing.xiPanFanZhuanBuy,
