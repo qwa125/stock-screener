@@ -706,12 +706,17 @@ function showDetail(i){
     try{
       var code=s.code,market=code.startsWith('6')?'sh':'sz',emSecId=(code.startsWith('6')?'1.':'0.')+code
       var kdata=null
-      // 东财（第一位）
+      // 后端代理→东财（第一位，与搜索/扫描同源）
       try{
-        var ekr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500',{signal:timeoutSignal(8000)})
-        if(ekr.ok||ekr.status===0||ekr.type==='basic'){var ekd=await ekr.json();if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=5){kdata=ekd.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})}}
+        var prr=await fetch(API+'/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'1':'0'),{signal:timeoutSignal(15000)})
+        if(prr.ok){var prd=await prr.json();if(prd&&prd.code===200&&prd.data&&prd.data.length>=5){kdata=prd.data}}
       }catch(e){}
-      // 新浪（第二位）
+      // 东财直连（第二位）
+      if(!kdata)try{
+        var ekr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500',{signal:timeoutSignal(8000),mode:'cors'})
+        if(ekr.ok){var ekd=await ekr.json();if(ekd&&ekd.data&&ekd.data.klines&&ekd.data.klines.length>=5){kdata=ekd.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})}}
+      }catch(e){}
+      // 新浪（第三位）
       if(!kdata)try{var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+market+code+'&scale=240&ma=no&datalen=500';var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)});if(srr.ok||srr.status===0){var srd=await srr.json();if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}})}}}catch(e){}
       // 腾讯（第三位）
       if(!kdata)try{var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+market+code+',day,,,500,qfq';var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)});if(tqr.ok||tqr.status===0){var tqd=await tqr.json();if(tqd&&tqd.data){var tk=tqd.data[market+code];if(tk&&tk.qfq&&tk.qfq.day&&tk.qfq.day.length>=5){kdata=tk.qfq.day.map(function(l){var p=l.split(' ');return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}})}}}}catch(e){}
@@ -1599,12 +1604,25 @@ async function doSearch(){
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
         +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在拉取K线数据进行分析……</div>'
       
-      // 1. 通过后端代理拉K线（解决浏览器跨域问题）
+      // 1. 通过后端代理拉K线（解决浏览器跨域问题，与扫描同源）
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
       
-      // ★ 优先：浏览器直调东方财富（与扫描get2同接口，跨域走CORS）
+      // ★ 优先：后端代理→东方财富（与扫描同源，无CORS问题）
       if(stockMarket!=='hk'&&stockMarket!=='us')try{
+        var proxyUrl=API+'/gem/proxy/kline?code='+stockCode+'&market='+(stockCode.startsWith('6')?'1':'0')
+        var prr=await fetch(proxyUrl,{signal:timeoutSignal(15000)})
+        if(prr.ok){
+          try{var prd=await prr.json()}catch(ee){prd=null}
+          if(prd&&prd.code===200&&prd.data&&prd.data.length>=5){
+            kdata=prd.data
+            console.log('[search] proxy eastmoney got '+kdata.length+' bars')
+          }
+        }
+      }catch(e){console.warn('[search] proxy eastmoney failed:',e.message||e)}
+      
+      // ★ 备选1：浏览器直调东方财富（跨域CORS兜底）
+      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500'
         var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000),mode:'cors'})
@@ -1619,25 +1637,8 @@ async function doSearch(){
           }
         }
       }catch(e){console.warn('[search] direct eastmoney failed:',e.message||e)}
-      // 东财直连失败→加1.5s重试一次（跟扫描一致）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        await new Promise(function(r){setTimeout(r,1500)})
-        var emSecId3=(stockCode.startsWith('6')?'1.':'0.')+stockCode
-        var ekurl3='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId3+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500'
-        var ekr3=await fetch(ekurl3,{signal:timeoutSignal(10000),mode:'cors'})
-        if(ekr3.ok){
-          try{var ekd3=await ekr3.json()}catch(ee){ekd3=null}
-          if(ekd3&&ekd3.data&&ekd3.data.klines&&ekd3.data.klines.length>=5){
-            kdata=ekd3.data.klines.map(function(l){
-              var p=l.split(',')
-              return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
-            })
-            console.log('[search] eastmoney retry got '+kdata.length+' bars')
-          }
-        }
-      }catch(e){console.warn('[search] eastmoney retry also failed:',e.message||e)}
       
-      // ★ 备选1：新浪行情K线（直连，第二位）
+      // ★ 备选2：新浪行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var sinaPrefix=prefix==='sz'?'sz':'sh'
         var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=500'
@@ -1653,7 +1654,7 @@ async function doSearch(){
         }
       }catch(e){console.warn('[search] sina kline failed:',e.message||e)}
       
-      // ★ 备选2：腾讯行情K线（直连，第三位）
+      // ★ 备选3：腾讯行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
         var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
