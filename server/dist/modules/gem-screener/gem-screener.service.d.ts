@@ -44,6 +44,8 @@ export interface OpportunityStock {
         reason: string;
         details: Record<string, any>;
     };
+    future_1_2Day_suggestion?: string;
+    _debug?: Record<string, any>;
     forecast1_2Day?: {
         direction: string;
         confidence: string;
