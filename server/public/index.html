@@ -1603,12 +1603,12 @@ async function doSearch(){
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
       
-      // ★ 优先：浏览器直调东方财富（你在国内，直连最快最稳）
+      // ★ 优先：浏览器直调东方财富（与扫描get2同接口，跨域走CORS）
       if(stockMarket!=='hk'&&stockMarket!=='us')try{
-        var emSecId2=isIndex?"1.":(stockCode.startsWith('6')?'1.':'0.')+stockCode
-        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=500'
-        var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000)})
-        if(ekr2.ok||ekr2.status===0||ekr2.type==='basic'){
+        var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
+        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500'
+        var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000),mode:'cors'})
+        if(ekr2.ok){
           try{var ekd2=await ekr2.json()}catch(ee){ekd2=null}
           if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=5){
             kdata=ekd2.data.klines.map(function(l){
@@ -1619,6 +1619,23 @@ async function doSearch(){
           }
         }
       }catch(e){console.warn('[search] direct eastmoney failed:',e.message||e)}
+      // 东财直连失败→加1.5s重试一次（跟扫描一致）
+      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
+        await new Promise(function(r){setTimeout(r,1500)})
+        var emSecId3=(stockCode.startsWith('6')?'1.':'0.')+stockCode
+        var ekurl3='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId3+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500'
+        var ekr3=await fetch(ekurl3,{signal:timeoutSignal(10000),mode:'cors'})
+        if(ekr3.ok){
+          try{var ekd3=await ekr3.json()}catch(ee){ekd3=null}
+          if(ekd3&&ekd3.data&&ekd3.data.klines&&ekd3.data.klines.length>=5){
+            kdata=ekd3.data.klines.map(function(l){
+              var p=l.split(',')
+              return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
+            })
+            console.log('[search] eastmoney retry got '+kdata.length+' bars')
+          }
+        }
+      }catch(e){console.warn('[search] eastmoney retry also failed:',e.message||e)}
       
       // ★ 备选1：新浪行情K线（直连，第二位）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
