@@ -70,8 +70,6 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly MAX_MARKET_CAP;
     private readonly MIN_MARKET_CAP;
     private readonly SUGGESTION_PRIORITY;
-    private fullCache;
-    private readonly FULL_CACHE_PATH;
     private cache;
     private refreshPromise;
     private mainBoardCache;
@@ -249,7 +247,6 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private static calcChipAnalysis;
     quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[], frontendMainForce?: number): Promise<OpportunityStock | null>;
     searchStocks(keyword: string): Promise<OpportunityStock[]>;
-    getStockDetail(code: string): Promise<any>;
     rescanMarket(): Promise<OpportunityStock[]>;
     triggerAnalysisPreCacheFromCache(): void;
     private triggerAnalysisPreCache;
@@ -278,22 +275,6 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         inflow: number;
         klines: any[];
     }[]): Promise<any[]>;
-    cacheAllData(stocks: {
-        code: string;
-        name: string;
-        price: number;
-        changePercent: number;
-        inflow: number;
-        klines: any[];
-    }[]): Promise<{
-        all: OpportunityStock[];
-        opportunities: OpportunityStock[];
-        timestamp: number;
-    }>;
-    getScanResult(): Promise<{
-        opportunities: OpportunityStock[];
-        timestamp: number;
-    }>;
     runBacktest(): Promise<any>;
     runForecastBacktest(): Promise<any>;
     technicalAnalysis(code: string): Promise<any>;

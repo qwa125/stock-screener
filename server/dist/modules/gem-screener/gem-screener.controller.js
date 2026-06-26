@@ -350,19 +350,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: [] };
         }
     }
-    async getStockDetail(code) {
-        if (!code) {
-            return { code: 400, msg: '请输入股票代码', data: null };
-        }
-        try {
-            const result = await this.gemScreener.getStockDetail(code.trim());
-            return { code: 200, msg: 'ok', data: result };
-        }
-        catch (e) {
-            this.logger.error(`获取详情失败: ${e.message}`);
-            return { code: 500, msg: e.message, data: null };
-        }
-    }
     async updateUpgraded(body) {
         try {
             const list = body?.data || [];
@@ -387,30 +374,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         catch (e) {
             return { code: 500, msg: e.message };
-        }
-    }
-    async cacheData(body) {
-        try {
-            const stocks = body?.stocks || [];
-            if (stocks.length === 0) {
-                return { code: 400, msg: 'no stocks data', data: { all: [], opportunities: [] } };
-            }
-            this.logger.log(`📥 接收前端全量数据: ${stocks.length} 只股票`);
-            const result = await this.gemScreener.cacheAllData(stocks);
-            return { code: 200, msg: 'success', data: result };
-        }
-        catch (e) {
-            this.logger.error(`❌ cache-data 分析失败: ${e.message}`);
-            return { code: 500, msg: e.message, data: { all: [], opportunities: [] } };
-        }
-    }
-    async getScanResult() {
-        try {
-            const result = await this.gemScreener.getScanResult();
-            return { code: 200, msg: 'success', data: result };
-        }
-        catch (e) {
-            return { code: 500, msg: e.message, data: { opportunities: [], timestamp: Date.now() } };
         }
     }
     async rescanBatch(body) {
@@ -815,7 +778,6 @@ __decorate([
 ], GemScreenerController.prototype, "seedCache", null);
 __decorate([
     (0, common_1.Get)('search'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('q')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -828,14 +790,6 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanMarket", null);
-__decorate([
-    (0, common_1.Get)('detail'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
-    __param(0, (0, common_1.Query)('code')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], GemScreenerController.prototype, "getStockDetail", null);
 __decorate([
     (0, common_1.Post)('update-upgraded'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
@@ -862,22 +816,6 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "syncSellState", null);
-__decorate([
-    (0, common_1.Post)('cache-data'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
-    (0, common_1.HttpCode)(200),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], GemScreenerController.prototype, "cacheData", null);
-__decorate([
-    (0, common_1.Get)('scan-result'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], GemScreenerController.prototype, "getScanResult", null);
 __decorate([
     (0, common_1.Post)('rescan-batch'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

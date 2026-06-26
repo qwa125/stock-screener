@@ -23,12 +23,6 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
     preloadKline(code, klines) {
         this.klineCache.set(code, { data: klines, timestamp: Date.now() });
     }
-    getCachedKlines(code) {
-        const entry = this.klineCache.get(code);
-        if (!entry)
-            return null;
-        return entry.data;
-    }
     async getAllStocks() {
         if (this.stockListCache)
             return this.stockListCache;

@@ -244,12 +244,10 @@ let StockService = StockService_1 = class StockService {
         const low60 = Math.min(...lowArr.slice(-60));
         const pricePos = high60 > low60 ? ((lastPrice - low60) / (high60 - low60)) * 100 : 50;
         const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const ma5_1dAgo = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : ma5;
         const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-        const ma10_1dAgo = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : ma10;
         const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
-        const ma5Up = ma5 > ma5_1dAgo;
-        const ma10Up = ma10 > ma10_1dAgo;
+        const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+        const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
         let trendState = 1;
         if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
             trendState = 3;
@@ -291,10 +289,9 @@ let StockService = StockService_1 = class StockService {
             baiCoverTrend: formulaResult?.baiCoverTrend ?? 'stable',
             baiXiao: !!formulaResult?.baiXiao,
             volumeStructure: formulaResult?.volumeStructure ?? 0,
-            ma5Up, ma10Up,
         };
         const stockSuggestion = (0, trading_suggestion_1.getTradingSuggestion)(stockInput);
-        const suggestion = stockSuggestion.suggestion;
+        const suggestion = stockSuggestion.action;
         const prediction = stockSuggestion.prediction || '';
         const reason = stockSuggestion.reason || '';
         if (usesRealKline) {
