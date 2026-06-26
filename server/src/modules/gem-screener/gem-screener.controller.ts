@@ -376,6 +376,7 @@ export class GemScreenerController {
   }
 
   @Get('search')
+  @SkipAccessLimit()
   async searchStock(@Query('q') keyword: string) {
     if (!keyword || keyword.trim().length === 0) {
       return { code: 400, msg: '请输入搜索关键词', data: [] };
@@ -403,6 +404,7 @@ export class GemScreenerController {
   }
 
   @Get('detail')
+  @SkipAccessLimit()
   async getStockDetail(@Query('code') code: string) {
     if (!code) {
       return { code: 400, msg: '请输入股票代码', data: null };
@@ -477,6 +479,7 @@ export class GemScreenerController {
    * GET /api/gem/scan-result
    */
   @Get('scan-result')
+  @SkipAccessLimit()
   async getScanResult() {
     try {
       const result = await this.gemScreener.getScanResult();
