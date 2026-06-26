@@ -117,6 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
 .admin-login-msg{font-size:12px;color:#6b7280;text-align:center;padding:20px 0}
 .admin-device-item .dev-remark{font-size:10px;color:#10b981;margin-top:1px}
+	.blur-btn:disabled{opacity:0.6;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -265,16 +266,27 @@ function hideBlocked(){
 console.log('页面初始化完成')
 
 // 毛玻璃按钮：一键隐退，注册在后台静默执行
-function handleBlurClick(){
-  hideBlocked()
-  if(localStorage.getItem('deviceRegistered')!=='1'){
-    fetch("/api/device/register",{
+async function handleBlurClick(){
+  var btn=$("pageBlur").querySelector('.blur-btn')
+  if(btn.disabled)return
+  if(localStorage.getItem('deviceRegistered')==='1'){
+    hideBlocked();return
+  }
+  btn.disabled=true;btn.textContent='⏳ 验证中...'
+  try{
+    var regRes=await fetch("/api/device/register",{
       method:"POST",
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-    }).then(function(r){
-      if(r.status!==429)localStorage.setItem('deviceRegistered','1')
-      else showBlocked(true)
-    }).catch(function(e){console.warn('设备注册失败:',e)})
+    })
+    if(regRes.status===429){
+      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+      showBlocked(true);return
+    }
+    localStorage.setItem('deviceRegistered','1')
+    hideBlocked()
+  }catch(e){
+    console.warn('设备注册失败:',e)
+    hideBlocked()
   }
 }
 // 主页面扫描按钮：立即触发扫描
