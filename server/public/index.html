@@ -1,4 +1,4 @@
-<!-- Core v20250627-trend2 -->
+<!-- Core v20250627-inline1 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -50,7 +50,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 
 /* Detail panel - 全屏覆盖层 */
 .detail-panel{display:none;background:#fff;overflow-x:hidden;border-bottom:1px solid #eee}
-.detail-panel.open{display:block}
 .signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
 .signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
 /* 价格数字标签 */
@@ -707,13 +706,6 @@ function gridChipLine(s,entry){
     +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+peakClr+'">'+peakLabel+'</div></div>'
 }
 
-function closeDetail(){
-  $('detailArea').style.display='none'
-  $('scanBtn').style.display=''
-  $('listHeader').style.display=''
-  $('stockList').style.display=''
-  renderList()
-}
 function showDetail(i){
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
@@ -772,7 +764,7 @@ function buildDetail(s,rt,ta){
   var rt=rt||{}
   var price=rt.price||s.currentPrice||0
   var chg=rt.chgP!==undefined?rt.chgP:(s.changePercent||0)
-  var chgClr=chg>=0?'#cf1322':'#389e0d' // 涨色红 跌色绿
+  var chgClr=chg>=0?'#ef4444':'#22c55e'
   var p=s.pricePosition??50
   var posTag=posLabel(p)
   var posTClr=TAG_COLORS[posTag]||'#6b7280'
@@ -831,83 +823,103 @@ function buildDetail(s,rt,ta){
   // 🕐 技术指标分析（含日内介入点建议）
   var entryHtml=''
   if(ta&&ta.entryScore!=null){
-    // ———— 有技术分析数据：趋势 + 位置 → 建议 ————
-    var macdHist=ta.macd.hist||0, k=ta.kdj.k||50, d=ta.kdj.d||50
-    var bb=ta.bollinger, price=rt.price||0
-    var sup=ta.supportLevel, res=ta.resistanceLevel
-    var trendIcon, trendName
-    // 趋势判定
-    if(macdHist>0&&k>d){trendIcon='📈';trendName='上涨中'}
-    else if(macdHist<0||k<20){trendIcon='📉';trendName='下跌中'}
-    else{trendIcon='📊';trendName='震荡'}
-    // 位置判定
-    var posLabel, sugg='', suggestTag=''
-    var nearSup=price>0&&sup>0&&price<=sup*1.02
-    var nearRes=price>0&&res>0&&price>=res*0.98
-    var belowMid=bb&&price<bb.middle
-    var ovsold=bb&&price<=bb.lower*1.02
-    if(nearSup||ovsold) posLabel='支撑位附近'
-    else if(nearRes) posLabel='阻力位附近'
-    else if(belowMid) posLabel='中间位置'
-    else posLabel='中间位置'
-    // 映射建议
-    if(trendIcon==='📈'&&(nearSup||ovsold)){sugg='✅ 空中加油入场点，可介入';suggestTag='green'}
-    else if(trendIcon==='📈'&&nearRes){sugg='⚠️ 等回调';suggestTag='yellow'}
-    else if(trendIcon==='📈'){sugg='⏳ 可部分介入或等回调';suggestTag='blue'}
-    else if(trendIcon==='📉'&&(ovsold||nearSup)){sugg='✅ 超跌反弹机会，轻仓试探';suggestTag='green'}
-    else if(trendIcon==='📉'){sugg='⚠️ 不建议抄底，等企稳';suggestTag='red'}
-    else if(trendIcon==='📊'&&(nearSup||ovsold)){sugg='✅ 低吸';suggestTag='green'}
-    else if(trendIcon==='📊'&&nearRes){sugg='⚠️ 等回调';suggestTag='yellow'}
-    else{sugg='⏳ 观望';suggestTag='gray'}
-    var tagColor=suggestTag==='green'?'#16a34a':suggestTag==='yellow'?'#ca8a04':suggestTag==='red'?'#dc2626':suggestTag==='blue'?'#2563eb':'#6b7280'
+    // ———— 全量技术指标分析 ————
+    var sc=ta.entryScore
+    var scClr=sc>=75?'#16a34a':sc>=55?'#ca8a04':sc>=35?'#6b7280':'#dc2626'
+    var scLbl=sc>=75?'极佳介入点 ⭐':sc>=55?'良好介入点 ✓':sc>=35?'观望区 −':'不建议介入 ✗'
+    var bb=ta.bollinger
+    var posStr=''
+    if(rt.price&&bb){
+      if(rt.price<=bb.lower) posStr='触及下轨，超卖区'
+      else if(rt.price<=bb.lower+(bb.middle-bb.lower)*0.5) posStr='下轨附近，偏低区'
+      else if(rt.price<=bb.middle+(bb.upper-bb.middle)*0.3) posStr='中轨附近，均衡区'
+      else if(rt.price<=bb.upper) posStr='上轨附近，偏高区'
+      else posStr='突破上轨，超买区'
+    }
     entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
-      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">📊 当前位置评估：是否适合介入？</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px">'
-        +'<div style="background:#fff;border-radius:4px;padding:4px 6px;text-align:center"><div style="font-size:9px;color:#6b7280">趋势</div><div style="font-weight:600;font-size:12px;color:#1f2937">'+trendIcon+' '+trendName+'</div></div>'
-        +'<div style="background:#fff;border-radius:4px;padding:4px 6px;text-align:center"><div style="font-size:9px;color:#6b7280">当前位置</div><div style="font-weight:600;font-size:12px;color:#1f2937">'+posLabel+'</div></div>'
-        +'<div style="background:#fff;border-radius:4px;padding:4px 6px;text-align:center"><div style="font-size:9px;color:#6b7280">建议</div><div style="font-weight:600;font-size:12px;color:'+tagColor+'">'+sugg+'</div></div>'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">📊 技术指标综合评定</div>'
+      // 评分大标签
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span style="background:'+scClr+';color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">'+scLbl+'（'+sc.toFixed(0)+'分）</span>'
       +'</div>'
-      +'<div style="font-size:9px;color:#6b7280;margin-bottom:4px">MACD柱 '+(macdHist>=0?'+':'')+macdHist.toFixed(3)+' ｜ K '+k.toFixed(1)+' D '+d.toFixed(1)+' J '+(ta.kdj.j||0).toFixed(1)+' ｜ 支撑 '+sup.toFixed(2)+' 阻力 '+res.toFixed(2)+'</div>'
-      +'<div style="display:flex;align-items:center;gap:6px">'
-        +'<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">最佳介入价</span>'
+      // 布林带位置
+      +(bb?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'
+        +'<span style="background:#1f2937;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">布林中轨 '+bb.middle.toFixed(2)+'</span>'
+        +'<span style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">下轨 '+bb.lower.toFixed(2)+'</span>'
+        +'<span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">上轨 '+bb.upper.toFixed(2)+'</span>'
+      +'</div>':'')
+      // 布林带可视化长条
+      +(bb?'<div style="position:relative;margin-bottom:4px;height:20px;background:linear-gradient(to right,#22c55e 0%,#86efac 25%,#fef08a 50%,#fca5a5 75%,#ef4444 100%);border-radius:6px">'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-4px;width:0;height:0;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid #1f2937;z-index:2"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:0;width:2px;height:20px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-20px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
+      +'</div>':'')
+      // 布林带文字描述
+      +(posStr?'<div style="color:#374151;font-size:10px;margin-bottom:5px">📍 价格位置：'+posStr+'</div>':'')
+      // 指标网格
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:5px">'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">MACD</span><br><span style="font-weight:600">DIF '+ta.macd.dif.toFixed(3)+'<br>DEA '+ta.macd.dea.toFixed(3)+'<br>柱 '+(ta.macd.hist>=0?'+':'')+ta.macd.hist.toFixed(3)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">KDJ</span><br><span style="font-weight:600">K '+ta.kdj.k.toFixed(1)+'<br>D '+ta.kdj.d.toFixed(1)+'<br>J '+ta.kdj.j.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">RSI</span><br><span style="font-weight:600;color:'+(ta.rsi>=70?'#ef4444':ta.rsi<=30?'#22c55e':'#1f2937')+'">RSI(14) '+ta.rsi.toFixed(1)+'<br>RSI(6) '+ta.rsi6.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">量比</span><br><span style="font-weight:600;color:'+(ta.volumeRatio>=1.5?'#ef4444':ta.volumeRatio>=0.8?'#ca8a04':'#6b7280')+'">'+(ta.volumeRatio>0?ta.volumeRatio.toFixed(2)+'x':'-')+'</span></div>'
+      +'</div>'
+      // 综合理由
+      +'<div style="background:#fff;border-radius:4px;padding:5px 6px;margin-bottom:5px">'
+        +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
+        +'<ul style="list-style:none;padding:0;margin:0">'
+          +ta.reasoning.map(function(r){return '<li style="font-size:9px;color:#6b7280;line-height:1.7;padding-left:10px;position:relative">• '+r+'</li>'}).join('')
+        +'</ul>'
+      +'</div>'
+      // 最佳介入价
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">✅ 最佳介入价</span>'
         +'<span style="font-size:15px;font-weight:700;color:#16a34a">'+ta.bestEntryPrice.toFixed(2)+'</span>'
-        +(price>0?'<span style="font-size:10px;color:#6b7280">当前 '+(price!=null?price:'--')+'</span>':'')
+        +'<span style="font-size:10px;color:#6b7280">⬇ 支撑 '+ta.supportLevel.toFixed(2)+' | ⬆ 压力 '+ta.resistanceLevel.toFixed(2)+'</span>'
       +'</div>'
-      +(bb?'<div style="background:#fff;border-radius:4px;padding:4px 6px;margin-top:4px">'
-        +'<div style="font-size:9px;color:#6b7280">布林带 中轨 '+bb.middle.toFixed(2)+' 上轨 '+bb.upper.toFixed(2)+' 下轨 '+bb.lower.toFixed(2)+'</div>'
-        +'<div style="position:relative;margin-top:3px;height:14px;background:linear-gradient(to right,#22c55e,#86efac,#fef08a,#fca5a5,#ef4444);border-radius:4px">'
-          +'<div style="position:absolute;left:'+(price&&bb.upper>bb.lower?((price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-2px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:3px;padding:0 4px;font-size:8px;font-weight:600;white-space:nowrap;z-index:2">¥'+(price||0).toFixed(2)+'</div>'
-        +'</div>'
-      +'</div>':'')
     +'</div>'
-  }else if(rt.price&&rt.yc){
-    // ———— 无技术分析：基于昨收 + 日内区间 ————
-    var cp=rt.price||0, yc=rt.yc||0, low=rt.low||0, high=rt.high||0
-    var vsYc=yc>0?((cp-yc)/yc)*100:0
-    var intraPos=high>low?((cp-low)/(high-low))*100:50
-    var sugg='', suggestTag='gray'
-    if(cp<yc&&intraPos<30){sugg='✅ 分批低吸';suggestTag='green'}
-    else if(cp<yc&&intraPos>=30&&intraPos<60){sugg='⏳ 等企稳';suggestTag='blue'}
-    else if(cp>yc&&vsYc>3){sugg='⚠️ 不追高，等回调';suggestTag='yellow'}
-    else if(cp>yc&&vsYc>0){sugg='✅ 可介入，设止损';suggestTag='green'}
-    else if(Math.abs(vsYc)<=1&&intraPos<40){sugg='✅ 安全边际高';suggestTag='green'}
-    else if(Math.abs(vsYc)<=1){sugg='⏳ 等回调';suggestTag='blue'}
-    else if(cp<yc){sugg='⏳ 等企稳';suggestTag='blue'}
-    else{sugg='⚠️ 等回调';suggestTag='yellow'}
-    var tagColor=suggestTag==='green'?'#16a34a':suggestTag==='yellow'?'#ca8a04':suggestTag==='red'?'#dc2626':suggestTag==='blue'?'#2563eb':'#6b7280'
+  }else if(rt.high!=null&&rt.low!=null&&rt.high>=rt.low&&rt.high>0){
+    // ———— 降级：纯日内位置（无技术分析时） ————
+    var intraPos=((rt.price-rt.low)/(rt.high-rt.low))*100
+    var sugg='', bestPrice='', hangAdvice=''
+    if(intraPos<20){
+      sugg='📊 当前处于日内 <b>低位区</b>（接近最低价）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+rt.price.toFixed(2)+'</span> 现价即可，安全边际高'
+      var hLow=rt.low*0.98; hangAdvice='挂单参考：现价买入，或挂 <span class="num-badge">'+hLow.toFixed(2)+'</span>（低2%）等更低点位'
+    }else if(intraPos<40){
+      var tgt=rt.low+(rt.high-rt.low)*0.3
+      sugg='📊 当前处于日内 <b>中低位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+tgt.toFixed(2)+'</span>（30%回踩位）'
+      hangAdvice='挂单参考：现价介入，或挂单 <span class="num-badge">'+tgt.toFixed(2)+'</span> 等回踩后买入'
+    }else if(intraPos<60){
+      var tgt=rt.low+(rt.high-rt.low)*0.3
+      sugg='📊 当前处于日内 <b>中位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+tgt.toFixed(2)+'</span>（回踩30%分位）'
+      hangAdvice='挂单参考：不建议现价追，挂单 <span class="num-badge">'+tgt.toFixed(2)+'</span> 等待回调介入'
+    }else if(intraPos<80){
+      sugg='📊 当前处于日内 <b>高位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='⚠️ 建议等待回调至中位以下再介入'
+      hangAdvice='挂单参考：若想介入，可挂 <span class="num-badge">'+(rt.low+(rt.high-rt.low)*0.4).toFixed(2)+'</span>（40%分位）轻仓试水'
+    }else{
+      sugg='📊 当前处于日内 <b>极高区</b>（'+intraPos.toFixed(0)+'%分位，接近最高价）'
+      bestPrice='⛔ 不建议追高，等待明日回调后再介入'
+      hangAdvice='挂单参考：今日观望为宜'
+    }
     entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
-      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">📊 当前位置评估（基于昨收+日内区间）</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">'
-        +'<div style="background:#fff;border-radius:4px;padding:4px 6px;text-align:center"><div style="font-size:9px;color:#6b7280">日内情况</div><div style="font-weight:600;font-size:12px;color:#1f2937">'+(cp<yc?'⬇低于昨收':cp>yc?'⬆高于昨收':'⬆围绕昨收')+' '+(intraPos<30?'低位':intraPos<60?'中段':intraPos<80?'高位':'极高')+'</div></div>'
-        +'<div style="background:#fff;border-radius:4px;padding:4px 6px;text-align:center"><div style="font-size:9px;color:#6b7280">建议</div><div style="font-weight:600;font-size:12px;color:'+tagColor+'">'+sugg+'</div></div>'
-      +'</div>'
-      +'<div style="font-size:9px;color:#6b7280;margin-bottom:4px">昨收 '+yc.toFixed(2)+' ｜ 当前 '+(cp||0).toFixed(2)+' ｜ 相对昨收 '+(vsYc>=0?'+':'')+vsYc.toFixed(1)+'%</div>'
-      +(high>low?'<div style="background:#fff;border-radius:4px;padding:4px 6px">'
-        +'<div style="font-size:9px;color:#6b7280">日内区间 低 '+low.toFixed(2)+' 高 '+high.toFixed(2)+'</div>'
-        +'<div style="position:relative;margin-top:3px;height:14px;background:linear-gradient(to right,#22c55e,#eab308,#ef4444);border-radius:4px">'
-          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-2px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:3px;padding:0 4px;font-size:8px;font-weight:600;white-space:nowrap;z-index:2">¥'+(cp||0).toFixed(2)+'</div>'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考</div>'
+      +'<div style="position:relative;margin-bottom:4px">'
+        +'<div style="height:24px;border-radius:6px;background:linear-gradient(to right,#22c55e 0%,#eab308 50%,#ef4444 100%);position:relative;overflow:visible">'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-6px;width:0;height:0;margin-left:-6px;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #1f2937;z-index:2"></div>'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:0;width:2px;height:24px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-22px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
         +'</div>'
-      +'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+        +'<div style="color:#16a34a;font-size:10px;font-weight:500">⬆低 '+rt.low.toFixed(2)+'</div>'
+        +'<div style="color:#dc2626;font-size:10px;font-weight:500">高 '+rt.high.toFixed(2)+' ⬆</div>'
+      +'</div>'
+      +'<div style="color:#374151;font-size:10px">'+sugg+'</div>'
+      +'<div style="color:#15803d;font-size:10px;margin-top:3px">'+bestPrice+'</div>'
+      +'<div style="color:#6b7280;font-size:10px;margin-top:2px">'+hangAdvice+'</div>'
     +'</div>'
   }
 
@@ -920,7 +932,7 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="closeDetail()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="closeDetail()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
   return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
