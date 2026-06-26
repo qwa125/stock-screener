@@ -2548,8 +2548,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const macdR = this.calcCustomMACD(klineV);
         const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
         const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-        const ma5Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
-        const ma10Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
+        const ma5_1dAgo2 = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : 0;
+        const ma5Up = ma5 >= ma5_1dAgo2 * 0.995;
+        const ma10_1dAgo2 = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : 0;
+        const ma10Up = ma10 >= ma10_1dAgo2 * 0.995;
         const ma10Down = closeArr.length > 15
             && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
         let trendState = 1;
@@ -2610,17 +2612,17 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
             suggestion = '不要介入';
         }
+        const ma10_1dAgo = closeArr.length > 11
+            ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
+            : 0;
+        const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
         if (suggestion === '不要介入') {
             const ma10Prev5 = closeArr.length > 15
                 ? (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10)
                 : 0;
-            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10Down=${ma10Down} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
+            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
         }
         if (suggestion === '不要介入' && ma5 < ma10) {
-            const ma10_1dAgo = closeArr.length > 11
-                ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
-                : 0;
-            const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
             const debugVolActive = (volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5)
                 / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6;
             this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
@@ -2791,6 +2793,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             ma5: Math.round(ma5 * 100) / 100,
             ma10: Math.round(ma10 * 100) / 100,
             jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+            _debug: {
+                ma5: Math.round(ma5 * 100) / 100,
+                ma10: Math.round(ma10 * 100) / 100,
+                ma10_1dAgo: Math.round(ma10_1dAgo * 100) / 100,
+                ma5Up,
+                ma10Up,
+                ma10TurnUp,
+                baiBuState: !!baiBuState,
+                price: Math.round(price * 100) / 100,
+                pricePos: Math.round(pricePos),
+                volRatio: Math.round(volRatio * 100) / 100,
+                volActive: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+                chipPattern,
+                chipPeakPosition,
+                chipConcentration90: Math.round(chipConcentration90 * 100) / 100,
+                chipDowngrade: chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30,
+                chipRisk: chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25,
+                sellLocked: !!sellEntry,
+                deepWashoutApplied: suggestion === '轻仓买入',
+                keepAll,
+            },
         };
     }
     async searchStocks(keyword) {
