@@ -3076,6 +3076,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       macdGoldenCross: macdR?.isGoldenCross ?? false,
       macdDeathCross: false,
       baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
+      baiBu: !!(baiXing as any)?.覆盖中?.[engine.length - 1],
+      baiXiao: !!baiXiao,
       volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
     };
 
@@ -3233,6 +3235,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       macdGoldenCross: fullIsGoldenCross,
       macdDeathCross: fullDiffV < fullDeaV,
       baiXiaoDays: (fullBaiXing as any)?.baiXiaoDays ?? 0,
+      baiBu: !!(fullBaiXing as any)?.覆盖中?.[((fullBaiXing as any)?.engine?.length ?? 1) - 1],
+      baiXiao: !!(fullBaiXing as any)?.baiXiao,
       volumeStructure: (fullSanJiao as any)?.volumeStructure ?? 0,
     };
     const crossResult = getTradingSuggestion(crossInput);

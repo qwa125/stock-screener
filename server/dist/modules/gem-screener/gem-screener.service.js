@@ -2591,6 +2591,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             macdGoldenCross: macdR?.isGoldenCross ?? false,
             macdDeathCross: false,
             baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
+            baiBu: !!baiXing?.覆盖中?.[engine.length - 1],
+            baiXiao: !!baiXiao,
             volumeStructure: sanJiao?.volumeStructure ?? 0,
         };
         const isGoldenCross = macdR?.isGoldenCross ?? false;
@@ -2718,6 +2720,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             macdGoldenCross: fullIsGoldenCross,
             macdDeathCross: fullDiffV < fullDeaV,
             baiXiaoDays: fullBaiXing?.baiXiaoDays ?? 0,
+            baiBu: !!fullBaiXing?.覆盖中?.[(fullBaiXing?.engine?.length ?? 1) - 1],
+            baiXiao: !!fullBaiXing?.baiXiao,
             volumeStructure: fullSanJiao?.volumeStructure ?? 0,
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);

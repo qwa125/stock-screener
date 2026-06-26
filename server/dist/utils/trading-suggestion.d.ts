@@ -18,6 +18,8 @@ export interface SuggestionInput {
     safe?: boolean;
     macdGoldenCross?: boolean;
     macdDeathCross?: boolean;
+    baiBu?: boolean;
+    baiXiao?: boolean;
     baiXiaoDays?: number;
     volumeStructure?: number;
 }

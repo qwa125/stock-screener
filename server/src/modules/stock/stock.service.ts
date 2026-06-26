@@ -344,6 +344,8 @@ export class StockService {
       macdGoldenCross: isGoldenCross,
       macdDeathCross: false,
       baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
+      baiBu: !!(formulaResult as any)?.覆盖中?.[((formulaResult as any)?.engine?.length ?? 1) - 1],
+      baiXiao: !!(formulaResult as any)?.baiXiao,
       volumeStructure: (formulaResult as any)?.volumeStructure ?? 0,
     };
     const stockSuggestion = getTradingSuggestion(stockInput);

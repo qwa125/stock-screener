@@ -28,6 +28,9 @@ function getTradingSuggestion(f) {
         (f.baiXiaoDays ?? 0) >= 3 ||
         (!!f.shortBuy && volumeBullish);
     const strongSell = !!f.macdDeathCross || !!f.strongSell;
+    const baiXiao = !!f.baiXiao;
+    const baiBu = !!f.baiBu;
+    const baiXiaoActive = baiXiao && (f.baiXiaoDays ?? 0) >= 1;
     if (zone.includes('低位')) {
         if (longDecline && trend <= 1 && !macdBullish && !volumeBullish) {
             return {
@@ -59,6 +62,14 @@ function getTradingSuggestion(f) {
                 color: 'bg-yellow-500',
                 reason: '低位+趋势拐头，等待信号确认',
                 prediction: '未来1-2日方向待确认，建议持有',
+            };
+        }
+        if (baiXiaoActive) {
+            return {
+                action: '持有',
+                color: 'bg-yellow-500',
+                reason: '低位+白消恢复期，均线修复中',
+                prediction: '未来1-2日白消恢复期有望企稳，建议持有',
             };
         }
         return {
@@ -109,6 +120,14 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日方向待确认，建议持有',
             };
         }
+        if (baiXiaoActive) {
+            return {
+                action: '轻仓买入',
+                color: 'bg-green-500',
+                reason: '中低位+白消恢复期，有望回暖',
+                prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
+            };
+        }
         return {
             action: '持有',
             color: 'bg-yellow-500',
@@ -150,6 +169,14 @@ function getTradingSuggestion(f) {
                     prediction: '未来1-2日可能调整，建议减仓',
                 };
             }
+            if (baiBu) {
+                return {
+                    action: '减仓',
+                    color: 'bg-orange-500',
+                    reason: '中位区上升+白布出现，趋势可能反转',
+                    prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
+                };
+            }
             return {
                 action: '持有',
                 color: 'bg-yellow-500',
@@ -179,6 +206,14 @@ function getTradingSuggestion(f) {
                 color: 'bg-yellow-500',
                 reason: '中位区下降+强信号，暂持',
                 prediction: '未来1-2日信号验证中，建议持有',
+            };
+        }
+        if (baiXiaoActive) {
+            return {
+                action: '轻仓买入',
+                color: 'bg-green-500',
+                reason: '中位区下降+白消恢复期',
+                prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
             };
         }
         return {
@@ -214,6 +249,14 @@ function getTradingSuggestion(f) {
                     prediction: '未来1-2日可能调整，建议减仓',
                 };
             }
+            if (baiBu) {
+                return {
+                    action: '减仓',
+                    color: 'bg-orange-500',
+                    reason: '中高位上升+白布出现，趋势可能反转',
+                    prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
+                };
+            }
             return {
                 action: '持有',
                 color: 'bg-yellow-500',
@@ -243,6 +286,14 @@ function getTradingSuggestion(f) {
                 color: 'bg-red-500',
                 reason: '中高位下降+卖出信号',
                 prediction: '未来1-2日预计继续回落，建议卖出',
+            };
+        }
+        if (baiXiaoActive) {
+            return {
+                action: '轻仓买入',
+                color: 'bg-green-500',
+                reason: '中高位下降+白消恢复期',
+                prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
             };
         }
         return {
@@ -277,11 +328,11 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日有望突破，建议介入',
             };
         }
-        if (strongSell) {
+        if (strongSell || baiBu) {
             return {
                 action: '卖出',
                 color: 'bg-red-500',
-                reason: '高位横盘+卖出信号',
+                reason: strongSell ? '高位横盘+卖出信号' : '高位横盘+白布出现',
                 prediction: '未来1-2日预计回落，建议卖出',
             };
         }

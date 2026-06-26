@@ -284,6 +284,8 @@ let StockService = StockService_1 = class StockService {
             macdGoldenCross: isGoldenCross,
             macdDeathCross: false,
             baiXiaoDays: formulaResult?.baiXiaoDays ?? 0,
+            baiBu: !!formulaResult?.覆盖中?.[(formulaResult?.engine?.length ?? 1) - 1],
+            baiXiao: !!formulaResult?.baiXiao,
             volumeStructure: formulaResult?.volumeStructure ?? 0,
         };
         const stockSuggestion = (0, trading_suggestion_1.getTradingSuggestion)(stockInput);
