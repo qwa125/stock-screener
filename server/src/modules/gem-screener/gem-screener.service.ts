@@ -1632,8 +1632,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 
     if (baiBu && hasStrongSell) return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
     if (baiBu && hasChuHuo) return { suggestion: '卖出', signalComb: '白布+出货' };
-    if (baiBu && (sj.shortSell || lx.shortSell)) return { suggestion: '卖出', signalComb: '白布+紧急清仓' };
-    if (baiBu && (sj.strongSell || lx.strongSell)) return { suggestion: '卖出', signalComb: '白布+空' };
+    if (baiBu && sj.shortSell) return { suggestion: '卖出', signalComb: '白布+紧急清仓' };
+    if (baiBu && sj.strongSell) return { suggestion: '卖出', signalComb: '白布+空' };
     if (!baiBu && hasChuHuo && (baiXiaoStart || baiXiao)) return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
 
     if (priceIncrease > 60) return null;
@@ -2643,11 +2643,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         trendState,
         trendStrength: (baiXing as any)?.trendStrength ?? sanJiao?.trendStrength ?? 0,
         diff, dea,
-        shortBuy: (lingXing as any)?.shortBuy ?? false,
+        shortBuy: (sanJiao as any)?.shortBuy ?? false,
         strictBuy: (sanJiao as any)?.strictBuy ?? false,
         jiaCang: (sanJiao as any)?.jiaCang ?? false,
-        shortSell: (xingX as any)?.shortSell ?? false,
-        strongSell: (xingX as any)?.strongSell ?? false,
+        shortSell: (sanJiao as any)?.shortSell ?? false,
+        strongSell: (sanJiao as any)?.strongSell ?? false,
         safe: (baiXing as any)?.safe ?? false,
         macdGoldenCross: isGoldenCross,
         macdDeathCross: false,
@@ -3071,11 +3071,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       trendStrength: (baiXing as any)?.trendStrength ?? sanJiao?.trendStrength ?? 0,
       diff,
       dea,
-      shortBuy: (lingXing as any)?.shortBuy ?? false,
+      shortBuy: (sanJiao as any)?.shortBuy ?? false,
       strictBuy: (sanJiao as any)?.strictBuy ?? false,
       jiaCang: (sanJiao as any)?.jiaCang ?? false,
-      shortSell: (xingX as any)?.shortSell ?? false,
-      strongSell: (xingX as any)?.strongSell ?? false,
+      shortSell: (sanJiao as any)?.shortSell ?? false,
+      strongSell: (sanJiao as any)?.strongSell ?? false,
       safe: (baiXing as any)?.safe ?? false,
       macdGoldenCross: macdR?.isGoldenCross ?? false,
       macdDeathCross: false,
@@ -3107,7 +3107,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       (lingXing as any)?.zhuShengZhongWeiChuHuo ||
       (lingXing as any)?.zhenShiChuHuo
     );
-    if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (lingXing as any)?.shortSell || (sanJiao as any)?.strongSell || (lingXing as any)?.strongSell)) {
+    if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (sanJiao as any)?.strongSell)) {
       suggestion = '卖出';
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
     }
@@ -3232,11 +3232,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       trendStrength: (fullBaiXing as any)?.trendStrength ?? (fullSanJiao as any)?.trendStrength ?? 0,
       diff: fullDiffV,
       dea: fullDeaV,
-      shortBuy: (fullLingXing as any)?.shortBuy ?? false,
+      shortBuy: (fullSanJiao as any)?.shortBuy ?? false,
       strictBuy: (fullSanJiao as any)?.strictBuy ?? false,
       jiaCang: (fullSanJiao as any)?.jiaCang ?? false,
-      shortSell: (fullXingXing as any)?.shortSell ?? false,
-      strongSell: (fullXingXing as any)?.strongSell ?? false,
+      shortSell: (fullSanJiao as any)?.shortSell ?? false,
+      strongSell: (fullSanJiao as any)?.strongSell ?? false,
       safe: (fullBaiXing as any)?.safe ?? false,
       macdGoldenCross: fullIsGoldenCross,
       macdDeathCross: fullDiffV < fullDeaV,
@@ -3344,7 +3344,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       isGoldenCross,
       diff,
       dea,
-      buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || lingXing?.shortBuy) ? '有信号' : '',
+      buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || sanJiao?.shortBuy) ? '有信号' : '',
       chipConcentration90,
       chipPeakPosition,
       chipPattern,

@@ -1402,9 +1402,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
         if (baiBu && hasChuHuo)
             return { suggestion: '卖出', signalComb: '白布+出货' };
-        if (baiBu && (sj.shortSell || lx.shortSell))
+        if (baiBu && sj.shortSell)
             return { suggestion: '卖出', signalComb: '白布+紧急清仓' };
-        if (baiBu && (sj.strongSell || lx.strongSell))
+        if (baiBu && sj.strongSell)
             return { suggestion: '卖出', signalComb: '白布+空' };
         if (!baiBu && hasChuHuo && (baiXiaoStart || baiXiao))
             return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
@@ -2227,11 +2227,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 trendState,
                 trendStrength: baiXing?.trendStrength ?? sanJiao?.trendStrength ?? 0,
                 diff, dea,
-                shortBuy: lingXing?.shortBuy ?? false,
+                shortBuy: sanJiao?.shortBuy ?? false,
                 strictBuy: sanJiao?.strictBuy ?? false,
                 jiaCang: sanJiao?.jiaCang ?? false,
-                shortSell: xingX?.shortSell ?? false,
-                strongSell: xingX?.strongSell ?? false,
+                shortSell: sanJiao?.shortSell ?? false,
+                strongSell: sanJiao?.strongSell ?? false,
                 safe: baiXing?.safe ?? false,
                 macdGoldenCross: isGoldenCross,
                 macdDeathCross: false,
@@ -2586,11 +2586,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             trendStrength: baiXing?.trendStrength ?? sanJiao?.trendStrength ?? 0,
             diff,
             dea,
-            shortBuy: lingXing?.shortBuy ?? false,
+            shortBuy: sanJiao?.shortBuy ?? false,
             strictBuy: sanJiao?.strictBuy ?? false,
             jiaCang: sanJiao?.jiaCang ?? false,
-            shortSell: xingX?.shortSell ?? false,
-            strongSell: xingX?.strongSell ?? false,
+            shortSell: sanJiao?.shortSell ?? false,
+            strongSell: sanJiao?.strongSell ?? false,
             safe: baiXing?.safe ?? false,
             macdGoldenCross: macdR?.isGoldenCross ?? false,
             macdDeathCross: false,
@@ -2614,7 +2614,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
             lingXing?.zhuShengZhongWeiChuHuo ||
             lingXing?.zhenShiChuHuo);
-        if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || lingXing?.shortSell || sanJiao?.strongSell || lingXing?.strongSell)) {
+        if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
         }
@@ -2716,11 +2716,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             trendStrength: fullBaiXing?.trendStrength ?? fullSanJiao?.trendStrength ?? 0,
             diff: fullDiffV,
             dea: fullDeaV,
-            shortBuy: fullLingXing?.shortBuy ?? false,
+            shortBuy: fullSanJiao?.shortBuy ?? false,
             strictBuy: fullSanJiao?.strictBuy ?? false,
             jiaCang: fullSanJiao?.jiaCang ?? false,
-            shortSell: fullXingXing?.shortSell ?? false,
-            strongSell: fullXingXing?.strongSell ?? false,
+            shortSell: fullSanJiao?.shortSell ?? false,
+            strongSell: fullSanJiao?.strongSell ?? false,
             safe: fullBaiXing?.safe ?? false,
             macdGoldenCross: fullIsGoldenCross,
             macdDeathCross: fullDiffV < fullDeaV,
@@ -2817,7 +2817,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             isGoldenCross,
             diff,
             dea,
-            buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || lingXing?.shortBuy) ? '有信号' : '',
+            buySignal: !!(baiXing?.baiXiao || sanJiao?.jiaCang || sanJiao?.shortBuy) ? '有信号' : '',
             chipConcentration90,
             chipPeakPosition,
             chipPattern,
