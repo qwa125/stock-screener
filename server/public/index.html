@@ -265,29 +265,23 @@ function hideBlocked(){
 console.log('页面初始化完成')
 
 // 立即扫描：先注册设备，再关闭毛玻璃
-async function handleScanClick(){
-  var blur=$('pageBlur')
-  // 毛玻璃可见时：先注册设备再关闭毛玻璃
-  if(blur&&blur.classList.contains('hidden')===false){
-    var registered=localStorage.getItem('deviceRegistered')
-    if(registered!=='1'){
-      try{
-        var regRes=await fetch("/api/device/register",{
-          method:"POST",
-          headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-        })
-        if(regRes.status===429){
-          showBlocked(true);return
-        }
-        localStorage.setItem('deviceRegistered','1')
-      }catch(e){
-        console.warn('设备注册失败:',e)
-      }
-    }
-    hideBlocked()
-    return
+// 毛玻璃按钮：只注册设备 + 关闭遮罩
+async function handleBlurClick(){
+  var registered=localStorage.getItem('deviceRegistered')
+  if(registered!=='1'){
+    try{
+      var regRes=await fetch("/api/device/register",{
+        method:"POST",
+        headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+      })
+      if(regRes.status===429){showBlocked(true);return}
+      localStorage.setItem('deviceRegistered','1')
+    }catch(e){console.warn('设备注册失败:',e)}
   }
-  // 毛玻璃已关闭（主页面）：触发立即扫描
+  hideBlocked()
+}
+// 主页面扫描按钮：立即触发扫描
+function handleScanClick(){
   if(loading||_autoScanning)return
   autoLightScan()
 }
@@ -2279,7 +2273,7 @@ function changeAdminPwd(){
 </script>
 <div class="page-blur" id="pageBlur">
   <div class="blur-btn-wrap">
-    <button class="blur-btn" onclick="handleScanClick()">📊 点击扫描解锁</button>
+    <button class="blur-btn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
