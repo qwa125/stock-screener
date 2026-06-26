@@ -57,6 +57,8 @@ export interface FormulaResult {
     baiXiaoDays: number;
     baiXiaoPureDays?: number;
     baiBu: boolean;
+    baiBuDays?: number;
+    baiCoverTrend?: 'exiting' | 'entering' | 'stable';
     diBuBuy: boolean;
     gaoWeiHuiDiaoBuy: boolean;
     zhuLiShiPan: boolean;

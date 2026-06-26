@@ -7,7 +7,7 @@ import { FormulaEngine } from './formula-engine';
 import { FormulaResult, TrendState } from './types';
 
 export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
-  'diff' | 'dea' | 'lifeLine' | 'pressure' | 'baiXiao' | 'baiXiaoDays' | 'baiBu' |
+  'diff' | 'dea' | 'lifeLine' | 'pressure' | 'baiXiao' | 'baiXiaoDays' | 'baiBu' | 'baiBuDays' | 'baiCoverTrend' |
   'diBuBuy' | 'gaoWeiHuiDiaoBuy' | 'zhuLiShiPan' | 'jiaCang' |
   'gaoKaiDiZouQingCang' | 'baoLiangFuGaiQingCang' | 'po5RiXian' | 'yinDiePoWei' |
   'baiXiaoPureDays' | 'baiXiaoBuy1' | 'baiXiaoBuy2' | 'qiangShiHuiCai' | 'qiangZhiFuGai' | 'xiPanHuoMian' | 'safe' | 'baiBuArray' | 'baiXiaoArray'
@@ -210,6 +210,14 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     // 纯天数：只看 压力<=DIFF，不看强制覆盖
     const 纯状态 = 压力[i] <= DIFF[i];
     白消纯天数[i] = i === 0 ? (纯状态 ? 1 : 0) : (纯状态 ? 白消纯天数[i - 1] + 1 : 0);
+  }
+
+  // ===== 白布天数(连续覆盖中) =====
+  const 白布天数: number[] = [];
+  for (let i = 0; i < engine.length; i++) {
+    白布天数[i] = i === 0
+      ? (覆盖中[i] ? 1 : 0)
+      : (覆盖中[i] ? 白布天数[i - 1] + 1 : 0);
   }
 
   // ===== DIFF止跌 / 前日DIFF下降 / DIFF高于/低于生命线 =====
@@ -464,6 +472,20 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     baiXiaoDays: 白消天数[lastIdx],
     baiXiaoPureDays: 白消纯天数[lastIdx],
     baiBu: 覆盖中[lastIdx],
+    baiBuDays: 白布天数[lastIdx],
+    // XMA平移补偿：检测最近3根K线的覆盖状态变化趋势
+    // 覆盖趋势: [lastIdx-2 → lastIdx-1 → lastIdx] 的变化方向
+    baiCoverTrend: (() => {
+      const a = lastIdx - 2 >= 0 ? 覆盖中[lastIdx - 2] : 覆盖中[lastIdx];
+      const b = 覆盖中[lastIdx - 1];
+      const c = 覆盖中[lastIdx];
+      // ↓(出白布): [true,false,false] 或 [true,true,false] → 白消恢复期
+      if (a && !c) return 'exiting';
+      // ↑(进白布): [false,true,true] 或 [false,false,true] → 白布出现期
+      if (!a && c) return 'entering';
+      // 稳定
+      return 'stable';
+    })(),
     diBuBuy: 底部买点[lastIdx],
     gaoWeiHuiDiaoBuy: 高位回调买点[lastIdx],
     zhuLiShiPan: 主力试盘[lastIdx],

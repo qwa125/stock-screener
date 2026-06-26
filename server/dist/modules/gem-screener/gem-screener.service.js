@@ -2236,6 +2236,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 macdGoldenCross: isGoldenCross,
                 macdDeathCross: false,
                 baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
+                baiBu: !!baiXing?.覆盖中?.[engine.length - 1],
+                baiBuDays: baiXing?.baiBuDays ?? 0,
+                baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
+                baiXiao: !!baiXing?.baiXiao,
                 volumeStructure: sanJiao?.volumeStructure ?? 0,
             };
             const cfsResult = (0, trading_suggestion_1.getTradingSuggestion)(cfsInput);
@@ -2592,6 +2596,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             macdDeathCross: false,
             baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
             baiBu: !!baiXing?.覆盖中?.[engine.length - 1],
+            baiBuDays: baiXing?.baiBuDays ?? 0,
+            baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
             baiXiao: !!baiXiao,
             volumeStructure: sanJiao?.volumeStructure ?? 0,
         };
@@ -2721,6 +2727,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             macdDeathCross: fullDiffV < fullDeaV,
             baiXiaoDays: fullBaiXing?.baiXiaoDays ?? 0,
             baiBu: !!fullBaiXing?.覆盖中?.[(fullBaiXing?.engine?.length ?? 1) - 1],
+            baiBuDays: fullBaiXing?.baiBuDays ?? 0,
+            baiCoverTrend: fullBaiXing?.baiCoverTrend ?? 'stable',
             baiXiao: !!fullBaiXing?.baiXiao,
             volumeStructure: fullSanJiao?.volumeStructure ?? 0,
         };

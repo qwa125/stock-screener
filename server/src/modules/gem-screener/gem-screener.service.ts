@@ -2652,6 +2652,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         macdGoldenCross: isGoldenCross,
         macdDeathCross: false,
         baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
+        baiBu: !!(baiXing as any)?.覆盖中?.[engine.length - 1],
+        baiBuDays: (baiXing as any)?.baiBuDays ?? 0,
+        baiCoverTrend: (baiXing as any)?.baiCoverTrend ?? 'stable',
+        baiXiao: !!(baiXing as any)?.baiXiao,
         volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
       };
       const cfsResult = getTradingSuggestion(cfsInput);
@@ -3077,6 +3081,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       macdDeathCross: false,
       baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
       baiBu: !!(baiXing as any)?.覆盖中?.[engine.length - 1],
+      baiBuDays: (baiXing as any)?.baiBuDays ?? 0,
+      baiCoverTrend: (baiXing as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!baiXiao,
       volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
     };
@@ -3236,6 +3242,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       macdDeathCross: fullDiffV < fullDeaV,
       baiXiaoDays: (fullBaiXing as any)?.baiXiaoDays ?? 0,
       baiBu: !!(fullBaiXing as any)?.覆盖中?.[((fullBaiXing as any)?.engine?.length ?? 1) - 1],
+      baiBuDays: (fullBaiXing as any)?.baiBuDays ?? 0,
+      baiCoverTrend: (fullBaiXing as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!(fullBaiXing as any)?.baiXiao,
       volumeStructure: (fullSanJiao as any)?.volumeStructure ?? 0,
     };

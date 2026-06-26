@@ -41,6 +41,8 @@ export interface SuggestionInput {
   baiBu?: boolean;
   baiXiao?: boolean;
   baiXiaoDays?: number;
+  baiBuDays?: number;
+  baiCoverTrend?: 'exiting' | 'entering' | 'stable';
   volumeStructure?: number;
 }
 
@@ -66,6 +68,10 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
   const baiXiao = !!f.baiXiao;
   const baiBu = !!f.baiBu;
   const baiXiaoActive = baiXiao && (f.baiXiaoDays ?? 0) >= 1;
+  // XMA平移补偿：检测最近3根K线的覆盖状态变化趋势
+  const baiCoverTrend = f.baiCoverTrend ?? 'stable';
+  const baiXiaoFresh = baiXiao && baiCoverTrend === 'exiting';   // 刚出白布(白消恢复期)
+  const baiBuFresh = baiBu && baiCoverTrend === 'entering';      // 刚进白布(白布出现期)
 
   // ─── 1) 低位区 (<25%) ───
   // 用户核心需求：ma5刚拐头(trend>=1) + 强信号 = 重仓买入
@@ -103,6 +109,14 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
       };
     }
     // trend === 0 — 下降趋势不产生任何买入信号
+    if (baiXiaoFresh) {
+      return {
+        action: '轻仓买入',
+        color: 'bg-green-500',
+        reason: '低位+刚出白布恢复期', 
+        prediction: '未来1-2日刚出白布恢复期有望反弹，建议轻仓买入',
+      };
+    }
     if (baiXiaoActive) {
       return {
         action: '持有',
@@ -161,6 +175,14 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日方向待确认，建议持有',
       };
     }
+    if (baiXiaoFresh) {
+      return {
+        action: '买入',
+        color: 'bg-green-600',
+        reason: '中低位+刚出白布恢复期，有望回暖',
+        prediction: '未来1-2日刚出白布恢复期有望反弹，建议买入',
+      };
+    }
     if (baiXiaoActive) {
       return {
         action: '轻仓买入',
@@ -212,7 +234,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
           prediction: '未来1-2日可能调整，建议减仓',
         };
       }
-      if (baiBu) {
+      if (baiBuFresh) {
         return {
           action: '减仓',
           color: 'bg-orange-500',
@@ -295,7 +317,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
           prediction: '未来1-2日可能调整，建议减仓',
         };
       }
-      if (baiBu) {
+      if (baiBuFresh) {
         return {
           action: '减仓',
           color: 'bg-orange-500',
@@ -377,7 +399,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日有望突破，建议介入',
       };
     }
-    if (strongSell || baiBu) {
+    if (strongSell || baiBuFresh) {
       return {
         action: '卖出',
         color: 'bg-red-500',

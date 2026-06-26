@@ -163,6 +163,12 @@ function calcBaiXing(engine) {
         const 纯状态 = 压力[i] <= DIFF[i];
         白消纯天数[i] = i === 0 ? (纯状态 ? 1 : 0) : (纯状态 ? 白消纯天数[i - 1] + 1 : 0);
     }
+    const 白布天数 = [];
+    for (let i = 0; i < engine.length; i++) {
+        白布天数[i] = i === 0
+            ? (覆盖中[i] ? 1 : 0)
+            : (覆盖中[i] ? 白布天数[i - 1] + 1 : 0);
+    }
     const DIFF止跌 = [];
     const 前日DIFF下降 = [];
     const DIFF低于生命线 = [];
@@ -351,6 +357,17 @@ function calcBaiXing(engine) {
         baiXiaoDays: 白消天数[lastIdx],
         baiXiaoPureDays: 白消纯天数[lastIdx],
         baiBu: 覆盖中[lastIdx],
+        baiBuDays: 白布天数[lastIdx],
+        baiCoverTrend: (() => {
+            const a = lastIdx - 2 >= 0 ? 覆盖中[lastIdx - 2] : 覆盖中[lastIdx];
+            const b = 覆盖中[lastIdx - 1];
+            const c = 覆盖中[lastIdx];
+            if (a && !c)
+                return 'exiting';
+            if (!a && c)
+                return 'entering';
+            return 'stable';
+        })(),
         diBuBuy: 底部买点[lastIdx],
         gaoWeiHuiDiaoBuy: 高位回调买点[lastIdx],
         zhuLiShiPan: 主力试盘[lastIdx],

@@ -345,6 +345,8 @@ export class StockService {
       macdDeathCross: false,
       baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
       baiBu: !!(formulaResult as any)?.覆盖中?.[((formulaResult as any)?.engine?.length ?? 1) - 1],
+      baiBuDays: (formulaResult as any)?.baiBuDays ?? 0,
+      baiCoverTrend: (formulaResult as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!(formulaResult as any)?.baiXiao,
       volumeStructure: (formulaResult as any)?.volumeStructure ?? 0,
     };

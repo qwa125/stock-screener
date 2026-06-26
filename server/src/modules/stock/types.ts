@@ -102,6 +102,10 @@ export interface FormulaResult {
   baiXiaoPureDays?: number;
   /** 是否白布状态（压力>DIFF或强制覆盖） */
   baiBu: boolean;
+  /** 白布连续天数 */
+  baiBuDays?: number;
+  /** 白布/白消覆盖状态变化趋势：exiting(刚出白布), entering(刚进白布), stable(稳定) */
+  baiCoverTrend?: 'exiting' | 'entering' | 'stable';
   /** 底部买点 */
   diBuBuy: boolean;
   /** 高位回调买点 */

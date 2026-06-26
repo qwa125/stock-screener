@@ -285,6 +285,8 @@ let StockService = StockService_1 = class StockService {
             macdDeathCross: false,
             baiXiaoDays: formulaResult?.baiXiaoDays ?? 0,
             baiBu: !!formulaResult?.覆盖中?.[(formulaResult?.engine?.length ?? 1) - 1],
+            baiBuDays: formulaResult?.baiBuDays ?? 0,
+            baiCoverTrend: formulaResult?.baiCoverTrend ?? 'stable',
             baiXiao: !!formulaResult?.baiXiao,
             volumeStructure: formulaResult?.volumeStructure ?? 0,
         };

@@ -21,6 +21,8 @@ export interface SuggestionInput {
     baiBu?: boolean;
     baiXiao?: boolean;
     baiXiaoDays?: number;
+    baiBuDays?: number;
+    baiCoverTrend?: 'exiting' | 'entering' | 'stable';
     volumeStructure?: number;
 }
 export declare function getTradingSuggestion(f: SuggestionInput): SuggestionResult;
