@@ -37,10 +37,12 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
         ]);
         if (skip)
             return true;
+        const adminToken = request.headers['x-admin-token'];
+        const isAdminToken = typeof adminToken === 'string' && adminToken === (process.env.ADMIN_TOKEN || 'admin2025');
         const deviceId = request.headers['x-device-id'];
         if (deviceId && typeof deviceId === 'string') {
             try {
-                await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+                await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown', isAdminToken);
             }
             catch (e) {
                 this.logger.warn(`设备注册失败: ${e.message}`);
@@ -65,7 +67,7 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
             return true;
         }
         if (deviceId) {
-            const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+            const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown', isAdminToken);
             if (!result.allowed) {
                 throw new common_1.HttpException({ code: 429, msg: result.message, data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
             }

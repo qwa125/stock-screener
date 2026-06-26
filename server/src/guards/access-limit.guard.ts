@@ -38,11 +38,14 @@ export class AccessLimitGuard implements CanActivate {
 
     // ══════════════════════════════════
     // 无论是否命中限制，先注册设备（让所有请求都能记录设备）
+    // 管理员令牌 ≈ 全量豁免
     // ══════════════════════════════════
+    const adminToken = request.headers['x-admin-token'];
+    const isAdminToken = typeof adminToken === 'string' && adminToken === (process.env.ADMIN_TOKEN || 'admin2025');
     const deviceId = request.headers['x-device-id'];
     if (deviceId && typeof deviceId === 'string') {
       try {
-        await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+        await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown', isAdminToken);
       } catch (e) {
         this.logger.warn(`设备注册失败: ${(e as Error).message}`);
       }
@@ -82,7 +85,7 @@ export class AccessLimitGuard implements CanActivate {
     // 无 token → 按设备限制检查（兜底）
     // ══════════════════════════════════
     if (deviceId) {
-      const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown');
+      const result = await this.deviceRegistry.touchDevice(deviceId, request.headers['user-agent'] || 'unknown', isAdminToken);
       if (!result.allowed) {
         throw new HttpException(
           { code: 429, msg: result.message, data: null },
