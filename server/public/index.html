@@ -264,21 +264,18 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 立即扫描：先注册设备，再关闭毛玻璃
-// 毛玻璃按钮：只注册设备 + 关闭遮罩
-async function handleBlurClick(){
-  var registered=localStorage.getItem('deviceRegistered')
-  if(registered!=='1'){
-    try{
-      var regRes=await fetch("/api/device/register",{
-        method:"POST",
-        headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-      })
-      if(regRes.status===429){showBlocked(true);return}
-      localStorage.setItem('deviceRegistered','1')
-    }catch(e){console.warn('设备注册失败:',e)}
-  }
+// 毛玻璃按钮：一键隐退，注册在后台静默执行
+function handleBlurClick(){
   hideBlocked()
+  if(localStorage.getItem('deviceRegistered')!=='1'){
+    fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    }).then(function(r){
+      if(r.status!==429)localStorage.setItem('deviceRegistered','1')
+      else showBlocked(true)
+    }).catch(function(e){console.warn('设备注册失败:',e)})
+  }
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
