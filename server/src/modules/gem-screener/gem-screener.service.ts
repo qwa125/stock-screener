@@ -3112,24 +3112,34 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         : 0;
       this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10Down=${ma10Down} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
     }
-    if (suggestion === '不要介入' && ma5 < ma10 && !ma10Down && baiBuState && price > ma5) {
-      const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
-      const avgVol20 = volumeArr.length >= 20
-        ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
-        : avgVol5;
-      const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
-      this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10Down=${ma10Down} baiBu=${baiBuState} price>ma5=${price > ma5} volActive=${volActive} >12=${volActive > 12}`);
-      if (volActive > 12) {
-        suggestion = '轻仓买入';
-        this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
-        // 深度洗盘反转信号：解除之前的卖出锁定
-        if (this.sellStateCache.has(code)) {
-          this.sellStateCache.delete(code);
-          this.logger.log(`🔓 [深度洗盘] ${name}(${code}) 洗盘结束信号，解除卖出锁定`);
+    if (suggestion === '不要介入' && ma5 < ma10) {
+      // MA10短期趋势：对比前一日（而不是5日前，下跌趋势中5日前肯定往下）
+      const ma10_1dAgo = closeArr.length > 11
+        ? closeArr.slice(-11, -1).reduce((a: number, b: number) => a + b, 0) / 10
+        : 0;
+      const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+      const debugVolActive = (volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5)
+        / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20 : 1) || 1) * 6;
+      this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
+      if (ma10TurnUp && baiBuState && price > ma5) {
+        const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
+        const avgVol20 = volumeArr.length >= 20
+          ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
+          : avgVol5;
+        const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+        this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: volActive=${volActive} >12=${volActive > 12}`);
+        if (volActive > 12) {
+          suggestion = '轻仓买入';
+          this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
+          // 深度洗盘反转信号：解除之前的卖出锁定
+          if (this.sellStateCache.has(code)) {
+            this.sellStateCache.delete(code);
+            this.logger.log(`🔓 [深度洗盘] ${name}(${code}) 洗盘结束信号，解除卖出锁定`);
+          }
+        } else {
+          suggestion = '持有';
+          this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=12, 只能设为持有`);
         }
-      } else {
-        suggestion = '持有';
-        this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=12, 只能设为持有`);
       }
     }
 
