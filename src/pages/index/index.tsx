@@ -285,7 +285,7 @@ export default function Index() {
       const nowMin = bjMinutes()
       const diffMs = (next - nowMin) * 60 * 1000
       const delay = Math.min(diffMs, 5 * 60 * 1000)
-      scanTimerR.current = window.setTimeout(async () => {
+      scanTimerR.current = setTimeout(async () => {
         // 到达扫描窗口则执行扫描
         if (isInScanWindow() && !frozenR.current) {
           setStatus('🔄 定时扫描开始...')
