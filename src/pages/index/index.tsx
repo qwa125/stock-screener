@@ -11,7 +11,7 @@ import './index.css'
 
 const ACTION_BADGE_COLOR: Record<string, string> = {
   '重仓买入': '#dc2626', '买入🏆': '#16a34a', '买入': '#2563eb',
-  '轻仓买入': '#ca8a04', '观望': '#6b7280',
+  '轻仓买入': '#ca8a04', '持有': '#6b7280',
 }
 const ACTION_ORDER = ['重仓买入', '买入🏆', '买入', '轻仓买入']
 function getActionPriority(a: string): number { const i = ACTION_ORDER.indexOf(a); return i >= 0 ? i : 999 }
@@ -101,20 +101,114 @@ export default function Index() {
         const rs = await Promise.all(wq.slice(i, i+30).map(async (s) => {
           try {
             const kl = await fetchKlines(s.c, 20); if (kl.length < 20) return null
-            const c = kl.map(x => x.c); const ma5 = c.slice(-5).reduce((a,b)=>a+b,0)/5
-            const ma10 = c.slice(-10).reduce((a,b)=>a+b,0)/10; const lc = c[c.length-1]
+            const c = kl.map(x => x.c), v = kl.map(x => x.v), o = kl.map(x => x.o)
+            const lc = c[c.length-1]
             const lo = Math.min(...c), hi = Math.max(...c)
             const pp = ((lc-lo)/(hi-lo||1))*100
-            const trend = ma5 > ma10 ? (ma5 > ma10*1.05 ? 2 : 1) : (ma5 < ma10*0.95 ? -1 : 0)
-            const sb = c.slice(-3).every((p,j) => p > kl[kl.length-3+j].o)
-            const jc = kl.slice(-2).every((x,j) => { const pc = j===0 ? c[c.length-3] : c[c.length-2]; return x.h > Math.max(x.o,pc) && x.c > x.o })
-            const strict = sb && kl[kl.length-1].v > kl[kl.length-2].v
-            const hs = sb || strict || jc
+
+            // 均线
+            const ma5 = c.slice(-5).reduce((a,b)=>a+b,0)/5
+            const ma10 = c.slice(-10).reduce((a,b)=>a+b,0)/10
+            const ma20 = c.length >= 20 ? c.slice(-20).reduce((a,b)=>a+b,0)/20 : ma10
+
+            // 趋势状态 0-3（与后端一致）
+            const ma5Up = c[c.length-1] > c[c.length-6]
+            const ma10_1dAgo = c.length > 11 ? c.slice(-11,-1).reduce((a,b)=>a+b,0)/10 : 0
+            const ma10Up = ma10 >= ma10_1dAgo * 0.995
+            let trend = 1
+            if (ma5 > ma10 && ma5Up && ma10Up) trend = 3
+            else if (ma5 > ma10 && ma10Up) trend = 2
+            else if (ma5 > ma10 && ma5Up) trend = 2
+            else if (ma5 < ma10 && ma10 < ma20) trend = 0
+            else if (ma5 < ma10) trend = 0
+
+            // DIFF/DEA（EMA12-EMA26）
+            const ema12 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
+            const ema26 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
+            const diff = ema12 - ema26
+            // DEA近似计算
+            let deaAcc = 0
+            for (let idx = 0; idx < c.length; idx++) {
+              const e12 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
+              const e26 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
+              const curDiff = e12 - e26
+              deaAcc = idx === 0 ? curDiff : deaAcc + (curDiff - deaAcc) * 2 / 9
+            }
+            const macdBullish = diff > deaAcc
+            const macdGoldenCross = macdBullish && diff > 0
+
+            // 成交量结构
+            const avgVol5 = v.slice(-5).reduce((a,b)=>a+b,0)/5
+            const avgVol20 = v.length >= 20 ? v.slice(-20).reduce((a,b)=>a+b,0)/20 : avgVol5
+            const volRatio = avgVol5 / (avgVol20 || 1)
+            const volActive = Math.min(Math.max(volRatio, 0) * 6, 20)
+
+            // 买入信号
+            const sb = c.slice(-3).every((p,j) => p > o[o.length - 3 + j])
+            const jcFlag = kl.slice(-2).every((x,j) => {
+              const pc = j===0 ? c[c.length-3] : c[c.length-2]
+              return x.h > Math.max(x.o, pc) && x.c > x.o
+            })
+            const strict = sb && v[v.length-1] > v[v.length-2]
+            const shortBuy = sb || strict || jcFlag
+            const strictBuy = strict
+            const hasBuySignal = shortBuy || strictBuy || macdBullish
+
+            // MA10下跌趋势判断
+            const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995
+
+            // 深度洗盘
+            const deepWashout = ma5 < ma10 && ma10TurnUp && lc > ma5 && volActive > 7
+
+            // ─── port getTradingSuggestion ───
+            const volumeBullish = volRatio > 1.2
+            const strongBuy = (macdGoldenCross && volumeBullish) || (shortBuy && volumeBullish)
+
             let sug = '观望'
-            if (pp < 25 && trend >= 1 && strict) sug = '重仓买入'
-            else if (pp < 45 && trend >= 1 && hs) sug = '买入🏆'
-            else if (pp < 25 && trend >= 1 && hs) sug = '买入'
-            else if (pp >= 45 && pp <= 55 && trend >= 2 && hs) sug = '轻仓买入'
+            // 低位区 <25%
+            if (pp < 25) {
+              if (trend >= 1 && strongBuy) sug = '重仓买入'
+              else if (trend >= 1 && hasBuySignal) sug = '买入'
+              else if (trend >= 1) sug = '持有'
+              else sug = '观望'
+            }
+            // 中低位区 25-45%
+            else if (pp < 45) {
+              if (trend >= 2 && strongBuy) sug = '买入'
+              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
+              else if (trend >= 1 && strongBuy) sug = '买入'
+              else if (trend >= 1 && hasBuySignal) sug = '轻仓买入'
+              else if (trend >= 2) sug = '持有'
+              else sug = '观望'
+            }
+            // 中位区 45-55%
+            else if (pp < 55) {
+              if (trend >= 2 && strongBuy) sug = '买入'
+              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
+              else if (trend >= 2) sug = '持有'
+              else if (trend === 1 && (strongBuy || hasBuySignal)) sug = '持有'
+              else sug = '观望'
+            }
+            // 中高位区 55-75%
+            else if (pp < 75) {
+              if (trend >= 2 && strongBuy) sug = '轻仓买入'
+              else if (trend >= 2) sug = '持有'
+              else if (trend === 1 && strongBuy) sug = '持有'
+              else sug = '观望'
+            }
+            // 高位区 >=75%
+            else {
+              if (trend >= 2 && strongBuy) sug = '轻仓买入'
+              else if (trend >= 2) sug = '持有'
+              else if (trend === 1 && strongBuy) sug = '持有'
+              else sug = '观望'
+            }
+
+            // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 → 轻仓买入
+            if ((sug === '观望' || sug === '持有') && deepWashout) {
+              sug = '轻仓买入'
+            }
+
             return {c:s.c, n:s.n, p:s.p||0, cp:s.cp||0, curP:qm[s.c]?.p||s.p||0, sug, pp, trend, ma5, ma10}
           } catch(e) { return null }
         }))
