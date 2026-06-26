@@ -204,9 +204,19 @@ export default function Index() {
               else sug = '观望'
             }
 
-            // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 → 轻仓买入
+            //             // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 -> 轻仓买入
             if ((sug === '观望' || sug === '持有') && deepWashout) {
               sug = '轻仓买入'
+            }
+
+            // 涨跌幅升级: 后端判断为 重仓买入/买入/轻仓买入/持有 时, 根据实际涨跌幅可升级
+            if (['观望', '持有', '轻仓买入', '买入'].indexOf(sug) >= 0) {
+              const cpVal = qm[s.c]?.cp ?? s.cp ?? 0
+              if (sug === '持有' && cpVal >= 5) sug = '买入'
+              else if (sug === '持有' && cpVal >= 3) sug = '轻仓买入'
+              else if (sug === '轻仓买入' && cpVal >= 7) sug = '重仓买入'
+              else if (sug === '轻仓买入' && cpVal >= 4) sug = '买入'
+              else if (sug === '买入' && cpVal >= 5) sug = '重仓买入'
             }
 
             return {c:s.c, n:s.n, p:s.p||0, cp:s.cp||0, curP:qm[s.c]?.p||s.p||0, sug, pp, trend, ma5, ma10}
