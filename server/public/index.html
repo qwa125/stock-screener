@@ -1,4 +1,4 @@
-<!-- Core v20250626-fix6 -->
+<!-- Core v20250626-fix7 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -725,10 +725,11 @@ function showDetail(i){
   if(!rt.high&&!rt.low&&s.code){
     fetchRealtime([s.code]).then(function(fr){
       var nr=fr&&fr[s.code]
+      console.log('[detail] 异步补拉实时行情:', s.code, nr)
       if(nr&&nr.high&&nr.low){
         da.innerHTML=buildDetail(s,nr)
       }
-    }).catch(function(){})
+    }).catch(function(){console.warn('[detail] 补拉实时行情失败:', s.code)})
   }
   renderList()
   // ★ 异步拉取技术指标分析（MACD/KDJ/布林带/RSI/量比→最佳介入价）
@@ -737,7 +738,9 @@ function showDetail(i){
       var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
       var tj=await tr.json()
       if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
-        da.innerHTML=buildDetail(s,rt,tj.data)
+        // 用最新的实时行情替换闭包中的旧 rt（防止 rt.price 未就绪导致下方 .toFixed 崩溃）
+        var frRt=realtimePrices[s.code]||rt||{}
+        da.innerHTML=buildDetail(s,frRt,tj.data)
       }
     }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
   })()
@@ -884,7 +887,7 @@ function buildDetail(s,rt,ta){
         // Trend from TA
         +(ta.macd&&ta.macd.hist!==undefined?(ta.macd.hist>0&&ta.kdj.j>50?'<div style="font-size:10px;color:#16a34a;margin-bottom:2px">📈 趋势：上涨中</div>':ta.macd.hist<0&&ta.kdj.j<30?'<div style="font-size:10px;color:#dc2626;margin-bottom:2px">📉 趋势：下跌中</div>':'<div style="font-size:10px;color:#6b7280;margin-bottom:2px">📊 趋势：震荡整理</div>'):'')
         // Support/Resistance reference
-        +'<div style="font-size:10px;color:#6b7280;margin-bottom:3px">支撑 '+ta.supportLevel.toFixed(2)+' | 阻力 '+ta.resistanceLevel.toFixed(2)+' | 当前 '+(rt.price||'').toFixed(2)+'</div>'
+        +'<div style="font-size:10px;color:#6b7280;margin-bottom:3px">支撑 '+ta.supportLevel.toFixed(2)+' | 阻力 '+ta.resistanceLevel.toFixed(2)+' | 当前 '+((rt.price!=null?rt.price:'--'))+'</div>'
         // Dynamic action advice
         +(function(){
           var cp=rt.price||0, sup=ta.supportLevel||0, res=ta.resistanceLevel||0, dip=ta.bestEntryPrice||0
