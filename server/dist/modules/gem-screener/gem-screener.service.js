@@ -2626,14 +2626,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const debugVolActive = (volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5)
                 / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6;
             this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
-            if (ma10TurnUp && baiBuState && price > ma5) {
+            if (ma10TurnUp && price > ma5) {
                 const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
                 const avgVol20 = volumeArr.length >= 20
                     ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
                     : avgVol5;
                 const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
-                this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: volActive=${volActive} >12=${volActive > 12}`);
-                if (volActive > 12) {
+                this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: volActive=${volActive} >7=${volActive > 7}`);
+                if (volActive > 7) {
                     suggestion = '轻仓买入';
                     this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
                     if (this.sellStateCache.has(code)) {
@@ -2643,7 +2643,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
                 else {
                     suggestion = '持有';
-                    this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=12, 只能设为持有`);
+                    this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=7, 只能设为持有`);
                 }
             }
         }
