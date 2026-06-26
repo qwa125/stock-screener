@@ -3094,13 +3094,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const reasonText = result.reason || '';
 
     // ─── 白布卖出信号检测（覆盖getTradingSuggestion，与determineBySignalRule一致）───
-    const baiBuIdx = engine.length - 1;
-    const baiBuState = !!(baiXing as any)?.覆盖中?.[baiBuIdx];
+    // [!] 注意：calcBaiXing返回对象使用拼音key(baiBu/gaoKaiDiZouQingCang)，不是中文
+    const baiBuState = !!(baiXing as any)?.baiBu;
     const hasStrongSell = !!(
-      (baiXing as any)?.高开低走清仓?.[baiBuIdx] ||
-      (baiXing as any)?.爆量覆盖清仓?.[baiBuIdx] ||
-      (baiXing as any)?.白布破5日线?.[baiBuIdx] ||
-      (baiXing as any)?.阴跌破位?.[baiBuIdx]
+      (baiXing as any)?.gaoKaiDiZouQingCang ||
+      (baiXing as any)?.baoLiangFuGaiQingCang ||
+      (baiXing as any)?.po5RiXian ||
+      (baiXing as any)?.yinDiePoWei
     );
     const hasChuHuo = !!(
       (sanJiao as any)?.zhuLiChuHuo ||
