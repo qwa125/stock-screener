@@ -198,6 +198,7 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
+var searchStockCode=null,searchStockObj=null // 搜索股票的详情跟踪（用于2s刷新）
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
 var FROZEN_KEY='frozenSnapshot'
 function saveFrozenSnapshot(arr){
@@ -1008,7 +1009,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;currentTaData=null;$('detailArea').style.display='none'
+    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none'
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1403,7 +1404,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;$('detailArea').style.display='none'
+    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -1646,7 +1647,7 @@ async function doSearch(){
   var isUS=/[a-zA-Z]/.test(v)&&!/^\d/.test(v)&&!/^1a/i.test(v)
 
 
-  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
+  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockYc=0,stockMarket=''
   
   // 第一步：确定代码和真实名称（多市场验证）
   if(isCode||isHK||isUS){
@@ -1662,7 +1663,7 @@ async function doSearch(){
     }else if(isUS){
       t=await fetchSinaUS(v)
     }
-    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
+    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockYc=t.yc;stockMarket=t.market}
     else{
       da.style.display='block';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
       return
@@ -1682,7 +1683,7 @@ async function doSearch(){
         stockName=hit.Name||hit.Code
         // 查Tencent行情拿实时价
         var t=await fetchTencentDetail(stockCode)
-        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
+        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockYc=t.yc;stockMarket=t.market}
         $('searchInput').value=stockName
       }
     }catch(e){}
@@ -1839,11 +1840,28 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        var _dbg=(o&&o._debug)||{};da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
+        var _dbg=(o&&o._debug)||{};da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
 ma5Up='+_dbg.ma5Up+' ma10Up='+_dbg.ma10Up+' ma10TurnUp='+_dbg.ma10TurnUp+' baiBu='+_dbg.baiBuState+' baiXiao='+_dbg.baiXiao+'<br>\
 ma10_1dAgo='+_dbg.ma10_1dAgo+' pricePos='+_dbg.pricePos+' volRatio='+(_dbg.volRatio||'').toFixed(2)+' deepWash='+_dbg.deepWashoutApplied+'<br>\
 ma10Down='+_dbg.ma10Down+' trendState='+_dbg.trendState+' price>ma5='+_dbg.priceAboveMa5+' volActive='+(_dbg.volActive||'')+' qiangZhiFuGai='+_dbg.qiangZhiFuGai+'<br>\
 chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' keepAll='+_dbg.keepAll+'</div>':'')
+      // 异步拉取TA数据升级介入建议
+      ;(async function(){
+        try{
+          var tar=await fetch('/api/gem/technical-analysis?code='+o.code+'&_='+Date.now())
+          var taj=await tar.json()
+          if(taj.code===200&&taj.data&&taj.data.entryScore!=null){
+            currentTaData=taj.data
+            var tarN=da.querySelector('.detail-entry-section')
+            if(tarN){
+              var nrt2={price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc}
+              tarN.outerHTML=buildEntrySection(o,nrt2,taj.data)
+            }
+          }
+        }catch(e){console.warn('[search ta] TA升级失败:',e.message)}
+      })()
+      // 记录搜索股票信息供2s刷新
+      searchStockObj=o;searchStockCode=o.code
       }else{
         throw new Error('分析无结果')
       }
@@ -1867,7 +1885,23 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})
+          // 异步拉取TA数据升级介入建议
+          ;(async function(){
+            try{
+              var tar=await fetch('/api/gem/technical-analysis?code='+o2.code+'&_='+Date.now())
+              var taj=await tar.json()
+              if(taj.code===200&&taj.data&&taj.data.entryScore!=null){
+                currentTaData=taj.data
+                var tarN=da.querySelector('.detail-entry-section')
+                if(tarN){
+                  var nrt2={price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc}
+                  tarN.outerHTML=buildEntrySection(o2,nrt2,taj.data)
+                }
+              }
+            }catch(e){console.warn('[search ta] TA升级失败:',e.message)}
+          })()
+          searchStockObj=o2;searchStockCode=o2.code
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
             +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
@@ -2127,6 +2161,23 @@ function startPriceRefresh(stks){
                 if(newEntry) es.outerHTML=newEntry
               }
             }
+          }
+          // 搜索详情的2s刷新
+          if(searchStockCode&&searchStockObj){
+            fetchRealtime([searchStockCode]).then(function(fr){
+              var frt=fr&&fr[searchStockCode]
+              if(frt&&frt.price>0){
+                realtimePrices[searchStockCode]=frt
+                var sda=$('detailArea')
+                if(sda&&sda.style.display!=='none'){
+                  var ses=sda.querySelector('.detail-entry-section')
+                  if(ses){
+                    var sNew=buildEntrySection(searchStockObj,frt,currentTaData)
+                    if(sNew) ses.outerHTML=sNew
+                  }
+                }
+              }
+            }).catch(function(){})
           }
         }).catch(function(){})
       }
