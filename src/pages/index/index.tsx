@@ -143,8 +143,8 @@ export default function Index() {
   const [prices, setPrices] = useState<Record<string, { price: number; cp: number }>>({})
   const [frozen, setFrozen] = useState(false)
   const frozenR = useRef(false)
-  const scanTimerR = useRef<number | null>(null)
-  const priceTimerR = useRef<number | null>(null)
+  const scanTimerR = useRef<any>(null)
+  const priceTimerR = useRef<any>(null)
   const oppCodesR = useRef<string[]>([])
 
   /** 核心扫描：拉取数据 → 发送后端缓存 → 读取机会区 */
@@ -230,6 +230,41 @@ export default function Index() {
     } catch { /* ignore */ }
   }, [])
 
+  /** 加载后端缓存的冻结数据（页面打开时直接读缓存，不触发扫描） */
+  const loadCachedData = useCallback(async () => {
+    setStatus('📂 读取缓存数据...')
+    try {
+      const res = await Network.request({ url: '/api/gem/scan-result' })
+      console.log('📂 缓存数据:', res.data)
+      const scanData = res?.data?.data || res?.data
+      const opps = scanData?.opportunities || []
+      if (opps.length > 0) {
+        setOpportunities(opps)
+        oppCodesR.current = opps.map((s: any) => s.code)
+        setStatus(`📂 缓存数据: ${opps.length}只机会股`)
+        // 拉一次价格
+        const pr = await fetchPrices(oppCodesR.current)
+        if (Object.keys(pr).length > 0) setPrices(prev => ({ ...prev, ...pr }))
+      } else {
+        setStatus('📂 缓存为空，等待下次扫描')
+      }
+      // 显示上次扫描时间
+      const scanTime = scanData?.timestamp
+      if (scanTime) {
+        const t = new Date(scanTime)
+        setLastScanTime(t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+      }
+    } catch (e: any) {
+      setStatus(`⚠️ 读取缓存失败: ${e.message}`)
+      console.error('读取缓存失败:', e)
+    }
+  }, [])
+
+  // ====== 页面加载时先读缓存 ======
+  useEffect(() => {
+    loadCachedData()
+  }, [loadCachedData])
+
   // ====== 扫描调度器 ======
   useEffect(() => {
     const tick = () => {
@@ -242,19 +277,18 @@ export default function Index() {
     const scheduleNextScan = () => {
       const next = nextScanMinutes()
       if (next < 0) {
-        // 非交易日或已收盘
-        scanTimerR.current = window.setTimeout(() => {
+        scanTimerR.current = setTimeout(() => {
           scheduleNextScan()
         }, 60000)
         return
       }
       const nowMin = bjMinutes()
       const diffMs = (next - nowMin) * 60 * 1000
-      // 如果距离下次扫描超过60分钟（跨午休），设置一个中间定时器避免睡过头
       const delay = Math.min(diffMs, 5 * 60 * 1000)
       scanTimerR.current = window.setTimeout(async () => {
         // 到达扫描窗口则执行扫描
         if (isInScanWindow() && !frozenR.current) {
+          setStatus('🔄 定时扫描开始...')
           await runScan()
         }
         // 继续调度下一次
@@ -262,12 +296,8 @@ export default function Index() {
       }, Math.max(delay, 1000))
     }
 
-    // 首次启动
+    // 首次启动：设置冻结状态 + 启动调度器
     tick()
-    if (isInScanWindow()) {
-      // 9:25开盘立即扫描，之后按调度器
-      setTimeout(() => runScan(), 3000)
-    }
     scheduleNextScan()
 
     // 定时检查冻结状态
@@ -283,7 +313,7 @@ export default function Index() {
   useEffect(() => {
     const startPriceRefresh = () => {
       if (priceTimerR.current) clearInterval(priceTimerR.current)
-      priceTimerR.current = window.setInterval(async () => {
+      priceTimerR.current = setInterval(async () => {
         if (isInScanWindow() && oppCodesR.current.length > 0) {
           await refreshPrices()
         }
