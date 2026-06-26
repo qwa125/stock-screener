@@ -60,6 +60,23 @@ export class DeviceController {
     return { code: 200, msg: `设备限额已设为 ${body.maxSlots}`, data: result }
   }
 
+  /** 验证管理员令牌是否有效 */
+  @Get('verify-token')
+  @SkipAccessLimit()
+  async verifyToken(@Headers('x-admin-token') adminToken?: string) {
+    if (!adminToken) {
+      return { code: 400, msg: '未提供令牌', valid: false }
+    }
+    const expected = process.env.ADMIN_TOKEN || 'admin2025'
+    const valid = adminToken === expected
+    return {
+      code: 200,
+      valid,
+      msg: valid ? '令牌有效' : '令牌无效，请检查输入',
+      // 安全：只返回是否匹配，不返回真实令牌
+    }
+  }
+
   /** 获取设备列表 */
   @Get('list')
   @SkipAccessLimit()

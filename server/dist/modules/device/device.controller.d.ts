@@ -27,6 +27,11 @@ export declare class DeviceController {
             maxSlots: number;
         };
     }>;
+    verifyToken(adminToken?: string): Promise<{
+        code: number;
+        msg: string;
+        valid: boolean;
+    }>;
     listDevices(): Promise<{
         code: number;
         data: {

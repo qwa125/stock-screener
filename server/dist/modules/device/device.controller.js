@@ -56,6 +56,18 @@ let DeviceController = DeviceController_1 = class DeviceController {
         const result = await this.deviceRegistry.setMaxSlots(body.maxSlots);
         return { code: 200, msg: `设备限额已设为 ${body.maxSlots}`, data: result };
     }
+    async verifyToken(adminToken) {
+        if (!adminToken) {
+            return { code: 400, msg: '未提供令牌', valid: false };
+        }
+        const expected = process.env.ADMIN_TOKEN || 'admin2025';
+        const valid = adminToken === expected;
+        return {
+            code: 200,
+            valid,
+            msg: valid ? '令牌有效' : '令牌无效，请检查输入',
+        };
+    }
     async listDevices() {
         const devices = await this.deviceRegistry.getDevices();
         return {
@@ -113,6 +125,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], DeviceController.prototype, "setSlots", null);
+__decorate([
+    (0, common_1.Get)('verify-token'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Headers)('x-admin-token')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], DeviceController.prototype, "verifyToken", null);
 __decorate([
     (0, common_1.Get)('list'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
