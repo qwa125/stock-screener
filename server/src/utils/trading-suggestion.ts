@@ -191,11 +191,19 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
       };
     }
+    if (baiBuFresh) {
+      return {
+        action: '减仓',
+        color: 'bg-orange-500',
+        reason: '中低位+白布出现，可能继续走弱',
+        prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
+      };
+    }
     return {
-      action: '持有',
-      color: 'bg-yellow-500',
-      reason: '中低位+横盘，等待方向',
-      prediction: '未来1-2日可能震荡，建议持有',
+      action: '减仓',
+      color: 'bg-orange-500',
+      reason: '中低位+下降趋势，注意风险',
+      prediction: '未来1-2日预计偏弱，建议减仓',
     };
   }
 
