@@ -1,4 +1,4 @@
-<!-- Core v20250627-trend3 -->
+<!-- Core v20250627-trend4 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -243,7 +243,7 @@ window.fetch=function(u,o){
   return _origFetch.call(this,u,o).then(function(r){
     // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
     if(typeof u==='string'&&u.indexOf('/api/')===0){
-      if(r.status===429){
+      if(r.status===429&&localStorage.getItem('deviceRegistered')!=='1'){
         showBlocked(true)
       }
     }
@@ -1632,7 +1632,7 @@ async function doSearch(){
   // 先检查设备权限：搜股票也要经过后端 guard 验证
   try{
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
-    if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
+    if(_reg.status===429&&localStorage.getItem('deviceRegistered')!=='1'){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none'
 
