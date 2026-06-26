@@ -560,7 +560,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const isMainBoardStock = /^60/.test(code) || /^00/.test(code);
     const isGEMStock = /^30/.test(code);
 
-    if (this.cache?.data) {
+    // GEM缓存不存在则初始化
+    if (!this.cache) {
+      this.cache = { data: [], timestamp: Date.now() };
+    }
+    // GEM缓存查询/更新
+    {
       const idx = this.cache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
@@ -576,7 +581,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
         return;
       }
     }
-    if (this.mainBoardCache?.data) {
+    // 主板缓存不存在则初始化
+    if (!this.mainBoardCache) {
+      this.mainBoardCache = { data: [], timestamp: Date.now() };
+    }
+    // 主板缓存查询/更新
+    {
       const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
