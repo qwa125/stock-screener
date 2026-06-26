@@ -286,7 +286,8 @@ async function handleBlurClick(){
     hideBlocked()
   }catch(e){
     console.warn('设备注册失败:',e)
-    hideBlocked()
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    $("blurMsg").innerHTML="⚠️ 服务器连接失败，请检查网络后重试"
   }
 }
 // 主页面扫描按钮：立即触发扫描
