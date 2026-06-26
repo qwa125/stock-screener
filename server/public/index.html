@@ -707,6 +707,11 @@ function gridChipLine(s,entry){
     +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+peakClr+'">'+peakLabel+'</div></div>'
 }
 
+function closeDetail(){
+  $('detailArea').style.display='none'
+  $('scanBtn').style.display='';$('listHeader').style.display='';$('stockList').style.display=''
+  renderList()
+}
 function showDetail(i){
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
@@ -714,6 +719,8 @@ function showDetail(i){
   da.style.display='block'
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
+  // 打开详情时隐藏扫描按钮和列表，让详情框拉长到页面底部
+  $('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none'
   // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
   if(!rt.high&&!rt.low&&s.code){
     fetchRealtime([s.code]).then(function(fr){
@@ -933,7 +940,7 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var backBtn='<div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  var backBtn='<div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="closeDetail()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="closeDetail()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
   return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
@@ -1016,7 +1023,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;$('detailArea').style.display='none'
+    selectedIdx=-1;closeDetail()
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1411,7 +1418,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;$('detailArea').style.display='none'
+    selectedIdx=-1;closeDetail()
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -1652,7 +1659,7 @@ async function doSearch(){
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
-  var da=$('detailArea');da.style.display='none'
+  closeDetail()
 
   // 兼容指数代码：1A0001=上证指数
   if(/^1a\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
