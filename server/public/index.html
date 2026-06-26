@@ -389,6 +389,8 @@ async function handleRescanClick(){
 var _autoScanning=false
 async function autoLightScan(){
   if(_autoScanning||loading||_rescanAll)return
+  // 毛玻璃遮罩未关闭时不执行（用户尚未进入页面）
+  if(!document.getElementById('pageBlur').classList.contains('hidden'))return
   _autoScanning=true
   try{
     setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
