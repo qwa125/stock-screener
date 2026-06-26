@@ -7,7 +7,6 @@ export declare class DataFetcherService {
     private klineCache;
     private readonly KLINE_CACHE_TTL;
     preloadKline(code: string, klines: KLine[]): void;
-    getCachedKlines(code: string): KLine[] | null;
     private stockListCache;
     getAllStocks(): Promise<StockInfo[]>;
     private getHotStockList;

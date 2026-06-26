@@ -17,13 +17,6 @@ export class DataFetcherService {
   preloadKline(code: string, klines: KLine[]): void {
     this.klineCache.set(code, { data: klines, timestamp: Date.now() });
   }
-
-  /** 获取缓存的K线数据（用于后续分析） */
-  getCachedKlines(code: string): KLine[] | null {
-    const entry = this.klineCache.get(code);
-    if (!entry) return null;
-    return entry.data;
-  }
   private stockListCache: StockInfo[] | null = null;
 
   /** 获取全部A股列表（带缓存） */

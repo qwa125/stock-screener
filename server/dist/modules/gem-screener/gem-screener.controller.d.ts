@@ -199,15 +199,6 @@ export declare class GemScreenerController {
         msg: any;
         data: never[];
     }>;
-    getStockDetail(code: string): Promise<{
-        code: number;
-        msg: string;
-        data: any;
-    } | {
-        code: number;
-        msg: any;
-        data: null;
-    }>;
     updateUpgraded(body: {
         data?: any[];
     }): Promise<{
@@ -237,46 +228,6 @@ export declare class GemScreenerController {
     }): Promise<{
         code: number;
         msg: any;
-    }>;
-    cacheData(body: {
-        stocks: {
-            code: string;
-            name: string;
-            price: number;
-            changePercent: number;
-            inflow: number;
-            klines: any[];
-        }[];
-    }): Promise<{
-        code: number;
-        msg: string;
-        data: {
-            all: import("./gem-screener.service").OpportunityStock[];
-            opportunities: import("./gem-screener.service").OpportunityStock[];
-            timestamp: number;
-        };
-    } | {
-        code: number;
-        msg: any;
-        data: {
-            all: never[];
-            opportunities: never[];
-        };
-    }>;
-    getScanResult(): Promise<{
-        code: number;
-        msg: string;
-        data: {
-            opportunities: import("./gem-screener.service").OpportunityStock[];
-            timestamp: number;
-        };
-    } | {
-        code: number;
-        msg: any;
-        data: {
-            opportunities: never[];
-            timestamp: number;
-        };
     }>;
     rescanBatch(body: {
         codes: string[];

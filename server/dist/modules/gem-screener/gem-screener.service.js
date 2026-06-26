@@ -123,8 +123,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             '重仓买入': 1, '买入': 2, '轻仓买入': 3,
             '持有': 4, '减仓': 5, '卖出': 6, '不要介入': 7,
         };
-        this.fullCache = null;
-        this.FULL_CACHE_PATH = '/tmp/full-scan-cache.json';
         this.cache = null;
         this.refreshPromise = null;
         this.mainBoardCache = null;
@@ -1480,58 +1478,40 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const hasChuHuo = !!(sanJiao.zhuLiChuHuo || lingXing.zhuShengZhongWeiChuHuo || lingXing.zhenShiChuHuo);
         const qiangShiHuiCaiLast3 = [len - 2, len - 3, len - 4].some(i => i >= 0 && !!bx.qiangShiHuiCai?.[i]);
         const hengPoLast3 = [len - 2, len - 3, len - 4].some(i => i >= 0 && !!bx.baiXiaoBuy2?.[i]);
-        const zhenDangMaiDian = (sanJiao.bestBuyPoints || []).includes('震荡买点');
-        const zhongWeiZhuSheng = (sanJiao.bestBuyPoints || []).includes('中位主升');
-        const zhongGaoWeiZhuSheng = (sanJiao.bestBuyPoints || []).includes('中高位主升');
-        const gaoFengXianZhuSheng = (sanJiao.bestBuyPoints || []).includes('高风险主升');
-        const zhuSheng = hasMainRise;
-        const qingCang = !!(bx.gaoKaiDiZouQingCang);
-        const baoLiangFuGai = !!(bx.baoLiangFuGaiQingCang);
-        const po5RiXian = !!(bx.po5RiXian);
-        const jinJiQingCang = !!(sanJiao.shortSell);
-        const kong = !!(sanJiao.strongSell);
-        const zhuLiChuHuo = hasChuHuo;
-        const baiXiaoStartLast3 = [len - 2, len - 3, len - 4].some(i => i >= 0 && !!bx.baiXiaoBuy1?.[i]);
         const signals = {
-            baiXiaoStart: !!bx.baiXiaoBuy1,
+            baiXiaoStart: !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2),
             qiangShiHuiCai: !!bx.qiangShiHuiCai,
-            hengPo, jiaCang: !!bx.jiaCang,
-            zhenDangMaiDian, zhongWeiZhuSheng, zhongGaoWeiZhuSheng, gaoFengXianZhuSheng,
+            jiaCang: !!bx.jiaCang,
             diBuBuy: !!bx.diBuBuy,
             zhuLiShiPan: !!bx.zhuLiShiPan,
             gaoWeiHuiDiao: !!bx.gaoWeiHuiDiaoBuy,
-            qingCang, baoLiangFuGai, po5RiXian, jinJiQingCang, kong, zhuLiChuHuo,
+            hengPo, hasMainRise, hasZhenDang,
             baiXiaoDays: bxDays, baiXiao: !!bx.baiXiao, baiBu: !!bx.baiBu,
             jiGouActive: hasJiGouActive, jiGouHuoYueDu: xingXing.jiGouHuoYueDu || 0,
-            firstBreakMA5,
-            ma5NotDown, ma10NotDown,
-            qiangShiHuiCaiLast3, hengPoLast3, baiXiaoStartLast3,
+            firstBreakMA5, ma5NotDown, ma10NotDown,
             lingXingBuy: !!lingXing.buySignalDiamond,
             xiPanFanZhuan: !!lingXing.xiPanFanZhuanBuy,
+            qiangShiHuiCaiLast3, hengPoLast3,
         };
         const signalParts = [];
         if (signals.baiXiaoStart)
             signalParts.push('白消启动');
         if (signals.qiangShiHuiCai)
             signalParts.push('强势回踩');
-        if (signals.hengPo)
-            signalParts.push('横盘突破');
         if (signals.jiaCang)
             signalParts.push('★加仓');
-        if (signals.zhongWeiZhuSheng)
-            signalParts.push('中位主升');
-        if (signals.zhongGaoWeiZhuSheng)
-            signalParts.push('中高位主升');
-        if (signals.gaoFengXianZhuSheng)
-            signalParts.push('高风险主升');
-        if (signals.zhenDangMaiDian)
-            signalParts.push('震荡买点');
+        if (signals.hengPo)
+            signalParts.push('横盘突破');
         if (signals.diBuBuy)
             signalParts.push('主力建仓');
         if (signals.zhuLiShiPan)
             signalParts.push('主力试盘');
         if (signals.gaoWeiHuiDiao)
             signalParts.push('企稳');
+        if (signals.hasMainRise)
+            signalParts.push('主升');
+        if (signals.hasZhenDang)
+            signalParts.push('震荡买点');
         if (signals.jiGouActive)
             signalParts.push('机构活跃');
         if (signals.lingXingBuy)
@@ -1567,71 +1547,92 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         return '不要介入';
     }
     determineBySignalRule(signals, bx, result, bhResult) {
-        const { baiXiaoStart, qiangShiHuiCai, hengPo, jiaCang, zhongWeiZhuSheng, zhongGaoWeiZhuSheng, gaoFengXianZhuSheng, zhenDangMaiDian, diBuBuy, zhuLiShiPan, gaoWeiHuiDiao, qingCang, baoLiangFuGai, po5RiXian, jinJiQingCang, kong, zhuLiChuHuo, baiXiaoDays, baiXiao, baiBu, jiGouActive, firstBreakMA5, ma5NotDown, ma10NotDown, qiangShiHuiCaiLast3, hengPoLast3, baiXiaoStartLast3, } = signals;
-        const buyRisePoints = zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang;
-        const anyRisePoints = buyRisePoints || zhenDangMaiDian;
-        const ma5Up = ma5NotDown;
-        const ma10Up = ma10NotDown;
-        const jiGouActiveBreak = jiGouActive >= 12 && firstBreakMA5 && ma5Up && ma10Up;
-        if (qingCang || baoLiangFuGai || po5RiXian)
-            return { suggestion: '卖出', signalComb: '清仓/爆量覆盖/破5日线' };
-        if (jinJiQingCang)
-            return { suggestion: '卖出', signalComb: '紧急清仓' };
-        if (kong)
-            return { suggestion: '卖出', signalComb: '空' };
-        if (baiXiao && zhuLiChuHuo)
-            return { suggestion: '减仓', signalComb: '白消+主力出货' };
-        if (baiXiao && baiXiaoDays >= 1 && baiXiaoDays <= 6) {
-            if (qiangShiHuiCaiLast3 && anyRisePoints)
-                return { suggestion: '重仓买入', signalComb: '强势回踩→主升/加仓(重仓)' };
-            if (baiXiaoStartLast3 && anyRisePoints)
-                return { suggestion: '重仓买入', signalComb: '白消启动→主升/加仓(重仓)' };
-            if (qiangShiHuiCai && anyRisePoints)
-                return { suggestion: '重仓买入', signalComb: '强势回踩+主升/加仓(重仓)' };
-            if (baiXiaoStart && anyRisePoints)
-                return { suggestion: '重仓买入', signalComb: '白消启动+主升/加仓(重仓)' };
-            if (buyRisePoints)
-                return { suggestion: '重仓买入', signalComb: '主升/加仓(重仓)' };
-            if (qiangShiHuiCai)
-                return { suggestion: '重仓买入', signalComb: '强势回踩(重仓)' };
-            if (baiXiaoStart)
-                return { suggestion: '重仓买入', signalComb: '白消启动(重仓)' };
-            if (jiGouActiveBreak)
-                return { suggestion: '重仓买入', signalComb: '机构突破均线(重仓)' };
-        }
-        if (baiXiao && baiXiaoDays >= 7) {
-            if (hengPo && anyRisePoints)
-                return { suggestion: '买入', signalComb: '横盘突破+主升(买入)' };
-            if (hengPoLast3 && anyRisePoints && !hengPo)
-                return { suggestion: '买入', signalComb: '横盘突破→主升(买入)' };
-            if (qiangShiHuiCai && anyRisePoints)
-                return { suggestion: '买入', signalComb: '强势回踩+主升(买入)' };
-            if (qiangShiHuiCaiLast3 && anyRisePoints)
-                return { suggestion: '买入', signalComb: '强势回踩→主升(买入)' };
-            if (hengPo)
-                return { suggestion: '买入', signalComb: '横盘突破(买入)' };
-            if (jiGouActiveBreak)
-                return { suggestion: '买入', signalComb: '机构突破均线(买入)' };
-        }
+        const { baiXiaoStart, qiangShiHuiCai, jiaCang, diBuBuy, zhuLiShiPan, gaoWeiHuiDiao, hengPo, hasMainRise, hasZhenDang, baiXiaoDays, baiXiao, baiBu, jiGouActive, firstBreakMA5, ma5NotDown, ma10NotDown, lingXingBuy, xiPanFanZhuan, qiangShiHuiCaiLast3, hengPoLast3, } = signals;
+        const trendState = result.trendState;
+        const priceIncrease = result.priceIncrease;
+        const pricePosition = result.pricePosition;
+        const closeArr = result.closeArr;
+        const ma20 = result.ma20;
+        const ma60 = result.ma60;
+        const hasStrongSell = result.hasStrongSell;
+        const hasChuHuo = result.hasChuHuo;
+        const sj = result.sanJiao || {};
+        const lx = result.lingXing || {};
+        if (baiBu && hasStrongSell)
+            return { suggestion: '卖出', signalComb: '白布+清仓/爆量覆盖/破5日线' };
+        if (baiBu && hasChuHuo)
+            return { suggestion: '卖出', signalComb: '白布+出货' };
+        if (baiBu && sj.shortSell)
+            return { suggestion: '卖出', signalComb: '白布+紧急清仓' };
+        if (baiBu && sj.strongSell)
+            return { suggestion: '卖出', signalComb: '白布+空' };
+        if (!baiBu && hasChuHuo && (baiXiaoStart || baiXiao))
+            return { suggestion: '减仓', signalComb: '白消+出货(减仓)' };
+        if (priceIncrease > 60)
+            return null;
+        const jiGouActiveBreak = jiGouActive && firstBreakMA5 && ma5NotDown && ma10NotDown;
         if (baiBu) {
             if (jiGouActiveBreak)
-                return { suggestion: '轻仓买入', signalComb: '白布+机构突破均线(轻仓)' };
-            if (diBuBuy || gaoWeiHuiDiao || zhuLiShiPan || jiaCang) {
+                return { suggestion: '轻仓买入', signalComb: '白布+机构活跃+突破MA5' };
+            if (diBuBuy || zhuLiShiPan || gaoWeiHuiDiao || jiaCang) {
                 const parts = ['白布'];
                 if (diBuBuy)
                     parts.push('主力建仓');
-                if (gaoWeiHuiDiao)
-                    parts.push('企稳');
                 if (zhuLiShiPan)
                     parts.push('主力试盘');
+                if (gaoWeiHuiDiao)
+                    parts.push('企稳');
                 if (jiaCang)
-                    parts.push('加仓');
+                    parts.push('★加仓');
                 return { suggestion: '轻仓买入', signalComb: parts.join('+') };
             }
+            return null;
         }
-        if (ma10Up)
-            return { suggestion: '持有', signalComb: '10日线往上/走平' };
-        return { suggestion: '不要介入', signalComb: '10日线往下' };
+        if (baiXiao) {
+            if (hasChuHuo)
+                return { suggestion: '减仓', signalComb: '白消+出货' };
+            if (baiXiaoDays <= 6) {
+                if (qiangShiHuiCaiLast3 && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩→主升' };
+                if ((baiXiaoStart || baiXiaoDays <= 4) && hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+主升' };
+                if ((baiXiaoStart || baiXiaoDays <= 4) && qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+强势回踩' };
+                if (qiangShiHuiCai && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩+★加仓' };
+                if (baiXiaoStart && jiaCang)
+                    return { suggestion: '重仓买入', signalComb: '白消启动+★加仓' };
+                if (hasMainRise)
+                    return { suggestion: '重仓买入', signalComb: '主升' };
+                if (qiangShiHuiCai)
+                    return { suggestion: '重仓买入', signalComb: '强势回踩' };
+                if (baiXiaoStart)
+                    return { suggestion: '重仓买入', signalComb: '白消启动' };
+                if (jiGouActiveBreak)
+                    return { suggestion: '重仓买入', signalComb: '机构活跃+突破MA5' };
+                if (baiXiaoDays >= 4)
+                    return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天(待观察)` };
+                return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
+            }
+            if (baiXiaoDays >= 6) {
+                if (hengPo && hasMainRise)
+                    return { suggestion: '买入', signalComb: '横盘突破+主升' };
+                if (hengPo && qiangShiHuiCai)
+                    return { suggestion: '买入', signalComb: '横盘突破+强势回踩' };
+                if (hengPoLast3 && hasMainRise && !hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破→主升' };
+                if (hengPoLast3 && qiangShiHuiCai && !hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破→强势回踩' };
+                if (qiangShiHuiCaiLast3 && hasMainRise)
+                    return { suggestion: '买入', signalComb: '强势回踩→主升' };
+                if (hengPo)
+                    return { suggestion: '买入', signalComb: '横盘突破' };
+                if (jiGouActiveBreak)
+                    return { suggestion: '买入', signalComb: '机构活跃+突破MA5' };
+                return { suggestion: '持有', signalComb: `白消第${baiXiaoDays}天` };
+            }
+        }
+        return null;
     }
     async checkOpportunity(s, prevSuggestion) {
         const kline = await this.dataFetcher.getKLineData(s.code);
@@ -2349,15 +2350,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const low60 = Math.min(...lowArr.slice(-60));
             const pricePos = high60 > low60 ? ((price - low60) / (high60 - low60)) * 100 : 50;
             const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-            const ma5_1dAgo = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : ma5;
             const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
-            const ma10_1dAgo = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : ma10;
             const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
             const macdR = this.calcCustomMACD(klineV);
             const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
             const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-            const ma5Up = ma5 > ma5_1dAgo;
-            const ma10Up = ma10 > ma10_1dAgo;
+            const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
+            const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
             let trendState = 1;
             if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
                 trendState = 3;
@@ -2396,10 +2395,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 baiXiao: !!baiXing?.baiXiao,
                 volumeStructure: sanJiao?.volumeStructure ?? 0,
                 qiangZhiFuGai: !!baiXing?.qiangZhiFuGai,
-                ma5Up, ma10Up,
             };
             const cfsResult = (0, trading_suggestion_1.getTradingSuggestion)(cfsInput);
-            const suggestion = cfsResult.suggestion;
+            const suggestion = cfsResult.action;
             const BASE = {
                 '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
             };
@@ -2758,11 +2756,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiXiao: !!baiXiao,
             volumeStructure: sanJiao?.volumeStructure ?? 0,
             qiangZhiFuGai,
-            ma5Up, ma10Up,
         };
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
-        let suggestion = result.suggestion;
+        let suggestion = result.action;
         const predictionText = result.prediction || '';
         const reasonText = result.reason || '';
         const baiBuState = !!baiXing?.baiBu;
@@ -2889,10 +2886,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiXiao: !!fullBaiXing?.baiXiao,
             volumeStructure: fullSanJiao?.volumeStructure ?? 0,
             qiangZhiFuGai: !!fullBaiXing?.qiangZhiFuGai,
-            ma5Up, ma10Up,
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
-        const crossSuggestion = crossResult.suggestion;
+        const crossSuggestion = crossResult.action;
         const NEGATIVE_CROSS = ['卖出', '不要介入'];
         if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion))
             return null;
@@ -3017,7 +3013,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async searchStocks(keyword) {
         const results = [];
         try {
-            const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+            const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
             const seen = new Set();
             const deduped = allCached.filter(s => {
                 const key = s.code;
@@ -3066,25 +3062,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.error(`缓存搜索失败: ${e.message}`);
         }
         return results;
-    }
-    async getStockDetail(code) {
-        const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
-        const stock = allCached.find(s => s.code === code);
-        if (!stock) {
-            return { stock: null, technical: null, message: '该股票不在缓存中，请稍后扫描后再试' };
-        }
-        let technical = null;
-        try {
-            const klines = this.dataFetcher.getCachedKlines(code);
-            if (klines && klines.length >= 20) {
-                const { analyzeTechnical, KLine } = require('../utils/technical-analysis');
-                technical = analyzeTechnical(klines, stock.currentPrice);
-            }
-        }
-        catch (e) {
-            this.logger.warn(`技术分析失败 ${code}: ${e.message}`);
-        }
-        return { stock, technical };
     }
     async rescanMarket() {
         const now = Date.now();
@@ -3517,109 +3494,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.saveCacheToDisk();
         this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
         return finalResults;
-    }
-    async cacheAllData(stocks) {
-        const results = [];
-        for (const s of stocks) {
-            if (s.klines && s.klines.length >= 20) {
-                this.dataFetcher.preloadKline(s.code, s.klines);
-            }
-        }
-        for (const s of stocks) {
-            try {
-                const candidate = {
-                    code: s.code, name: s.name, inflow: s.inflow ?? 0,
-                    changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
-                };
-                const result = await this.checkOpportunity(candidate);
-                if (result)
-                    results.push(result);
-            }
-            catch { }
-        }
-        if (results.filter(r => ['重仓买入', '买入', '轻仓买入'].includes(r.suggestion ?? '')).length <= 3) {
-            for (const s of stocks) {
-                try {
-                    const candidate = {
-                        code: s.code, name: s.name, inflow: s.inflow ?? 0,
-                        changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
-                    };
-                    const result = await this.checkOpportunityRelaxed(candidate);
-                    if (result && !results.find(ex => ex.code === result.code))
-                        results.push(result);
-                }
-                catch { }
-            }
-        }
-        const SELL_LOCK = ['卖出'];
-        const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
-        for (const r of results) {
-            const code = r.code;
-            if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
-                this.soldOutStocks.delete(code);
-            }
-            else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
-                this.soldOutStocks.add(code);
-            }
-            else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
-                if (this.soldOutStocks.has(code)) {
-                    r.suggestion = '不要介入';
-                }
-            }
-        }
-        results.sort((a, b) => {
-            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
-            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-            return pa !== pb ? pa - pb
-                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
-                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
-                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
-        });
-        const buyResults = results.filter(r => BUY_SIGNALS.includes(r.suggestion ?? ''));
-        this.upgradeCacheFields(results);
-        this.addForecastToCache(results);
-        const ts = Date.now();
-        this.fullCache = { data: results, timestamp: ts };
-        try {
-            const dir = require('path').dirname(this.FULL_CACHE_PATH);
-            if (!require('fs').existsSync(dir))
-                require('fs').mkdirSync(dir, { recursive: true });
-            require('fs').writeFileSync(this.FULL_CACHE_PATH, JSON.stringify(this.fullCache, null, 2));
-        }
-        catch { }
-        this.cache = { data: buyResults.slice(0, 30), timestamp: ts };
-        this.saveCacheToDisk();
-        this.logger.log(`✅ 全量数据分析完成: ${results.length} 只有效, ${buyResults.length} 只买入信号`);
-        return { all: results, opportunities: buyResults.slice(0, 30), timestamp: ts };
-    }
-    async getScanResult() {
-        if (this.fullCache && this.fullCache.data?.length > 0) {
-            const buyResults = this.fullCache.data.filter(r => ['重仓买入', '买入'].includes(r.suggestion ?? ''));
-            return { opportunities: buyResults.slice(0, 30), timestamp: this.fullCache.timestamp };
-        }
-        const allCached = [];
-        let latestTs = 0;
-        if (this.cache && this.cache.data?.length > 0) {
-            allCached.push(...this.cache.data);
-            if (this.cache.timestamp > latestTs)
-                latestTs = this.cache.timestamp;
-        }
-        if (this.mainBoardCache && this.mainBoardCache.data?.length > 0) {
-            const gemCodes = new Set();
-            for (const s of this.cache?.data || [])
-                gemCodes.add(s.code);
-            for (const s of this.mainBoardCache.data) {
-                if (!gemCodes.has(s.code))
-                    allCached.push(s);
-            }
-            if (this.mainBoardCache.timestamp > latestTs)
-                latestTs = this.mainBoardCache.timestamp;
-        }
-        if (allCached.length > 0) {
-            const buyResults = allCached.filter(r => ['重仓买入', '买入'].includes(r.suggestion ?? ''));
-            return { opportunities: buyResults.slice(0, 30), timestamp: latestTs };
-        }
-        return { opportunities: [], timestamp: Date.now() };
     }
     async runBacktest() {
         const allCodes = [];
