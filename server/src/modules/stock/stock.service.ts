@@ -304,10 +304,12 @@ export class StockService {
     const low60 = Math.min(...lowArr.slice(-60));
     const pricePos = high60 > low60 ? ((lastPrice - low60) / (high60 - low60)) * 100 : 50;
     const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const ma5_1dAgo = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : ma5;
     const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const ma10_1dAgo = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : ma10;
     const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
-    const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
-    const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+    const ma5Up = ma5 > ma5_1dAgo;
+    const ma10Up = ma10 > ma10_1dAgo;
     let trendState = 1;
     if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up) trendState = 3;
     else if (ma5 > ma10 && ma5Up) trendState = 2;
@@ -349,6 +351,7 @@ export class StockService {
       baiCoverTrend: (formulaResult as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!(formulaResult as any)?.baiXiao,
       volumeStructure: (formulaResult as any)?.volumeStructure ?? 0,
+      ma5Up, ma10Up,
     };
     const stockSuggestion = getTradingSuggestion(stockInput);
     const suggestion = stockSuggestion.action;

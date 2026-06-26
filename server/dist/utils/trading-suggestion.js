@@ -60,18 +60,18 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日有望延续反弹，建议买入',
             };
         }
-        if (trend >= 1) {
+        if (f.ma10Up) {
             return {
                 action: '持有',
                 color: 'bg-yellow-500',
-                reason: '低位+趋势拐头，等待信号确认',
+                reason: '低位+10日线往上，趋势企稳',
                 prediction: '未来1-2日方向待确认，建议持有',
             };
         }
         return {
             action: '不要介入',
             color: 'bg-gray-500',
-            reason: '低位+5/10日线下跌，均线空头压制',
+            reason: '低位+10日线下跌，均线空头压制',
             prediction: '未来1-2日预计继续探底，建议不要介入',
         };
     }

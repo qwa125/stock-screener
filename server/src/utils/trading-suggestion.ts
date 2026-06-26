@@ -7,6 +7,7 @@
  * 2. 信号等级：strongBuy > hasBuySignal > hasSellSignal > strongSell
  * 3. 趋势权重：ma5/ma10/ma20 三线关系
  * 4. 位置越低买入条件越宽松，位置越高买入条件越严格
+ * 5. MA方向决定持有/不要介入：10日线往上=持有，10日线往下=不要介入
  */
 
 export interface SuggestionResult {
@@ -45,6 +46,10 @@ export interface SuggestionInput {
   baiCoverTrend?: 'exiting' | 'entering' | 'stable';
   volumeStructure?: number;
   qiangZhiFuGai?: boolean;
+  /** 5日线方向：true=往上，false=往下/走平 */
+  ma5Up?: boolean;
+  /** 10日线方向：true=往上，false=往下/走平 */
+  ma10Up?: boolean;
 }
 
 export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
@@ -104,20 +109,20 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日有望延续反弹，建议买入',
       };
     }
-    if (trend >= 1) {
+    // ma10方向：决定持有 vs 不要介入
+    // 10日线往上=持有(均线企稳)，10日线往下=不要介入(空头压制)
+    if (f.ma10Up) {
       return {
         action: '持有',
         color: 'bg-yellow-500',
-        reason: '低位+趋势拐头，等待信号确认',
+        reason: '低位+10日线往上，趋势企稳',
         prediction: '未来1-2日方向待确认，建议持有',
       };
     }
-    // trend === 0 — 下降趋势不产生任何买入信号
-    // 5日10日线下跌=不要介入（覆盖白消等所有场景）
     return {
       action: '不要介入',
       color: 'bg-gray-500',
-      reason: '低位+5/10日线下跌，均线空头压制',
+      reason: '低位+10日线下跌，均线空头压制',
       prediction: '未来1-2日预计继续探底，建议不要介入',
     };
   }

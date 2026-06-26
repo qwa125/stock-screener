@@ -25,5 +25,7 @@ export interface SuggestionInput {
     baiCoverTrend?: 'exiting' | 'entering' | 'stable';
     volumeStructure?: number;
     qiangZhiFuGai?: boolean;
+    ma5Up?: boolean;
+    ma10Up?: boolean;
 }
 export declare function getTradingSuggestion(f: SuggestionInput): SuggestionResult;

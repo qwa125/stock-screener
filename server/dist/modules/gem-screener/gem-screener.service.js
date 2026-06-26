@@ -2350,13 +2350,15 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const low60 = Math.min(...lowArr.slice(-60));
             const pricePos = high60 > low60 ? ((price - low60) / (high60 - low60)) * 100 : 50;
             const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const ma5_1dAgo = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : ma5;
             const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / 10;
+            const ma10_1dAgo = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : ma10;
             const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
             const macdR = this.calcCustomMACD(klineV);
             const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
             const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-            const ma5Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
-            const ma10Up = closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+            const ma5Up = ma5 > ma5_1dAgo;
+            const ma10Up = ma10 > ma10_1dAgo;
             let trendState = 1;
             if (ma5 > ma10 && ma10 > ma20 && ma5Up && ma10Up)
                 trendState = 3;
@@ -2395,6 +2397,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 baiXiao: !!baiXing?.baiXiao,
                 volumeStructure: sanJiao?.volumeStructure ?? 0,
                 qiangZhiFuGai: !!baiXing?.qiangZhiFuGai,
+                ma5Up, ma10Up,
             };
             const cfsResult = (0, trading_suggestion_1.getTradingSuggestion)(cfsInput);
             const suggestion = cfsResult.action;
@@ -2756,6 +2759,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiXiao: !!baiXiao,
             volumeStructure: sanJiao?.volumeStructure ?? 0,
             qiangZhiFuGai,
+            ma5Up, ma10Up,
         };
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
@@ -2886,6 +2890,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiXiao: !!fullBaiXing?.baiXiao,
             volumeStructure: fullSanJiao?.volumeStructure ?? 0,
             qiangZhiFuGai: !!fullBaiXing?.qiangZhiFuGai,
+            ma5Up, ma10Up,
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
         const crossSuggestion = crossResult.action;
