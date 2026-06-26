@@ -496,16 +496,17 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { total, updated: total };
   }
 
-  /** 获取全量缓存 */
+  /** 获取全量缓存（仅主板60/00 + 创业板30，过滤科创板688/689） */
   getCacheAll(): OpportunityStock[] {
     const all: OpportunityStock[] = [];
     if (this.cache?.data) all.push(...this.cache.data);
     if (this.mainBoardCache?.data) all.push(...this.mainBoardCache.data);
-    // 去重 (以 code 为准)
+    // 去重 (以 code 为准) + 过滤科创板
     const seen = new Set<string>();
     return all.filter(s => {
       if (seen.has(s.code)) return false;
       seen.add(s.code);
+      if (/^68[89]/.test(s.code)) return false;
       return true;
     });
   }
@@ -1026,7 +1027,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
         this.dataFetcher.preloadKline(s.code, s.klines);
       }
     }
-    // 逐只检查
+    // 逐只检查（创业板本来就是30开头，无需额外过滤）
     for (const s of stocks) {
       try {
         const candidate: StockCandidate = {
@@ -1094,7 +1095,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: KLine[] }[]
   ): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
-    for (const s of stocks) {
+    // 过滤科创板688/689，仅保留主板(60/00)和创业板(30)
+    const filteredStocks = stocks.filter(s => /^(60|00|30)/.test(s.code));
+    for (const s of filteredStocks) {
       if (s.klines && s.klines.length >= 20) {
         this.dataFetcher.preloadKline(s.code, s.klines);
       }
@@ -2739,7 +2742,9 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
   async scanTopOpportunities(force = false): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
     const gem = await this.scanTopGem(force);
     const main = await this.scanTopMainBoard(force);
-    const combined = [...gem.opportunities, ...main.opportunities];
+    let combined = [...gem.opportunities, ...main.opportunities];
+    // 过滤科创板688/689，仅保留主板(60/00)和创业板(30)
+    combined = combined.filter(s => !/^68[89]/.test(s.code));
     const ORDER: Record<string, number> = {
       '重仓买入': 0, '买入': 1, '轻仓买入': 2,
       '减仓': 3, '持有': 4, '卖出': 5, '不要介入': 6,

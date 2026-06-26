@@ -387,6 +387,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             if (seen.has(s.code))
                 return false;
             seen.add(s.code);
+            if (/^68[89]/.test(s.code))
+                return false;
             return true;
         });
     }
@@ -961,7 +963,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async scanWithFrontendMainBoardData(stocks) {
         const results = [];
-        for (const s of stocks) {
+        const filteredStocks = stocks.filter(s => /^(60|00|30)/.test(s.code));
+        for (const s of filteredStocks) {
             if (s.klines && s.klines.length >= 20) {
                 this.dataFetcher.preloadKline(s.code, s.klines);
             }
@@ -2293,7 +2296,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async scanTopOpportunities(force = false) {
         const gem = await this.scanTopGem(force);
         const main = await this.scanTopMainBoard(force);
-        const combined = [...gem.opportunities, ...main.opportunities];
+        let combined = [...gem.opportunities, ...main.opportunities];
+        combined = combined.filter(s => !/^68[89]/.test(s.code));
         const ORDER = {
             '重仓买入': 0, '买入': 1, '轻仓买入': 2,
             '减仓': 3, '持有': 4, '卖出': 5, '不要介入': 6,
