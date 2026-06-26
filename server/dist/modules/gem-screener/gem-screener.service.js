@@ -2548,8 +2548,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const macdR = this.calcCustomMACD(klineV);
         const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
         const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-        const ma5Up = closeArr.length > 5 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
-        const ma10Up = closeArr.length > 10 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+        const ma5Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
+        const ma10Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
         const ma10Down = closeArr.length > 15
             && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
         let trendState = 1;

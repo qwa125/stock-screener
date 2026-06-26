@@ -3031,8 +3031,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
     const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
 
-    const ma5Up = closeArr.length > 5 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6];
-    const ma10Up = closeArr.length > 10 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11];
+    const ma5Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
+    const ma10Up = closeArr.length > 1 && closeArr[closeArr.length - 1] > closeArr[closeArr.length - 2];
     // MA10环比下降：当前10日均线 < 5天前的10日均线（需要至少15根K线）
     const ma10Down = closeArr.length > 15
       && ma10 < (closeArr.slice(-15, -5).reduce((a: number, b: number) => a + b, 0) / 10);
