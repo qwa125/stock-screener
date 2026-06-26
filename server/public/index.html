@@ -48,8 +48,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .chg{font-size:13px;font-weight:600;flex:1;text-align:center}
 .pos{font-size:13px;font-weight:700;flex:1;text-align:center}
 
-/* Detail panel - rich analysis style */
-.detail-panel{display:none;margin:6px 0 0;padding:0;background:#fff;border-radius:8px;overflow-y:auto;max-height:45vh}
+/* Detail panel - 全屏覆盖层 */
+.detail-panel{display:none;background:#fff;overflow-x:hidden;border-bottom:1px solid #eee}
 .detail-panel.open{display:block}
 .signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
 .signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
@@ -117,6 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
 .admin-login-msg{font-size:12px;color:#6b7280;text-align:center;padding:20px 0}
 .admin-device-item .dev-remark{font-size:10px;color:#10b981;margin-top:1px}
+	.blur-btn:disabled{opacity:0.6;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -141,7 +142,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 </div>
 
 <!-- 共享详情区域：列表点击 / 搜索都显示在这里 -->
-<div id="detailArea" class="detail-panel" style="margin:0 12px 8px;display:none"></div>
+<div id="detailArea" class="detail-panel"></div>
 
 <div class="btn-scan-wrapper" style="gap:8px;flex-wrap:wrap">
   <button class="btn-scan" id="scanBtn" onclick="handleScanClick()" style="flex:1;min-width:100px">🔄 立即扫描</button>
@@ -264,21 +265,30 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 立即扫描：先注册设备，再关闭毛玻璃
-// 毛玻璃按钮：只注册设备 + 关闭遮罩
+// 毛玻璃按钮：一键隐退，注册在后台静默执行
 async function handleBlurClick(){
-  var registered=localStorage.getItem('deviceRegistered')
-  if(registered!=='1'){
-    try{
-      var regRes=await fetch("/api/device/register",{
-        method:"POST",
-        headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
-      })
-      if(regRes.status===429){showBlocked(true);return}
-      localStorage.setItem('deviceRegistered','1')
-    }catch(e){console.warn('设备注册失败:',e)}
+  var btn=$("pageBlur").querySelector('.blur-btn')
+  if(btn.disabled)return
+  if(localStorage.getItem('deviceRegistered')==='1'){
+    hideBlocked();return
   }
-  hideBlocked()
+  btn.disabled=true;btn.textContent='⏳ 验证中...'
+  try{
+    var regRes=await fetch("/api/device/register",{
+      method:"POST",
+      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+    })
+    if(regRes.status===429){
+      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+      showBlocked(true);return
+    }
+    localStorage.setItem('deviceRegistered','1')
+    hideBlocked()
+  }catch(e){
+    console.warn('设备注册失败:',e)
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    $("blurMsg").innerHTML="⚠️ 服务器连接失败，请检查网络后重试"
+  }
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
@@ -923,9 +933,8 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var nameHtml='<div style="font-size:15px;font-weight:700;color:#1f2937;padding:8px 12px 2px">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></div>'
-  var backBtn='<div style="padding:6px 12px 0;display:flex;align-items:center;gap:6px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;color:#6b7280;cursor:pointer">← 返回列表</button></div>'
-  return backBtn+nameHtml+tags+action+future+grid+entryHtml+detailList
+  var backBtn='<div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
 // ---------- 渲染列表 ----------
@@ -1585,31 +1594,35 @@ async function fetchSinaUS(code){
 // ---------- 拼音搜索下拉（输入字母实时搜索） ----------
 var searchTimer=null
 function onSearchInput(){
-  var v=$('searchInput').value.trim().toLowerCase()
+  var v=$('searchInput').value.trim()
   var dd=$('searchDropdown')
-  // 清空旧的timer
   if(searchTimer)clearTimeout(searchTimer)
-  // 输入为空或含数字（可能是代码），隐藏下拉
-  if(!v||/\d/.test(v)||!/^[a-z]+$/.test(v)){
-    dd.style.display='none'
-    return
-  }
-  // 防抖300ms
+  if(!v){dd.style.display='none';return}
+  // 防抖300ms，使用东方财富全A股搜索
   searchTimer=setTimeout(function(){
-    fetch('/api/gem/search?q='+encodeURIComponent(v))
+    fetch('/api/gem/proxy/search?q='+encodeURIComponent(v)+'&count=15')
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.code===200&&d.data&&d.data.length>0){
+          var items=d.data
+          // 只保留A股（深A/沪A/京A），排除ETF/指数/港股/美股/三板
+          var aShares=items.filter(function(x){
+            var sn=x.SecurityTypeName||''
+            return sn.indexOf('A')>=0||(!isNaN(x.Code)&&x.Code.length===6&&!/^9/.test(x.Code))
+          })
+          if(!aShares.length)aShares=items.filter(function(x){return x.Code&&x.Code.length===6})
+          if(!aShares.length)aShares=items.slice(0,8)
           var html=''
-          for(var i=0;i<d.data.length;i++){
-            var s=d.data[i]
-            var sug=s.suggestion||''
-            var sugColor=sug.indexOf('买入')>=0?'#22c55e':sug.indexOf('卖出')>=0?'#ef4444':'#888'
-            html+='<div onclick="selectPinyinStock(\''+s.code+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
-            html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
-            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
-            html+='<span style="font-size:11px;color:'+sugColor+'">'+sug+'</span>'
+          for(var i=0;i<Math.min(aShares.length,15);i++){
+            var s=aShares[i]
+            html+='<div onclick="selectStock(\''+s.Code+'\',\''+(s.Name||'').replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
+            html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.Code+'</span>'
+            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+(s.Name||'')+'</span>'
+            if(s.PinYin)html+='<span style="font-size:11px;color:#aaa">'+s.PinYin+'</span>'
             html+='</div>'
+          }
+          if(items.length>15){
+            html+='<div style="padding:6px 12px;color:#999;font-size:12px;text-align:center">共'+(aShares.length||items.length)+'条，继续输入精确匹配</div>'
           }
           dd.innerHTML=html
           dd.style.display='block'
@@ -1619,6 +1632,11 @@ function onSearchInput(){
       })
       .catch(function(){dd.style.display='none'})
   },300)
+}
+function selectStock(code,name){
+  $('searchInput').value=code
+  $('searchDropdown').style.display='none'
+  doSearch()
 }
 function selectPinyinStock(code,name){
   $('searchInput').value=code
@@ -1637,12 +1655,13 @@ async function doSearch(){
   var da=$('detailArea');da.style.display='none'
 
   // 兼容指数代码：1A0001=上证指数
-  if(/^1a\\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
+  if(/^1a\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
 
-  // 判断输入类型：A股代码(6位)/港股(5位)/美股(含字母)/北交所(92/4/8开头)
-  var isCode=/^\\d{6}$/.test(v)||/^9\\d{5}$/.test(v)||/^[48]\\d{5}$/.test(v)
-  var isHK=/^\\d{5}$/.test(v)
-  var isUS=/[a-zA-Z]/.test(v)&&!/^\\d/.test(v)&&!/^1a/i.test(v)
+  // 判断输入类型：A股代码(6位)/港股(5位)/拼音首字母(2-5小写字母)/美股(含大写字母)/北交所(92/4/8开头)
+  var isCode=/^\d{6}$/.test(v)||/^9\d{5}$/.test(v)||/^[48]\d{5}$/.test(v)
+  var isHK=/^\d{5}$/.test(v)
+  var isPinyin=/^[a-z]{2,5}$/.test(v)
+  var isUS=/[a-zA-Z]/.test(v)&&!/^\d/.test(v)&&!/^1a/i.test(v)&&!isPinyin
 
 
   var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
@@ -1673,8 +1692,8 @@ async function doSearch(){
       var d=await r.json()
       var items=d&&d.data
       if(items&&items.length){
-        // 取第一个A股结果（排除ETF/指数）
-        var hit=items.find(function(x){return x.SecurityTypeName==='A股'||x.Code.startsWith('3')||x.Code.startsWith('6')||x.Code.startsWith('0')||x.Code.startsWith('1')})
+        // 取第一个A股结果（排除ETF/指数/三板）
+        var hit=items.find(function(x){var sn=x.SecurityTypeName||'';return sn.indexOf('A')>=0||(x.Code&&x.Code.length===6&&!/^[89]/.test(x.Code)&&!/^4/.test(x.Code))})
         if(!hit)hit=items[0]
         var rawCode=hit.Code.replace(/\.(SZ|SH)$/i,'')
         stockCode=rawCode
@@ -1968,16 +1987,45 @@ setTimeout(function(){
         },1000)
       })
   }else{
-    // 休盘/周末 → 恢复最后一次冻结快照（不重新拉取）
-    var snap=loadFrozenSnapshot()
-    if(snap&&snap.length){
-      stocks=snap
-      renderList()
-      setStatus('📊 已冻结 — '+freezeMsg()+' | 展示最后一次扫描结果')
-      $('footer').textContent='✅ 已冻结 '+snap.length+' 只 | '+lastScanTime
-    }else{
-      setStatus('⏸️ 等待扫描')
-    }
+    // 休盘/周末 → 优先从后端缓存加载（设备间共享），后端无缓存时回退到本地快照
+    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d.code===200&&d.data&&d.data.length){
+          // 后端缓存有效（盘后数据，设备间共享）
+          var ALLOWED={'重仓买入':1,'买入':1}
+          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          if(stocks.length){
+            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
+            renderList()
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享）')
+          }else{
+            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+          }
+        }else{
+          // 后端无缓存 → 尝试本地快照
+          var snap2=loadFrozenSnapshot()
+          if(snap2&&snap2.length){
+            stocks=snap2
+            renderList()
+            setStatus('📋 冻数据 '+(snap2.length||0))
+          }else{
+            setStatus('⏸️ 等待扫描')
+          }
+        }
+      })
+      .catch(function(e){
+        console.log('⚠️ 读缓存失败:',e.message)
+        // 网络异常时尝试本地快照
+        var snap3=loadFrozenSnapshot()
+        if(snap3&&snap3.length){
+          stocks=snap3
+          renderList()
+          setStatus('📋 本地快照恢复（盘后，网络异常）')
+        }else{
+          setStatus('⏸️ 等待扫描')
+        }
+      })
   }
 },3000)
 
@@ -2162,9 +2210,12 @@ async function loadAdminDashboard(){
     try{curToken=localStorage.getItem('adminToken')||''}catch(e){}
     html+='<div class="admin-row" style="margin-top:8px">'
       +'<label style="font-size:12px;color:#6b7280;white-space:nowrap">管理员令牌：</label>'
-      +'<input class="num-input" id="adminTokenInput" type="text" style="flex:1;min-width:0" placeholder="输入令牌免设备名额" value="'+curToken+'">'
+      +'<input class="num-input" id="adminTokenInput" type="text" style="flex:1;min-width:0" placeholder="默认 admin2025" value="'+curToken+'">'
       +'<button class="btn btn-primary btn-sm" onclick="saveAdminToken()">保存</button>'
+      +'<span id="adminTokenStatus" style="font-size:12px;margin-left:4px"></span>'
       +'</div>'
+    // 如果已经有令牌，立即验证
+    if(curToken){verifyAdminToken(curToken)}
 
     // 设备列表
     html+='<div class="admin-tabs"><span class="admin-tab active">设备列表 ('+total+')</span></div>'
@@ -2213,14 +2264,39 @@ async function updateMaxSlots(){
 // 保存管理员令牌到localStorage，所有请求自动附带 X-Admin-Token 头，免设备名额
 function saveAdminToken(){
   var val=ad('adminTokenInput')?ad('adminTokenInput').value.trim():''
+  var st=ad('adminTokenStatus')
   try{
     if(val){
       localStorage.setItem('adminToken',val)
+      // 立即验证
+      fetch('/api/device/verify-token',{headers:{'X-Admin-Token':val}}).then(function(r){return r.json()}).then(function(j){
+        if(st){
+          if(j.valid){
+            st.innerHTML='<span style="color:#16a34a;font-weight:600">✅ 令牌有效</span>'
+          }else{
+            st.innerHTML='<span style="color:#ef4444;font-weight:600">❌ 令牌无效（默认: admin2025）</span>'
+          }
+        }
+      }).catch(function(){if(st)st.innerHTML='<span style="color:#999">⏳ 验证失败</span>'})
     }else{
       localStorage.removeItem('adminToken')
+      if(st)st.innerHTML='<span style="color:#999">已清除</span>'
     }
-    alert(val?'✅ 管理员令牌已保存！刷新后生效':'已清除管理员令牌')
   }catch(e){alert('保存失败: '+e.message)}
+}
+function verifyAdminToken(tok){
+  if(!tok)return
+  var st=ad('adminTokenStatus')
+  if(st)st.innerHTML='<span style="color:#999">⏳ 验证中…</span>'
+  fetch('/api/device/verify-token',{headers:{'X-Admin-Token':tok}}).then(function(r){return r.json()}).then(function(j){
+    if(st){
+      if(j.valid){
+        st.innerHTML='<span style="color:#16a34a;font-weight:600">✅ 令牌有效 (👑 管理员)</span>'
+      }else{
+        st.innerHTML='<span style="color:#ef4444;font-weight:600">❌ 令牌无效</span>'
+      }
+    }
+  }).catch(function(){if(st)st.innerHTML='<span style="color:#999">⏳ 验证失败</span>'})
 }
 
 async function removeDevice(idx){
