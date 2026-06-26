@@ -86,6 +86,11 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private lastScanAt;
     private readonly SCAN_INTERVAL;
     private marketHoursBeganAt;
+    private _pgSql;
+    private get pgSql();
+    private ensurePgTable;
+    private saveCacheToPg;
+    private loadCacheFromPg;
     constructor(dataFetcher: DataFetcherService, stockService: StockService);
     private isFrozenSchedule;
     private updateMarketHoursBeganAt;
@@ -94,6 +99,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private loadSectorCacheFromDisk;
     clearCache(): Promise<void>;
     private saveCacheToDisk;
+    private saveMainBoardCacheToDisk;
     private loadSellStateCache;
     private saveSellStateCache;
     syncSellStateFromFrontend(sellStates: {
@@ -213,7 +219,6 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         opportunities: OpportunityStock[];
         timestamp: number;
     }>;
-    private saveMainBoardCacheToDisk;
     getAllOpportunities(): Promise<OpportunityStock[]>;
     computeFullSuggestion(code: string): Promise<{
         suggestion: string;

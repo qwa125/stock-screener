@@ -26,6 +26,7 @@ const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
 const pinyin_pro_1 = require("pinyin-pro");
 const data_1 = require("../../industry-sectors/data");
+const postgres_1 = require("postgres");
 const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
@@ -33,6 +34,73 @@ function getOpportunityTTL() {
     return (0, market_time_1.isMarketOpen)() ? MARKET_OPEN_TTL : FROZEN_TTL;
 }
 let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
+    get pgSql() {
+        if (this._pgSql)
+            return this._pgSql;
+        const url = process.env.DATABASE_URL;
+        if (!url)
+            return null;
+        try {
+            this._pgSql = (0, postgres_1.default)(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
+            this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL 连接失败，缓存仅在内存/磁盘: ${e.message}`);
+            this._pgSql = null;
+        }
+        return this._pgSql;
+    }
+    async ensurePgTable() {
+        try {
+            const sql = this.pgSql;
+            if (!sql)
+                return false;
+            await sql `CREATE TABLE IF NOT EXISTS stock_scan_cache (
+        cache_key VARCHAR(100) PRIMARY KEY,
+        cache_value JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`;
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async saveCacheToPg(key, data) {
+        try {
+            const sql = this.pgSql;
+            if (!sql)
+                return;
+            const json = JSON.stringify(data);
+            await sql `
+        INSERT INTO stock_scan_cache (cache_key, cache_value)
+        VALUES (${key}, ${json}::jsonb)
+        ON CONFLICT (cache_key)
+        DO UPDATE SET cache_value = EXCLUDED.cache_value, updated_at = NOW()
+      `;
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL 写入失败(cache_key=${key}): ${e.message}`);
+        }
+    }
+    async loadCacheFromPg(key) {
+        try {
+            const sql = this.pgSql;
+            if (!sql)
+                return null;
+            const rows = await sql `SELECT cache_value FROM stock_scan_cache WHERE cache_key = ${key}`;
+            if (rows && rows.length > 0) {
+                const raw = rows[0].cache_value;
+                if (typeof raw === 'string')
+                    return JSON.parse(raw);
+                return raw;
+            }
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL 读取失败(cache_key=${key}): ${e.message}`);
+        }
+        return null;
+    }
     constructor(dataFetcher, stockService) {
         this.dataFetcher = dataFetcher;
         this.stockService = stockService;
@@ -70,6 +138,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.lastScanAt = 0;
         this.SCAN_INTERVAL = 5 * 60 * 1000;
         this.marketHoursBeganAt = 0;
+        this._pgSql = null;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -199,7 +268,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             await fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
         }
         catch (err) {
-            this.logger.warn(`⚠️ 缓存写入失败: ${err.message}`);
+            this.logger.warn(`⚠️ GEM缓存写入失败: ${err.message}`);
+        }
+        if (this.cache?.data?.length) {
+            await this.saveCacheToPg('gem', this.cache);
+        }
+    }
+    async saveMainBoardCacheToDisk() {
+        try {
+            await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
+        }
+        catch (err) {
+            this.logger.warn(`⚠️ 主板缓存写入失败: ${err.message}`);
+        }
+        if (this.mainBoardCache?.data?.length) {
+            await this.saveCacheToPg('main_board', this.mainBoardCache);
         }
     }
     loadSellStateCache() {
@@ -537,6 +620,30 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 主板机会区: 无缓存, 等待前端推送数据');
         }
         await this.loadSellStateCache();
+        await this.ensurePgTable();
+        const pgGem = await this.loadCacheFromPg('gem');
+        if (pgGem && pgGem.data && pgGem.data.length > 0) {
+            if (!this.cache || this.cache.data.length === 0) {
+                this.cache = pgGem;
+                this.logger.log(`✅ PostgreSQL 创业板缓存恢复: ${pgGem.data.length} 只`);
+            }
+            try {
+                await fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(pgGem), 'utf-8');
+            }
+            catch { }
+        }
+        const pgMain = await this.loadCacheFromPg('main_board');
+        if (pgMain && pgMain.data && pgMain.data.length > 0) {
+            if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
+                this.mainBoardCache = pgMain;
+                this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只`);
+            }
+            try {
+                await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8');
+            }
+            catch { }
+        }
+        this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length ?? 0} 只, 主板 ${this.mainBoardCache?.data?.length ?? 0} 只`);
     }
     calcKDJ(kline) {
         const high = kline.map(k => k.high);
@@ -2216,12 +2323,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.saveMainBoardCacheToDisk();
         return { opportunities: data, timestamp: Date.now() };
     }
-    async saveMainBoardCacheToDisk() {
-        try {
-            await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf8');
-        }
-        catch { }
-    }
     async getAllOpportunities() {
         const results = [];
         if (this.cache?.data?.length)
@@ -3126,14 +3227,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
             this.cache = { data: gemStocks, timestamp: now };
             this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
-            try {
-                require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
-            }
-            catch { }
-            try {
-                require('fs').writeFileSync(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
-            }
-            catch { }
+            await this.saveCacheToDisk();
+            await this.saveMainBoardCacheToDisk();
             for (const stock of updated) {
                 if (!stock.trendPrediction) {
                     stock.trendPrediction = this.calcSimpleTrendPrediction(stock);

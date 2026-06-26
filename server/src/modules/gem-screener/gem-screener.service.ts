@@ -14,6 +14,7 @@ import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
 import { pinyin } from 'pinyin-pro';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
+import postgres from 'postgres';
 
 // 合并申万行业 + 热点概念板块
 const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
@@ -139,6 +140,67 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private lastScanAt: number = 0;                        // 最近一次全量扫描时间戳
   private readonly SCAN_INTERVAL = 5 * 60 * 1000;        // 5分钟间隔
   private marketHoursBeganAt: number = 0;                // 本交易日 9:15 时间戳
+
+  // ─── PostgreSQL 持久化（Render 上重启不丢缓存） ───
+  private _pgSql: ReturnType<typeof postgres> | null = null;
+  private get pgSql(): ReturnType<typeof postgres> | null {
+    if (this._pgSql) return this._pgSql;
+    const url = process.env.DATABASE_URL;
+    if (!url) return null;
+    try {
+      this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
+      this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
+    } catch (e) {
+      this.logger.warn(`⚠️ PostgreSQL 连接失败，缓存仅在内存/磁盘: ${(e as Error).message}`);
+      this._pgSql = null;
+    }
+    return this._pgSql;
+  }
+
+  private async ensurePgTable(): Promise<boolean> {
+    try {
+      const sql = this.pgSql;
+      if (!sql) return false;
+      await sql`CREATE TABLE IF NOT EXISTS stock_scan_cache (
+        cache_key VARCHAR(100) PRIMARY KEY,
+        cache_value JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`;
+      return true;
+    } catch { return false; }
+  }
+
+  private async saveCacheToPg(key: string, data: any): Promise<void> {
+    try {
+      const sql = this.pgSql;
+      if (!sql) return;
+      const json = JSON.stringify(data);
+      await sql`
+        INSERT INTO stock_scan_cache (cache_key, cache_value)
+        VALUES (${key}, ${json}::jsonb)
+        ON CONFLICT (cache_key)
+        DO UPDATE SET cache_value = EXCLUDED.cache_value, updated_at = NOW()
+      `;
+    } catch (e) {
+      this.logger.warn(`⚠️ PostgreSQL 写入失败(cache_key=${key}): ${(e as Error).message}`);
+    }
+  }
+
+  private async loadCacheFromPg<T>(key: string): Promise<T | null> {
+    try {
+      const sql = this.pgSql;
+      if (!sql) return null;
+      const rows = await sql`SELECT cache_value FROM stock_scan_cache WHERE cache_key = ${key}`;
+      if (rows && rows.length > 0) {
+        const raw = rows[0].cache_value;
+        if (typeof raw === 'string') return JSON.parse(raw) as T;
+        return raw as T;
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ PostgreSQL 读取失败(cache_key=${key}): ${(e as Error).message}`);
+    }
+    return null;
+  }
 
   // ─── 卖出锁定持久化 ───
 
@@ -282,7 +344,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
     try {
       await fs.writeFile(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
     } catch (err) {
-      this.logger.warn(`⚠️ 缓存写入失败: ${err.message}`);
+      this.logger.warn(`⚠️ GEM缓存写入失败: ${err.message}`);
+    }
+    // 同时持久化到 PostgreSQL，以便 Render 重启后恢复
+    if (this.cache?.data?.length) {
+      await this.saveCacheToPg('gem', this.cache);
+    }
+  }
+
+  private async saveMainBoardCacheToDisk() {
+    try {
+      await fs.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
+    } catch (err) {
+      this.logger.warn(`⚠️ 主板缓存写入失败: ${err.message}`);
+    }
+    // 同时持久化到 PostgreSQL
+    if (this.mainBoardCache?.data?.length) {
+      await this.saveCacheToPg('main_board', this.mainBoardCache);
     }
   }
 
@@ -673,6 +751,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
     // 由用户前端页面访问时触发
     // 加载卖出状态持久缓存
     await this.loadSellStateCache();
+
+    // ─── PostgreSQL 持久缓存恢复（Render 重启后 /tmp 清空，从数据库恢复） ───
+    await this.ensurePgTable();
+    const pgGem = await this.loadCacheFromPg<{ data: any[]; timestamp: number }>('gem');
+    if (pgGem && pgGem.data && pgGem.data.length > 0) {
+      if (!this.cache || this.cache.data.length === 0) {
+        this.cache = pgGem;
+        this.logger.log(`✅ PostgreSQL 创业板缓存恢复: ${pgGem.data.length} 只`);
+      }
+      // 即使内存有缓存，也确保 /tmp 有最新副本（修复首次部署/assets比PG旧的问题）
+      try { await fs.writeFile(this.CACHE_FILE, JSON.stringify(pgGem), 'utf-8'); } catch {}
+    }
+    const pgMain = await this.loadCacheFromPg<{ data: any[]; timestamp: number }>('main_board');
+    if (pgMain && pgMain.data && pgMain.data.length > 0) {
+      if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
+        this.mainBoardCache = pgMain;
+        this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只`);
+      }
+      try { await fs.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8'); } catch {}
+    }
+    this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length??0} 只, 主板 ${this.mainBoardCache?.data?.length??0} 只`);
 
     }
 
@@ -2637,11 +2736,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     return { opportunities: data, timestamp: Date.now() };
   }
 
-  private async saveMainBoardCacheToDisk(): Promise<void> {
-    try { await fs.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf8'); }
-    catch {}
-  }
-
   /**
    * 获取所有机会股（创业板+主板），供板块机会区交叉引用
    */
@@ -3670,8 +3764,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
       this.cache = { data: gemStocks, timestamp: now };
       this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
-      try { require('fs').writeFileSync(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8'); } catch {}
-      try { require('fs').writeFileSync(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8'); } catch {}
+      await this.saveCacheToDisk();
+      await this.saveMainBoardCacheToDisk();
 
       // ─── 为结果添加简化趋势预测 + 未来1-2日预测 ───
       for (const stock of updated) {
