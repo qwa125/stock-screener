@@ -1,4 +1,4 @@
-<!-- Core v20250627-trend5 -->
+<!-- Core v20250627-restore28db1c2 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -198,7 +198,6 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime=''
-var searchStockCode=null,searchStockObj=null // 搜索股票的详情跟踪（用于2s刷新）
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
 var FROZEN_KEY='frozenSnapshot'
 function saveFrozenSnapshot(arr){
@@ -534,8 +533,7 @@ async function fetchKlineAndAnalyze(s){
 }
 function setStatus(s){$('status').textContent=s}
 function updateScanCount(n){var b=$('scanCountBadge');if(b){b.textContent=n>0?n+'只':'—'}}
-var selectedIdx=-1
-// 白消白布：仅用昨收+日内区间判断买卖点，无技术分析
+var selectedIdx=-1,searchStockCode=null,searchStockObj=null,currentTaData=null
 
 function posLabel(p){
   if(p<25) return '低位区'
@@ -709,8 +707,7 @@ function gridChipLine(s,entry){
 }
 
 function showDetail(i){
-  $('scanBtn').style.display='none'
-  selectedIdx=i
+  selectedIdx=i;if($('scanBtn'))$('scanBtn').style.display='none'
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
   da.style.display='block'
@@ -725,7 +722,18 @@ function showDetail(i){
       }
     }).catch(function(){})
   }
-  }
+  renderList()
+  // ★ 异步拉取技术指标分析（MACD/KDJ/布林带/RSI/量比→最佳介入价）
+  ;(async function(){
+    try{
+      var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
+      var tj=await tr.json()
+      if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
+        currentTaData=tj.data
+        da.innerHTML=buildDetail(s,rt,tj.data)
+      }
+    }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
+  })()
 }
 
 // ---------- 腾讯实时行情 ----------
@@ -753,55 +761,6 @@ async function fetchRealtime(codes){
 }
 
 // ---------- 构建分析详情HTML（仿旧版模板） ----------
-function buildEntrySection(s,rt){
-  // 独立构建"当前位置是否适合介入"模块，供首次渲染和2s轮询复用
-  var rt=rt||{}
-  var price=rt.price||s.currentPrice||0
-  var html=''
-  if(price>0&&rt.yc>0){
-    var intraPos=rt.high>rt.low?((price-rt.low)/(rt.high-rt.low)*100):50
-    var vsYc=rt.yc>0?((price-rt.yc)/rt.yc*100):0
-    var tagText="", tagClr="", msg=""
-    if(vsYc<-0.5&&intraPos<30){
-      tagText="分批低吸";tagClr="#16a34a";msg="低于昨收+靠近日内低位，分批低吸"
-    }else if(vsYc<-0.5&&intraPos<65){
-      tagText="等企稳";tagClr="#2563eb";msg="低于昨收+中段回调，等企稳"
-    }else if(vsYc>2&&intraPos>70){
-      tagText="等回调";tagClr="#ca8a04";msg="高于昨收+大幅反弹，不追高，等回调"
-    }else if(vsYc>0.5&&intraPos<50){
-      tagText="可介入";tagClr="#16a34a";msg="高于昨收+温和上涨，可介入，设止损"
-    }else if(Math.abs(vsYc)<=0.5&&intraPos<40){
-      tagText="安全边际高";tagClr="#16a34a";msg="围绕昨收+低位，安全边际高"
-    }else if(Math.abs(vsYc)<=0.5&&intraPos>60){
-      tagText="等回调";tagClr="#2563eb";msg="围绕昨收+高位，等回调"
-    }else{
-      tagText="等企稳";tagClr="#2563eb";msg="等企稳"
-    }
-    html='<div class="detail-entry-section" style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
-      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考 — 当前位置是否适合介入</div>'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-        +'<span style="background:'+tagClr+';color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">'+tagText+'</span>'
-        +'<span style="font-size:12px;color:#374151">✅ '+msg+'</span>'
-      +'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">'
-        +'<span style="background:#1f2937;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">当前 '+price.toFixed(2)+'</span>'
-        +'<span style="background:#6b7280;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">昨收 '+rt.yc.toFixed(2)+'</span>'
-        +'<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">低 '+rt.low.toFixed(2)+'</span>'
-        +'<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">高 '+rt.high.toFixed(2)+'</span>'
-      +'</div>'
-      +(rt.high>rt.low?'<div style="position:relative;margin-bottom:4px;height:24px;border-radius:6px;background:linear-gradient(to right,#22c55e 0%,#eab308 50%,#ef4444 100%);position:relative;overflow:visible">'
-        +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-6px;width:0;height:0;margin-left:-6px;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #1f2937;z-index:2"></div>'
-        +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:0;width:2px;height:24px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
-      +'</div>':'')
-      +'<div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:6px">'
-        +'<span>低 '+rt.low.toFixed(2)+'</span>'
-        +'<span>中 '+(rt.low+(rt.high-rt.low)/2).toFixed(2)+'</span>'
-        +'<span>高 '+rt.high.toFixed(2)+'</span>'
-      +'</div>'
-    +'</div>'
-  }
-  return html
-}
 function buildDetail(s,rt,ta){
   var rt=rt||{}
   var price=rt.price||s.currentPrice||0
@@ -851,19 +810,120 @@ function buildDetail(s,rt,ta){
   // 指标网格
   var mfClr=''
   var grid='<div style="padding:4px 12px 4px;font-size:12px;font-weight:600;color:#666">📊 技术指标</div><div class="indicator-grid">'
-    +'<div class="indicator-item"><div class="label">实时价格</div><div class="value detail-price-value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
-    +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value detail-chg-value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
+    +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
+    +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
     +gridChipLine(s,entry)
-    +'<div class="indicator-item"><div class="label">最高价</div><div class="value detail-high-value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
-    +'<div class="indicator-item"><div class="label">最低价</div><div class="value detail-low-value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
-  // 🕐 当前位置是否适合介入
-  var entryHtml=buildEntrySection(s,rt)
+  // 🕐 技术指标分析（含日内介入点建议）
+  var entryHtml=''
+  if(ta&&ta.entryScore!=null){
+    // ———— 全量技术指标分析 ————
+    var sc=ta.entryScore
+    var scClr=sc>=75?'#16a34a':sc>=55?'#ca8a04':sc>=35?'#6b7280':'#dc2626'
+    var scLbl=sc>=75?'极佳介入点 ⭐':sc>=55?'良好介入点 ✓':sc>=35?'观望区 −':'不建议介入 ✗'
+    var bb=ta.bollinger
+    var posStr=''
+    if(rt.price&&bb){
+      if(rt.price<=bb.lower) posStr='触及下轨，超卖区'
+      else if(rt.price<=bb.lower+(bb.middle-bb.lower)*0.5) posStr='下轨附近，偏低区'
+      else if(rt.price<=bb.middle+(bb.upper-bb.middle)*0.3) posStr='中轨附近，均衡区'
+      else if(rt.price<=bb.upper) posStr='上轨附近，偏高区'
+      else posStr='突破上轨，超买区'
+    }
+    entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">📊 技术指标综合评定</div>'
+      // 评分大标签
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span style="background:'+scClr+';color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">'+scLbl+'（'+sc.toFixed(0)+'分）</span>'
+      +'</div>'
+      // 布林带位置
+      +(bb?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px">'
+        +'<span style="background:#1f2937;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">布林中轨 '+bb.middle.toFixed(2)+'</span>'
+        +'<span style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">下轨 '+bb.lower.toFixed(2)+'</span>'
+        +'<span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px">上轨 '+bb.upper.toFixed(2)+'</span>'
+      +'</div>':'')
+      // 布林带可视化长条
+      +(bb?'<div style="position:relative;margin-bottom:4px;height:20px;background:linear-gradient(to right,#22c55e 0%,#86efac 25%,#fef08a 50%,#fca5a5 75%,#ef4444 100%);border-radius:6px">'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-4px;width:0;height:0;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:7px solid #1f2937;z-index:2"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:0;width:2px;height:20px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
+        +'<div style="position:absolute;left:'+(rt.price&&bb.middle&&bb.upper>bb.lower?((rt.price-bb.lower)/(bb.upper-bb.lower)*100).toFixed(0):'50')+'%;top:-20px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
+      +'</div>':'')
+      // 布林带文字描述
+      +(posStr?'<div style="color:#374151;font-size:10px;margin-bottom:5px">📍 价格位置：'+posStr+'</div>':'')
+      // 指标网格
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:5px">'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">MACD</span><br><span style="font-weight:600">DIF '+ta.macd.dif.toFixed(3)+'<br>DEA '+ta.macd.dea.toFixed(3)+'<br>柱 '+(ta.macd.hist>=0?'+':'')+ta.macd.hist.toFixed(3)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">KDJ</span><br><span style="font-weight:600">K '+ta.kdj.k.toFixed(1)+'<br>D '+ta.kdj.d.toFixed(1)+'<br>J '+ta.kdj.j.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">RSI</span><br><span style="font-weight:600;color:'+(ta.rsi>=70?'#ef4444':ta.rsi<=30?'#22c55e':'#1f2937')+'">RSI(14) '+ta.rsi.toFixed(1)+'<br>RSI(6) '+ta.rsi6.toFixed(1)+'</span></div>'
+        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">量比</span><br><span style="font-weight:600;color:'+(ta.volumeRatio>=1.5?'#ef4444':ta.volumeRatio>=0.8?'#ca8a04':'#6b7280')+'">'+(ta.volumeRatio>0?ta.volumeRatio.toFixed(2)+'x':'-')+'</span></div>'
+      +'</div>'
+      // 综合理由
+      +'<div style="background:#fff;border-radius:4px;padding:5px 6px;margin-bottom:5px">'
+        +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
+        +'<ul style="list-style:none;padding:0;margin:0">'
+          +ta.reasoning.map(function(r){return '<li style="font-size:9px;color:#6b7280;line-height:1.7;padding-left:10px;position:relative">• '+r+'</li>'}).join('')
+        +'</ul>'
+      +'</div>'
+      // 最佳介入价
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">✅ 最佳介入价</span>'
+        +'<span style="font-size:15px;font-weight:700;color:#16a34a">'+ta.bestEntryPrice.toFixed(2)+'</span>'
+        +'<span style="font-size:10px;color:#6b7280">⬇ 支撑 '+ta.supportLevel.toFixed(2)+' | ⬆ 压力 '+ta.resistanceLevel.toFixed(2)+'</span>'
+      +'</div>'
+    +'</div>'
+  }else if(rt.high!=null&&rt.low!=null&&rt.high>=rt.low&&rt.high>0){
+    // ———— 降级：纯日内位置（无技术分析时） ————
+    var intraPos=((rt.price-rt.low)/(rt.high-rt.low))*100
+    var sugg='', bestPrice='', hangAdvice=''
+    if(intraPos<20){
+      sugg='📊 当前处于日内 <b>低位区</b>（接近最低价）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+rt.price.toFixed(2)+'</span> 现价即可，安全边际高'
+      var hLow=rt.low*0.98; hangAdvice='挂单参考：现价买入，或挂 <span class="num-badge">'+hLow.toFixed(2)+'</span>（低2%）等更低点位'
+    }else if(intraPos<40){
+      var tgt=rt.low+(rt.high-rt.low)*0.3
+      sugg='📊 当前处于日内 <b>中低位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+tgt.toFixed(2)+'</span>（30%回踩位）'
+      hangAdvice='挂单参考：现价介入，或挂单 <span class="num-badge">'+tgt.toFixed(2)+'</span> 等回踩后买入'
+    }else if(intraPos<60){
+      var tgt=rt.low+(rt.high-rt.low)*0.3
+      sugg='📊 当前处于日内 <b>中位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">'+tgt.toFixed(2)+'</span>（回踩30%分位）'
+      hangAdvice='挂单参考：不建议现价追，挂单 <span class="num-badge">'+tgt.toFixed(2)+'</span> 等待回调介入'
+    }else if(intraPos<80){
+      sugg='📊 当前处于日内 <b>高位区</b>（'+intraPos.toFixed(0)+'%分位）'
+      bestPrice='⚠️ 建议等待回调至中位以下再介入'
+      hangAdvice='挂单参考：若想介入，可挂 <span class="num-badge">'+(rt.low+(rt.high-rt.low)*0.4).toFixed(2)+'</span>（40%分位）轻仓试水'
+    }else{
+      sugg='📊 当前处于日内 <b>极高区</b>（'+intraPos.toFixed(0)+'%分位，接近最高价）'
+      bestPrice='⛔ 不建议追高，等待明日回调后再介入'
+      hangAdvice='挂单参考：今日观望为宜'
+    }
+    entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考</div>'
+      +'<div style="position:relative;margin-bottom:4px">'
+        +'<div style="height:24px;border-radius:6px;background:linear-gradient(to right,#22c55e 0%,#eab308 50%,#ef4444 100%);position:relative;overflow:visible">'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-6px;width:0;height:0;margin-left:-6px;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid #1f2937;z-index:2"></div>'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:0;width:2px;height:24px;margin-left:-1px;background:#1f2937;z-index:1"></div>'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:-22px;transform:translateX(-50%);background:#1f2937;color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:600;white-space:nowrap;z-index:3">¥'+rt.price.toFixed(2)+'</div>'
+        +'</div>'
+      +'</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+        +'<div style="color:#16a34a;font-size:10px;font-weight:500">⬆低 '+rt.low.toFixed(2)+'</div>'
+        +'<div style="color:#dc2626;font-size:10px;font-weight:500">高 '+rt.high.toFixed(2)+' ⬆</div>'
+      +'</div>'
+      +'<div style="color:#374151;font-size:10px">'+sugg+'</div>'
+      +'<div style="color:#15803d;font-size:10px;margin-top:3px">'+bestPrice+'</div>'
+      +'<div style="color:#6b7280;font-size:10px;margin-top:2px">'+hangAdvice+'</div>'
+    +'</div>'
+  }
+
   // 详情说明
   var details=[]
   if(sig==='重仓买入'){details.push('低位区'+p.toFixed(0)+'%：处于安全价位区间');details.push('MA5>MA10多头排列，趋势向上');details.push('强信号触发，技术面共振')}
@@ -873,7 +933,7 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';document.getElementById(\'scanBtn\').style.display=\'\';selectedIdx=-1;searchStockCode=null;searchStockObj=null;renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';document.getElementById(\'scanBtn\').style.display=\'\';selectedIdx=-1;searchStockCode=null;searchStockObj=null;renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
   return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
@@ -956,7 +1016,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none';$('scanBtn').style.display=''
+    selectedIdx=-1;if($('scanBtn'))$('scanBtn').style.display='';$('detailArea').style.display='none'
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1351,7 +1411,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none';$('scanBtn').style.display=''
+    selectedIdx=-1;if($('scanBtn'))$('scanBtn').style.display='';$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -1594,7 +1654,7 @@ async function doSearch(){
   var isUS=/[a-zA-Z]/.test(v)&&!/^\d/.test(v)&&!/^1a/i.test(v)
 
 
-  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockYc=0,stockMarket=''
+  var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
   
   // 第一步：确定代码和真实名称（多市场验证）
   if(isCode||isHK||isUS){
@@ -1610,7 +1670,7 @@ async function doSearch(){
     }else if(isUS){
       t=await fetchSinaUS(v)
     }
-    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockYc=t.yc;stockMarket=t.market}
+    if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
     else{
       da.style.display='block';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
       return
@@ -1630,7 +1690,7 @@ async function doSearch(){
         stockName=hit.Name||hit.Code
         // 查Tencent行情拿实时价
         var t=await fetchTencentDetail(stockCode)
-        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockYc=t.yc;stockMarket=t.market}
+        if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
         $('searchInput').value=stockName
       }
     }catch(e){}
@@ -1787,13 +1847,11 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        var _dbg=(o&&o._debug)||{};$('scanBtn').style.display='none';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
+        var _dbg=(o&&o._debug)||{};da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
 ma5Up='+_dbg.ma5Up+' ma10Up='+_dbg.ma10Up+' ma10TurnUp='+_dbg.ma10TurnUp+' baiBu='+_dbg.baiBuState+' baiXiao='+_dbg.baiXiao+'<br>\
 ma10_1dAgo='+_dbg.ma10_1dAgo+' pricePos='+_dbg.pricePos+' volRatio='+(_dbg.volRatio||'').toFixed(2)+' deepWash='+_dbg.deepWashoutApplied+'<br>\
 ma10Down='+_dbg.ma10Down+' trendState='+_dbg.trendState+' price>ma5='+_dbg.priceAboveMa5+' volActive='+(_dbg.volActive||'')+' qiangZhiFuGai='+_dbg.qiangZhiFuGai+'<br>\
 chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' keepAll='+_dbg.keepAll+'</div>':'')
-      // 记录搜索股票信息供2s刷新
-      searchStockObj=o;searchStockCode=o.code
       }else{
         throw new Error('分析无结果')
       }
@@ -1817,8 +1875,7 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc});$('scanBtn').style.display='none'
-          searchStockObj=o2;searchStockCode=o2.code
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
             +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
@@ -2050,51 +2107,16 @@ function startPriceRefresh(stks){
               chgSpan.style.color=chgClr
             }
           })
-          // 同步刷新详情面板中的价格和介入建议（每2s）
-          if(selectedIdx>=0&&stocks[selectedIdx]){
-            var ds=stocks[selectedIdx],drt=realtimePrices[ds.code]||{}
-            if(drt.price){
-              var da=$('detailArea')
-              var pv=da.querySelector('.detail-price-value')
-              if(pv){
-                var c=drt.chgP!==undefined?drt.chgP:(ds.changePercent||0)
-                pv.textContent='¥'+drt.price.toFixed(2)
-                pv.style.color=c>=0?'#ef4444':'#22c55e'
-              }
-              var cv=da.querySelector('.detail-chg-value')
-              if(cv){
-                var c2=drt.chgP!==undefined?drt.chgP:(ds.changePercent||0)
-                cv.textContent=(c2>=0?'+':'')+c2.toFixed(2)+'%'
-                cv.style.color=c2>=0?'#ef4444':'#22c55e'
-              }
-              var hv=da.querySelector('.detail-high-value')
-              if(hv&&drt.high!=null) hv.textContent=drt.high.toFixed(2)
-              var lv=da.querySelector('.detail-low-value')
-              if(lv&&drt.low!=null) lv.textContent=drt.low.toFixed(2)
-              // 刷新介入建议区域
-              var es=da.querySelector('.detail-entry-section')
-              if(es){
-                var newEntry=buildEntrySection(ds,drt)
-                if(newEntry) es.outerHTML=newEntry
-              }
-            }
-          }
-          // 搜索详情的2s刷新
-          if(searchStockCode&&searchStockObj){
-            fetchRealtime([searchStockCode]).then(function(fr){
-              var frt=fr&&fr[searchStockCode]
-              if(frt&&frt.price>0){
-                realtimePrices[searchStockCode]=frt
-                var sda=$('detailArea')
-                if(sda&&sda.style.display!=='none'){
-                  var ses=sda.querySelector('.detail-entry-section')
-                  if(ses){
-                    var sNew=buildEntrySection(searchStockObj,frt)
-                    if(sNew) ses.outerHTML=sNew
-                  }
-                }
-              }
-            }).catch(function(){})
+        }).catch(function(){})
+      }
+      // 详情面板2s刷新：价格&白消白布信号
+      if(selectedIdx>=0&&stocks[selectedIdx]){
+        var ds=stocks[selectedIdx],drt=realtimePrices[ds.code]||{}
+        fetchRealtime([ds.code]).then(function(nr){
+          if(nr&&nr[ds.code]){Object.assign(drt,nr[ds.code]);realtimePrices[ds.code]=drt}
+          var da=$('detailArea')
+          if(da&&da.style.display!='none'){
+            da.innerHTML=buildDetail(ds,drt,currentTaData)
           }
         }).catch(function(){})
       }
