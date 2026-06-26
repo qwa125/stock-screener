@@ -1977,16 +1977,45 @@ setTimeout(function(){
         },1000)
       })
   }else{
-    // 休盘/周末 → 恢复最后一次冻结快照（不重新拉取）
-    var snap=loadFrozenSnapshot()
-    if(snap&&snap.length){
-      stocks=snap
-      renderList()
-      setStatus('📊 已冻结 — '+freezeMsg()+' | 展示最后一次扫描结果')
-      $('footer').textContent='✅ 已冻结 '+snap.length+' 只 | '+lastScanTime
-    }else{
-      setStatus('⏸️ 等待扫描')
-    }
+    // 休盘/周末 → 优先从后端缓存加载（设备间共享），后端无缓存时回退到本地快照
+    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d.code===200&&d.data&&d.data.length){
+          // 后端缓存有效（盘后数据，设备间共享）
+          var ALLOWED={'重仓买入':1,'买入':1}
+          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          if(stocks.length){
+            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
+            renderList()
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享）')
+          }else{
+            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+          }
+        }else{
+          // 后端无缓存 → 尝试本地快照
+          var snap2=loadFrozenSnapshot()
+          if(snap2&&snap2.length){
+            stocks=snap2
+            renderList()
+            setStatus('📋 冻数据 '+(snap2.length||0))
+          }else{
+            setStatus('⏸️ 等待扫描')
+          }
+        }
+      })
+      .catch(function(e){
+        console.log('⚠️ 读缓存失败:',e.message)
+        // 网络异常时尝试本地快照
+        var snap3=loadFrozenSnapshot()
+        if(snap3&&snap3.length){
+          stocks=snap3
+          renderList()
+          setStatus('📋 本地快照恢复（盘后，网络异常）')
+        }else{
+          setStatus('⏸️ 等待扫描')
+        }
+      })
   }
 },3000)
 
