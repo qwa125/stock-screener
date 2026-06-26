@@ -17,7 +17,21 @@
     "fingerprint": "::1|Python-urllib/3.12",
     "ua": "Python-urllib/3.12",
     "displayName": "未识别",
-    "firstSeen": 1782335363414,
-    "lastSeen": 1782335363414
+    "firstSeen": 1782335363449,
+    "lastSeen": 1782335363449
+  },
+  {
+    "fingerprint": "__settings__",
+    "ua": "",
+    "displayName": "maxSlots:7",
+    "firstSeen": 1782355540162,
+    "lastSeen": 1782355540162
+  },
+  {
+    "fingerprint": "112.10.248.213|Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "displayName": "未识别",
+    "firstSeen": 1782485830148,
+    "lastSeen": 1782485830148
   }
 ]

@@ -376,6 +376,30 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message };
         }
     }
+    async cacheData(body) {
+        try {
+            const stocks = body?.stocks || [];
+            if (stocks.length === 0) {
+                return { code: 400, msg: 'no stocks data', data: { all: [], opportunities: [] } };
+            }
+            this.logger.log(`📥 接收前端全量数据: ${stocks.length} 只股票`);
+            const result = await this.gemScreener.cacheAllData(stocks);
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            this.logger.error(`❌ cache-data 分析失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: { all: [], opportunities: [] } };
+        }
+    }
+    async getScanResult() {
+        try {
+            const result = await this.gemScreener.getScanResult();
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            return { code: 500, msg: e.message, data: { opportunities: [], timestamp: Date.now() } };
+        }
+    }
     async rescanBatch(body) {
         if (!body.codes || !body.codes.length) {
             return { code: 400, msg: '请提供股票代码列表', data: [] };
@@ -816,6 +840,21 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "syncSellState", null);
+__decorate([
+    (0, common_1.Post)('cache-data'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "cacheData", null);
+__decorate([
+    (0, common_1.Get)('scan-result'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getScanResult", null);
 __decorate([
     (0, common_1.Post)('rescan-batch'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

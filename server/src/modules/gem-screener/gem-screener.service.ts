@@ -123,6 +123,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
     '持有': 4, '减仓': 5, '卖出': 6, '不要介入': 7,
   };
 
+  /** 全量分析缓存（所有分析结果，不限信号类型） */
+  private fullCache: CacheEntry | null = null;
+  private readonly FULL_CACHE_PATH = '/tmp/full-scan-cache.json';
   private cache: CacheEntry | null = null;
   private refreshPromise: Promise<void> | null = null;
   private mainBoardCache: CacheEntry | null = null;
@@ -4112,6 +4115,113 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.saveCacheToDisk();
     this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
     return finalResults;
+  }
+
+  /**
+   * 全量数据分析 + 缓存（接收前端推送的原始数据，运行完整分析并保存所有结果）
+   * 与 scanAllWithFrontendData 的区别：保存所有信号类型（含持有/减仓/卖出/不要介入），不限Top30
+   */
+  async cacheAllData(
+    stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: any[] }[]
+  ): Promise<{
+    all: OpportunityStock[];
+    opportunities: OpportunityStock[];
+    timestamp: number;
+  }> {
+    const results: OpportunityStock[] = [];
+    // 预加载K线
+    for (const s of stocks) {
+      if (s.klines && s.klines.length >= 20) {
+        this.dataFetcher.preloadKline(s.code, s.klines);
+      }
+    }
+    // 分析每只股票
+    for (const s of stocks) {
+      try {
+        const candidate: StockCandidate = {
+          code: s.code, name: s.name, inflow: s.inflow ?? 0,
+          changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+        };
+        const result = await this.checkOpportunity(candidate);
+        if (result) results.push(result);
+      } catch {}
+    }
+    // 如果机会太少，放松条件再扫一轮
+    if (results.filter(r => ['重仓买入', '买入', '轻仓买入'].includes(r.suggestion ?? '')).length <= 3) {
+      for (const s of stocks) {
+        try {
+          const candidate: StockCandidate = {
+            code: s.code, name: s.name, inflow: s.inflow ?? 0,
+            changePercent: s.changePercent ?? 0, currentPrice: s.price ?? 0,
+          };
+          const result = await this.checkOpportunityRelaxed(candidate);
+          if (result && !results.find(ex => ex.code === result.code)) results.push(result);
+        } catch {}
+      }
+    }
+    // 卖出锁定状态机
+    const SELL_LOCK = ['卖出'];
+    const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
+    for (const r of results) {
+      const code = r.code;
+      if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
+        this.soldOutStocks.delete(code);
+      } else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
+        this.soldOutStocks.add(code);
+      } else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
+        if (this.soldOutStocks.has(code)) {
+          r.suggestion = '不要介入';
+        }
+      }
+    }
+    // 排序
+    results.sort((a: any, b: any) => {
+      const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+      const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+      return pa !== pb ? pa - pb
+        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+        : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+    });
+    // 提取买入信号
+    const buyResults = results.filter(r => BUY_SIGNALS.includes(r.suggestion ?? ''));
+    // 填充预测
+    this.upgradeCacheFields(results);
+    this.addForecastToCache(results);
+    // 保存全量缓存
+    const ts = Date.now();
+    this.fullCache = { data: results, timestamp: ts };
+    try {
+      const dir = require('path').dirname(this.FULL_CACHE_PATH);
+      if (!require('fs').existsSync(dir)) require('fs').mkdirSync(dir, { recursive: true });
+      require('fs').writeFileSync(this.FULL_CACHE_PATH, JSON.stringify(this.fullCache, null, 2));
+    } catch {}
+    // 也保存到 cache（兼容旧接口）
+    this.cache = { data: buyResults.slice(0, 30), timestamp: ts };
+    this.saveCacheToDisk();
+    this.logger.log(`✅ 全量数据分析完成: ${results.length} 只有效, ${buyResults.length} 只买入信号`);
+    return { all: results, opportunities: buyResults.slice(0, 30), timestamp: ts };
+  }
+
+  /**
+   * 获取机会区结果（仅重仓买入/买入）
+   */
+  async getScanResult(): Promise<{ opportunities: OpportunityStock[]; timestamp: number }> {
+    // 优先从全量缓存读取
+    if (this.fullCache && this.fullCache.data?.length > 0) {
+      const buyResults = this.fullCache.data.filter(r =>
+        ['重仓买入', '买入'].includes(r.suggestion ?? '')
+      );
+      return { opportunities: buyResults.slice(0, 30), timestamp: this.fullCache.timestamp };
+    }
+    // 降级到旧缓存
+    if (this.cache && this.cache.data?.length > 0) {
+      const buyResults = this.cache.data.filter(r =>
+        ['重仓买入', '买入'].includes(r.suggestion ?? '')
+      );
+      return { opportunities: buyResults.slice(0, 30), timestamp: this.cache.timestamp };
+    }
+    return { opportunities: [], timestamp: Date.now() };
   }
 
   // ─── 回测: 评分系统预测能力验证 ────────────────────────────

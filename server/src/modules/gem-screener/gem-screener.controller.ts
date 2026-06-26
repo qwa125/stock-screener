@@ -436,6 +436,42 @@ export class GemScreenerController {
     }
   }
 
+  /**
+   * 接收前端推送的原始股票数据 + 120日K线，全量分析并缓存
+   * POST /api/gem/cache-data
+   */
+  @Post('cache-data')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async cacheData(@Body() body: { stocks: { code: string; name: string; price: number; changePercent: number; inflow: number; klines: any[] }[] }) {
+    try {
+      const stocks = body?.stocks || [];
+      if (stocks.length === 0) {
+        return { code: 400, msg: 'no stocks data', data: { all: [], opportunities: [] } };
+      }
+      this.logger.log(`📥 接收前端全量数据: ${stocks.length} 只股票`);
+      const result = await this.gemScreener.cacheAllData(stocks);
+      return { code: 200, msg: 'success', data: result };
+    } catch (e: any) {
+      this.logger.error(`❌ cache-data 分析失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: { all: [], opportunities: [] } };
+    }
+  }
+
+  /**
+   * 获取机会区结果（仅重仓买入/买入）
+   * GET /api/gem/scan-result
+   */
+  @Get('scan-result')
+  async getScanResult() {
+    try {
+      const result = await this.gemScreener.getScanResult();
+      return { code: 200, msg: 'success', data: result };
+    } catch (e: any) {
+      return { code: 500, msg: e.message, data: { opportunities: [], timestamp: Date.now() } };
+    }
+  }
+
   @Post('rescan-batch')
   @SkipAccessLimit()
   @HttpCode(200)

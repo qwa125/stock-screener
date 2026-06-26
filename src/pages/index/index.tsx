@@ -1,349 +1,414 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
-import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react-taro'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import './index.css'
+import { Button } from '@/components/ui/button'
+import { Network } from '@/network'
 
-const ACTION_BADGE_COLOR: Record<string, string> = {
-  '重仓买入': '#dc2626', '买入🏆': '#16a34a', '买入': '#2563eb',
-  '轻仓买入': '#ca8a04', '持有': '#6b7280',
+const BUY_COLORS: Record<string, string> = { '重仓买入': '#dc2626', '买入': '#2563eb' }
+
+function getBJ(): Date {
+  const n = new Date()
+  return new Date(n.getTime() + n.getTimezoneOffset() * 60000 + 28800000)
 }
-const ACTION_ORDER = ['重仓买入', '买入🏆', '买入', '轻仓买入']
-function getActionPriority(a: string): number { const i = ACTION_ORDER.indexOf(a); return i >= 0 ? i : 999 }
-function getBJ(): Date { const n = new Date(); return new Date(n.getTime() + n.getTimezoneOffset() * 60000 + 28800000) }
-function isTH(): boolean { const b = getBJ(); if (b.getDay() === 0 || b.getDay() === 6) return false; const m = b.getHours() * 60 + b.getMinutes(); return m >= 540 && m < 900 }
-function freezeMsg(): string {
-  const b = getBJ(); const d = b.getDay(); const m = b.getHours() * 60 + b.getMinutes()
-  if (d === 0 || d === 6) return '周末休市，已冻结至周一 9:00'
-  if (m >= 900) return d === 5 ? '周五收盘，已冻结至下周一 9:00' : '收盘已冻结，明早 9:00 恢复'
-  if (m < 540) return '盘前已冻结，9:00 恢复'; return ''
+
+function isTradingDay(): boolean {
+  const b = getBJ()
+  return b.getUTCDay() >= 1 && b.getUTCDay() <= 5
 }
-async function fetchKlines(code: string, minL = 20): Promise<any[]> {
-  for (const src of [
-    `http://d.10jqka.com.cn/v2/line/hs_${code}/01/last.js`,
-    `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code.startsWith('6')?'sh':'sz'}${code},day,,,100,qfq`,
-    `http://push2.eastmoney.com/api/qt/stock/kline/get?secid=${(code.startsWith('6')||code.startsWith('68'))?1:0}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101`,
-  ]) {
-    try {
-      const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 5000)
-      const r = await fetch(src, { signal: ac.signal }); clearTimeout(tid); const txt = await r.text()
-      let kl: any[] = []
-      if (src.includes('10jqka')) {
-        const m = txt.match(/\{.*\}/)
-        if (m) { const j = JSON.parse(m[0]); kl = (j?.data||'').split(';').filter(Boolean).map((s: string) => { const p = s.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} }) }
-      } else if (src.includes('gtimg')) {
-        const pk = (code.startsWith('6')?'sh':'sz')+code; const j = JSON.parse(txt)
-        kl = (j?.data?.[pk]?.qfqday || []).map((k: any) => ({d:k[0],o:+k[1],c:+k[2],h:+k[3],l:+k[4],v:+k[5]}))
-      } else {
-        const j = JSON.parse(txt)
-        kl = (j?.data?.klines || []).map((k: string) => { const p = k.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} })
-      }
-      if (kl.length >= minL) return kl
-    } catch(e) {}
-  }
-  return []
+
+function bjMinutes(): number {
+  const b = getBJ()
+  return b.getUTCHours() * 60 + b.getUTCMinutes()
 }
-async function fetchEMList(fs: string): Promise<any[]> {
+
+/** 是否在交易时间段(9:25-11:30 / 13:00-15:00) */
+function isInScanWindow(): boolean {
+  if (!isTradingDay()) return false
+  const m = bjMinutes()
+  return (m >= 565 && m < 690) || (m >= 780 && m < 900)
+}
+
+function isLunch(): boolean {
+  return bjMinutes() >= 690 && bjMinutes() < 780
+}
+
+function nextScanMinutes(): number {
+  const m = bjMinutes()
+  if (!isTradingDay() || m >= 900) return -1
+  if (m < 565) return 565
+  if (isLunch()) return 780
+  // 下一个10分钟整点
+  return Math.ceil((m + 1) / 10) * 10
+}
+
+function freezeText(): string {
+  const b = getBJ()
+  const d = b.getUTCDay()
+  const m = bjMinutes()
+  if (d === 0 || d === 6) return '周末休市，下周一 9:25 开盘'
+  if (m >= 900) return d === 5 ? '周五收盘，下周一 9:25 恢复' : '今日收盘，明早 9:25 恢复'
+  if (isLunch()) return '午间休市，13:00 恢复'
+  if (m < 565) return '盘前等待，9:25 开盘'
+  return ''
+}
+
+async function getRanking(board: 'gem' | 'main'): Promise<any[]> {
+  const fs = board === 'gem' ? 'm:0+t:80' : 'm:0+t:6,m:1+t:1'
   const all: any[] = []
-  for (let pn = 1; pn <= 3; pn++) {
+  for (let pn = 1; pn <= 2; pn++) {
     try {
-      const r = await fetch(`http://push2.eastmoney.com/api/qt/clist/get?pn=${pn}&pz=5000&po=1&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f2,f3`)
-      const j = await r.json(); (j?.data?.diff || []).forEach((x: any) => { if (x.f12) all.push({c:String(x.f12),n:x.f14,p:x.f2||0,cp:x.f3||0}) })
-      if ((j?.data?.diff || []).length < 5000) break
-    } catch(e) { break }
+      const r = await fetch(
+        `https://push2.eastmoney.com/api/qt/clist/get?pn=${pn}&pz=500&po=1&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f2,f3,f62,f184`
+      )
+      const j = await r.json()
+      ;(j?.data?.diff || []).forEach((x: any) => {
+        if (x.f12) all.push({
+          code: String(x.f12),
+          name: x.f14 || '',
+          price: x.f2 ?? 0,
+          changePercent: x.f3 ?? 0,
+          inflow: x.f184 ?? x.f62 ?? 0,
+        })
+      })
+      if ((j?.data?.diff || []).length < 500) break
+    } catch { break }
   }
   return all
 }
-async function fetchQ(codes: string[]): Promise<Record<string, any>> {
-  const qm: Record<string, any> = {}
-  for (let i = 0; i < codes.length; i += 200) {
-    const q = codes.slice(i, i+200).map(c => (c.startsWith('6')?'sh':'sz')+c).join(',')
-    try {
-      const r = await fetch('http://qt.gtimg.cn/q='+q); const buf = await r.arrayBuffer()
-      new TextDecoder('gbk').decode(buf).split(';').forEach(line => {
-        const t = line.trim(); if (!t || !t.includes('~')) return; const p = t.split('~'); if (p.length < 40) return
-        qm[p[2]] = {p:+p[3]||0,cp:+p[32]||0}
-      })
-    } catch(e) {}
+
+async function fetchKLine(code: string): Promise<any[]> {
+  const MAX_RETRY = 2
+  for (let retry = 0; retry < MAX_RETRY; retry++) {
+    for (const src of [
+      `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code.startsWith('6') ? 'sh' : 'sz'}${code},day,,,120,qfq`,
+      `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${(code.startsWith('6') || code.startsWith('68')) ? '1.' : '0.'}${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120`,
+    ]) {
+      try {
+        const ac = new AbortController()
+        const tid = setTimeout(() => ac.abort(), 6000)
+        const r = await fetch(src, { signal: ac.signal })
+        clearTimeout(tid)
+        const txt = await r.text()
+        let kl: any[] = []
+        if (src.includes('gtimg')) {
+          const pk = (code.startsWith('6') ? 'sh' : 'sz') + code
+          const j = JSON.parse(txt)
+          kl = (j?.data?.[pk]?.day || j?.data?.[pk]?.qfqday || []).map((k: any) => {
+            if (Array.isArray(k)) return { day: k[0], open: +k[1], close: +k[2], high: +k[3], low: +k[4], volume: +k[5] }
+            const p = String(k).split(' ')
+            return { day: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4], volume: +p[5] }
+          })
+        } else {
+          const j = JSON.parse(txt)
+          kl = (j?.data?.klines || []).map((k: string) => {
+            const p = k.split(',')
+            return { day: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4], volume: +p[5] }
+          })
+        }
+        if (kl.length >= 20) return kl
+      } catch { /* try next source */ }
+    }
+    await new Promise(r => setTimeout(r, 2000))
   }
-  return qm
+  return []
+}
+
+/** 从腾讯行情获取实时价格 */
+async function fetchPrices(codes: string[]): Promise<Record<string, { price: number; cp: number }>> {
+  const result: Record<string, { price: number; cp: number }> = {}
+  for (let i = 0; i < codes.length; i += 200) {
+    const q = codes.slice(i, i + 200).map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',')
+    try {
+      const r = await fetch(`https://qt.gtimg.cn/q=${q}`)
+      const buf = await r.arrayBuffer()
+      new TextDecoder('gbk').decode(buf).split(';').forEach(line => {
+        const t = line.trim()
+        if (!t || !t.includes('~')) return
+        const p = t.split('~')
+        if (p.length < 40) return
+        result[p[2]] = { price: +p[3] || 0, cp: +p[32] || 0 }
+      })
+    } catch { /* continue */ }
+  }
+  return result
 }
 
 export default function Index() {
-  const [sc, setSc] = useState('')
-  const [sr, setSr] = useState<any>(null)
-  const [stocks, setStocks] = useState<any[]>([])
+  const [opportunities, setOpportunities] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
+  const [lastScanTime, setLastScanTime] = useState('')
+  const [prices, setPrices] = useState<Record<string, { price: number; cp: number }>>({})
   const [frozen, setFrozen] = useState(false)
-  const [fmsg, setFmsg] = useState('')
   const frozenR = useRef(false)
-  const intR = useRef<number | null>(null)
+  const scanTimerR = useRef<number | null>(null)
+  const priceTimerR = useRef<number | null>(null)
+  const oppCodesR = useRef<string[]>([])
 
-  const scan = useCallback(async () => {
-    if (frozenR.current) { setStatus('⏸️ 非交易时间，数据已冻结'); return }
-    setLoading(true); setStatus('🔄 获取全市场股票列表...')
+  /** 核心扫描：拉取数据 → 发送后端缓存 → 读取机会区 */
+  const runScan = useCallback(async () => {
+    if (frozenR.current) {
+      setStatus('⏸️ 非交易时间，数据已冻结')
+      return
+    }
+    setLoading(true)
+    setStatus('🔄 拉取创业板排行榜 Top 500...')
     try {
-      const g = await fetchEMList('m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23')
-      const m = await fetchEMList('m:1+t:1,m:1+t:2,m:0+t:6')
-      const all = Array.from(new Map([...g, ...m].map(s => [s.c, s])).values())
-      setStatus(`✅ ${all.length} 只，获取批量行情...`)
-      const qm = await fetchQ(all.map(s => s.c))
-      const wq = all.map(s => ({...s, ...(qm[s.c]||{})}))
-      setStatus('🔄 K线分析中...')
-      const res: any[] = []
-      for (let i = 0; i < wq.length; i += 30) {
-        const rs = await Promise.all(wq.slice(i, i+30).map(async (s) => {
-          try {
-            const kl = await fetchKlines(s.c, 20); if (kl.length < 20) return null
-            const c = kl.map(x => x.c), v = kl.map(x => x.v), o = kl.map(x => x.o)
-            const lc = c[c.length-1]
-            const lo = Math.min(...c), hi = Math.max(...c)
-            const pp = ((lc-lo)/(hi-lo||1))*100
+      // 1. 拉取排行榜
+      const [gemList, mainList] = await Promise.all([
+        getRanking('gem'),
+        getRanking('main'),
+      ])
+      const topGem = gemList.slice(0, 500)
+      const topMain = mainList.slice(0, 500)
+      const allStocks = [...topGem, ...topMain]
+      setStatus(`✅ 共 ${allStocks.length} 只, 批量获取K线...`)
 
-            // 均线
-            const ma5 = c.slice(-5).reduce((a,b)=>a+b,0)/5
-            const ma10 = c.slice(-10).reduce((a,b)=>a+b,0)/10
-            const ma20 = c.length >= 20 ? c.slice(-20).reduce((a,b)=>a+b,0)/20 : ma10
-
-            // 趋势状态 0-3（与后端一致）
-            const ma5Up = c[c.length-1] > c[c.length-6]
-            const ma10_1dAgo = c.length > 11 ? c.slice(-11,-1).reduce((a,b)=>a+b,0)/10 : 0
-            const ma10Up = ma10 >= ma10_1dAgo * 0.995
-            let trend = 1
-            if (ma5 > ma10 && ma5Up && ma10Up) trend = 3
-            else if (ma5 > ma10 && ma10Up) trend = 2
-            else if (ma5 > ma10 && ma5Up) trend = 2
-            else if (ma5 < ma10 && ma10 < ma20) trend = 0
-            else if (ma5 < ma10) trend = 0
-
-            // DIFF/DEA（EMA12-EMA26）
-            const ema12 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-            const ema26 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-            const diff = ema12 - ema26
-            // DEA近似计算
-            let deaAcc = 0
-            for (let idx = 0; idx < c.length; idx++) {
-              const e12 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-              const e26 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-              const curDiff = e12 - e26
-              deaAcc = idx === 0 ? curDiff : deaAcc + (curDiff - deaAcc) * 2 / 9
-            }
-            const macdBullish = diff > deaAcc
-            const macdGoldenCross = macdBullish && diff > 0
-
-            // 成交量结构
-            const avgVol5 = v.slice(-5).reduce((a,b)=>a+b,0)/5
-            const avgVol20 = v.length >= 20 ? v.slice(-20).reduce((a,b)=>a+b,0)/20 : avgVol5
-            const volRatio = avgVol5 / (avgVol20 || 1)
-            const volActive = Math.min(Math.max(volRatio, 0) * 6, 20)
-
-            // 买入信号
-            const sb = c.slice(-3).every((p,j) => p > o[o.length - 3 + j])
-            const jcFlag = kl.slice(-2).every((x,j) => {
-              const pc = j===0 ? c[c.length-3] : c[c.length-2]
-              return x.h > Math.max(x.o, pc) && x.c > x.o
-            })
-            const strict = sb && v[v.length-1] > v[v.length-2]
-            const shortBuy = sb || strict || jcFlag
-            const strictBuy = strict
-            const hasBuySignal = shortBuy || strictBuy || macdBullish
-
-            // MA10下跌趋势判断
-            const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995
-
-            // 深度洗盘
-            const deepWashout = ma5 < ma10 && ma10TurnUp && lc > ma5 && volActive > 7
-
-            // ─── port getTradingSuggestion ───
-            const volumeBullish = volRatio > 1.2
-            const strongBuy = (macdGoldenCross && volumeBullish) || (shortBuy && volumeBullish)
-
-            let sug = '观望'
-            // 低位区 <25%
-            if (pp < 25) {
-              if (trend >= 1 && strongBuy) sug = '重仓买入'
-              else if (trend >= 1 && hasBuySignal) sug = '买入'
-              else if (trend >= 1) sug = '持有'
-              else sug = '观望'
-            }
-            // 中低位区 25-45%
-            else if (pp < 45) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 1 && strongBuy) sug = '买入'
-              else if (trend >= 1 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else sug = '观望'
-            }
-            // 中位区 45-55%
-            else if (pp < 55) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && (strongBuy || hasBuySignal)) sug = '持有'
-              else sug = '观望'
-            }
-            // 中高位区 55-75%
-            else if (pp < 75) {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-            // 高位区 >=75%
-            else {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-
-            //             // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 -> 轻仓买入
-            if ((sug === '观望' || sug === '持有') && deepWashout) {
-              sug = '轻仓买入'
-            }
-
-            // 涨跌幅升级: 后端判断为 重仓买入/买入/轻仓买入/持有 时, 根据实际涨跌幅可升级
-            if (['观望', '持有', '轻仓买入', '买入'].indexOf(sug) >= 0) {
-              const cpVal = qm[s.c]?.cp ?? s.cp ?? 0
-              if (sug === '持有' && cpVal >= 5) sug = '买入'
-              else if (sug === '持有' && cpVal >= 3) sug = '轻仓买入'
-              else if (sug === '轻仓买入' && cpVal >= 7) sug = '重仓买入'
-              else if (sug === '轻仓买入' && cpVal >= 4) sug = '买入'
-              else if (sug === '买入' && cpVal >= 5) sug = '重仓买入'
-            }
-
-            return {c:s.c, n:s.n, p:s.p||0, cp:s.cp||0, curP:qm[s.c]?.p||s.p||0, sug, pp, trend, ma5, ma10}
-          } catch(e) { return null }
-        }))
-        res.push(...rs.filter(Boolean))
-        if (i % 600 === 0) setStatus(`🔄 分析中: ${res.length}/${wq.length}`)
+      // 2. 批量获取120日K线（每次30并发）
+      const enriched: any[] = []
+      const BATCH = 30
+      for (let i = 0; i < allStocks.length; i += BATCH) {
+        const batch = allStocks.slice(i, i + BATCH)
+        const batchResults = await Promise.all(
+          batch.map(async (s) => {
+            try {
+              const klines = await fetchKLine(s.code)
+              if (klines.length < 20) return null
+              return { ...s, klines }
+            } catch { return null }
+          })
+        )
+        enriched.push(...batchResults.filter(Boolean))
+        if (i % 300 === 0) {
+          setStatus(`🔄 K线获取中: ${enriched.length}/${allStocks.length}...`)
+        }
       }
-      const valid = res.filter(x => x && x.sug !== '观望')
-      valid.sort((a, b) => {
-        const pa = getActionPriority(a.sug), pb = getActionPriority(b.sug)
-        return pa !== pb ? pa - pb : Math.abs(b.pp - 50) - Math.abs(a.pp - 50)
+      setStatus(`📤 发送 ${enriched.length} 只到后端分析...`)
+
+      // 3. 发送到后端缓存分析
+      const cacheRes = await Network.request({
+        url: '/api/gem/cache-data',
+        method: 'POST',
+        data: { stocks: enriched },
       })
-      setStocks(valid.slice(0, 20))
-      setStatus('✅ Top 20 已更新')
-    } catch(e: any) { setStatus('❌ 失败: ' + (e.message||'未知错误')) }
+      console.log('📦 cache-data response:', cacheRes.data)
+
+      // 4. 获取机会区结果（仅重仓买入/买入）
+      const scanRes = await Network.request({ url: '/api/gem/scan-result' })
+      console.log('🎯 scan-result response:', scanRes.data)
+      const scanData = scanRes?.data?.data || scanRes?.data
+      const opps = scanData?.opportunities || []
+      setOpportunities(opps)
+      oppCodesR.current = opps.map((s: any) => s.code)
+
+      // 5. 更新状态
+      const now = new Date()
+      setLastScanTime(now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+      setStatus(`✅ 已更新: ${enriched.length}只分析完成, ${opps.length}只机会股`)
+
+      // 6. 分析完成后立即拉一次价格
+      if (opps.length > 0) {
+        const pr = await fetchPrices(oppCodesR.current)
+        if (Object.keys(pr).length > 0) setPrices(prev => ({ ...prev, ...pr }))
+      }
+    } catch (e: any) {
+      setStatus(`❌ 扫描失败: ${(e.message || '未知错误')}`)
+      console.error('扫描异常:', e)
+    }
     setLoading(false)
   }, [])
 
-  useEffect(() => {
-    const check = () => { const f = !isTH(); setFrozen(f); frozenR.current = f; setFmsg(freezeMsg()) }
-    check(); const tt = setInterval(check, 60000)
-    if (isTH()) setTimeout(() => scan(), 3000)
-    intR.current = window.setInterval(() => { if (isTH()) scan() }, 600000)
-    return () => { clearInterval(tt); if (intR.current) clearInterval(intR.current) }
-  }, [scan])
-
-  const hSearch = useCallback(async () => {
-    if (!sc.trim()) return; setSr(null)
+  /** 2秒价格刷新 */
+  const refreshPrices = useCallback(async () => {
+    const codes = oppCodesR.current
+    if (codes.length === 0) return
     try {
-      const q = await fetchQ([sc.trim()]); const r = q[sc.trim()]
-      if (!r) { setSr({error:'未找到'}); return }
-      setSr({c:sc.trim(), p:r.p, cp:r.cp})
-    } catch(e) { setSr({error:'查询失败'}) }
-  }, [sc])
+      const pr = await fetchPrices(codes)
+      if (Object.keys(pr).length > 0) setPrices(prev => ({ ...prev, ...pr }))
+    } catch { /* ignore */ }
+  }, [])
 
+  // ====== 扫描调度器 ======
+  useEffect(() => {
+    const tick = () => {
+      const inWindow = isInScanWindow()
+      const frz = !inWindow
+      setFrozen(frz)
+      frozenR.current = frz
+    }
+
+    const scheduleNextScan = () => {
+      const next = nextScanMinutes()
+      if (next < 0) {
+        // 非交易日或已收盘
+        scanTimerR.current = window.setTimeout(() => {
+          scheduleNextScan()
+        }, 60000)
+        return
+      }
+      const nowMin = bjMinutes()
+      const diffMs = (next - nowMin) * 60 * 1000
+      // 如果距离下次扫描超过60分钟（跨午休），设置一个中间定时器避免睡过头
+      const delay = Math.min(diffMs, 5 * 60 * 1000)
+      scanTimerR.current = window.setTimeout(async () => {
+        // 到达扫描窗口则执行扫描
+        if (isInScanWindow() && !frozenR.current) {
+          await runScan()
+        }
+        // 继续调度下一次
+        scheduleNextScan()
+      }, Math.max(delay, 1000))
+    }
+
+    // 首次启动
+    tick()
+    if (isInScanWindow()) {
+      // 9:25开盘立即扫描，之后按调度器
+      setTimeout(() => runScan(), 3000)
+    }
+    scheduleNextScan()
+
+    // 定时检查冻结状态
+    const stateTimer = setInterval(tick, 10000)
+
+    return () => {
+      if (scanTimerR.current) clearTimeout(scanTimerR.current)
+      clearInterval(stateTimer)
+    }
+  }, [runScan])
+
+  // ====== 2秒价格刷新 ======
+  useEffect(() => {
+    const startPriceRefresh = () => {
+      if (priceTimerR.current) clearInterval(priceTimerR.current)
+      priceTimerR.current = window.setInterval(async () => {
+        if (isInScanWindow() && oppCodesR.current.length > 0) {
+          await refreshPrices()
+        }
+      }, 2000)
+    }
+    startPriceRefresh()
+    return () => {
+      if (priceTimerR.current) clearInterval(priceTimerR.current)
+    }
+  }, [refreshPrices])
+
+  // ====== 渲染 ======
   return (
     <View className="flex flex-col h-full bg-gray-50">
-      <View className="sticky top-0 bg-white z-10 px-3 py-2 border-b border-gray-100">
-        <View className="flex flex-row items-center justify-between">
-          <Text className="block text-base font-bold">A股优选 Top20</Text>
+      {/* 顶部状态栏 */}
+      <View className="sticky top-0 bg-white z-10 px-4 py-3 border-b border-gray-100">
+        <View className="flex flex-row items-center justify-between mb-1">
+          <Text className="block text-base font-bold text-gray-900">📊 机会区</Text>
           <Text className="block text-xs text-gray-400">{status}</Text>
         </View>
-        {fmsg ? <View className="mt-1 px-2 py-1 bg-yellow-50 rounded-lg border border-yellow-200"><Text className="block text-xs text-yellow-700">{fmsg}</Text></View> : null}
+        <View className="flex flex-row items-center justify-between">
+          {frozen ? (
+            <Text className="block text-xs text-yellow-600">{freezeText()}</Text>
+          ) : (
+            <Text className="block text-xs text-green-600">交易中 · 每10分钟扫描</Text>
+          )}
+          {lastScanTime && (
+            <Text className="block text-xs text-gray-400 ml-2">最近: {lastScanTime}</Text>
+          )}
+        </View>
       </View>
 
-      <View className="px-3 py-2 bg-white border-b border-gray-100">
-        <View style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'8px'}} className="bg-gray-50 rounded-lg px-3 py-2">
-          <Search size={16} color="#999" />
-          <View style={{flex:1}}><Input className="w-full text-xs bg-transparent" placeholder="输入代码搜索" value={sc}
-            onInput={e => setSc(e.detail.value)} onConfirm={() => hSearch()}
-          /></View>
-          <Button className="bg-blue-500 text-white text-xs px-3 py-1 rounded-md"
-            onClick={() => hSearch()}
+      {/* 操作按钮 */}
+      <View className="px-4 py-2 bg-white border-b border-gray-100">
+        <View style={{ display: 'flex', flexDirection: 'row', gap: '8px' }}>
+          <Button
+            className="flex-1 bg-blue-600 text-white text-xs px-4 py-2 rounded-lg"
+            onClick={() => { if (!frozenR.current) runScan(); else Taro.showToast({ title: '非交易时间', icon: 'none' }) }}
+            disabled={loading}
           >
-            <Text className="block text-xs">搜索</Text>
+            <Text className="block text-xs text-center">{loading ? '扫描分析中...' : '🔄 立即扫描'}</Text>
           </Button>
         </View>
-        {sr ? (sr.error ? <Text className="block text-xs text-red-500 mt-1">{sr.error}</Text>
-          : <View className="mt-1 px-2 py-1 bg-gray-50 rounded-lg"><Text className="block text-xs">{sr.c} ¥{sr.p} {(sr.cp||0)>=0?'+':''}{sr.cp}%</Text></View>
-        ) : null}
       </View>
 
-      <View className="px-3 py-1 flex flex-row gap-2">
-        <Button className="bg-blue-500 text-white text-xs px-4 py-2 rounded-lg flex-1"
-          onClick={() => { if (!frozenR.current) scan(); else Taro.showToast({title:'非交易时间',icon:'none'}) }}
-          disabled={loading}
-        >
-          <Text className="block text-xs">{loading ? '扫描中...' : (frozen ? '📊 已冻结' : '🔄 立即扫描')}</Text>
-        </Button>
-      </View>
-
-      <ScrollView className="flex-1 px-3" scrollY>
-        <View className="py-2">
-          <View className="flex flex-row items-center px-2 py-1 mb-1">
-            <View style={{flex:1.1}}><Text className="block text-xs text-gray-400 font-medium">名称</Text></View>
-            <View style={{flex:0.55}} className="text-center"><Text className="block text-xs text-gray-400">操作</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">价格</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">涨幅</Text></View>
-            <View style={{flex:0.9}} className="text-right"><Text className="block text-xs text-gray-400">位置</Text></View>
-          </View>
-
-          {loading && stocks.length === 0 ? (
-            <View className="flex flex-col gap-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="w-full h-12 rounded-xl" />)}</View>
-          ) : stocks.length === 0 ? (
-            <View className="flex items-center justify-center py-12"><Text className="block text-sm text-gray-400">{frozen ? fmsg : '点击上方按钮开始扫描'}</Text></View>
-          ) : (
-            <View className="flex flex-col gap-2">
-              {stocks.map((item, idx) => (
-                <Card key={item.c} className="overflow-hidden">
-                  <CardContent className="p-2">
-                    <View className="flex flex-row items-center">
-                      <View style={{flex:1.1}}>
-                        <View className="flex flex-row items-center gap-1">
-                          <Badge className={'px-1 py-0 flex-shrink-0 ' + (idx < 3 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200')}>
-                            <Text className="block text-xs">#{idx+1}</Text>
-                          </Badge>
-                          <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{item.n}</Text>
-                            <Text className="block text-xs text-gray-400">{item.c}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={{flex:0.55}} className="text-center">
-                        <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{backgroundColor:ACTION_BADGE_COLOR[item.sug]??'#999'}}>{item.sug||'-'}</Text>
-                      </View>
-                      <View style={{flex:0.8}} className="text-center"><Text className="block text-xs font-medium">{item.curP?.toFixed(2)}</Text></View>
-                      <View style={{flex:0.8}} className="text-center">
-                        <Text className="block text-xs font-bold" style={{color:(item.cp??0)>=0?'#ef4444':'#22c55e'}}>{(item.cp??0)>=0?'+':''}{item.cp?.toFixed(2)}%</Text>
-                      </View>
-                      <View style={{flex:0.9}} className="text-right">
-                        <Text className="block text-xs font-bold" style={{color:(item.pp??0)<50?'#22c55e':(item.pp??0)<80?'#eab308':'#ef4444'}}>位置{(item.pp??0).toFixed(0)}%</Text>
-                      </View>
-                    </View>
+      {/* 机会区列表 */}
+      <ScrollView className="flex-1 px-4" scrollY>
+        <View className="py-3">
+          {loading && opportunities.length === 0 ? (
+            // 加载骨架屏
+            <View className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <Skeleton className="h-4 w-24 mb-2" />
+                    <Skeleton className="h-3 w-32" />
                   </CardContent>
                 </Card>
               ))}
             </View>
+          ) : opportunities.length === 0 ? (
+            <View className="py-12 flex items-center justify-center">
+              <Text className="block text-sm text-gray-400 text-center">
+                {frozen
+                  ? '非交易时间，数据已冻结'
+                  : '暂无机会股，等待下次扫描...'}
+              </Text>
+            </View>
+          ) : (
+            <View className="space-y-2">
+              {/* 表头 */}
+              <View className="flex flex-row items-center px-3 py-2">
+                <View style={{ flex: 1.2 }}><Text className="block text-xs text-gray-400 font-medium">名称</Text></View>
+                <View style={{ flex: 0.7, textAlign: 'center' }}><Text className="block text-xs text-gray-400 text-center">信号</Text></View>
+                <View style={{ flex: 0.7, textAlign: 'center' }}><Text className="block text-xs text-gray-400 text-center">最新价</Text></View>
+                <View style={{ flex: 0.7, textAlign: 'center' }}><Text className="block text-xs text-gray-400 text-center">涨幅</Text></View>
+                <View style={{ flex: 0.6, textAlign: 'right' }}><Text className="block text-xs text-gray-400 text-right">介入分</Text></View>
+              </View>
+              {opportunities.map((stock: any, idx: number) => {
+                const realtime = prices[stock.code] || {}
+                const price = realtime.price || stock.currentPrice || 0
+                const cp = realtime.cp ?? stock.changePercent ?? 0
+                const sig = stock.suggestion || ''
+                const color = BUY_COLORS[sig] || '#6b7280'
+                return (
+                  <Card key={stock.code + idx}>
+                    <CardContent className="px-3 py-2">
+                      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ flex: 1.2 }}>
+                          <Text className="block text-sm font-medium text-gray-900">{stock.name}</Text>
+                          <Text className="block text-xs text-gray-400">{stock.code}</Text>
+                        </View>
+                        <View style={{ flex: 0.7, textAlign: 'center' }} className="flex items-center justify-center">
+                          <View
+                            className="px-1 py-0 rounded text-xs text-white font-medium text-center"
+                            style={{ backgroundColor: color, whiteSpace: 'nowrap' }}
+                          >
+                            <Text className="block text-xs text-white font-medium">{sig}</Text>
+                          </View>
+                        </View>
+                        <View style={{ flex: 0.7, textAlign: 'center' }}>
+                          <Text className="block text-xs text-gray-800 text-center font-medium">
+                            {price > 0 ? `¥${price.toFixed(2)}` : '--'}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 0.7, textAlign: 'center' }}>
+                          <Text
+                            className="block text-xs font-medium text-center"
+                            style={{ color: cp >= 0 ? '#dc2626' : '#16a34a' }}
+                          >
+                            {cp > 0 ? '+' : ''}{cp.toFixed(2)}%
+                          </Text>
+                        </View>
+                        <View style={{ flex: 0.6, textAlign: 'right' }}>
+                          <Text className="block text-xs text-gray-500 text-right">{stock.entryTiming ?? '--'}</Text>
+                        </View>
+                      </View>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </View>
           )}
         </View>
       </ScrollView>
-
-      <View className="bg-white px-3 py-2 border-t border-gray-100">
-        <Text className="block text-xs text-gray-400">
-          {loading ? '⏳ 扫描中...' : (frozen ? fmsg : stocks.length > 0 ? '✅ Top20 | 10分钟自动刷新' : '⏸️ 等待扫描')}
-        </Text>
-      </View>
     </View>
   )
 }
