@@ -199,6 +199,15 @@ export declare class GemScreenerController {
         msg: any;
         data: never[];
     }>;
+    getStockDetail(code: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    } | {
+        code: number;
+        msg: any;
+        data: null;
+    }>;
     updateUpgraded(body: {
         data?: any[];
     }): Promise<{

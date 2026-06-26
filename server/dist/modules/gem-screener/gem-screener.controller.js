@@ -350,6 +350,19 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: [] };
         }
     }
+    async getStockDetail(code) {
+        if (!code) {
+            return { code: 400, msg: '请输入股票代码', data: null };
+        }
+        try {
+            const result = await this.gemScreener.getStockDetail(code.trim());
+            return { code: 200, msg: 'ok', data: result };
+        }
+        catch (e) {
+            this.logger.error(`获取详情失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
     async updateUpgraded(body) {
         try {
             const list = body?.data || [];
@@ -814,6 +827,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "rescanMarket", null);
+__decorate([
+    (0, common_1.Get)('detail'),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getStockDetail", null);
 __decorate([
     (0, common_1.Post)('update-upgraded'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

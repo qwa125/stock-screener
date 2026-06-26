@@ -3640,6 +3640,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return results;
   }
 
+  /** 获取单只股票的详情（含技术分析） */
+  async getStockDetail(code: string): Promise<any> {
+    const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+    const stock = allCached.find(s => s.code === code);
+    if (!stock) {
+      return { stock: null, technical: null, message: '该股票不在缓存中，请稍后扫描后再试' };
+    }
+    // 读取K线数据做技术分析
+    let technical = null;
+    try {
+      const klines = this.dataFetcher.getCachedKlines(code);
+      if (klines && klines.length >= 20) {
+        const { analyzeTechnical, KLine } = require('../utils/technical-analysis');
+        technical = analyzeTechnical(klines, stock.currentPrice);
+      }
+    } catch (e) {
+      this.logger.warn(`技术分析失败 ${code}: ${(e as Error).message}`);
+    }
+    return { stock, technical };
+  }
+
   /**
    * 服务端全市场重新扫描：从 Sina API 获取股票列表 → 筛选活跃股 → 全量分析 → 缓存结果
    */

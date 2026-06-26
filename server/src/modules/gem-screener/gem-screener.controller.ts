@@ -402,6 +402,20 @@ export class GemScreenerController {
     }
   }
 
+  @Get('detail')
+  async getStockDetail(@Query('code') code: string) {
+    if (!code) {
+      return { code: 400, msg: '请输入股票代码', data: null };
+    }
+    try {
+      const result = await this.gemScreener.getStockDetail(code.trim());
+      return { code: 200, msg: 'ok', data: result };
+    } catch (e) {
+      this.logger.error(`获取详情失败: ${e.message}`);
+      return { code: 500, msg: e.message, data: null };
+    }
+  }
+
   @Post('update-upgraded')
   @SkipAccessLimit()
   async updateUpgraded(@Body() body: { data?: any[] }) {

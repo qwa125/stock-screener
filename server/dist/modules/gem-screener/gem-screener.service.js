@@ -3067,6 +3067,25 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return results;
     }
+    async getStockDetail(code) {
+        const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+        const stock = allCached.find(s => s.code === code);
+        if (!stock) {
+            return { stock: null, technical: null, message: '该股票不在缓存中，请稍后扫描后再试' };
+        }
+        let technical = null;
+        try {
+            const klines = this.dataFetcher.getCachedKlines(code);
+            if (klines && klines.length >= 20) {
+                const { analyzeTechnical, KLine } = require('../utils/technical-analysis');
+                technical = analyzeTechnical(klines, stock.currentPrice);
+            }
+        }
+        catch (e) {
+            this.logger.warn(`技术分析失败 ${code}: ${e.message}`);
+        }
+        return { stock, technical };
+    }
     async rescanMarket() {
         const now = Date.now();
         this.logger.log('开始按新标准重新评估缓存的个股...');

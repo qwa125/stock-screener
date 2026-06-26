@@ -249,6 +249,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private static calcChipAnalysis;
     quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[], frontendMainForce?: number): Promise<OpportunityStock | null>;
     searchStocks(keyword: string): Promise<OpportunityStock[]>;
+    getStockDetail(code: string): Promise<any>;
     rescanMarket(): Promise<OpportunityStock[]>;
     triggerAnalysisPreCacheFromCache(): void;
     private triggerAnalysisPreCache;
