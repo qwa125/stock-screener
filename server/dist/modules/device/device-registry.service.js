@@ -13,6 +13,7 @@ const supabase_client_1 = require("../../storage/database/supabase-client");
 const fs = require("fs");
 const path = require("path");
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin2025';
+const postgres = require('postgres');
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
@@ -20,18 +21,23 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.maxSlots = parseInt(process.env.MAX_SLOTS || '3', 10);
         this.registryLoaded = false;
         this.supabase = this.initSupabase();
+        this.pgSql = null;
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
         this.settingsPath = '/tmp/device-settings.json';
     }
     async onModuleInit() {
         this.logger.log('⚙️ DeviceRegistryService 启动中...');
+        this.initPostgres();
+        if (this.pgSql) {
+            await this.createPGTables();
+        }
         await this.loadSettingsFromDB();
         await this.loadRegistry();
-        if (!this.supabase) {
+        if (!this.supabase && !this.pgSql) {
             this.loadFromFile();
         }
         this.registryLoaded = true;
-        this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}`);
+        this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}${this.pgSql ? ' (PostgreSQL)' : this.supabase ? ' (Supabase)' : ' (文件)'}`);
     }
     initSupabase() {
         try {
@@ -43,6 +49,25 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             this.logger.warn('Supabase未配置，使用JSON文件持久化设备列表');
         }
         return null;
+    }
+    initPostgres() {
+        if (this.pgSql)
+            return this.pgSql;
+        try {
+            const url = process.env.DATABASE_URL;
+            if (!url) {
+                this.logger.warn('DATABASE_URL 未设置，跳过 PostgreSQL');
+                return null;
+            }
+            this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
+            this.logger.log('✅ DeviceRegistry 连接 PostgreSQL 成功');
+            return this.pgSql;
+        }
+        catch (e) {
+            this.logger.warn(`DeviceRegistry PostgreSQL 连接失败: ${e.message}`);
+            this.pgSql = null;
+            return null;
+        }
     }
     async createTablesIfNeeded() {
         const serviceKey = (0, supabase_client_1.getSupabaseServiceRoleKey)();
@@ -98,6 +123,38 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             return false;
         }
     }
+    async createPGTables() {
+        const sql = this.pgSql;
+        if (!sql)
+            return false;
+        try {
+            await sql `
+        CREATE TABLE IF NOT EXISTS public.device_access_devices (
+          id TEXT PRIMARY KEY,
+          ua TEXT NOT NULL DEFAULT '',
+          display_name TEXT NOT NULL DEFAULT '',
+          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `;
+            await sql `
+        CREATE TABLE IF NOT EXISTS public.device_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL DEFAULT ''
+        )
+      `;
+            await sql `
+        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+        ON CONFLICT (key) DO NOTHING
+      `;
+            this.logger.log('✅ PostgreSQL 设备表创建/确认成功');
+            return true;
+        }
+        catch (e) {
+            this.logger.warn(`PostgreSQL 创建表失败: ${e.message}`);
+            return false;
+        }
+    }
     async warmUpSchema() {
         if (!this.supabase)
             return;
@@ -135,7 +192,25 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async loadSettingsFromDB() {
         let loaded = false;
-        if (this.supabase) {
+        if (this.pgSql) {
+            try {
+                const rows = await this.pgSql `
+          SELECT value FROM public.device_settings WHERE key = 'max_slots' LIMIT 1
+        `;
+                if (rows && rows.length > 0) {
+                    const val = parseInt(rows[0].value, 10);
+                    if (val > 0) {
+                        this.maxSlots = val;
+                        this.logger.log(`⚙️ 从 PostgreSQL 加载: 设备限额 ${this.maxSlots}`);
+                        loaded = true;
+                    }
+                }
+            }
+            catch (e) {
+                this.logger.warn(`PostgreSQL 加载设置失败: ${e.message}`);
+            }
+        }
+        if (!loaded && this.supabase) {
             try {
                 const { data, error } = await this.supabase
                     .from('access_devices')
@@ -146,7 +221,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                     const val = parseInt(data.display_name.replace('maxSlots:', ''), 10);
                     if (val > 0) {
                         this.maxSlots = val;
-                        this.logger.log(`⚙️ 从数据库加载: 设备限额 ${this.maxSlots}`);
+                        this.logger.log(`⚙️ 从 Supabase 加载: 设备限额 ${this.maxSlots}`);
                         loaded = true;
                     }
                 }
@@ -163,7 +238,6 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                             const val = parseInt(retry.data.display_name.replace('maxSlots:', ''), 10);
                             if (val > 0) {
                                 this.maxSlots = val;
-                                this.logger.log(`⚙️ 从数据库加载(建表后): 设备限额 ${this.maxSlots}`);
                                 loaded = true;
                             }
                         }
@@ -171,7 +245,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 }
             }
             catch (e) {
-                this.logger.warn(`数据库加载设置异常: ${e.message}`);
+                this.logger.warn(`Supabase 加载设置异常: ${e.message}`);
             }
         }
         if (!loaded && this.supabase) {
@@ -257,6 +331,14 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             if (err2) {
                 this.logger.warn(`device_settings写入失败: ${err2.message}（不影响使用）`);
             }
+            if (this.pgSql) {
+                await this.pgSql `
+          INSERT INTO public.device_device_settings (key, value) 
+          VALUES ('max_slots', ${String(this.maxSlots)})
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+        `.catch(() => { });
+                this.logger.log(`⚙️ 设备限额已持久化到 PostgreSQL: ${this.maxSlots}`);
+            }
         }
         catch (e) {
             this.logger.warn(`数据库写入设置异常: ${e.message}，降级到文件`);
@@ -289,6 +371,27 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         this.registryLoaded = true;
     }
     async loadRegistry() {
+        if (this.pgSql) {
+            try {
+                const rows = await this.pgSql `
+          SELECT * FROM public.device_access_devices ORDER BY first_seen ASC
+        `;
+                if (rows && rows.length > 0) {
+                    this.registry = rows.map((r) => ({
+                        fingerprint: r.id,
+                        ua: r.ua || '',
+                        displayName: r.display_name || '',
+                        firstSeen: new Date(r.first_seen).getTime(),
+                        lastSeen: new Date(r.last_seen).getTime(),
+                    }));
+                    this.logger.log(`从 PostgreSQL 加载了 ${this.registry.length} 个设备`);
+                    return;
+                }
+            }
+            catch (e) {
+                this.logger.warn(`PostgreSQL 加载设备失败: ${e.message}`);
+            }
+        }
         if (!this.supabase)
             return;
         try {
@@ -364,6 +467,11 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                     .update({ last_seen: now, ua })
                     .eq('id', deviceId);
             }
+            if (this.pgSql) {
+                await this.pgSql `
+          UPDATE public.device_access_devices SET last_seen = ${now}, ua = ${ua} WHERE id = ${deviceId}
+        `.catch(() => { });
+            }
             return { allowed: true };
         }
         if (isAdmin) {
@@ -372,6 +480,13 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             const supabase = await this.getOrInitSupabase();
             if (supabase) {
                 await supabase.from('access_devices').insert({ id: deviceId, ua, display_name: displayName + '(管理员)' });
+            }
+            if (this.pgSql) {
+                await this.pgSql `
+          INSERT INTO public.device_access_devices (id, ua, display_name, first_seen, last_seen) 
+          VALUES (${deviceId}, ${ua}, ${displayName + '(管理员)'}, ${new Date().toISOString()}, ${new Date().toISOString()})
+          ON CONFLICT (id) DO UPDATE SET last_seen = EXCLUDED.last_seen
+        `.catch(() => { });
             }
             this.saveToFile();
             return { allowed: true };
@@ -388,6 +503,13 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 .insert({ id: deviceId, ua, display_name: displayName });
             if (error)
                 this.logger.warn(`Supabase插入失败: ${error.message}`);
+        }
+        if (this.pgSql) {
+            await this.pgSql `
+        INSERT INTO public.device_access_devices (id, ua, display_name, first_seen, last_seen) 
+        VALUES (${deviceId}, ${ua}, ${displayName}, ${new Date().toISOString()}, ${new Date().toISOString()})
+        ON CONFLICT (id) DO UPDATE SET last_seen = EXCLUDED.last_seen, ua = EXCLUDED.ua
+      `.catch(() => { });
         }
         this.saveToFile();
         return { allowed: true };
@@ -413,6 +535,13 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 .insert({ id: fingerprint, ua, display_name: '未识别' });
             if (error)
                 this.logger.warn(`Supabase插入失败(tryRegister): ${error.message}`);
+        }
+        if (this.pgSql) {
+            await this.pgSql `
+        INSERT INTO public.device_access_devices (id, ua, display_name, first_seen, last_seen) 
+        VALUES (${fingerprint}, ${ua}, '未识别', ${new Date().toISOString()}, ${new Date().toISOString()})
+        ON CONFLICT (id) DO UPDATE SET last_seen = EXCLUDED.last_seen
+      `.catch(() => { });
         }
         this.saveToFile();
         return { allowed: true };
@@ -458,6 +587,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         const supabase = await this.getOrInitSupabase();
         if (supabase) {
             await supabase.from('access_devices').delete().neq('id', '0');
+        }
+        if (this.pgSql) {
+            await this.pgSql `DELETE FROM public.device_access_devices`.catch(() => { });
         }
         this.saveToFile();
         return { success: true };

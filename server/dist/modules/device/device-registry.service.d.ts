@@ -6,11 +6,14 @@ export declare class DeviceRegistryService implements OnModuleInit {
     private maxSlots;
     private registryLoaded;
     private supabase;
+    private pgSql;
     private readonly filePath;
     private readonly settingsPath;
     onModuleInit(): Promise<void>;
     private initSupabase;
+    private initPostgres;
     private createTablesIfNeeded;
+    private createPGTables;
     private warmUpSchema;
     private saveToFile;
     private loadFromFile;
