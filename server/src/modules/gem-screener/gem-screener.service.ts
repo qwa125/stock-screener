@@ -1902,8 +1902,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
 			}
 		}
 
-		// ═══ 4. 持有: MA10往上(不限MA5方向) ═══
-		if (ma10Up) return { suggestion: '持有', signalComb: '10日线往上' };
+		// ═══ 4. 持有: MA10往上或走平(不限MA5方向) ═══
+		if (ma10Up) return { suggestion: '持有', signalComb: '10日线往上/走平' };
 
 		// ═══ 5. 不要介入: MA10往下(不限MA5方向) ═══
 		return { suggestion: '不要介入', signalComb: '10日线往下' };

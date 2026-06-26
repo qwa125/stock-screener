@@ -1630,7 +1630,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         if (ma10Up)
-            return { suggestion: '持有', signalComb: '10日线往上' };
+            return { suggestion: '持有', signalComb: '10日线往上/走平' };
         return { suggestion: '不要介入', signalComb: '10日线往下' };
     }
     async checkOpportunity(s, prevSuggestion) {
