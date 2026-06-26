@@ -685,6 +685,15 @@ function showDetail(i){
   da.style.display='block'
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
+  // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
+  if(!rt.high&&!rt.low&&s.code){
+    fetchRealtime([s.code]).then(function(fr){
+      var nr=fr&&fr[s.code]
+      if(nr&&nr.high&&nr.low){
+        da.innerHTML=buildDetail(s,nr)
+      }
+    }).catch(function(){})
+  }
   renderList()
   // ★ 异步拉取新鲜K线→重新分析（与搜索流程完全一致，确保使用最新判断逻辑）
   ;(async function(){
@@ -817,7 +826,7 @@ function buildDetail(s,rt){
 
   // 🕐 日内介入点建议
   var entryHtml=''
-  if(rt.high!=null&&rt.low!=null&&rt.high>rt.low){
+  if(rt.high!=null&&rt.low!=null&&rt.high>=rt.low&&rt.high>0){
     var intraPos=((rt.price-rt.low)/(rt.high-rt.low))*100
     var sugg=''
     if(intraPos<20){sugg='当前处于日内低位区，现价即可介入'}
