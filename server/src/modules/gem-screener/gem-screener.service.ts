@@ -394,6 +394,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 持久化 sellStateCache
       this.saveSellStateCache();
 
+      this.logger.log(`🕵️ [DEBUG 最终结果] ${name}(${code}) finalSuggestion=${finalSuggestion} chipPat=${chipPattern} chipPeak=${chipPeakPosition} pp=${pricePos.toFixed(1)} crossSug=${crossSuggestion} baiBu=${baiBuState} sellLock=${!!sellEntry}`);
+
       return { opportunities: allData, timestamp: latestTs };
     }
     return { opportunities: [], timestamp: Date.now() };
@@ -3106,13 +3108,23 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     // ─── 深度洗盘后期特殊判断：MA5<MA10但MA10向上 + 白布 + 站上5日线 + 机构活跃 ───
     // 上涨趋势中的深度洗盘接近尾声，有企稳迹象，不应判不要介入
     // 如 301051 信濠光电：MA5<MA10但MA10向上+白布+机构活跃18.49+站上5日线
+    if (suggestion === '不要介入') {
+      this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5<ma10=${ma5 < ma10} (!ma10Down)=${!ma10Down} baiBu=${baiBuState} price>ma5=${price > ma5} sug=${suggestion}`);
+    }
     if (suggestion === '不要介入' && ma5 < ma10 && !ma10Down && baiBuState && price > ma5) {
       const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
       const avgVol20 = volumeArr.length >= 20
         ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
         : avgVol5;
-      const volActive = avgVol5 / (avgVol20 || 1) * 6;
-      suggestion = volActive > 12 ? '轻仓买入' : '持有';
+      const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+      this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10Down=${ma10Down} baiBu=${baiBuState} price>ma5=${price > ma5} volActive=${volActive} >12=${volActive > 12}`);
+      if (volActive > 12) {
+        suggestion = '轻仓买入';
+        this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
+      } else {
+        suggestion = '持有';
+        this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=12, 只能设为持有`);
+      }
     }
 
     const NEGATIVE = ['减仓', '不要介入'];
@@ -3211,6 +3223,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       if (finalSuggestion === '重仓买入') finalSuggestion = '买入';
       else if (finalSuggestion === '买入') finalSuggestion = '轻仓买入';
       else if (finalSuggestion === '轻仓买入') finalSuggestion = '不要介入';
+      this.logger.log(`🕵️ [DEBUG 筹码降级] ${name}(${code}) 触发: chipPat=${chipPattern} peak=${chipPeakPosition} pp=${pricePos.toFixed(1)} sugerWas=${suggestion} now=${finalSuggestion}`);
     }
     // 筹码集中+峰在下方+低位企稳 → 升级
     if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePos > 15 && pricePos < 45 && trendState >= 1) {
