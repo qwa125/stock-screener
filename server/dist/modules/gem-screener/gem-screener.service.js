@@ -2611,7 +2611,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion = '不要介入';
         }
         if (suggestion === '不要介入') {
-            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5<ma10=${ma5 < ma10} (!ma10Down)=${!ma10Down} baiBu=${baiBuState} price>ma5=${price > ma5} sug=${suggestion}`);
+            const ma10Prev5 = closeArr.length > 15
+                ? (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10)
+                : 0;
+            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10Down=${ma10Down} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
         }
         if (suggestion === '不要介入' && ma5 < ma10 && !ma10Down && baiBuState && price > ma5) {
             const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
