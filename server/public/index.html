@@ -767,7 +767,7 @@ function buildEntrySection(s,rt,ta){
   var rt=rt||{},ta=ta||null
   var price=rt.price||s.currentPrice||0
   var html=''
-  if(ta&&ta.entryScore!=null){
+  if(ta&&ta.entryScore!=null&&ta.macd!=null){
     var macdDir=ta.macd.hist>=0?"up":"down"
     var kdjDir=ta.kdj.j>50?"up":"down"
     var bb=ta.bollinger
@@ -809,12 +809,8 @@ function buildEntrySection(s,rt,ta){
         +'<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">阻力 '+resist.toFixed(2)+'</span>'
         +(bestPrice>0?'<span style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px">参考 '+bestPrice.toFixed(2)+'</span>':'')
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:4px">'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">MACD</span><br><span style="font-weight:600">DIF '+ta.macd.dif.toFixed(3)+'<br>DEA '+ta.macd.dea.toFixed(3)+'<br>柱 '+(ta.macd.hist>=0?'+':'')+ta.macd.hist.toFixed(3)+'</span></div>'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">KDJ</span><br><span style="font-weight:600">K '+ta.kdj.k.toFixed(1)+'<br>D '+ta.kdj.d.toFixed(1)+'<br>J '+ta.kdj.j.toFixed(1)+'</span></div>'
-      +'</div>'
     +'</div>'
-  }else if(price&&rt.yc){
+  }else if(price>0&&rt.yc>0){
     var intraPos=rt.high>rt.low?((price-rt.low)/(rt.high-rt.low)*100):50
     var vsYc=rt.yc>0?((price-rt.yc)/rt.yc*100):0
     var tagText="", tagClr="", msg=""
