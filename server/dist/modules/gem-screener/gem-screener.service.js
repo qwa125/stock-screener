@@ -2574,6 +2574,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
         const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
         const xingX = (0, xing_xing_1.calcXingXing)(engine);
+        const baiXiao = baiXing?.baiXiao ?? false;
+        const baiXiaoDays = baiXing?.baiXiaoDays ?? 0;
         const formulaInput = {
             pricePosition: pricePos,
             trendState,
@@ -2609,20 +2611,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
         }
-        if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
-            suggestion = '不要介入';
-        }
         const ma10_1dAgo = closeArr.length > 11
             ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
             : 0;
         const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+        if (suggestion !== '卖出' && ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
+            suggestion = '不要介入';
+        }
         if (suggestion === '不要介入') {
             const ma10Prev5 = closeArr.length > 15
                 ? (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10)
                 : 0;
             this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
         }
-        if (suggestion === '不要介入' && ma5 < ma10) {
+        if ((suggestion === '不要介入' || suggestion === '减仓') && ma5 < ma10) {
             const debugVolActive = (volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5)
                 / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6;
             this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
@@ -2645,6 +2647,25 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     suggestion = '持有';
                     this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=7, 只能设为持有`);
                 }
+            }
+        }
+        if (suggestion !== '卖出' && !baiBuState && baiXiao && ma10TurnUp && price > ma5) {
+            const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const avgVol20 = volumeArr.length >= 20
+                ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
+                : avgVol5;
+            const volRatio = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+            this.logger.log(`🕵️ [白消恢复期] ${name}(${code}) DIFF>压力 baiXiao=${baiXiao} ma10TurnUp=${ma10TurnUp} price>ma5=${price > ma5} volRatio=${volRatio}`);
+            if (volRatio > 7) {
+                suggestion = '轻仓买入';
+                this.logger.log(`✅ [白消恢复期] ${name}(${code}) 设为轻仓买入`);
+            }
+            else if (volRatio > 5) {
+                suggestion = '持有';
+                this.logger.log(`⚠️ [白消恢复期] ${name}(${code}) 量能不足(volRatio=${volRatio})，只能设为持有`);
+            }
+            else {
+                this.logger.log(`ℹ️ [白消恢复期] ${name}(${code}) 量能太低(volRatio=${volRatio})，不改变信号`);
             }
         }
         const NEGATIVE = ['减仓', '不要介入'];

@@ -3058,6 +3058,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const sanJiao: any = calcBaiSanJiao(engine);
     const lingXing: any = calcBaiLingXing(engine);
     const xingX: any = calcXingXing(engine);
+    const baiXiao = (baiXing as any)?.baiXiao ?? false;
+    const baiXiaoDays = (baiXing as any)?.baiXiaoDays ?? 0;
 
     const formulaInput: any = {
       pricePosition: pricePos,
@@ -3102,28 +3104,28 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
     }
 
-    // ─── 下跌趋势(MA5<MA10 + MA10环比下降)兜底：仅双边下行才判不要介入 ───
-    // 如果MA5<MA10但MA10还在往上（如301051 MA5<MA10但MA10趋势向上+白布+机构活跃>12），
-    // 保留getTradingSuggestion的原始信号（可能为轻仓买入/持有）
-    if (suggestion !== '卖出' && ma5 < ma10 && ma10Down) {
-      suggestion = '不要介入';
-    }
-
-    // ─── 深度洗盘后期特殊判断：MA5<MA10但MA10向上 + 白布 + 站上5日线 + 机构活跃 ───
-    // 上涨趋势中的深度洗盘接近尾声，有企稳迹象，不应判不要介入
-    // 如 301051 信濠光电：MA5<MA10但MA10向上+白布+机构活跃18.49+站上5日线
-    // 计算MA10短期趋势（前1日MA10，用于深度洗盘判断。下跌趋势中前5日肯定往下）
+    // ─── 计算MA10短期趋势（1日对比/5日对比，用于后续判断）───
     const ma10_1dAgo = closeArr.length > 11
       ? closeArr.slice(-11, -1).reduce((a: number, b: number) => a + b, 0) / 10
       : 0;
     const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+
+    // ─── 下跌趋势(MA5<MA10 + MA10环比下降)兜底：仅双边下行才判不要介入 ───
+    // 白消恢复期+MA10已转头->跳过此检查（DIFF已金叉突破，均线正在修复，不应被5日MA10趋势拖死）
+    if (suggestion !== '卖出' && ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
+      suggestion = '不要介入';
+    }
+
+    // ─── 深度洗盘后期特殊判断：MA5<MA10但MA10向上 + 站上5日线 + 机构活跃 ───
+    // 上涨趋势中的深度洗盘接近尾声，有企稳迹象，不应判不要介入
+    // 如 301051 信濠光电：MA5<MA10但MA10向上+机构活跃18.49+站上5日线
     if (suggestion === '不要介入') {
       const ma10Prev5 = closeArr.length > 15
         ? (closeArr.slice(-15, -5).reduce((a: number, b: number) => a + b, 0) / 10)
         : 0;
       this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
     }
-    if (suggestion === '不要介入' && ma5 < ma10) {
+    if ((suggestion === '不要介入' || suggestion === '减仓') && ma5 < ma10) {
       const debugVolActive = (volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5)
         / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20 : 1) || 1) * 6;
       this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
@@ -3146,6 +3148,27 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           suggestion = '持有';
           this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=7, 只能设为持有`);
         }
+      }
+    }
+
+    // ─── 白消恢复期：DIFF金叉突破压力线(白消) + MA10转头 + 站上5日线 ───
+    // 处于白消（DIFF>压力线）说明已经走出了白布压制期，均线正在修复
+    // 配合MA10转头向上+站上5日线+成交量活跃，是白消恢复期买入信号
+    if (suggestion !== '卖出' && !baiBuState && baiXiao && ma10TurnUp && price > ma5) {
+      const avgVol5 = volumeArr.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5;
+      const avgVol20 = volumeArr.length >= 20
+        ? volumeArr.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20
+        : avgVol5;
+      const volRatio = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+      this.logger.log(`🕵️ [白消恢复期] ${name}(${code}) DIFF>压力 baiXiao=${baiXiao} ma10TurnUp=${ma10TurnUp} price>ma5=${price>ma5} volRatio=${volRatio}`);
+      if (volRatio > 7) {
+        suggestion = '轻仓买入';
+        this.logger.log(`✅ [白消恢复期] ${name}(${code}) 设为轻仓买入`);
+      } else if (volRatio > 5) {
+        suggestion = '持有';
+        this.logger.log(`⚠️ [白消恢复期] ${name}(${code}) 量能不足(volRatio=${volRatio})，只能设为持有`);
+      } else {
+        this.logger.log(`ℹ️ [白消恢复期] ${name}(${code}) 量能太低(volRatio=${volRatio})，不改变信号`);
       }
     }
 
