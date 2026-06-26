@@ -2636,7 +2636,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       const baiXing: any = calcBaiXing(engine);
       const sanJiao: any = calcBaiSanJiao(engine);
       const lingXing: any = calcBaiLingXing(engine);
-      const xingX: any = calcXingXing(engine);
 
       const isGoldenCross = macdR?.isGoldenCross ?? false;
       const cfsInput: any = {
@@ -3062,7 +3061,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const baiXing: any = calcBaiXing(engine);
     const sanJiao: any = calcBaiSanJiao(engine);
     const lingXing: any = calcBaiLingXing(engine);
-    const xingX: any = calcXingXing(engine);
     const baiXiao = (baiXing as any)?.baiXiao ?? false;
     const baiXiaoDays = (baiXing as any)?.baiXiaoDays ?? 0;
 
@@ -3213,7 +3211,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const fullBaiXing: any = calcBaiXing(fullEngine);
     const fullSanJiao: any = calcBaiSanJiao(fullEngine);
     const fullLingXing: any = calcBaiLingXing(fullEngine);
-    const fullXingXing: any = calcXingXing(fullEngine);
 
     // 简化版MACD（与 stock/analyze 一致）
     const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);

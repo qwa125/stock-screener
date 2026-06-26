@@ -2221,7 +2221,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const baiXing = (0, bai_xing_1.calcBaiXing)(engine);
             const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
             const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
-            const xingX = (0, xing_xing_1.calcXingXing)(engine);
             const isGoldenCross = macdR?.isGoldenCross ?? false;
             const cfsInput = {
                 pricePosition: pricePos,
@@ -2578,7 +2577,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const baiXing = (0, bai_xing_1.calcBaiXing)(engine);
         const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
         const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
-        const xingX = (0, xing_xing_1.calcXingXing)(engine);
         const baiXiao = baiXing?.baiXiao ?? false;
         const baiXiaoDays = baiXing?.baiXiaoDays ?? 0;
         const formulaInput = {
@@ -2700,7 +2698,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const fullBaiXing = (0, bai_xing_1.calcBaiXing)(fullEngine);
         const fullSanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(fullEngine);
         const fullLingXing = (0, bai_ling_xing_1.calcBaiLingXing)(fullEngine);
-        const fullXingXing = (0, xing_xing_1.calcXingXing)(fullEngine);
         const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
         const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
         const fullDiffV = szEma12 - szEma26;
