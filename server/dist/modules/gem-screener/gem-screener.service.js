@@ -1007,7 +1007,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.cache = { data: deduped, timestamp: Date.now() };
         this.saveCacheToDisk();
         this.logger.log(`✅ 前端数据扫描完成, 全量存储 ${deduped.length} 只`);
-        return deduped.slice(0, 30);
+        return deduped;
     }
     async scanWithFrontendMainBoardData(stocks) {
         const results = [];

@@ -1137,7 +1137,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.cache = { data: deduped, timestamp: Date.now() };
     this.saveCacheToDisk();
     this.logger.log(`✅ 前端数据扫描完成, 全量存储 ${deduped.length} 只`);
-    return deduped.slice(0, 30); // 函数返回值仍是Top30（旧兼容）
+    return deduped; // 全量返回，与主板scanWithFrontendMainBoardData一致
   }
 
   /**
