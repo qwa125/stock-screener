@@ -267,7 +267,8 @@ console.log('📦 已关闭本地缓存，每次展示都以最新数据计算')
 // 仅在交易时段可点击，休盘时按钮显示"已冻结"
 async function handleScanClick(){
   hideBlocked()
-  handleRescanClick()
+  // 仅关闭毛玻璃展示页面，不要自动触发全市场重扫
+  // 后台 autoLightScan 会在10分钟周期内自然刷新
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
