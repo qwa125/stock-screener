@@ -53,6 +53,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .detail-panel.open{display:block}
 .signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
 .signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
+/* 价格数字标签 */
+.num-badge{display:inline-block;padding:1px 6px;border-radius:4px;background:#166534;color:#fff;font-size:13px;font-weight:700}
 
 /* Action button */
 .action-card{padding:0 12px 8px}
@@ -789,22 +791,22 @@ function buildDetail(s,rt){
     var sugg='', bestPrice='', hangAdvice=''
     if(intraPos<20){
       sugg='📊 当前处于日内 <b>低位区</b>（接近最低价）'
-      bestPrice='✅ 最佳介入价：<b>¥'+rt.price.toFixed(2)+'</b>（现价即可，安全边际高）'
-      var hLow=rt.low*0.98; hangAdvice='挂单参考：现价买入，或挂 <b>¥'+hLow.toFixed(2)+'</b>（低2%）等更低点位'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">¥'+rt.price.toFixed(2)+'</span> 现价即可，安全边际高'
+      var hLow=rt.low*0.98; hangAdvice='挂单参考：现价买入，或挂 <span class="num-badge">¥'+hLow.toFixed(2)+'</span>（低2%）等更低点位'
     }else if(intraPos<40){
       var tgt=rt.low+(rt.high-rt.low)*0.3
       sugg='📊 当前处于日内 <b>中低位区</b>（'+intraPos.toFixed(0)+'%分位）'
-      bestPrice='✅ 最佳介入价：<b>¥'+tgt.toFixed(2)+'</b>（30%回踩位）'
-      hangAdvice='挂单参考：现价介入，或挂单 <b>¥'+tgt.toFixed(2)+'</b> 等回踩后买入'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">¥'+tgt.toFixed(2)+'</span>（30%回踩位）'
+      hangAdvice='挂单参考：现价介入，或挂单 <span class="num-badge">¥'+tgt.toFixed(2)+'</span> 等回踩后买入'
     }else if(intraPos<60){
       var tgt=rt.low+(rt.high-rt.low)*0.3
       sugg='📊 当前处于日内 <b>中位区</b>（'+intraPos.toFixed(0)+'%分位）'
-      bestPrice='✅ 最佳介入价：<b>¥'+tgt.toFixed(2)+'</b>（回踩30%分位）'
-      hangAdvice='挂单参考：不建议现价追，挂单 <b>¥'+tgt.toFixed(2)+'</b> 等待回调介入'
+      bestPrice='✅ 最佳介入价：<span class="num-badge">¥'+tgt.toFixed(2)+'</span>（回踩30%分位）'
+      hangAdvice='挂单参考：不建议现价追，挂单 <span class="num-badge">¥'+tgt.toFixed(2)+'</span> 等待回调介入'
     }else if(intraPos<80){
       sugg='📊 当前处于日内 <b>高位区</b>（'+intraPos.toFixed(0)+'%分位）'
       bestPrice='⚠️ 建议等待回调至中位以下再介入'
-      hangAdvice='挂单参考：若想介入，可挂 <b>¥'+(rt.low+(rt.high-rt.low)*0.4).toFixed(2)+'</b>（40%分位）轻仓试水'
+      hangAdvice='挂单参考：若想介入，可挂 <span class="num-badge">¥'+(rt.low+(rt.high-rt.low)*0.4).toFixed(2)+'</span>（40%分位）轻仓试水'
     }else{
       sugg='📊 当前处于日内 <b>极高区</b>（'+intraPos.toFixed(0)+'%分位，接近最高价）'
       bestPrice='⛔ 不建议追高，等待明日回调后再介入'
