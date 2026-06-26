@@ -1720,7 +1720,7 @@ async function doSearch(){
         var _dbg=(o&&o._debug)||{};da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
 ma5Up='+_dbg.ma5Up+' ma10Up='+_dbg.ma10Up+' ma10TurnUp='+_dbg.ma10TurnUp+' baiBu='+_dbg.baiBuState+' baiXiao='+_dbg.baiXiao+'<br>\
 ma10_1dAgo='+_dbg.ma10_1dAgo+' pricePos='+_dbg.pricePos+' volRatio='+(_dbg.volRatio||'').toFixed(2)+' deepWash='+_dbg.deepWashoutApplied+'<br>\
-ma10Down='+_dbg.ma10Down+' trendState='+_dbg.trendState+' price>ma5='+_dbg.priceAboveMa5+' volActive='+(_dbg.volActive||'')+'<br>\
+ma10Down='+_dbg.ma10Down+' trendState='+_dbg.trendState+' price>ma5='+_dbg.priceAboveMa5+' volActive='+(_dbg.volActive||'')+' qiangZhiFuGai='+_dbg.qiangZhiFuGai+'<br>\
 chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' keepAll='+_dbg.keepAll+'</div>':'')
       }else{
         throw new Error('分析无结果')

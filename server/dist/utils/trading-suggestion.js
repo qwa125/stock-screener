@@ -34,6 +34,7 @@ function getTradingSuggestion(f) {
     const baiCoverTrend = f.baiCoverTrend ?? 'stable';
     const baiXiaoFresh = baiXiao && baiCoverTrend === 'exiting';
     const baiBuFresh = baiBu && baiCoverTrend === 'entering';
+    const baiBuForcedStrong = baiBu && !!f.qiangZhiFuGai && trend >= 2;
     if (zone.includes('低位')) {
         if (longDecline && trend <= 1 && !macdBullish && !volumeBullish) {
             return {
@@ -147,7 +148,7 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
             };
         }
-        if (baiBuFresh) {
+        if (baiBuFresh && !baiBuForcedStrong) {
             return {
                 action: '减仓',
                 color: 'bg-orange-500',
@@ -196,7 +197,7 @@ function getTradingSuggestion(f) {
                     prediction: '未来1-2日可能调整，建议减仓',
                 };
             }
-            if (baiBuFresh) {
+            if (baiBuFresh && !baiBuForcedStrong) {
                 return {
                     action: '减仓',
                     color: 'bg-orange-500',
@@ -276,7 +277,7 @@ function getTradingSuggestion(f) {
                     prediction: '未来1-2日可能调整，建议减仓',
                 };
             }
-            if (baiBuFresh) {
+            if (baiBuFresh && !baiBuForcedStrong) {
                 return {
                     action: '减仓',
                     color: 'bg-orange-500',
@@ -355,7 +356,7 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日有望突破，建议介入',
             };
         }
-        if (strongSell || baiBuFresh) {
+        if (strongSell || (baiBuFresh && !baiBuForcedStrong)) {
             return {
                 action: '卖出',
                 color: 'bg-red-500',

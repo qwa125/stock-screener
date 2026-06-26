@@ -337,7 +337,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     recalculateSuggestions(data) {
         for (const s of data) {
-            if (s.suggestion)
+            if (['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || ''))
                 continue;
             if (s.changePercent <= -5) {
                 s.suggestion = '卖出';
@@ -2241,6 +2241,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
                 baiXiao: !!baiXing?.baiXiao,
                 volumeStructure: sanJiao?.volumeStructure ?? 0,
+                qiangZhiFuGai: !!baiXing?.qiangZhiFuGai,
             };
             const cfsResult = (0, trading_suggestion_1.getTradingSuggestion)(cfsInput);
             const suggestion = cfsResult.action;
@@ -2579,6 +2580,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
         const baiXiao = baiXing?.baiXiao ?? false;
         const baiXiaoDays = baiXing?.baiXiaoDays ?? 0;
+        const qiangZhiFuGai = !!baiXing?.qiangZhiFuGai;
         const formulaInput = {
             pricePosition: pricePos,
             trendState,
@@ -2599,6 +2601,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
             baiXiao: !!baiXiao,
             volumeStructure: sanJiao?.volumeStructure ?? 0,
+            qiangZhiFuGai,
         };
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
@@ -2728,6 +2731,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             baiCoverTrend: fullBaiXing?.baiCoverTrend ?? 'stable',
             baiXiao: !!fullBaiXing?.baiXiao,
             volumeStructure: fullSanJiao?.volumeStructure ?? 0,
+            qiangZhiFuGai: !!fullBaiXing?.qiangZhiFuGai,
         };
         const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
         const crossSuggestion = crossResult.action;
@@ -2833,6 +2837,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 baiXiao: !!baiXiao,
                 baiXiaoDays,
                 baiBuState: !!baiBuState,
+                qiangZhiFuGai,
                 ma10Down,
                 trendState,
                 price: Math.round(price * 100) / 100,

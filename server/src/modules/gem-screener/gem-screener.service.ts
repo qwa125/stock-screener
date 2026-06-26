@@ -452,8 +452,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
   /** 重新生成缓存建议，与服务器分析算法保持一致 */
   recalculateSuggestions(data: OpportunityStock[]) {
     for (const s of data) {
-      // 已有信号（来自 signalRule 的白布+清仓/紧急清仓/主力出货等）→ 不覆盖
-      if (s.suggestion) continue;
+      // 保护买入信号（来自 signalRule 的精准分析），不做兜底覆盖
+      // 非买入信号（持有/减仓/卖出/不要介入）允许兜底逻辑修正
+      if (['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || '')) continue;
 
       // 暴跌 → 卖出（兜底，正常情况下signalRule已处理）
       if (s.changePercent <= -5) {
@@ -2657,6 +2658,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         baiCoverTrend: (baiXing as any)?.baiCoverTrend ?? 'stable',
         baiXiao: !!(baiXing as any)?.baiXiao,
         volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
+        qiangZhiFuGai: !!(baiXing as any)?.qiangZhiFuGai,
       };
       const cfsResult = getTradingSuggestion(cfsInput);
       const suggestion = cfsResult.action;
@@ -3064,6 +3066,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const baiXiao = (baiXing as any)?.baiXiao ?? false;
     const baiXiaoDays = (baiXing as any)?.baiXiaoDays ?? 0;
 
+    const qiangZhiFuGai = !!(baiXing as any)?.qiangZhiFuGai;
+
     const formulaInput: any = {
       pricePosition: pricePos,
       trendState,
@@ -3084,6 +3088,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       baiCoverTrend: (baiXing as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!baiXiao,
       volumeStructure: (sanJiao as any)?.volumeStructure ?? 0,
+      qiangZhiFuGai,
     };
 
     const isGoldenCross = macdR?.isGoldenCross ?? false;
@@ -3244,6 +3249,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       baiCoverTrend: (fullBaiXing as any)?.baiCoverTrend ?? 'stable',
       baiXiao: !!(fullBaiXing as any)?.baiXiao,
       volumeStructure: (fullSanJiao as any)?.volumeStructure ?? 0,
+      qiangZhiFuGai: !!(fullBaiXing as any)?.qiangZhiFuGai,
     };
     const crossResult = getTradingSuggestion(crossInput);
     const crossSuggestion = crossResult.action;
@@ -3363,6 +3369,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         baiXiao: !!baiXiao,
         baiXiaoDays,
         baiBuState: !!baiBuState,
+        qiangZhiFuGai,
         ma10Down,
         trendState,
         price: Math.round(price * 100) / 100,

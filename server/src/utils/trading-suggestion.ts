@@ -44,6 +44,7 @@ export interface SuggestionInput {
   baiBuDays?: number;
   baiCoverTrend?: 'exiting' | 'entering' | 'stable';
   volumeStructure?: number;
+  qiangZhiFuGai?: boolean;
 }
 
 export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
@@ -72,6 +73,9 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
   const baiCoverTrend = f.baiCoverTrend ?? 'stable';
   const baiXiaoFresh = baiXiao && baiCoverTrend === 'exiting';   // 刚出白布(白消恢复期)
   const baiBuFresh = baiBu && baiCoverTrend === 'entering';      // 刚进白布(白布出现期)
+
+  // 强制覆盖白布：爆量/乖离率过大导致的强制白布，在强趋势中不是真正的卖出信号
+  const baiBuForcedStrong = baiBu && !!f.qiangZhiFuGai && trend >= 2;
 
   // ─── 1) 低位区 (<25%) ───
   // 用户核心需求：ma5刚拐头(trend>=1) + 强信号 = 重仓买入
@@ -191,7 +195,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
       };
     }
-    if (baiBuFresh) {
+    if (baiBuFresh && !baiBuForcedStrong) {
       return {
         action: '减仓',
         color: 'bg-orange-500',
@@ -242,7 +246,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
           prediction: '未来1-2日可能调整，建议减仓',
         };
       }
-      if (baiBuFresh) {
+      if (baiBuFresh && !baiBuForcedStrong) {
         return {
           action: '减仓',
           color: 'bg-orange-500',
@@ -325,7 +329,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
           prediction: '未来1-2日可能调整，建议减仓',
         };
       }
-      if (baiBuFresh) {
+      if (baiBuFresh && !baiBuForcedStrong) {
         return {
           action: '减仓',
           color: 'bg-orange-500',
@@ -407,7 +411,7 @@ export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
         prediction: '未来1-2日有望突破，建议介入',
       };
     }
-    if (strongSell || baiBuFresh) {
+    if (strongSell || (baiBuFresh && !baiBuForcedStrong)) {
       return {
         action: '卖出',
         color: 'bg-red-500',
