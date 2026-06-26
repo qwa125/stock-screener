@@ -1054,7 +1054,7 @@ async function doFullRescan(){
         var sc=list[si],c=String(sc.code||'')
         if(!c||seenCodes[c])continue
         seenCodes[c]=1
-        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0})
+        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
       }
     }
     scanCount=emData.length
@@ -1108,6 +1108,8 @@ async function doFullRescan(){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
+          newStocks[si3].intradayHigh=item.f15
+          newStocks[si3].intradayLow=item.f16
           if(hasLiveData){
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
@@ -1171,6 +1173,8 @@ async function doFullRescan(){
       if(['持有','减仓','卖出','不要介入','观望'].indexOf(_cacheInNewStk.suggestion)>=0){
         _cacheInNewStk.currentPrice=price;
         _cacheInNewStk.changePercent=chg;
+        _cacheInNewStk.intradayHigh=item.f15;
+        _cacheInNewStk.intradayLow=item.f16;
         seenInSina[code]=1;
         continue;  // 跳过新股路径，保持缓存原有建议
       }
@@ -1178,6 +1182,8 @@ async function doFullRescan(){
       // 更新实时数据后继续往下走（不添加为新股）
       _cacheInNewStk.currentPrice=price;
       _cacheInNewStk.changePercent=chg;
+      _cacheInNewStk.intradayHigh=item.f15;
+      _cacheInNewStk.intradayLow=item.f16;
       _cacheInNewStk.score=liveScore;
       _cacheInNewStk.entryTiming=liveEntryTiming;
       var _bks=_cacheInNewStk.suggestion;
@@ -1196,6 +1202,7 @@ async function doFullRescan(){
     seenInSina[code]=1  // 标记新股也在Sina中找到，避免被降级
     
     newStocks.push({code:code,name:name,currentPrice:price,
+      intradayHigh:item.f15,intradayLow:item.f16,
       pricePosition:50,
       // 新股按涨跌幅给基础评分（即使非交易时段也有排序依据）
       suggestion:hasLiveData?liveSuggestion:'持有',
@@ -1245,8 +1252,14 @@ async function doFullRescan(){
   if(newStocks.length){
     setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
     stocks=newStocks
-    // 排序：信号优先级 → 入场时机 → 综合评分 → 今日涨幅(降序)
+    // 排序：信号优先级 → 入场时机 → 日内位置(低位优先) → 综合评分 → 今日涨幅(降序)
     var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6 }
+    function calcIntradayScore(s){
+      var hi=s.intradayHigh||0, lo=s.intradayLow||0, p=s.currentPrice||0
+      if(!hi||!lo||hi<=lo) return 1
+      var pos=(p-lo)/(hi-lo)*100
+      return pos<25?3:pos<50?2:pos<75?1:0
+    }
     // 保存缓存股最新数据（排序会打乱位置）
     var cacheLatest=[]
     for(var ci=0;ci<newStocks.length;ci++){cacheLatest.push(newStocks[ci])}
@@ -1256,9 +1269,12 @@ async function doFullRescan(){
       // 第二排序：入场时机(高→低)
       var ea=a.entryTiming||0, eb=b.entryTiming||0
       if(eb!==ea) return eb-ea
-      // 第三排序：综合评分(高→低)
+      // 第三排序：日内位置(低位优先，现价可介入排最前)
+      var ia=calcIntradayScore(a), ib=calcIntradayScore(b)
+      if(ia!==ib) return ib-ia
+      // 第四排序：综合评分(高→低)
       if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      // 第四排序：今日涨幅(高→低)，让强势股浮上来
+      // 第五排序：今日涨幅(高→低)，让强势股浮上来
       return (b.changePercent||0)-(a.changePercent||0)
     })
     // 只保留重仓买入/买入的股票

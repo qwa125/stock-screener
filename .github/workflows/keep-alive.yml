@@ -16,7 +16,7 @@ jobs:
       - name: 🚀 触发Render部署
         run: |
           curl -s -o /dev/null -w "Deploy: HTTP %{http_code}\n" --max-time 30 \
-            -X POST "https://api.render.com/deploy/srv-d8n3ku1o3t8c73cd4qs0?key=Fg1T5D-KRDc"
+            -X POST "https://api.render.com/deploy/srv-d8ortc8js32c7385n72g?key=htmRK6ve_Qc"
       - name: 🌐 Ping Render 保持活跃
         run: |
           CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://stock-screener-54nd.onrender.com")
