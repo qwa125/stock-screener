@@ -471,12 +471,13 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: '东方财富API请求失败', data: [] };
         }
     }
-    async proxySearch(query) {
+    async proxySearch(query, count) {
         if (!query || !query.trim()) {
             return { code: 400, msg: '缺少搜索关键词' };
         }
+        const limit = count ? parseInt(count, 10) : 10;
         try {
-            const url = `https://searchadapter.eastmoney.com/api/suggest/get?input=${encodeURIComponent(query.trim())}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
+            const url = `https://searchadapter.eastmoney.com/api/suggest/get?input=${encodeURIComponent(query.trim())}&type=14&count=${Math.min(limit, 20)}&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
             const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
             const data = await resp.json();
             const results = data?.QuotationCodeTable?.Data || [];
@@ -850,8 +851,9 @@ __decorate([
     (0, common_1.Get)('proxy/search'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('q')),
+    __param(1, (0, common_1.Query)('count')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxySearch", null);
 __decorate([
