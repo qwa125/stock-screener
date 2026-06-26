@@ -1,4 +1,4 @@
-<!-- Core v20250627-restore28db1c2 -->
+<!-- Core v20250627-inline2 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -533,7 +533,7 @@ async function fetchKlineAndAnalyze(s){
 }
 function setStatus(s){$('status').textContent=s}
 function updateScanCount(n){var b=$('scanCountBadge');if(b){b.textContent=n>0?n+'只':'—'}}
-var selectedIdx=-1,searchStockCode=null,searchStockObj=null,currentTaData=null
+var selectedIdx=-1
 
 function posLabel(p){
   if(p<25) return '低位区'
@@ -707,7 +707,7 @@ function gridChipLine(s,entry){
 }
 
 function showDetail(i){
-  selectedIdx=i;if($('scanBtn'))$('scanBtn').style.display='none'
+  selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
   da.style.display='block'
@@ -729,7 +729,6 @@ function showDetail(i){
       var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
       var tj=await tr.json()
       if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
-        currentTaData=tj.data
         da.innerHTML=buildDetail(s,rt,tj.data)
       }
     }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
@@ -1016,7 +1015,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;if($('scanBtn'))$('scanBtn').style.display='';$('detailArea').style.display='none'
+    selectedIdx=-1;$('detailArea').style.display='none'
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1411,7 +1410,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;if($('scanBtn'))$('scanBtn').style.display='';$('detailArea').style.display='none'
+    selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -2107,17 +2106,6 @@ function startPriceRefresh(stks){
               chgSpan.style.color=chgClr
             }
           })
-        }).catch(function(){})
-      }
-      // 详情面板2s刷新：价格&白消白布信号
-      if(selectedIdx>=0&&stocks[selectedIdx]){
-        var ds=stocks[selectedIdx],drt=realtimePrices[ds.code]||{}
-        fetchRealtime([ds.code]).then(function(nr){
-          if(nr&&nr[ds.code]){Object.assign(drt,nr[ds.code]);realtimePrices[ds.code]=drt}
-          var da=$('detailArea')
-          if(da&&da.style.display!='none'){
-            da.innerHTML=buildDetail(ds,drt,currentTaData)
-          }
         }).catch(function(){})
       }
     },2000)
