@@ -26,7 +26,7 @@ const market_time_1 = require("../../utils/market-time");
 const trading_suggestion_1 = require("../../utils/trading-suggestion");
 const pinyin_pro_1 = require("pinyin-pro");
 const data_1 = require("../../industry-sectors/data");
-const postgres_1 = require("postgres");
+const postgres = require('postgres');
 const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
@@ -41,7 +41,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!url)
             return null;
         try {
-            this._pgSql = (0, postgres_1.default)(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
+            this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
             this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
         }
         catch (e) {

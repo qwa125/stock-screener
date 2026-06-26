@@ -14,7 +14,7 @@ import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
 import { pinyin } from 'pinyin-pro';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
-import postgres from 'postgres';
+const postgres = require('postgres');
 
 // 合并申万行业 + 热点概念板块
 const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
