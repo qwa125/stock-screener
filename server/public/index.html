@@ -1,4 +1,4 @@
-<!-- Core v20250626-fix9 -->
+<!-- Core v20250626-e540a37 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -48,8 +48,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .chg{font-size:13px;font-weight:600;flex:1;text-align:center}
 .pos{font-size:13px;font-weight:700;flex:1;text-align:center}
 
-/* Detail panel - 内联区域（搜索栏下方） */
-.detail-panel{display:none;background:#fff;overflow-x:hidden}
+/* Detail panel - 全屏覆盖层 */
+.detail-panel{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:200;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .detail-panel.open{display:block}
 .signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
 .signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
@@ -165,7 +165,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v6</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v5</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -707,29 +707,21 @@ function gridChipLine(s,entry){
     +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+peakClr+'">'+peakLabel+'</div></div>'
 }
 
-function closeDetail(){
-  $('detailArea').style.display='none'
-  $('scanBtn').style.display=''
-  $('listHeader').style.display=''
-  $('stockList').style.display=''
-  renderList()
-}
 function showDetail(i){
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
-  da.style.display='block';$('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none'
+  da.style.display='block'
   da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
   if(!rt.high&&!rt.low&&s.code){
     fetchRealtime([s.code]).then(function(fr){
       var nr=fr&&fr[s.code]
-      console.log('[detail] 异步补拉实时行情:', s.code, nr)
       if(nr&&nr.high&&nr.low){
         da.innerHTML=buildDetail(s,nr)
       }
-    }).catch(function(){console.warn('[detail] 补拉实时行情失败:', s.code)})
+    }).catch(function(){})
   }
   renderList()
   // ★ 异步拉取技术指标分析（MACD/KDJ/布林带/RSI/量比→最佳介入价）
@@ -738,9 +730,7 @@ function showDetail(i){
       var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
       var tj=await tr.json()
       if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
-        // 用最新的实时行情替换闭包中的旧 rt（防止 rt.price 未就绪导致下方 .toFixed 崩溃）
-        var frRt=realtimePrices[s.code]||rt||{}
-        da.innerHTML=buildDetail(s,frRt,tj.data)
+        da.innerHTML=buildDetail(s,rt,tj.data)
       }
     }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
   })()
@@ -934,6 +924,7 @@ function buildDetail(s,rt,ta){
     +'</div>'
   }
 
+  // 详情说明
   var details=[]
   if(sig==='重仓买入'){details.push('低位区'+p.toFixed(0)+'%：处于安全价位区间');details.push('MA5>MA10多头排列，趋势向上');details.push('强信号触发，技术面共振')}
   else if(sig==='买入'){details.push('低位区出现买点信号');details.push('趋势企稳回升，均线走好');details.push('成交量配合较好')}
@@ -942,7 +933,7 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var backBtn='<div style="position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="closeDetail()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="closeDetail()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
   return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
@@ -1025,7 +1016,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    closeDetail()
+    selectedIdx=-1;$('detailArea').style.display='none'
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1420,7 +1411,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    closeDetail()
+    selectedIdx=-1;$('detailArea').style.display='none'
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -1603,35 +1594,31 @@ async function fetchSinaUS(code){
 // ---------- 拼音搜索下拉（输入字母实时搜索） ----------
 var searchTimer=null
 function onSearchInput(){
-  var v=$('searchInput').value.trim()
+  var v=$('searchInput').value.trim().toLowerCase()
   var dd=$('searchDropdown')
+  // 清空旧的timer
   if(searchTimer)clearTimeout(searchTimer)
-  if(!v){dd.style.display='none';return}
-  // 防抖300ms，使用东方财富全A股搜索
+  // 输入为空或含数字（可能是代码），隐藏下拉
+  if(!v||/\d/.test(v)||!/^[a-z]+$/.test(v)){
+    dd.style.display='none'
+    return
+  }
+  // 防抖300ms
   searchTimer=setTimeout(function(){
-    fetch('/api/gem/proxy/search?q='+encodeURIComponent(v)+'&count=15')
+    fetch('/api/gem/search?q='+encodeURIComponent(v))
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.code===200&&d.data&&d.data.length>0){
-          var items=d.data
-          // 只保留A股（深A/沪A/京A），排除ETF/指数/港股/美股/三板
-          var aShares=items.filter(function(x){
-            var sn=x.SecurityTypeName||''
-            return sn.indexOf('A')>=0||(!isNaN(x.Code)&&x.Code.length===6&&!/^9/.test(x.Code))
-          })
-          if(!aShares.length)aShares=items.filter(function(x){return x.Code&&x.Code.length===6})
-          if(!aShares.length)aShares=items.slice(0,8)
           var html=''
-          for(var i=0;i<Math.min(aShares.length,15);i++){
-            var s=aShares[i]
-            html+='<div onclick="selectStock(\''+s.Code+'\',\''+(s.Name||'').replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
-            html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.Code+'</span>'
-            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+(s.Name||'')+'</span>'
-            if(s.PinYin)html+='<span style="font-size:11px;color:#aaa">'+s.PinYin+'</span>'
+          for(var i=0;i<d.data.length;i++){
+            var s=d.data[i]
+            var sug=s.suggestion||''
+            var sugColor=sug.indexOf('买入')>=0?'#22c55e':sug.indexOf('卖出')>=0?'#ef4444':'#888'
+            html+='<div onclick="selectPinyinStock(\''+s.code+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
+            html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
+            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
+            html+='<span style="font-size:11px;color:'+sugColor+'">'+sug+'</span>'
             html+='</div>'
-          }
-          if(items.length>15){
-            html+='<div style="padding:6px 12px;color:#999;font-size:12px;text-align:center">共'+(aShares.length||items.length)+'条，继续输入精确匹配</div>'
           }
           dd.innerHTML=html
           dd.style.display='block'
@@ -1641,11 +1628,6 @@ function onSearchInput(){
       })
       .catch(function(){dd.style.display='none'})
   },300)
-}
-function selectStock(code,name){
-  $('searchInput').value=code
-  $('searchDropdown').style.display='none'
-  doSearch()
 }
 function selectPinyinStock(code,name){
   $('searchInput').value=code
@@ -1661,16 +1643,15 @@ async function doSearch(){
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
-  closeDetail();var da=$('detailArea')
+  var da=$('detailArea');da.style.display='none'
 
   // 兼容指数代码：1A0001=上证指数
   if(/^1a\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
 
-  // 判断输入类型：A股代码(6位)/港股(5位)/拼音首字母(2-5小写字母)/美股(含大写字母)/北交所(92/4/8开头)
+  // 判断输入类型：A股代码(6位)/港股(5位)/美股(含字母)/北交所(92/4/8开头)
   var isCode=/^\d{6}$/.test(v)||/^9\d{5}$/.test(v)||/^[48]\d{5}$/.test(v)
   var isHK=/^\d{5}$/.test(v)
-  var isPinyin=/^[a-z]{2,5}$/.test(v)
-  var isUS=/[a-zA-Z]/.test(v)&&!/^\d/.test(v)&&!/^1a/i.test(v)&&!isPinyin
+  var isUS=/[a-zA-Z]/.test(v)&&!/^\d/.test(v)&&!/^1a/i.test(v)
 
 
   var stockName='',stockCode='',stockPrice=0,stockChgP=0,stockHigh=0,stockLow=0,stockMarket=''
@@ -1691,7 +1672,7 @@ async function doSearch(){
     }
     if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
     else{
-      da.style.display='block';$('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
+      da.style.display='block';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
       return
     }
   }else{
@@ -1701,8 +1682,8 @@ async function doSearch(){
       var d=await r.json()
       var items=d&&d.data
       if(items&&items.length){
-        // 取第一个A股结果（排除ETF/指数/三板）
-        var hit=items.find(function(x){var sn=x.SecurityTypeName||'';return sn.indexOf('A')>=0||(x.Code&&x.Code.length===6&&!/^[89]/.test(x.Code)&&!/^4/.test(x.Code))})
+        // 取第一个A股结果（排除ETF/指数）
+        var hit=items.find(function(x){return x.SecurityTypeName==='A股'||x.Code.startsWith('3')||x.Code.startsWith('6')||x.Code.startsWith('0')||x.Code.startsWith('1')})
         if(!hit)hit=items[0]
         var rawCode=hit.Code.replace(/\.(SZ|SH)$/i,'')
         stockCode=rawCode
@@ -1717,7 +1698,7 @@ async function doSearch(){
   
   // 第二步：显示基础信息
   if(stockCode){
-    da.style.display='block';$('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none'
+    da.style.display='block'
     // ★　搜索前先查机会区是否有该股（含前端实时升级后的建议）
     var localStock=null
     if(typeof stocks!=='undefined'&&stocks){
@@ -1907,7 +1888,7 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
       }
     }
   }else{
-    da.style.display='block';$('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none'
+    da.style.display='block'
     da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">未找到该股票或ETF/可转债</div>'
   }
 }
