@@ -729,8 +729,8 @@ function showDetail(i){
       var aj=await ar.json()
       if(aj.code===200&&aj.data&&aj.data.length>0){
         var o=aj.data[0]
-        // 用前端计算的机构活跃度覆盖
-        if(jiGouFromKdata)o.jiGouActiveScore=jiGouFromKdata
+        // 前端备用计算（后端有真实xing-xing值时优先）
+        if(jiGouFromKdata && !o.jiGouActiveScore) o.jiGouActiveScore=jiGouFromKdata
         o.name=s.name;o.currentPrice=o.currentPrice||rt.price||s.currentPrice||0;o.changePercent=o.changePercent||rt.chgP||s.changePercent||0
         // 用实时涨幅修正信号（与搜索逻辑一致）
         var chg=o.changePercent||0, LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'], BACKEND_SELL=['减仓','卖出','不要介入'], liveSug=null

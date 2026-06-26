@@ -1867,7 +1867,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       isGoldenCross: result.isGoldenCross,
       suggestion,
       signalCombination: signalCombination || result.detail,
-      jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+      jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
       trendPrediction: this.calcTrendPrediction(kline, result),
       // ═══ 共享技术面预测：与addForecastToCache/quickAnalyze完全统一 ═══
       forecast1_2Day: GemScreenerService.computeTechnicalForecast({
@@ -1877,7 +1877,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         ma10: result.ma10,
         pricePosition: result.pricePosition,
         mainForceInflow: s.inflow ?? 0,
-        jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+        jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
       }),
     };
   }

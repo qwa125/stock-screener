@@ -1592,7 +1592,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             isGoldenCross: result.isGoldenCross,
             suggestion,
             signalCombination: signalCombination || result.detail,
-            jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+            jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
             trendPrediction: this.calcTrendPrediction(kline, result),
             forecast1_2Day: GemScreenerService_1.computeTechnicalForecast({
                 entryTiming,
@@ -1601,7 +1601,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 ma10: result.ma10,
                 pricePosition: result.pricePosition,
                 mainForceInflow: s.inflow ?? 0,
-                jiGouActiveScore: Math.round(result.volumeRatio * 6 * 100) / 100,
+                jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
             }),
         };
     }
