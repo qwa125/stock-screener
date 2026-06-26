@@ -1792,8 +1792,8 @@ setTimeout(function(){
   $('scanBtn').textContent=isTH()?'🔄 立即扫描':'📊 已冻结'
   fetchMarketState() // 首次加载市场状态
   if(isTH()){
-    // 交易时段 → 自动拉取最新数据
-    doScan()
+    // 交易时段 → 渐进式自动扫描（不会因后端空缓存而全量重扫）
+    if(!_autoScanning&&!loading) autoLightScan()
   }else{
     // 休盘/周末 → 恢复最后一次冻结快照（不重新拉取）
     var snap=loadFrozenSnapshot()
