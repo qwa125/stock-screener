@@ -68,26 +68,10 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日方向待确认，建议持有',
             };
         }
-        if (baiXiaoFresh) {
-            return {
-                action: '轻仓买入',
-                color: 'bg-green-500',
-                reason: '低位+刚出白布恢复期',
-                prediction: '未来1-2日刚出白布恢复期有望反弹，建议轻仓买入',
-            };
-        }
-        if (baiXiaoActive) {
-            return {
-                action: '持有',
-                color: 'bg-yellow-500',
-                reason: '低位+白消恢复期，均线修复中',
-                prediction: '未来1-2日白消恢复期有望企稳，建议持有',
-            };
-        }
         return {
             action: '不要介入',
             color: 'bg-gray-500',
-            reason: '低位+下降趋势，均线空头压制',
+            reason: '低位+5/10日线下跌，均线空头压制',
             prediction: '未来1-2日预计继续探底，建议不要介入',
         };
     }
@@ -132,19 +116,19 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日方向待确认，建议持有',
             };
         }
-        if (baiXiaoFresh) {
+        if (trend >= 1 && baiXiaoFresh) {
             return {
                 action: '买入',
                 color: 'bg-green-600',
-                reason: '中低位+刚出白布恢复期，有望回暖',
+                reason: '中低位+趋势拐头+刚出白布恢复期',
                 prediction: '未来1-2日刚出白布恢复期有望反弹，建议买入',
             };
         }
-        if (baiXiaoActive) {
+        if (trend >= 1 && baiXiaoActive) {
             return {
                 action: '轻仓买入',
                 color: 'bg-green-500',
-                reason: '中低位+白消恢复期，有望回暖',
+                reason: '中低位+趋势拐头+白消恢复期',
                 prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
             };
         }
@@ -236,7 +220,7 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日信号验证中，建议持有',
             };
         }
-        if (baiXiaoActive) {
+        if (trend >= 1 && baiXiaoActive) {
             return {
                 action: '轻仓买入',
                 color: 'bg-green-500',
@@ -316,7 +300,7 @@ function getTradingSuggestion(f) {
                 prediction: '未来1-2日预计继续回落，建议卖出',
             };
         }
-        if (baiXiaoActive) {
+        if (trend >= 1 && baiXiaoActive) {
             return {
                 action: '轻仓买入',
                 color: 'bg-green-500',
