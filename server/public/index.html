@@ -1,4 +1,4 @@
-<!-- Core v20250624-fix5 -->
+<!-- Core v20250626-fix6 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -48,8 +48,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .chg{font-size:13px;font-weight:600;flex:1;text-align:center}
 .pos{font-size:13px;font-weight:700;flex:1;text-align:center}
 
-/* Detail panel - 全屏覆盖层 */
-.detail-panel{display:none;background:#fff;overflow-x:hidden;border-bottom:1px solid #eee}
+/* Detail panel - 固定全屏覆盖层 */
+.detail-panel{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:40;background:#fff;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .detail-panel.open{display:block}
 .signal-tags{padding:10px 12px 6px;display:flex;flex-wrap:wrap;gap:6px}
 .signal-tag{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:500;color:#fff}
@@ -165,7 +165,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v5</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v6</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -712,6 +712,7 @@ function closeDetail(){
   $('scanBtn').style.display=''
   $('listHeader').style.display=''
   $('stockList').style.display=''
+  document.body.style.overflow=''
   renderList()
 }
 function showDetail(i){
@@ -720,7 +721,8 @@ function showDetail(i){
   var da=$('detailArea')
   da.style.display='block';$('scanBtn').style.display='none';$('listHeader').style.display='none';$('stockList').style.display='none'
   da.innerHTML=buildDetail(s,rt)
-  da.scrollIntoView({behavior:'smooth',block:'nearest'})
+  document.body.style.overflow='hidden'
+  da.scrollTop=0
   // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
   if(!rt.high&&!rt.low&&s.code){
     fetchRealtime([s.code]).then(function(fr){
