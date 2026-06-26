@@ -3589,7 +3589,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   async searchStocks(keyword: string): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
     try {
-      const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+      const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
       // 去重
       const seen = new Set<string>();
       const deduped = allCached.filter(s => {

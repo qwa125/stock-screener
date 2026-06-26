@@ -4,7 +4,9 @@ import { View, Text, ScrollView } from '@tarojs/components'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Network } from '@/network'
+import { Search } from 'lucide-react-taro'
 
 const BUY_COLORS: Record<string, string> = { '重仓买入': '#dc2626', '买入': '#2563eb' }
 
@@ -137,6 +139,10 @@ async function fetchPrices(codes: string[]): Promise<Record<string, { price: num
 
 export default function Index() {
   const [opportunities, setOpportunities] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
   const [lastScanTime, setLastScanTime] = useState('')
@@ -146,6 +152,7 @@ export default function Index() {
   const scanTimerR = useRef<any>(null)
   const priceTimerR = useRef<any>(null)
   const oppCodesR = useRef<string[]>([])
+  const searchTimerR = useRef<any>(null)
 
   /** 核心扫描：拉取数据 → 发送后端缓存 → 读取机会区 */
   const runScan = useCallback(async () => {
@@ -228,6 +235,30 @@ export default function Index() {
       const pr = await fetchPrices(codes)
       if (Object.keys(pr).length > 0) setPrices(prev => ({ ...prev, ...pr }))
     } catch { /* ignore */ }
+  }, [])
+
+  /** 股票搜索：从后端缓存查询 */
+  const doSearch = useCallback(async (keyword: string) => {
+    if (!keyword.trim()) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+    setSearching(true)
+    try {
+      const res = await Network.request({
+        url: '/api/gem/search',
+        method: 'GET',
+        data: { q: keyword.trim() },
+      })
+      console.log('🔍 search response:', res.data)
+      const list = res?.data?.data || []
+      setSearchResults(list)
+      setShowSearchResults(list.length > 0)
+    } catch (e: any) {
+      console.error('搜索失败:', e)
+    }
+    setSearching(false)
   }, [])
 
   /** 加载后端缓存的冻结数据（页面打开时直接读缓存，不触发扫描） */
@@ -357,6 +388,87 @@ export default function Index() {
             <Text className="block text-xs text-center">{loading ? '扫描分析中...' : '🔄 立即扫描'}</Text>
           </Button>
         </View>
+        {/* 搜索框 */}
+        <View className="mt-2">
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+            <Search size={16} color="#9ca3af" />
+            <Input
+              className="flex-1 h-9"
+              placeholder="输入股票代码/名称/拼音搜索..."
+              value={searchKeyword}
+              onInput={(e) => {
+                const v = (e as any).detail?.value || ''
+                setSearchKeyword(v)
+                if (searchTimerR.current) clearTimeout(searchTimerR.current)
+                if (v.trim()) {
+                  searchTimerR.current = setTimeout(() => doSearch(v), 300)
+                } else {
+                  setSearchResults([])
+                  setShowSearchResults(false)
+                }
+              }}
+              onBlur={() => {
+                setTimeout(() => setShowSearchResults(false), 300)
+              }}
+            />
+            {searchKeyword && (
+              <View className="flex-shrink-0" onClick={() => { setSearchKeyword(''); setSearchResults([]); setShowSearchResults(false) }}>
+                <Text className="block text-xs text-gray-400">✕</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        {/* 搜索结果显示 */}
+        {showSearchResults && (
+          <View
+            className="bg-white border border-gray-200 rounded-lg mt-2 max-h-64 overflow-y-auto"
+            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          >
+            {searching ? (
+              <View className="px-4 py-3"><Text className="block text-xs text-gray-400">搜索中...</Text></View>
+            ) : searchResults.length === 0 ? (
+              <View className="px-4 py-3"><Text className="block text-xs text-gray-400">未找到匹配结果</Text></View>
+            ) : (
+              searchResults.map((stock: any, idx: number) => (
+                <View
+                  key={stock.code + idx}
+                  className="px-4 py-3 border-b border-gray-50 last:border-b-0"
+                  onClick={() => {
+                    // 点击搜索结果，滚动到详情或选中
+                    Taro.showToast({ title: `${stock.name}(${stock.code})`, icon: 'none' })
+                  }}
+                >
+                  <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                      <Text className="block text-sm font-medium text-gray-900">{stock.name}</Text>
+                      <Text className="block text-xs text-gray-400">{stock.code}</Text>
+                    </View>
+                    <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                      <View className="px-2 py-1 rounded text-xs font-medium text-white"
+                        style={{
+                          backgroundColor: stock.suggestion === '重仓买入' ? '#dc2626'
+                            : stock.suggestion === '买入' ? '#2563eb'
+                            : stock.suggestion === '轻仓买入' ? '#d97706'
+                            : stock.suggestion === '持有' ? '#059669'
+                            : stock.suggestion === '减仓' ? '#7c3aed'
+                            : stock.suggestion === '卖出' ? '#dc2626'
+                            : stock.suggestion === '不要介入' ? '#6b7280'
+                            : '#6b7280'
+                        }}
+                      >
+                        <Text className="block text-xs text-white font-medium">{stock.suggestion || '--'}</Text>
+                      </View>
+                      <Text className="block text-xs text-gray-500">{stock.entryTiming ?? '--'}</Text>
+                    </View>
+                  </View>
+                  {stock.signalComb && (
+                    <Text className="block text-xs text-gray-400 mt-1">{stock.signalComb}</Text>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
       </View>
 
       {/* 机会区列表 */}

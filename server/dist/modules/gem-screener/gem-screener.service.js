@@ -3017,7 +3017,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async searchStocks(keyword) {
         const results = [];
         try {
-            const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+            const allCached = [...(this.fullCache?.data || []), ...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
             const seen = new Set();
             const deduped = allCached.filter(s => {
                 const key = s.code;
