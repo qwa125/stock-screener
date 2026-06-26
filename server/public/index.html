@@ -709,6 +709,7 @@ function gridChipLine(s,entry){
 }
 
 function showDetail(i){
+  $('scanBtn').style.display='none'
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
@@ -926,7 +927,7 @@ function buildDetail(s,rt,ta){
   if(gc)details.push('MACD金叉信号，短期看多')
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
-  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
+  var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';document.getElementById(\'scanBtn\').style.display=\'\';selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';document.getElementById(\'scanBtn\').style.display=\'\';selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
   return backBtn+tags+action+future+grid+entryHtml+detailList
 }
 
@@ -1009,7 +1010,7 @@ async function doScan(){
     }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none'
+    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none';$('scanBtn').style.display=''
     renderList() // 先显示结果，筹码集中度后台计算
     setStatus('🔄 计算筹码集中度...')
     try{
@@ -1404,7 +1405,7 @@ async function doFullRescan(){
     // 不保存原始数据，后续由doScan保存最新分析结果
     setStatus('🔄 获取实时行情...')
     try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none'
+    selectedIdx=-1;currentTaData=null;searchStockCode=null;searchStockObj=null;$('detailArea').style.display='none';$('scanBtn').style.display=''
     lastScanTime=new Date().toLocaleString()
     // 日志输出Top20信号分布，方便排查
     console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
@@ -1840,7 +1841,7 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        var _dbg=(o&&o._debug)||{};da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
+        var _dbg=(o&&o._debug)||{};$('scanBtn').style.display='none';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})+(Object.keys(_dbg).length?'<div style="font-size:10px;color:#888;padding:6px 10px;border-top:1px solid #eee;margin-top:6px;font-family:monospace;line-height:1.5">\
 ma5Up='+_dbg.ma5Up+' ma10Up='+_dbg.ma10Up+' ma10TurnUp='+_dbg.ma10TurnUp+' baiBu='+_dbg.baiBuState+' baiXiao='+_dbg.baiXiao+'<br>\
 ma10_1dAgo='+_dbg.ma10_1dAgo+' pricePos='+_dbg.pricePos+' volRatio='+(_dbg.volRatio||'').toFixed(2)+' deepWash='+_dbg.deepWashoutApplied+'<br>\
 ma10Down='+_dbg.ma10Down+' trendState='+_dbg.trendState+' price>ma5='+_dbg.priceAboveMa5+' volActive='+(_dbg.volActive||'')+' qiangZhiFuGai='+_dbg.qiangZhiFuGai+'<br>\
@@ -1885,7 +1886,7 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc})
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow,yc:stockYc});$('scanBtn').style.display='none'
           // 异步拉取TA数据升级介入建议
           ;(async function(){
             try{
