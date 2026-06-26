@@ -262,13 +262,29 @@ function hideBlocked(){
   $("pageBlur").classList.add("hidden")
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
-console.log('📦 页面初始化完成')
+console.log('页面初始化完成')
 
-// 立即扫描：点击进入页面，不自动触发扫描，后台autoLightScan每10分钟自然刷新
+// 立即扫描：先注册设备，再关闭毛玻璃
 async function handleScanClick(){
+  // 检查是否已注册（localStorage 标记）
+  var registered=localStorage.getItem('deviceRegistered')
+  if(registered!=='1'){
+    try{
+      var regRes=await fetch("/api/device/register",{
+        method:"POST",
+        headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+      })
+      if(regRes.status===429){
+        showBlocked(true);return
+      }
+      // 注册成功，标记 localStorage（避免每次点击都注册）
+      localStorage.setItem('deviceRegistered','1')
+    }catch(e){
+      // 网络错误也允许进入（可能是本地开发）
+      console.warn('设备注册失败:',e)
+    }
+  }
   hideBlocked()
-  // 仅关闭毛玻璃展示页面，不要自动触发全市场重扫
-  // 后台 autoLightScan 会在10分钟周期内自然刷新
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
