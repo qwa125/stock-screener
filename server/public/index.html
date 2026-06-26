@@ -815,6 +815,31 @@ function buildDetail(s,rt){
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
+  // 🕐 日内介入点建议
+  var entryHtml=''
+  if(rt.high!=null&&rt.low!=null&&rt.high>rt.low){
+    var intraPos=((rt.price-rt.low)/(rt.high-rt.low))*100
+    var sugg=''
+    if(intraPos<20){sugg='当前处于日内低位区，现价即可介入'}
+    else if(intraPos<40){var tgt=rt.low+(rt.high-rt.low)*0.3;sugg='日内中低位，可现价介入或挂单 <b>'+tgt.toFixed(2)+'</b> 元等待回踩'}
+    else if(intraPos<60){var tgt=rt.low+(rt.high-rt.low)*0.3;sugg='日内中位区，建议挂单回踩 <b>'+tgt.toFixed(2)+'</b> 元介入'}
+    else if(intraPos<80){sugg='股价处于日内高位（'+intraPos.toFixed(0)+'%分位），建议等待回调再介入'}
+    else{sugg='接近日内最高点，建议明日回调后再介入'}
+    var barClr=intraPos<30?'#22c55e':intraPos<60?'#eab308':'#ef4444'
+    entryHtml='<div style="margin:0 12px 8px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
+      +'<div style="font-weight:600;color:#166534;margin-bottom:4px">🕐 日内介入参考</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="font-size:10px;color:#6b7280">低 '+rt.low.toFixed(2)+'</span>'
+        +'<div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;position:relative;overflow:hidden">'
+          +'<div style="position:absolute;left:'+intraPos.toFixed(0)+'%;top:0;width:10px;height:6px;margin-left:-4px;background:'+barClr+';border-radius:2px"></div>'
+        +'</div>'
+        +'<span style="font-size:10px;color:#6b7280">高 '+rt.high.toFixed(2)+'</span>'
+      +'</div>'
+      +'<div style="color:#374151;font-size:10px">当前价 <b>'+rt.price.toFixed(2)+'</b> 处于日内 <b>'+intraPos.toFixed(0)+'%</b> 分位</div>'
+      +'<div style="color:#15803d;margin-top:2px">💡 '+sugg+'</div>'
+    +'</div>'
+  }
+
   // 详情说明
   var details=[]
   if(sig==='重仓买入'){details.push('低位区'+p.toFixed(0)+'%：处于安全价位区间');details.push('MA5>MA10多头排列，趋势向上');details.push('强信号触发，技术面共振')}
@@ -826,7 +851,7 @@ function buildDetail(s,rt){
 
   var nameHtml='<div style="font-size:15px;font-weight:700;color:#1f2937;padding:8px 12px 2px">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></div>'
   var backBtn='<div style="padding:6px 12px 0;display:flex;align-items:center;gap:6px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';renderList()" style="background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 10px;font-size:12px;color:#6b7280;cursor:pointer">← 返回列表</button></div>'
-  return backBtn+nameHtml+tags+action+future+grid+detailList
+  return backBtn+nameHtml+tags+action+future+grid+entryHtml+detailList
 }
 
 // ---------- 渲染列表 ----------
