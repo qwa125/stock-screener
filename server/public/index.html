@@ -1461,8 +1461,15 @@ async function doFullRescan(saveToBackend){
               setSyncStatus(msg+' | '+new Date().toLocaleTimeString(),true)
               console.log(msg)
             }else{
-              setSyncStatus('⚠️ 缓存验证: '+verified+' 匹配/'+mismatch+' 不匹配',false)
-              console.warn('缓实验证不匹配:',verified,mismatch)
+              var detail=''
+              for(var vi=0;vi<buyList.length&&vi<30;vi++){
+                var bu=buyList[vi],back=vmap[bu.code]
+                if(!back||back.suggestion!==bu.suggestion){
+                  detail+=(detail?',':'')+bu.code+'('+(back?back.suggestion||'无':'无此股')+'→'+bu.suggestion+')'
+                }
+              }
+              setSyncStatus('⚠️ 缓存验证: '+verified+' 匹配/'+mismatch+' 不匹配 ['+detail+']',false)
+              console.warn('缓存验证不匹配:',verified,mismatch,detail)
             }
           }
         }catch(ve){

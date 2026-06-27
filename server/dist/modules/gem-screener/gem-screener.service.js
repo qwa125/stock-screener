@@ -504,13 +504,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             for (let i = 0; i < this.mainBoardCache.data.length; i++) {
                 const item = this.mainBoardCache.data[i];
                 const upgraded = map.get(item.code);
-                if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
-                    item.suggestion = upgraded.suggestion;
-                    if (upgraded.score !== undefined)
+                if (upgraded) {
+                    if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                        item.suggestion = upgraded.suggestion;
+                        mainBoardChanged = true;
+                    }
+                    if (upgraded.score !== undefined && upgraded.score !== item.score) {
                         item.score = upgraded.score;
-                    if (upgraded.entryTiming !== undefined)
+                        mainBoardChanged = true;
+                    }
+                    if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
                         item.entryTiming = upgraded.entryTiming;
-                    mainBoardChanged = true;
+                        mainBoardChanged = true;
+                    }
                 }
             }
             if (mainBoardChanged)
@@ -521,13 +527,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             for (let i = 0; i < this.cache.data.length; i++) {
                 const item = this.cache.data[i];
                 const upgraded = map.get(item.code);
-                if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
-                    item.suggestion = upgraded.suggestion;
-                    if (upgraded.score !== undefined)
+                if (upgraded) {
+                    if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                        item.suggestion = upgraded.suggestion;
+                        gemChanged = true;
+                    }
+                    if (upgraded.score !== undefined && upgraded.score !== item.score) {
                         item.score = upgraded.score;
-                    if (upgraded.entryTiming !== undefined)
+                        gemChanged = true;
+                    }
+                    if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
                         item.entryTiming = upgraded.entryTiming;
-                    gemChanged = true;
+                        gemChanged = true;
+                    }
                 }
             }
             if (gemChanged)

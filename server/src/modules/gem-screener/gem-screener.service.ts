@@ -635,11 +635,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
       for (let i = 0; i < this.mainBoardCache.data.length; i++) {
         const item = this.mainBoardCache.data[i];
         const upgraded = map.get(item.code);
-        if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
-          item.suggestion = upgraded.suggestion;
-          if (upgraded.score !== undefined) item.score = upgraded.score;
-          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
-          mainBoardChanged = true;
+        if (upgraded) {
+          if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+            item.suggestion = upgraded.suggestion;
+            mainBoardChanged = true;
+          }
+          if (upgraded.score !== undefined && upgraded.score !== item.score) {
+            item.score = upgraded.score;
+            mainBoardChanged = true;
+          }
+          if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
+            item.entryTiming = upgraded.entryTiming;
+            mainBoardChanged = true;
+          }
         }
       }
       if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
@@ -647,21 +655,44 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // 更新GEM缓存
     let gemChanged = false;
+    let leftover = 0;
     if (this.cache?.data?.length) {
       for (let i = 0; i < this.cache.data.length; i++) {
         const item = this.cache.data[i];
         const upgraded = map.get(item.code);
-        if (upgraded && upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
-          item.suggestion = upgraded.suggestion;
-          if (upgraded.score !== undefined) item.score = upgraded.score;
-          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
-          gemChanged = true;
+        if (upgraded) {
+          if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+            item.suggestion = upgraded.suggestion;
+            gemChanged = true;
+          }
+          if (upgraded.score !== undefined && upgraded.score !== item.score) {
+            item.score = upgraded.score;
+            gemChanged = true;
+          }
+          if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
+            item.entryTiming = upgraded.entryTiming;
+            gemChanged = true;
+          }
         }
       }
+      // 统计在两个缓存中都未找到的股票
+      for (const code of map.keys()) {
+        let found = false;
+        for (let i = 0; i < this.mainBoardCache.data.length; i++) {
+          if (this.mainBoardCache.data[i].code === code) { found = true; break; }
+        }
+        if (!found) {
+          for (let i = 0; i < this.cache.data.length; i++) {
+            if (this.cache.data[i].code === code) { found = true; break; }
+          }
+        }
+        if (!found) leftover++;
+      }
+      if (leftover > 0) this.logger.warn(`⚠️ ${leftover}只股票在两个缓存中都未找到，信号未更新`);
       if (gemChanged) this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
     }
 
-    this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更）`);
+    this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更${leftover>0?`, ${leftover}只未找到`:''}）`);
   }
 
   /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
