@@ -12,7 +12,7 @@ import { StockService } from '../stock/stock.service';
 import { KLine } from '../stock/types';
 import { isMarketOpen, isTradingDay } from '../../utils/market-time';
 import { getTradingSuggestion } from '../../utils/trading-suggestion';
-import { analyzeTechnical, KLine as TAKLine } from '../../utils/technical-analysis';
+import { analyzeTechnical, KLine as TAKLine } from './technical-analysis';
 import { pinyin } from 'pinyin-pro';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 const postgres = require('postgres');
