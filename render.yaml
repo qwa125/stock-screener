@@ -2,5 +2,5 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: npm install --prefix server && npm run --prefix server build
+    buildCommand: npm install --prefix server --ignore-scripts && npm run --prefix server build
     startCommand: cd server && node dist/main.js
