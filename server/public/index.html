@@ -2052,13 +2052,15 @@ setTimeout(function(){
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.code===200&&d.data&&d.data.length){
-          var ALLOWED={'重仓买入':1,'买入':1}
-          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          var ALLOWED_INIT={'轻仓买入':1,'买入':1,'重仓买入':1}
+          stocks=d.data.filter(function(s){return ALLOWED_INIT[s.suggestion]?1:0})
           if(stocks.length){
             // 持久化到浏览器本地，下次后端无缓存时可直接展示
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
+            // 立即触发 doFullRescan 获取完整的 Sina 升级数据
+            setTimeout(function(){if(!loading)doFullRescan()},1000)
           }else{
             setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
           }
