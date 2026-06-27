@@ -1425,20 +1425,31 @@ async function doFullRescan(saveToBackend){
   // ─── Step ③: 前端升级信号回写到后端（仅autoLightScan带K线分析时执行） ───
   if(saveToBackend!==false) try{
     var upgradeList=[]
+    var sigCount={}
     for(var si=0;si<newStocks.length;si++){
       var us=newStocks[si]
-        upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
+      upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
+      sigCount[us.suggestion]=(sigCount[us.suggestion]||0)+1
     }
+    console.log('📤 Step③ 准备写回后端, upgradeList='+upgradeList.length+' 只, 信号分布:', JSON.stringify(sigCount))
     if(upgradeList.length>0){
-      fetch(API+'/gem/update-upgraded',{
+      var resp=await fetch(API+'/gem/update-upgraded',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({list:upgradeList})
-      }).then(function(r){return r.json()}).then(function(j){
-        if(j.code===200)console.log('📤 前端升级信号已回写 '+upgradeList.length+' 只到后端缓存')
-      }).catch(function(){})
+      })
+      var j=await resp.json()
+      if(j.code===200){
+        console.log('✅ Step③ 写回成功: '+j.msg+' data='+JSON.stringify(j.data))
+      }else{
+        console.warn('⚠️ Step③ 写回失败: '+JSON.stringify(j))
+      }
+    }else{
+      console.warn('⚠️ Step③ upgradeList为空, 无数据写回')
     }
-  }catch(e){}
+  }catch(e){
+    console.error('❌ Step③ 写回异常:', e)
+  }
   // ─── Step ④: 前端同步卖出锁定到后端持久化 ───
   try{
     var sellStates=[]
