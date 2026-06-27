@@ -4362,4 +4362,213 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     return { code, ...result };
   }
 
+  /**
+   * 日内介入参考：分时MACD(40,120,40) + 通达信主力/散户指标
+   * 通过5分钟K线数据分析当日最佳低点买入/高点卖出位置
+   */
+  async intradayAnalysis(code: string): Promise<any> {
+    const minData = await this.fetchMinuteKLine(code, 5); // 5分钟K线
+    if (!minData || minData.length < 50) {
+      return {
+        code,
+        date: new Date().toISOString().slice(0, 10),
+        status: '数据不足',
+        reason: `5分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
+        macdSignals: [],
+        zhuliSanhu: { signals: [] },
+        suggestions: [],
+        summary: '数据不足，无法提供日内介入参考',
+      };
+    }
+
+    const close = minData.map(k => k.close);
+    const high = minData.map(k => k.high);
+    const low = minData.map(k => k.low);
+    const open = minData.map(k => k.open);
+    const volume = minData.map(k => k.volume);
+    const len = close.length;
+
+    // ─── MACD(40,120,40) ───
+    const alpha1 = 2 / (40 + 1);
+    const alpha2 = 2 / (120 + 1);
+    const alphaSignal = 2 / (40 + 1);
+    const ema40: number[] = [close[0]];
+    const ema120: number[] = [close[0]];
+    for (let i = 1; i < len; i++) {
+      ema40.push(alpha1 * close[i] + (1 - alpha1) * ema40[i - 1]);
+      ema120.push(alpha2 * close[i] + (1 - alpha2) * ema120[i - 1]);
+    }
+    const diff: number[] = [];
+    for (let i = 0; i < len; i++) diff.push(ema40[i] - ema120[i]);
+
+    const dea: number[] = [diff[0]];
+    for (let i = 1; i < len; i++) dea.push(alphaSignal * diff[i] + (1 - alphaSignal) * dea[i - 1]);
+
+    const macdHist: number[] = [];
+    for (let i = 0; i < len; i++) macdHist.push(2 * (diff[i] - dea[i]));
+
+    // 找到MACD金叉/死叉
+    const macdSignals: { time: string; type: '金叉' | '死叉'; idx: number; price: number; diff: number; dea: number }[] = [];
+    for (let i = 1; i < len; i++) {
+      if (diff[i - 1] < dea[i - 1] && diff[i] >= dea[i]) {
+        macdSignals.push({ time: minData[i].time, type: '金叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
+      } else if (diff[i - 1] > dea[i - 1] && diff[i] <= dea[i]) {
+        macdSignals.push({ time: minData[i].time, type: '死叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
+      }
+    }
+
+    // ─── 主力/散户指标（通达信做T公式） ───
+    // VAR3=(2*CLOSE+HIGH+LOW)/4
+    // VAR4=LLV(LOW,21) VAR5=HHV(HIGH,21)
+    // 主力=EMA((VAR3-VAR4)/(VAR5-VAR4)*100,7)
+    // 散户=EMA(0.5*REF(主力,1)+0.5*主力,8)
+    const var3: number[] = [];
+    for (let i = 0; i < len; i++) var3.push((2 * close[i] + high[i] + low[i]) / 4);
+
+    const llv21: number[] = [];
+    const hhv21: number[] = [];
+    for (let i = 0; i < len; i++) {
+      const start = Math.max(0, i - 21 + 1);
+      llv21.push(Math.min(...low.slice(start, i + 1)));
+      hhv21.push(Math.max(...high.slice(start, i + 1)));
+    }
+
+    const rawMain: number[] = [];
+    for (let i = 0; i < len; i++) {
+      const range = hhv21[i] - llv21[i];
+      rawMain.push(range > 0 ? ((var3[i] - llv21[i]) / range) * 100 : 50);
+    }
+
+    const ema7Alpha = 2 / (7 + 1);
+    const mainLine: number[] = [rawMain[0]];
+    for (let i = 1; i < len; i++) mainLine.push(ema7Alpha * rawMain[i] + (1 - ema7Alpha) * mainLine[i - 1]);
+
+    // 散户 = EMA(0.5*REF(主力,1)+0.5*主力, 8)
+    const smoothMain: number[] = [mainLine[0]];
+    for (let i = 1; i < len; i++) smoothMain.push(0.5 * mainLine[i - 1] + 0.5 * mainLine[i]);
+
+    const ema8Alpha = 2 / (8 + 1);
+    const retailLine: number[] = [smoothMain[0]];
+    for (let i = 1; i < len; i++) retailLine.push(ema8Alpha * smoothMain[i] + (1 - ema8Alpha) * retailLine[i - 1]);
+
+    // 主力升/降
+    const mainUp = mainLine.map((v, i) => i === 0 ? false : v > mainLine[i - 1]);
+    const mainDown = mainLine.map((v, i) => i === 0 ? false : v < mainLine[i - 1]);
+
+    // 买卖点（剔除3日重复）
+    const zhuliBuyPoints: { time: string; idx: number; price: number; main: number; retail: number }[] = [];
+    const zhuliSellPoints: { time: string; idx: number; price: number; main: number; retail: number }[] = [];
+    for (let i = 3; i < len; i++) {
+      // 买入: CROSS(主力,散户) AND 主力<20 AND 主力升
+      const crossBuy = mainLine[i - 1] <= retailLine[i - 1] && mainLine[i] > retailLine[i];
+      const buyCond = crossBuy && mainLine[i] < 20 && mainUp[i];
+      if (buyCond) {
+        // 去重3条K线
+        const lastBuy = zhuliBuyPoints[zhuliBuyPoints.length - 1];
+        if (!lastBuy || i - lastBuy.idx >= 3) {
+          zhuliBuyPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
+        }
+      }
+
+      // 卖出: CROSS(散户,主力) AND 散户>70 AND 主力降
+      const crossSell = retailLine[i - 1] <= mainLine[i - 1] && retailLine[i] > mainLine[i];
+      const sellCond = crossSell && retailLine[i] > 70 && mainDown[i];
+      if (sellCond) {
+        const lastSell = zhuliSellPoints[zhuliSellPoints.length - 1];
+        if (!lastSell || i - lastSell.idx >= 3) {
+          zhuliSellPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
+        }
+      }
+    }
+
+    // ─── 综合建议 ───
+    const suggestions: any[] = [];
+    const allPoints = [
+      ...zhuliBuyPoints.map(p => ({ ...p, type: '买入点' as const, source: '主力低吸' })),
+      ...zhuliSellPoints.map(p => ({ ...p, type: '卖出点' as const, source: '主力高抛' })),
+      ...macdSignals.filter(s => s.type === '金叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '买入点' as const, source: 'MACD金叉' })),
+      ...macdSignals.filter(s => s.type === '死叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '卖出点' as const, source: 'MACD死叉' })),
+    ];
+    allPoints.sort((a, b) => a.idx - b.idx);
+    suggestions.push(...allPoints);
+
+    // 最新状态
+    const lastIdx = len - 1;
+    const lastMain = mainLine[lastIdx];
+    const lastRetail = retailLine[lastIdx];
+    const lastDiff = diff[lastIdx];
+    const lastDea = dea[lastIdx];
+    const currentMacdStatus = lastDiff >= lastDea ? '金叉区' : '死叉区';
+    const currentZhuliStatus = lastMain > lastRetail ? '主力占优' : '散户占优';
+
+    let summary = '';
+    if (zhuliBuyPoints.length > 0) {
+      const latest = zhuliBuyPoints[zhuliBuyPoints.length - 1];
+      summary = `近期出现主力低吸买入信号（${latest.time}，¥${latest.price.toFixed(2)}），可关注低吸机会`;
+    } else if (zhuliSellPoints.length > 0) {
+      const latest = zhuliSellPoints[zhuliSellPoints.length - 1];
+      summary = `近期出现主力高抛卖出信号（${latest.time}，¥${latest.price.toFixed(2)}），注意回调风险`;
+    } else {
+      summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
+    }
+
+    return {
+      code,
+      date: new Date().toISOString().slice(0, 10),
+      status: 'ok',
+      dataCount: len,
+      currentPrice: close[lastIdx],
+      currentTime: minData[lastIdx].time,
+      macd: {
+        diff: Math.round(lastDiff * 100) / 100,
+        dea: Math.round(lastDea * 100) / 100,
+        macd: Math.round(macdHist[lastIdx] * 100) / 100,
+        status: currentMacdStatus,
+        goldenCrosses: macdSignals.filter(s => s.type === '金叉').length,
+        deathCrosses: macdSignals.filter(s => s.type === '死叉').length,
+        signals: macdSignals.slice(-10), // 最近10个信号
+      },
+      zhuliSanhu: {
+        main: Math.round(lastMain * 100) / 100,
+        retail: Math.round(lastRetail * 100) / 100,
+        status: currentZhuliStatus,
+        buySignals: zhuliBuyPoints,
+        sellSignals: zhuliSellPoints,
+      },
+      suggestions: suggestions.slice(-20), // 最近20个综合信号
+      summary,
+    };
+  }
+
+  /**
+   * 获取分钟K线数据（5分钟）
+   */
+  private async fetchMinuteKLine(code: string, minute: number = 5): Promise<any[]> {
+    try {
+      const kltMap: Record<number, number> = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
+      const klt = kltMap[minute] || 102;
+      const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
+      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) return [];
+      const json: any = await resp.json();
+      const klines = json?.data?.klines;
+      if (!klines || !Array.isArray(klines) || klines.length === 0) return [];
+      return klines.map((l: string) => {
+        const p = l.split(',');
+        return {
+          time: p[0],
+          open: parseFloat(p[1]),
+          close: parseFloat(p[2]),
+          high: parseFloat(p[3]),
+          low: parseFloat(p[4]),
+          volume: parseFloat(p[5]),
+          amount: parseFloat(p[6]) || 0,
+        };
+      });
+    } catch (e) {
+      this.logger.warn(`获取分钟K线失败 ${code}: ${(e as Error).message}`);
+      return [];
+    }
+  }
 }

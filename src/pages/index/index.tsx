@@ -1,339 +1,587 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
 import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react-taro'
+import { Search, ArrowLeft, Activity, ChevronRight, ChartBarIncreasing, Zap, CircleAlert } from 'lucide-react-taro'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import './index.css'
+import { Network } from '@/network'
 
-const ACTION_BADGE_COLOR: Record<string, string> = {
-  '重仓买入': '#dc2626', '买入🏆': '#16a34a', '买入': '#2563eb',
-  '轻仓买入': '#ca8a04', '持有': '#6b7280',
+type StockItem = {
+  code: string;
+  name: string;
+  suggestion?: string;
+  score?: number;
+  price?: number;
+  changePercent?: number;
+  trade?: number;
+  baiXiaoDays?: number;
+  baiBuDays?: number;
+  [key: string]: any;
 }
-const ACTION_ORDER = ['重仓买入', '买入🏆', '买入', '轻仓买入']
-function getActionPriority(a: string): number { const i = ACTION_ORDER.indexOf(a); return i >= 0 ? i : 999 }
-function getBJ(): Date { const n = new Date(); return new Date(n.getTime() + n.getTimezoneOffset() * 60000 + 28800000) }
-function isTH(): boolean { const b = getBJ(); if (b.getDay() === 0 || b.getDay() === 6) return false; const m = b.getHours() * 60 + b.getMinutes(); return m >= 540 && m < 900 }
-function freezeMsg(): string {
-  const b = getBJ(); const d = b.getDay(); const m = b.getHours() * 60 + b.getMinutes()
-  if (d === 0 || d === 6) return '周末休市，已冻结至周一 9:00'
-  if (m >= 900) return d === 5 ? '周五收盘，已冻结至下周一 9:00' : '收盘已冻结，明早 9:00 恢复'
-  if (m < 540) return '盘前已冻结，9:00 恢复'; return ''
+
+type AutoCompleteItem = {
+  code: string;
+  name: string;
 }
-async function fetchKlines(code: string, minL = 20): Promise<any[]> {
-  for (const src of [
-    `http://d.10jqka.com.cn/v2/line/hs_${code}/01/last.js`,
-    `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code.startsWith('6')?'sh':'sz'}${code},day,,,100,qfq`,
-    `http://push2.eastmoney.com/api/qt/stock/kline/get?secid=${(code.startsWith('6')||code.startsWith('68'))?1:0}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101`,
-  ]) {
-    try {
-      const ac = new AbortController(); const tid = setTimeout(() => ac.abort(), 5000)
-      const r = await fetch(src, { signal: ac.signal }); clearTimeout(tid); const txt = await r.text()
-      let kl: any[] = []
-      if (src.includes('10jqka')) {
-        const m = txt.match(/\{.*\}/)
-        if (m) { const j = JSON.parse(m[0]); kl = (j?.data||'').split(';').filter(Boolean).map((s: string) => { const p = s.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} }) }
-      } else if (src.includes('gtimg')) {
-        const pk = (code.startsWith('6')?'sh':'sz')+code; const j = JSON.parse(txt)
-        kl = (j?.data?.[pk]?.qfqday || []).map((k: any) => ({d:k[0],o:+k[1],c:+k[2],h:+k[3],l:+k[4],v:+k[5]}))
-      } else {
-        const j = JSON.parse(txt)
-        kl = (j?.data?.klines || []).map((k: string) => { const p = k.split(','); return {d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5]} })
-      }
-      if (kl.length >= minL) return kl
-    } catch(e) {}
-  }
-  return []
+
+type IntradayAnalysis = {
+  status: string;
+  dataCount: number;
+  currentPrice: number;
+  currentTime: string;
+  macd: {
+    diff: number;
+    dea: number;
+    macd: number;
+    status: string;
+    goldenCrosses: number;
+    deathCrosses: number;
+    signals: { time: string; type: string; idx: number; price: number }[];
+  };
+  zhuliSanhu: {
+    main: number;
+    retail: number;
+    status: string;
+    buySignals: number;
+    sellSignals: number;
+  };
+  suggestions: { time: string; type: string }[];
+  summary: string;
 }
-async function fetchEMList(fs: string): Promise<any[]> {
-  const all: any[] = []
-  for (let pn = 1; pn <= 3; pn++) {
-    try {
-      const r = await fetch(`http://push2.eastmoney.com/api/qt/clist/get?pn=${pn}&pz=5000&po=1&np=1&fltt=2&invt=2&fs=${fs}&fields=f12,f14,f2,f3`)
-      const j = await r.json(); (j?.data?.diff || []).forEach((x: any) => { if (x.f12) all.push({c:String(x.f12),n:x.f14,p:x.f2||0,cp:x.f3||0}) })
-      if ((j?.data?.diff || []).length < 5000) break
-    } catch(e) { break }
-  }
-  return all
+
+function getSuggestionBadgeColor(s: string | undefined): string {
+  if (!s) return 'bg-gray-100 text-gray-600';
+  if (s.includes('重仓买入')) return 'bg-red-50 text-red-700 border-red-200';
+  if (s.includes('买入')) return 'bg-orange-50 text-orange-700 border-orange-200';
+  if (s.includes('轻仓买入')) return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+  if (s.includes('持有')) return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (s.includes('减仓')) return 'bg-purple-50 text-purple-700 border-purple-200';
+  if (s.includes('卖出')) return 'bg-green-50 text-green-700 border-green-200';
+  if (s.includes('不要介入')) return 'bg-gray-50 text-gray-500 border-gray-200';
+  return 'bg-gray-100 text-gray-600';
 }
-async function fetchQ(codes: string[]): Promise<Record<string, any>> {
-  const qm: Record<string, any> = {}
-  for (let i = 0; i < codes.length; i += 200) {
-    const q = codes.slice(i, i+200).map(c => (c.startsWith('6')?'sh':'sz')+c).join(',')
-    try {
-      const r = await fetch('http://qt.gtimg.cn/q='+q); const buf = await r.arrayBuffer()
-      new TextDecoder('gbk').decode(buf).split(';').forEach(line => {
-        const t = line.trim(); if (!t || !t.includes('~')) return; const p = t.split('~'); if (p.length < 40) return
-        qm[p[2]] = {p:+p[3]||0,cp:+p[32]||0}
-      })
-    } catch(e) {}
-  }
-  return qm
+
+function formatPrice(v: number | undefined | null): string {
+  if (v == null) return '--';
+  return v.toFixed(2);
 }
 
 export default function Index() {
-  const [sc, setSc] = useState('')
-  const [sr, setSr] = useState<any>(null)
-  const [stocks, setStocks] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState('')
-  const [frozen, setFrozen] = useState(false)
-  const [fmsg, setFmsg] = useState('')
-  const frozenR = useRef(false)
-  const intR = useRef<number | null>(null)
+  const [query, setQuery] = useState('');
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [loading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [sr, setSr] = useState<StockItem | null>(null);
+  const [srError, setSrError] = useState('');
 
-  const scan = useCallback(async () => {
-    if (frozenR.current) { setStatus('⏸️ 非交易时间，数据已冻结'); return }
-    setLoading(true); setStatus('🔄 获取全市场股票列表...')
+  // 自动补全
+  const [acItems, setAcItems] = useState<AutoCompleteItem[]>([]);
+  const [acLoading, setAcLoading] = useState(false);
+  const [showAc, setShowAc] = useState(false);
+  const acTimer = useRef<any>(null);
+
+  // 个股详情
+  const [detailStock, setDetailStock] = useState<StockItem | null>(null);
+  const [iaData, setIaData] = useState<IntradayAnalysis | null>(null);
+  const [iaLoading, setIaLoading] = useState(false);
+
+  const scanStopRef = useRef(false);
+
+  // 获取股票列表
+  const fetchStocks = useCallback(async () => {
     try {
-      const g = await fetchEMList('m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23')
-      const m = await fetchEMList('m:1+t:1,m:1+t:2,m:0+t:6')
-      const all = Array.from(new Map([...g, ...m].map(s => [s.c, s])).values())
-      setStatus(`✅ ${all.length} 只，获取批量行情...`)
-      const qm = await fetchQ(all.map(s => s.c))
-      const wq = all.map(s => ({...s, ...(qm[s.c]||{})}))
-      setStatus('🔄 K线分析中...')
-      const res: any[] = []
-      for (let i = 0; i < wq.length; i += 30) {
-        const rs = await Promise.all(wq.slice(i, i+30).map(async (s) => {
-          try {
-            const kl = await fetchKlines(s.c, 20); if (kl.length < 20) return null
-            const c = kl.map(x => x.c), v = kl.map(x => x.v), o = kl.map(x => x.o)
-            const lc = c[c.length-1]
-            const lo = Math.min(...c), hi = Math.max(...c)
-            const pp = ((lc-lo)/(hi-lo||1))*100
+      const res = await Network.request({ url: '/api/gem/stock-cache', method: 'GET' });
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      if (list.length > 0) setStocks(list.slice(0, 50));
+    } catch (_) {}
+  }, []);
 
-            // 均线
-            const ma5 = c.slice(-5).reduce((a,b)=>a+b,0)/5
-            const ma10 = c.slice(-10).reduce((a,b)=>a+b,0)/10
-            const ma20 = c.length >= 20 ? c.slice(-20).reduce((a,b)=>a+b,0)/20 : ma10
+  useEffect(() => { fetchStocks(); }, [fetchStocks]);
 
-            // 趋势状态 0-3（与后端一致）
-            const ma5Up = c[c.length-1] > c[c.length-6]
-            const ma10_1dAgo = c.length > 11 ? c.slice(-11,-1).reduce((a,b)=>a+b,0)/10 : 0
-            const ma10Up = ma10 >= ma10_1dAgo * 0.995
-            let trend = 1
-            if (ma5 > ma10 && ma5Up && ma10Up) trend = 3
-            else if (ma5 > ma10 && ma10Up) trend = 2
-            else if (ma5 > ma10 && ma5Up) trend = 2
-            else if (ma5 < ma10 && ma10 < ma20) trend = 0
-            else if (ma5 < ma10) trend = 0
+  // 搜索自动补全
+  const fetchAutocomplete = useCallback(async (q: string) => {
+    if (!q || q.length < 1) { setAcItems([]); setShowAc(false); return; }
+    setAcLoading(true);
+    try {
+      const res = await Network.request({ url: `/api/stock/search?q=${encodeURIComponent(q)}`, method: 'GET' });
+      const arr: any[] = res.data?.data || [];
+      setAcItems(arr.map((i: any) => ({ code: i.code, name: i.name })));
+      setShowAc(arr.length > 0);
+    } catch (_) { setAcItems([]); }
+    setAcLoading(false);
+  }, []);
 
-            // DIFF/DEA（EMA12-EMA26）
-            const ema12 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-            const ema26 = c.reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-            const diff = ema12 - ema26
-            // DEA近似计算
-            let deaAcc = 0
-            for (let idx = 0; idx < c.length; idx++) {
-              const e12 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 13, 0)
-              const e26 = c.slice(0, idx+1).reduce((acc: number, val: number) => acc === 0 ? val : acc + (val - acc) * 2 / 27, 0)
-              const curDiff = e12 - e26
-              deaAcc = idx === 0 ? curDiff : deaAcc + (curDiff - deaAcc) * 2 / 9
-            }
-            const macdBullish = diff > deaAcc
-            const macdGoldenCross = macdBullish && diff > 0
+  const onQueryInput = useCallback((e: any) => {
+    const v = e.target?.value || '';
+    setQuery(v);
+    if (acTimer.current) clearTimeout(acTimer.current);
+    acTimer.current = setTimeout(() => fetchAutocomplete(v), 200);
+  }, [fetchAutocomplete]);
 
-            // 成交量结构
-            const avgVol5 = v.slice(-5).reduce((a,b)=>a+b,0)/5
-            const avgVol20 = v.length >= 20 ? v.slice(-20).reduce((a,b)=>a+b,0)/20 : avgVol5
-            const volRatio = avgVol5 / (avgVol20 || 1)
-            const volActive = Math.min(Math.max(volRatio, 0) * 6, 20)
+  // 选择自动补全项
+  const selectAc = useCallback((item: AutoCompleteItem) => {
+    setQuery(item.code);
+    setShowAc(false);
+    doSearch(item.code);
+  }, []);
 
-            // 买入信号
-            const sb = c.slice(-3).every((p,j) => p > o[o.length - 3 + j])
-            const jcFlag = kl.slice(-2).every((x,j) => {
-              const pc = j===0 ? c[c.length-3] : c[c.length-2]
-              return x.h > Math.max(x.o, pc) && x.c > x.o
-            })
-            const strict = sb && v[v.length-1] > v[v.length-2]
-            const shortBuy = sb || strict || jcFlag
-            const strictBuy = strict
-            const hasBuySignal = shortBuy || strictBuy || macdBullish
+  // 搜索
+  const doSearch = useCallback(async (code?: string) => {
+    const c = (code || query).trim();
+    if (!c) return;
+    setShowAc(false);
+    setSrError('');
+    setSr(null);
+    try {
+      // 先获取搜索信息
+      const searchRes = await Network.request({ url: `/api/stock/search?q=${encodeURIComponent(c)}`, method: 'GET' });
+      const stocksArr: any[] = searchRes.data?.data || [];
+      const matched = stocksArr.find((s: any) => s.code === c);
+      const stockName = matched?.name || c;
 
-            // MA10下跌趋势判断
-            const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995
+      // 获取K线数据
+      const klineRes = await Network.request({ url: `/api/stock/kline?code=${c}&type=daily`, method: 'GET' });
+      let klines = klineRes.data?.data?.klines || klineRes.data?.klines || [];
 
-            // 深度洗盘
-            const deepWashout = ma5 < ma10 && ma10TurnUp && lc > ma5 && volActive > 7
+      // 调用分析
+      const body: any = { code: c, name: stockName, kline: klines };
+      const analyzeRes = await Network.request({ url: '/api/gem/analyze', method: 'POST', data: body });
+      const opps = analyzeRes.data?.data || [];
+      const opp = Array.isArray(opps) ? opps[0] : opps;
 
-            // ─── port getTradingSuggestion ───
-            const volumeBullish = volRatio > 1.2
-            const strongBuy = (macdGoldenCross && volumeBullish) || (shortBuy && volumeBullish)
-
-            let sug = '观望'
-            // 低位区 <25%
-            if (pp < 25) {
-              if (trend >= 1 && strongBuy) sug = '重仓买入'
-              else if (trend >= 1 && hasBuySignal) sug = '买入'
-              else if (trend >= 1) sug = '持有'
-              else sug = '观望'
-            }
-            // 中低位区 25-45%
-            else if (pp < 45) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 1 && strongBuy) sug = '买入'
-              else if (trend >= 1 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else sug = '观望'
-            }
-            // 中位区 45-55%
-            else if (pp < 55) {
-              if (trend >= 2 && strongBuy) sug = '买入'
-              else if (trend >= 2 && hasBuySignal) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && (strongBuy || hasBuySignal)) sug = '持有'
-              else sug = '观望'
-            }
-            // 中高位区 55-75%
-            else if (pp < 75) {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-            // 高位区 >=75%
-            else {
-              if (trend >= 2 && strongBuy) sug = '轻仓买入'
-              else if (trend >= 2) sug = '持有'
-              else if (trend === 1 && strongBuy) sug = '持有'
-              else sug = '观望'
-            }
-
-            // 深度洗盘反转：MA5<MA10+MA10转头+站上5日线+量能活跃 → 轻仓买入
-            if ((sug === '观望' || sug === '持有') && deepWashout) {
-              sug = '轻仓买入'
-            }
-
-            return {c:s.c, n:s.n, p:s.p||0, cp:s.cp||0, curP:qm[s.c]?.p||s.p||0, sug, pp, trend, ma5, ma10}
-          } catch(e) { return null }
-        }))
-        res.push(...rs.filter(Boolean))
-        if (i % 600 === 0) setStatus(`🔄 分析中: ${res.length}/${wq.length}`)
+      if (opp) {
+        setSr(opp);
+        // 自动进入详情
+        setDetailStock(opp);
+        fetchIntraday(c);
+      } else {
+        setSrError('未找到该股票的分析结果');
       }
-      const valid = res.filter(x => x && x.sug !== '观望')
-      valid.sort((a, b) => {
-        const pa = getActionPriority(a.sug), pb = getActionPriority(b.sug)
-        return pa !== pb ? pa - pb : Math.abs(b.pp - 50) - Math.abs(a.pp - 50)
-      })
-      setStocks(valid.slice(0, 20))
-      setStatus('✅ Top 20 已更新')
-    } catch(e: any) { setStatus('❌ 失败: ' + (e.message||'未知错误')) }
-    setLoading(false)
-  }, [])
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        setSrError('未找到该股票代码');
+      } else {
+        setSrError('查询失败，请重试');
+      }
+    }
+  }, [query]);
 
-  useEffect(() => {
-    const check = () => { const f = !isTH(); setFrozen(f); frozenR.current = f; setFmsg(freezeMsg()) }
-    check(); const tt = setInterval(check, 60000)
-    if (isTH()) setTimeout(() => scan(), 3000)
-    intR.current = window.setInterval(() => { if (isTH()) scan() }, 600000)
-    return () => { clearInterval(tt); if (intR.current) clearInterval(intR.current) }
-  }, [scan])
-
-  const hSearch = useCallback(async () => {
-    if (!sc.trim()) return; setSr(null)
+  // 获取日内分析
+  const fetchIntraday = useCallback(async (code: string) => {
+    setIaLoading(true);
+    setIaData(null);
     try {
-      const q = await fetchQ([sc.trim()]); const r = q[sc.trim()]
-      if (!r) { setSr({error:'未找到'}); return }
-      setSr({c:sc.trim(), p:r.p, cp:r.cp})
-    } catch(e) { setSr({error:'查询失败'}) }
-  }, [sc])
+      const res = await Network.request({ url: `/api/gem/intraday-analysis?code=${code}`, method: 'GET' });
+      setIaData(res.data?.data || null);
+    } catch (_) {
+      setIaData(null);
+    }
+    setIaLoading(false);
+  }, []);
+
+  // 返回列表
+  const backToList = useCallback(() => {
+    setDetailStock(null);
+    setIaData(null);
+    setSr(null);
+    setQuery('');
+    setSrError('');
+  }, []);
+
+  // 点击个股卡片进入详情
+  const clickStock = useCallback((stock: StockItem) => {
+    setDetailStock(stock);
+    setQuery(stock.code);
+    fetchIntraday(stock.code);
+  }, [fetchIntraday]);
+
+  // 全市场扫描（只在列表页可用）
+  const startScan = useCallback(async () => {
+    if (detailStock || scanning) return;
+    setScanning(true);
+    scanStopRef.current = false;
+    try {
+      await Network.request({ url: '/api/gem/refresh-main-board', method: 'POST', data: { stocks: [] } });
+    } catch (_) {}
+    setScanning(false);
+  }, [detailStock, scanning]);
+
+  // 格式化时间
+  const fmtTime = (t: string) => {
+    if (!t) return '';
+    if (t.length >= 16) return t.slice(5, 16);
+    if (t.length === 10) return t.slice(5);
+    return t;
+  };
 
   return (
-    <View className="flex flex-col h-full bg-gray-50">
-      <View className="sticky top-0 bg-white z-10 px-3 py-2 border-b border-gray-100">
-        <View className="flex flex-row items-center justify-between">
-          <Text className="block text-base font-bold">A股优选 Top20</Text>
-          <Text className="block text-xs text-gray-400">{status}</Text>
+    <View className="flex flex-col h-screen bg-gray-50">
+      {/* 搜索区域 */}
+      <View className="px-4 pt-3 pb-2 bg-white border-b border-gray-100 relative z-20">
+        <View className="flex flex-row items-center gap-2">
+          {detailStock ? (
+            <View className="flex-shrink-0" onClick={backToList}>
+              <ArrowLeft size={22} color="#333" />
+            </View>
+          ) : null}
+          <View className="flex-1 relative">
+            <View className="relative">
+              <View className="absolute left-3 top-1/2 -translate-y-1/2">
+                <Search size={16} color="#999" />
+              </View>
+              <Input
+                className="w-full pl-9 pr-3 h-9 text-sm bg-gray-50 rounded-lg border-0"
+                placeholder={detailStock ? detailStock.code || detailStock.name : '输入股票代码或名称'}
+                value={query}
+                onInput={onQueryInput}
+                onConfirm={() => doSearch()}
+              />
+            </View>
+            {/* 自动补全下拉框 */}
+            {showAc && acItems.length > 0 && (
+              <View className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 max-h-60 overflow-y-auto">
+                {acItems.map((item, idx) => (
+                  <View
+                    key={`${item.code}-${idx}`}
+                    className="px-4 py-2 border-b border-gray-50 active:bg-gray-50 flex flex-row items-center justify-between"
+                    onClick={() => selectAc(item)}
+                  >
+                    <Text className="block text-sm font-medium text-gray-800">{item.code}</Text>
+                    <Text className="block text-xs text-gray-400">{item.name}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {acLoading && (
+              <View className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow p-3">
+                <View className="flex flex-row items-center gap-2">
+                  <View className="w-3 h-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+                  <Text className="block text-xs text-gray-400">搜索中...</Text>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
-        {fmsg ? <View className="mt-1 px-2 py-1 bg-yellow-50 rounded-lg border border-yellow-200"><Text className="block text-xs text-yellow-700">{fmsg}</Text></View> : null}
-      </View>
 
-      <View className="px-3 py-2 bg-white border-b border-gray-100">
-        <View style={{display:'flex',flexDirection:'row',alignItems:'center',gap:'8px'}} className="bg-gray-50 rounded-lg px-3 py-2">
-          <Search size={16} color="#999" />
-          <View style={{flex:1}}><Input className="w-full text-xs bg-transparent" placeholder="输入代码搜索" value={sc}
-            onInput={e => setSc(e.detail.value)} onConfirm={() => hSearch()}
-          /></View>
-          <Button className="bg-blue-500 text-white text-xs px-3 py-1 rounded-md"
-            onClick={() => hSearch()}
+        {/* 搜索错误 - 紧凑显示 */}
+        {srError && !detailStock && (
+          <View className="mt-2 px-3 py-2 bg-red-50 rounded-lg border border-red-100 flex flex-row items-center gap-2">
+            <CircleAlert size={14} color="#ef4444" />
+            <Text className="block text-xs text-red-600">{srError}</Text>
+          </View>
+        )}
+
+        {/* 紧凑搜索结果（详情中不显示，已进入详情） */}
+        {sr && !detailStock && (
+          <View className="mt-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+            <View className="flex flex-row items-center justify-between" onClick={() => { if (sr) { setDetailStock(sr); fetchIntraday(sr.code); } }}>
+              <View className="flex-1">
+                <View className="flex flex-row items-center gap-2">
+                  <Text className="block text-sm font-semibold text-gray-800">{sr.code}</Text>
+                  <Text className="block text-xs text-gray-500">{sr.name}</Text>
+                  <Badge className={getSuggestionBadgeColor(sr.suggestion)}>
+                    <Text className="block text-xs">{sr.suggestion || '--'}</Text>
+                  </Badge>
+                </View>
+                <View className="flex flex-row items-center gap-2 mt-1">
+                  <Text className="block text-sm font-bold text-gray-900">¥{formatPrice(sr.price || sr.trade)}</Text>
+                  <Text className={`block text-xs ${(sr.changePercent || 0) >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                    {(sr.changePercent || 0) >= 0 ? '+' : ''}{sr.changePercent?.toFixed(2)}%
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={16} color="#ccc" />
+            </View>
+          </View>
+        )}
+
+        {/* 扫描按钮（详情页中禁用） */}
+        <View className="mt-2">
+          <Button
+            className={`w-full text-sm h-9 ${detailStock ? 'opacity-40' : ''}`}
+            onClick={startScan}
+            disabled={!!detailStock}
           >
-            <Text className="block text-xs">搜索</Text>
+            {scanning ? <Text className="block text-sm">扫描中...</Text> :
+             detailStock ? <Text className="block text-sm">详情中不可扫描</Text> :
+             <Text className="block text-sm">立即扫描</Text>}
           </Button>
         </View>
-        {sr ? (sr.error ? <Text className="block text-xs text-red-500 mt-1">{sr.error}</Text>
-          : <View className="mt-1 px-2 py-1 bg-gray-50 rounded-lg"><Text className="block text-xs">{sr.c} ¥{sr.p} {(sr.cp||0)>=0?'+':''}{sr.cp}%</Text></View>
-        ) : null}
       </View>
 
-      <View className="px-3 py-1 flex flex-row gap-2">
-        <Button className="bg-blue-500 text-white text-xs px-4 py-2 rounded-lg flex-1"
-          onClick={() => { if (!frozenR.current) scan(); else Taro.showToast({title:'非交易时间',icon:'none'}) }}
-          disabled={loading}
-        >
-          <Text className="block text-xs">{loading ? '扫描中...' : (frozen ? '📊 已冻结' : '🔄 立即扫描')}</Text>
-        </Button>
-      </View>
-
-      <ScrollView className="flex-1 px-3" scrollY>
-        <View className="py-2">
-          <View className="flex flex-row items-center px-2 py-1 mb-1">
-            <View style={{flex:1.1}}><Text className="block text-xs text-gray-400 font-medium">名称</Text></View>
-            <View style={{flex:0.55}} className="text-center"><Text className="block text-xs text-gray-400">操作</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">价格</Text></View>
-            <View style={{flex:0.8}} className="text-center"><Text className="block text-xs text-gray-400">涨幅</Text></View>
-            <View style={{flex:0.9}} className="text-right"><Text className="block text-xs text-gray-400">位置</Text></View>
+      {/* 内容区域 */}
+      {detailStock ? (
+        /* ---- 个股详情 ---- */
+        <ScrollView className="flex-1" scrollY>
+          {/* 基本信息 */}
+          <View className="px-4 pt-4 pb-2 bg-white border-b border-gray-100">
+            <View className="flex flex-row items-center justify-between mb-2">
+              <View>
+                <Text className="block text-2xl font-bold text-gray-900">{detailStock.name || detailStock.code}</Text>
+                <Text className="block text-sm text-gray-400">{detailStock.code}</Text>
+              </View>
+              <View className="items-end">
+                <Text className="block text-2xl font-bold text-gray-900">¥{formatPrice(detailStock.price || detailStock.trade)}</Text>
+                <Text className={`block text-sm font-medium ${(detailStock.changePercent || 0) >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                  {(detailStock.changePercent || 0) >= 0 ? '+' : ''}{detailStock.changePercent?.toFixed(2)}%
+                </Text>
+              </View>
+            </View>
+            <View className="flex flex-row items-center gap-2">
+              <Badge className={getSuggestionBadgeColor(detailStock.suggestion)}>
+                <Text className="block text-sm">{detailStock.suggestion || '--'}</Text>
+              </Badge>
+              {detailStock.baiXiaoDays != null && (
+                <Badge className="bg-purple-50 text-purple-700 border-purple-200">
+                  <Text className="block text-xs">白消{detailStock.baiXiaoDays}天</Text>
+                </Badge>
+              )}
+              {detailStock.baiBuDays != null && detailStock.baiBuDays > 0 && (
+                <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                  <Text className="block text-xs">白布{detailStock.baiBuDays}天</Text>
+                </Badge>
+              )}
+            </View>
           </View>
 
-          {loading && stocks.length === 0 ? (
-            <View className="flex flex-col gap-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="w-full h-12 rounded-xl" />)}</View>
-          ) : stocks.length === 0 ? (
-            <View className="flex items-center justify-center py-12"><Text className="block text-sm text-gray-400">{frozen ? fmsg : '点击上方按钮开始扫描'}</Text></View>
-          ) : (
-            <View className="flex flex-col gap-2">
-              {stocks.map((item, idx) => (
-                <Card key={item.c} className="overflow-hidden">
-                  <CardContent className="p-2">
-                    <View className="flex flex-row items-center">
-                      <View style={{flex:1.1}}>
-                        <View className="flex flex-row items-center gap-1">
-                          <Badge className={'px-1 py-0 flex-shrink-0 ' + (idx < 3 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200')}>
-                            <Text className="block text-xs">#{idx+1}</Text>
-                          </Badge>
-                          <View className="min-w-0 flex-1">
-                            <Text className="block text-xs font-medium truncate">{item.n}</Text>
-                            <Text className="block text-xs text-gray-400">{item.c}</Text>
-                          </View>
-                        </View>
+          {/* MACD状态 */}
+          <View className="px-4 pt-3">
+            <View className="flex flex-row items-center gap-1 mb-2">
+              <Activity size={16} color="#6366f1" />
+              <Text className="block text-sm font-semibold text-gray-700">MACD(40,120,40) 分时分析</Text>
+            </View>
+            {iaLoading ? (
+              <Card>
+                <CardContent className="p-4">
+                  <Skeleton className="h-12 w-full" />
+                </CardContent>
+              </Card>
+            ) : iaData ? (
+              <Card>
+                <CardContent className="p-4">
+                  <View className="flex flex-row items-center justify-between mb-2">
+                    <View className="flex flex-row items-center gap-2">
+                      <Badge className={iaData.macd.status === '金叉区' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}>
+                        <Text className="block text-xs">{iaData.macd.status}</Text>
+                      </Badge>
+                    </View>
+                    <View className="flex flex-row items-center gap-3">
+                      <View className="items-center">
+                        <Text className="block text-xs text-gray-400">DIFF</Text>
+                        <Text className="block text-sm font-medium text-gray-700">{iaData.macd.diff.toFixed(2)}</Text>
                       </View>
-                      <View style={{flex:0.55}} className="text-center">
-                        <Text className="block text-xs text-white font-bold px-1 py-1 rounded-sm" style={{backgroundColor:ACTION_BADGE_COLOR[item.sug]??'#999'}}>{item.sug||'-'}</Text>
+                      <View className="items-center">
+                        <Text className="block text-xs text-gray-400">DEA</Text>
+                        <Text className="block text-sm font-medium text-gray-700">{iaData.macd.dea.toFixed(2)}</Text>
                       </View>
-                      <View style={{flex:0.8}} className="text-center"><Text className="block text-xs font-medium">{item.curP?.toFixed(2)}</Text></View>
-                      <View style={{flex:0.8}} className="text-center">
-                        <Text className="block text-xs font-bold" style={{color:(item.cp??0)>=0?'#ef4444':'#22c55e'}}>{(item.cp??0)>=0?'+':''}{item.cp?.toFixed(2)}%</Text>
-                      </View>
-                      <View style={{flex:0.9}} className="text-right">
-                        <Text className="block text-xs font-bold" style={{color:(item.pp??0)<50?'#22c55e':(item.pp??0)<80?'#eab308':'#ef4444'}}>位置{(item.pp??0).toFixed(0)}%</Text>
+                      <View className="items-center">
+                        <Text className="block text-xs text-gray-400">MACD</Text>
+                        <Text className={`block text-sm font-medium ${iaData.macd.macd >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {iaData.macd.macd.toFixed(2)}
+                        </Text>
                       </View>
                     </View>
+                  </View>
+                  {iaData.macd.signals.length > 0 && (
+                    <View className="mt-2 pt-2 border-t border-gray-50">
+                      <Text className="block text-xs text-gray-400 mb-1">
+                        共 {iaData.macd.goldenCrosses} 次金叉 / {iaData.macd.deathCrosses} 次死叉
+                      </Text>
+                      <ScrollView className="max-h-28" scrollY>
+                        {iaData.macd.signals.slice(-8).map((s, i) => (
+                          <View key={i} className={`flex flex-row items-center justify-between py-1 ${i > 0 ? 'border-t border-gray-50' : ''}`}>
+                            <View className="flex flex-row items-center gap-2">
+                              <View className={`w-1 h-1 rounded-full ${s.type === '金叉' ? 'bg-red-500' : 'bg-green-500'}`} />
+                              <Text className={`block text-xs font-medium ${s.type === '金叉' ? 'text-red-600' : 'text-green-600'}`}>
+                                {s.type}
+                              </Text>
+                            </View>
+                            <Text className="block text-xs text-gray-400">{fmtTime(s.time)}</Text>
+                            <Text className="block text-xs text-gray-600">¥{s.price.toFixed(2)}</Text>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+          </View>
+
+          {/* 主力/散户 */}
+          <View className="px-4 pt-3">
+            <View className="flex flex-row items-center gap-1 mb-2">
+              <ChartBarIncreasing size={16} color="#f59e0b" />
+              <Text className="block text-sm font-semibold text-gray-700">主力/散户指标</Text>
+            </View>
+            {iaLoading ? (
+              <Card>
+                <CardContent className="p-4">
+                  <Skeleton className="h-12 w-full" />
+                </CardContent>
+              </Card>
+            ) : iaData ? (
+              <Card>
+                <CardContent className="p-4">
+                  <View className="flex flex-row items-center justify-between mb-2">
+                    <View className="flex flex-row items-center gap-3">
+                      <View className="items-center">
+                        <Text className="block text-xs text-gray-400">主力</Text>
+                        <Text className={`block text-sm font-bold ${iaData.zhuliSanhu.main > 50 ? 'text-red-500' : 'text-blue-500'}`}>
+                          {iaData.zhuliSanhu.main?.toFixed(1) || '--'}
+                        </Text>
+                      </View>
+                      <View className="items-center">
+                        <Text className="block text-xs text-gray-400">散户</Text>
+                        <Text className={`block text-sm font-bold ${iaData.zhuliSanhu.retail > 50 ? 'text-amber-500' : 'text-gray-500'}`}>
+                          {iaData.zhuliSanhu.retail?.toFixed(1) || '--'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Badge className={`${iaData.zhuliSanhu.status === '主力占优' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                      <Text className="block text-xs">{iaData.zhuliSanhu.status}</Text>
+                    </Badge>
+                  </View>
+                  <View className="flex flex-row items-center gap-3">
+                    {iaData.zhuliSanhu.buySignals > 0 && (
+                      <Badge className="bg-red-50 text-red-700 border-red-200">
+                        <Text className="block text-xs">买入信号 {iaData.zhuliSanhu.buySignals}次</Text>
+                      </Badge>
+                    )}
+                    {iaData.zhuliSanhu.sellSignals > 0 && (
+                      <Badge className="bg-green-50 text-green-700 border-green-200">
+                        <Text className="block text-xs">卖出信号 {iaData.zhuliSanhu.sellSignals}次</Text>
+                      </Badge>
+                    )}
+                    {iaData.zhuliSanhu.buySignals === 0 && iaData.zhuliSanhu.sellSignals === 0 && (
+                      <Text className="block text-xs text-gray-400">近期无明确买卖信号</Text>
+                    )}
+                  </View>
+                </CardContent>
+              </Card>
+            ) : null}
+          </View>
+
+          {/* 日内买卖建议 */}
+          <View className="px-4 pt-3">
+            <View className="flex flex-row items-center gap-1 mb-2">
+              <Zap size={16} color="#8b5cf6" />
+              <Text className="block text-sm font-semibold text-gray-700">日内介入参考</Text>
+            </View>
+            {iaLoading ? (
+              <Card>
+                <CardContent className="p-4">
+                  <Skeleton className="h-16 w-full" />
+                </CardContent>
+              </Card>
+            ) : iaData ? (
+              <Card>
+                <CardContent className="p-4">
+                  {/* 买卖点列表 */}
+                  {iaData.suggestions.length > 0 ? (
+                    <View>
+                      <Text className="block text-xs text-gray-400 mb-2">
+                        共 {iaData.suggestions.length} 条建议（基于5分钟K线MACD+主力/散户）
+                      </Text>
+                      <ScrollView className="max-h-40" scrollY>
+                        {iaData.suggestions.map((s, i) => (
+                          <View key={i} className={`flex flex-row items-center justify-between py-1 ${i > 0 ? 'border-t border-gray-50' : ''}`}>
+                            <View className="flex flex-row items-center gap-2">
+                              <View className={`w-2 h-2 rounded-full ${s.type.includes('买入') ? 'bg-red-500' : 'bg-green-500'}`} />
+                              <Text className={`block text-xs font-medium ${s.type.includes('买入') ? 'text-red-600' : 'text-green-600'}`}>
+                                {s.type}
+                              </Text>
+                            </View>
+                            <Text className="block text-xs text-gray-400">{fmtTime(s.time)}</Text>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : (
+                    <View className="py-3 items-center">
+                      <Text className="block text-xs text-gray-400">{iaData.summary || '暂无明确的日内买卖信号'}</Text>
+                    </View>
+                  )}
+                  {iaData.summary && (
+                    <View className="mt-2 pt-2 border-t border-gray-50">
+                      <Text className="block text-xs text-gray-500">{iaData.summary}</Text>
+                    </View>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-4">
+                  <Text className="block text-xs text-gray-400">数据获取中，请稍后...</Text>
+                </CardContent>
+              </Card>
+            )}
+          </View>
+
+          <View className="h-20" />
+        </ScrollView>
+      ) : (
+        /* ---- 个股列表 ---- */
+        <ScrollView className="flex-1 px-4 pt-3" scrollY>
+          {loading ? (
+            <View className="space-y-3">
+              {[1,2,3,4,5].map(i => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <Skeleton className="h-16 w-full" />
                   </CardContent>
                 </Card>
               ))}
             </View>
+          ) : stocks.length > 0 ? (
+            <View>
+              <Text className="block text-xs text-gray-400 mb-2">机会区（最近更新）</Text>
+              {stocks.map((stock, idx) => (
+                <View key={`${stock.code}-${idx}`} className="mb-2" onClick={() => clickStock(stock)}>
+                  <Card>
+                    <CardContent className="p-3">
+                      <View className="flex flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <View className="flex flex-row items-center gap-2 mb-1">
+                            <Text className="block text-sm font-semibold text-gray-800">{stock.code}</Text>
+                            <Text className="block text-xs text-gray-400">{stock.name}</Text>
+                          </View>
+                          <View className="flex flex-row items-center gap-2">
+                            <Text className="block text-sm font-bold text-gray-900">¥{formatPrice(stock.price || stock.trade)}</Text>
+                            <Text className={`block text-xs ${(stock.changePercent || 0) >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                              {(stock.changePercent || 0) >= 0 ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                            </Text>
+                          </View>
+                        </View>
+                        {/* 只显示评分，不显示买卖建议文字（避免与搜索结果不符） */}
+                        <View className="flex flex-row items-center gap-2">
+                          {stock.score != null && (
+                            <View className="items-center">
+                              <Text className={`block text-xs font-medium ${(stock.score || 0) >= 60 ? 'text-red-500' : (stock.score || 0) >= 30 ? 'text-yellow-500' : 'text-gray-400'}`}>
+                                {stock.score}
+                              </Text>
+                              <Text className="block text-xs text-gray-300">评分</Text>
+                            </View>
+                          )}
+                          <ChevronRight size={14} color="#ddd" />
+                        </View>
+                      </View>
+                    </CardContent>
+                  </Card>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View className="items-center pt-20">
+              <Text className="block text-sm text-gray-300">暂无数据，请点击立即扫描</Text>
+            </View>
           )}
-        </View>
-      </ScrollView>
-
-      <View className="bg-white px-3 py-2 border-t border-gray-100">
-        <Text className="block text-xs text-gray-400">
-          {loading ? '⏳ 扫描中...' : (frozen ? fmsg : stocks.length > 0 ? '✅ Top20 | 10分钟自动刷新' : '⏸️ 等待扫描')}
-        </Text>
-      </View>
+          <View className="h-10" />
+        </ScrollView>
+      )}
     </View>
   )
 }

@@ -807,4 +807,21 @@ export class GemScreenerController {
       return { code: 500, msg: e.message, data: null };
     }
   }
+
+  /**
+   * 日内介入参考：分时MACD(40,120,40) + 主力/散户指标 → 最佳买卖点
+   * GET /api/gem/intraday-analysis?code=603200
+   */
+  @Get('intraday-analysis')
+  @SkipAccessLimit()
+  async intradayAnalysis(@Query('code') code: string) {
+    if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    try {
+      const result = await this.gemScreener.intradayAnalysis(code);
+      return { code: 200, msg: 'success', data: result };
+    } catch (e) {
+      this.logger.warn(`日内分析失败 ${code}: ${(e as Error).message}`);
+      return { code: 500, msg: e.message, data: null };
+    }
+  }
 }
