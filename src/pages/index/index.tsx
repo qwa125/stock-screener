@@ -97,26 +97,23 @@ export default function Index() {
     if (detailStock?.code) {
       const code = detailStock.code;
       detailCodeRef.current = code;
-      // 启动2秒定时器
+      // 启动2秒定时器：静默刷新日内分析和实时股价
       autoRefreshRef.current = setInterval(async () => {
         if (detailCodeRef.current !== code) return; // 已切换
+        setIaUpdating(true);
         try {
-          // 实时股价
-          const qRes = await Network.request({ url: `/api/stock/quote?code=${code}`, method: 'GET' });
-          const qItem = qRes.data?.data || null;
-          if (qItem && detailCodeRef.current === code) {
-            setDetailStock(prev => prev ? {
-              ...prev,
-              price: qItem.trade ?? qItem.price,
-              changePercent: qItem.changePercent,
-              name: qItem.name || prev.name,
-            } : null);
-          }
-          // 日内分析（静默刷新，不显示骨架）
-          setIaUpdating(true);
           const iaRes = await Network.request({ url: `/api/gem/intraday-analysis?code=${code}`, method: 'GET' });
           if (detailCodeRef.current === code) {
-            setIaData(iaRes.data?.data || null);
+            const newData = iaRes.data?.data || null;
+            setIaData(newData);
+            // 从日内分析中更新实时股价
+            if (newData?.currentPrice) {
+              setDetailStock(prev => prev ? {
+                ...prev,
+                price: newData.currentPrice,
+                changePercent: newData.changePercent ?? prev.changePercent,
+              } : null);
+            }
           }
         } catch (_) {}
         setIaUpdating(false);
