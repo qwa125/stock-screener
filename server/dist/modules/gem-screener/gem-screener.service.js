@@ -1952,7 +1952,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         return Math.min(Math.max(safety, 0), 100);
     }
     applySignalContinuity(currentSuggestion, prevSuggestion, pricePosition, trendState) {
-        if (!prevSuggestion || prevSuggestion === '观望' || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
+        if (!prevSuggestion || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
             return { suggestion: currentSuggestion, changed: false };
         }
         const PRIORITY = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];

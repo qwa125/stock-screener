@@ -626,7 +626,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 400, msg: '缺少股票代码' };
         }
         if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 5) {
-            const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '观望', score: 5, entryTiming: 0, currentPrice: body.price || 0, changePercent: body.changePercent || 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0, trade: body.price || 0, price: body.price || 0, changepercent: body.changePercent || 0, inflow: 0, timestamp: Date.now() };
+            const fallbackOpp = { code: body.code, name: body.name || '', suggestion: '持有', score: 5, entryTiming: 0, currentPrice: body.price || 0, changePercent: body.changePercent || 0, pricePosition: 0, priceIncrease: 0, mainForceInflow: 0, baiXiaoDays: 0, capitalRank: 0, safetyScore: 0, trade: body.price || 0, price: body.price || 0, changepercent: body.changePercent || 0, inflow: 0, timestamp: Date.now() };
             this.gemScreener.updateSingleStockInCache(fallbackOpp).catch(() => { });
             return { code: 200, msg: '已缓存基础数据（无K线）', data: [fallbackOpp] };
         }
