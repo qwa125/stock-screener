@@ -197,7 +197,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode=''
+var stocks=[],loading=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
 var FROZEN_KEY='frozenSnapshot'
 function saveFrozenSnapshot(arr){
@@ -291,6 +291,7 @@ async function handleBlurClick(){
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
+  if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
   autoLightScan()
 }
@@ -707,6 +708,7 @@ function gridChipLine(s,entry){
 }
 
 function showDetail(i){
+  isDetailView=true
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   var da=$('detailArea')
@@ -723,15 +725,23 @@ function showDetail(i){
     }).catch(function(){})
   }
   renderList()
-  // ★ 异步拉取技术指标分析（MACD/KDJ/布林带/RSI/量比→最佳介入价）
+  // ★ 异步拉取完整分析（统一7级买卖系统）
   ;(async function(){
     try{
-      var tr=await fetch('/api/gem/technical-analysis?code='+s.code+'&_='+Date.now())
-      var tj=await tr.json()
-      if(tj.code===200&&tj.data&&tj.data.entryScore!=null){
-        da.innerHTML=buildDetail(s,rt,tj.data)
+      var code=s.code
+      var sec=(code.startsWith('6')?'1.':'0.')+code
+      // 先拉K线
+      var kr=await fetch('/api/proxy/kline?sec='+sec+'&_='+Date.now())
+      var kj=await kr.json()
+      var kd=kj.data||kj
+      // 再分析
+      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kd)?kd:kd.list||kd.kline||[]})})
+      var aj=await ar.json()
+      var ad=aj.data||aj
+      if(ad&&ad.suggestion){
+        da.innerHTML=buildDetail(ad,rt,ad)
       }
-    }catch(e){console.warn('[ta] 技术分析失败:',e.message)}
+    }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
   })()
 }
 
@@ -1616,7 +1626,6 @@ function onSearchInput(){
             html+='<div onclick="selectPinyinStock(\''+s.code+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
             html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
             html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
-            html+='<span style="font-size:11px;color:'+sugColor+'">'+sug+'</span>'
             html+='</div>'
           }
           dd.innerHTML=html
@@ -1694,7 +1703,7 @@ async function doSearch(){
     var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
-  var da=$('detailArea');da.style.display='none'
+  var da=$('detailArea');da.style.display='none';isDetailView=false
 
   // 兼容指数代码：1A0001=上证指数
   if(/^1a\d{4}$/i.test(v)){v=v.replace(/^1a/i,"00");var isIndex=true}
@@ -1723,7 +1732,7 @@ async function doSearch(){
     }
     if(t){stockName=t.name;stockPrice=t.price;stockChgP=t.chgP;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
     else{
-      da.style.display='block';da.innerHTML='<div style="padding:40px 16px;text-align:center;color:#999;font-size:14px">😕 未找到该股票/代码<br><span style="font-size:12px;color:#ccc">请确认代码是否正确</span></div>';scrollTo(0,da.offsetTop-80)
+      da.style.display='block';da.innerHTML='<div style="padding:10px 16px;text-align:center;color:#999;font-size:13px">😕 未找到该股票/代码，请确认代码是否正确</div>';
       return
     }
   }else{
