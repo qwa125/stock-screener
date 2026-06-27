@@ -131,10 +131,11 @@ export class DeviceRegistryService implements OnModuleInit {
         this.logger.warn(`PostgreSQL 加载设置失败: ${(e as Error).message}`)
       }
     }
-    // 兜底：读文件
+    // 兜底：读文件（优先 /tmp，Render 重启保留但部署不保留）
     if (!loaded) {
+      const tmpSettingsPath = '/tmp/device_registry_settings.json'
       const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
-      for (const fp of [projectSettingsPath, this.settingsPath]) {
+      for (const fp of [tmpSettingsPath, projectSettingsPath, this.settingsPath]) {
         try {
           if (fs.existsSync(fp)) {
             const raw = fs.readFileSync(fp, 'utf-8')
@@ -148,6 +149,18 @@ export class DeviceRegistryService implements OnModuleInit {
           }
         } catch (e) {
           this.logger.warn(`设置文件加载失败 (${fp}): ${(e as Error).message}`)
+        }
+      }
+    }
+    // 最后兜底：环境变量 DEFAULT_MAX_SLOTS（可在 Render dashboard 设置）
+    if (!loaded) {
+      const envVal = process.env.DEFAULT_MAX_SLOTS
+      if (envVal) {
+        const parsed = parseInt(envVal, 10)
+        if (parsed > 0) {
+          this.maxSlots = parsed
+          this.logger.log(`⚙️ 从环境变量 DEFAULT_MAX_SLOTS 加载: 设备限额 ${this.maxSlots}`)
+          loaded = true
         }
       }
     }
@@ -169,9 +182,11 @@ export class DeviceRegistryService implements OnModuleInit {
         this.logger.warn(`PostgreSQL 写入设置异常: ${(e as Error).message}`)
       }
     }
-    // 文件兜底
+    // 文件兜底（同时写入 /tmp 以在重启后恢复）
+    const tmpSettingsPath = '/tmp/device_registry_settings.json'
     const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json')
     try {
+      fs.writeFileSync(tmpSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
       fs.writeFileSync(projectSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8')
     } catch (e) {
       this.logger.warn(`设置文件写入失败: ${(e as Error).message}`)

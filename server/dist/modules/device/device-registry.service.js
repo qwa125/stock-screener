@@ -132,8 +132,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             }
         }
         if (!loaded) {
+            const tmpSettingsPath = '/tmp/device_registry_settings.json';
             const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json');
-            for (const fp of [projectSettingsPath, this.settingsPath]) {
+            for (const fp of [tmpSettingsPath, projectSettingsPath, this.settingsPath]) {
                 try {
                     if (fs.existsSync(fp)) {
                         const raw = fs.readFileSync(fp, 'utf-8');
@@ -148,6 +149,17 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 }
                 catch (e) {
                     this.logger.warn(`设置文件加载失败 (${fp}): ${e.message}`);
+                }
+            }
+        }
+        if (!loaded) {
+            const envVal = process.env.DEFAULT_MAX_SLOTS;
+            if (envVal) {
+                const parsed = parseInt(envVal, 10);
+                if (parsed > 0) {
+                    this.maxSlots = parsed;
+                    this.logger.log(`⚙️ 从环境变量 DEFAULT_MAX_SLOTS 加载: 设备限额 ${this.maxSlots}`);
+                    loaded = true;
                 }
             }
         }
@@ -169,8 +181,10 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 this.logger.warn(`PostgreSQL 写入设置异常: ${e.message}`);
             }
         }
+        const tmpSettingsPath = '/tmp/device_registry_settings.json';
         const projectSettingsPath = path.resolve(process.cwd(), '.device_registry.settings.json');
         try {
+            fs.writeFileSync(tmpSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
             fs.writeFileSync(projectSettingsPath, JSON.stringify({ maxSlots: this.maxSlots }), 'utf-8');
         }
         catch (e) {

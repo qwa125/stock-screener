@@ -4,3 +4,6 @@ services:
     env: node
     buildCommand: cd server && npm install --ignore-scripts && npm run build
     startCommand: cd server && node dist/main.js
+    envVars:
+      - key: DEFAULT_MAX_SLOTS
+        value: 2
