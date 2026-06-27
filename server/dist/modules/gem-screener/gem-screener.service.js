@@ -3835,7 +3835,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
                     const last = _greenValleys[_greenValleys.length - 1];
                     if (!last || valleyIdx - last.idx >= 3) {
-                        _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time });
+                        _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
                     }
                 }
             }
@@ -3847,7 +3847,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     const thisPrice = Math.round(close[peakIdx] * 100) / 100;
                     const last = _redPeaks[_redPeaks.length - 1];
                     if (!last || peakIdx - last.idx >= 3) {
-                        _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time });
+                        _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
                     }
                 }
             }
@@ -3929,35 +3929,39 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
         let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
-        for (let i = _greenValleys.length - 1; i >= 0; i--) {
-            const gv = _greenValleys[i];
-            const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
-            const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
-            const confirmed = confirmedByZhuLi || confirmedByMacd;
-            if (confirmed) {
-                bestBuyPrice = gv.price;
-                bestBuyTime = gv.time;
-                break;
+        if (_greenValleys.length > 0) {
+            const sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+            for (const gv of sortedValleys) {
+                const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
+                const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
+                if (confirmedByZhuLi || confirmedByMacd) {
+                    bestBuyPrice = gv.price;
+                    bestBuyTime = gv.time;
+                    break;
+                }
+            }
+            if (!bestBuyPrice) {
+                const recent = _greenValleys[_greenValleys.length - 1];
+                bestBuyPrice = recent.price;
+                bestBuyTime = recent.time;
             }
         }
-        if (!bestBuyPrice && _greenValleys.length > 0) {
-            bestBuyPrice = _greenValleys[_greenValleys.length - 1].price;
-            bestBuyTime = _greenValleys[_greenValleys.length - 1].time;
-        }
-        for (let i = _redPeaks.length - 1; i >= 0; i--) {
-            const rp = _redPeaks[i];
-            const confirmedByZhuLi = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5);
-            const confirmedByMacd = macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
-            const confirmed = confirmedByZhuLi || confirmedByMacd;
-            if (confirmed) {
-                bestSellPrice = rp.price;
-                bestSellTime = rp.time;
-                break;
+        if (_redPeaks.length > 0) {
+            const sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+            for (const rp of sortedPeaks) {
+                const confirmedByZhuLi = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5);
+                const confirmedByMacd = macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
+                if (confirmedByZhuLi || confirmedByMacd) {
+                    bestSellPrice = rp.price;
+                    bestSellTime = rp.time;
+                    break;
+                }
             }
-        }
-        if (!bestSellPrice && _redPeaks.length > 0) {
-            bestSellPrice = _redPeaks[_redPeaks.length - 1].price;
-            bestSellTime = _redPeaks[_redPeaks.length - 1].time;
+            if (!bestSellPrice) {
+                const recent = _redPeaks[_redPeaks.length - 1];
+                bestSellPrice = recent.price;
+                bestSellTime = recent.time;
+            }
         }
         const _td = minData[len - 1]?.time?.slice(0, 10) || '';
         let todaySugs = [];
@@ -3967,12 +3971,22 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 todaySugs = _f.map(s => ({ ...s, time: s.time.slice(11, 16) }));
                 const _tG = _greenValleys.filter(v => v.time?.startsWith(_td));
                 const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
-                if (_tG.length > 0) {
+                if (bestBuyPrice > 0 && _tG.length > 0) {
+                    const _matched = _tG.find(v => Math.abs(v.price - bestBuyPrice) < 0.005);
+                    if (_matched)
+                        bestBuyTime = _matched.time.slice(11, 16);
+                }
+                if (bestSellPrice > 0 && _tR.length > 0) {
+                    const _matched = _tR.find(p => Math.abs(p.price - bestSellPrice) < 0.005);
+                    if (_matched)
+                        bestSellTime = _matched.time.slice(11, 16);
+                }
+                if (!bestBuyPrice && _tG.length > 0) {
                     const _g = _tG[_tG.length - 1];
                     bestBuyPrice = _g.price;
                     bestBuyTime = _g.time.slice(11, 16);
                 }
-                if (_tR.length > 0) {
+                if (!bestSellPrice && _tR.length > 0) {
                     const _r = _tR[_tR.length - 1];
                     bestSellPrice = _r.price;
                     bestSellTime = _r.time.slice(11, 16);
