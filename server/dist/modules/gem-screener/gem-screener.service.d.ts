@@ -74,6 +74,9 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private refreshPromise;
     private mainBoardCache;
     private sellStateCache;
+    private scanCache;
+    updateCache(type: 'scan', data: any[]): void;
+    getCache(type: 'scan'): any[];
     private soldOutStocks;
     private mainBoardRefreshPromise;
     private sectorCache;

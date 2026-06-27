@@ -18,14 +18,16 @@ const common_1 = require("@nestjs/common");
 const access_limit_guard_1 = require("../../guards/access-limit.guard");
 const gem_screener_service_1 = require("./gem-screener.service");
 const gem_screener_scheduler_1 = require("./gem-screener.scheduler");
+const stock_service_1 = require("../stock/stock.service");
 const iconv = require("iconv-lite");
 const fs_1 = require("fs");
 const path_1 = require("path");
 const data_1 = require("../../industry-sectors/data");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
-    constructor(gemScreener, scheduler) {
+    constructor(gemScreener, scheduler, stockService) {
         this.gemScreener = gemScreener;
         this.scheduler = scheduler;
+        this.stockService = stockService;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
     }
     async getMarketState() {
@@ -339,6 +341,60 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             this.logger.error(`搜索失败: ${e.message}`);
             return { code: 500, msg: e.message, data: [] };
         }
+    }
+    async cacheData(body) {
+        try {
+            const stocks = body?.stocks || [];
+            if (!stocks.length)
+                return { code: 400, msg: 'empty stocks', data: [] };
+            const results = [];
+            for (const s of stocks) {
+                try {
+                    if (!s.klines || s.klines.length < 20)
+                        continue;
+                    const normalKlines = s.klines.map(k => ({
+                        open: k.open ?? k[1] ?? 0,
+                        close: k.close ?? k[2] ?? 0,
+                        high: k.high ?? k[3] ?? 0,
+                        low: k.low ?? k[4] ?? 0,
+                        volume: k.volume ?? k[5] ?? 0,
+                        amount: k.amount ?? k[6] ?? 0,
+                    }));
+                    const result = await this.stockService.analyzeFromRawData({
+                        code: s.code,
+                        name: s.name,
+                        currentPrice: s.price,
+                        changePercent: s.changePercent,
+                        high: s.high,
+                        low: s.low,
+                        kline: normalKlines,
+                    });
+                    results.push(result);
+                }
+                catch (e) {
+                    this.logger.warn(`分析失败: ${s.code} ${s.name} - ${e.message}`);
+                }
+            }
+            const SIGNAL_ORDER = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
+            results.sort((a, b) => {
+                const ao = SIGNAL_ORDER[a.suggestion ?? '持有'] ?? 9;
+                const bo = SIGNAL_ORDER[b.suggestion ?? '持有'] ?? 9;
+                if (ao !== bo)
+                    return ao - bo;
+                return (b.score ?? 0) - (a.score ?? 0);
+            });
+            this.gemScreener.updateCache('scan', results);
+            this.logger.log(`📥 前端数据缓存+分析完成: ${results.length} 只`);
+            return { code: 200, msg: 'success', data: { total: results.length } };
+        }
+        catch (e) {
+            this.logger.error(`缓存数据失败: ${e.message}`);
+            return { code: 500, msg: e.message, data: [] };
+        }
+    }
+    async getScanResult() {
+        const cached = this.gemScreener.getCache('scan');
+        return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
     }
     async rescanMarket() {
         try {
@@ -784,6 +840,22 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "searchStock", null);
 __decorate([
+    (0, common_1.Post)('cache-data'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "cacheData", null);
+__decorate([
+    (0, common_1.Get)('scan-result'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getScanResult", null);
+__decorate([
     (0, common_1.Get)('rescan'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:type", Function),
@@ -920,5 +992,6 @@ __decorate([
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,
-        gem_screener_scheduler_1.GemScreenerScheduler])
+        gem_screener_scheduler_1.GemScreenerScheduler,
+        stock_service_1.StockService])
 ], GemScreenerController);

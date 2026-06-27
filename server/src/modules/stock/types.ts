@@ -68,6 +68,22 @@ export interface FormulaResult {
   coolingAfterSell: boolean;
   /** 冷却期趋势买点 */
   coolingTrendBuy: boolean;
+  /** 震荡买点（震荡区间+短线买入组合） */
+  zhenDangMaiDian: boolean;
+  /** 中位主升（价格中位+严格买入+趋势向上） */
+  zhongWeiZhuSheng: boolean;
+  /** 中高位主升（价格中高位+强烈买入信号） */
+  zhongGaoWeiZhuSheng: boolean;
+  /** 高风险主升（高风险区域+主力行为） */
+  gaoFengXianZhuSheng: boolean;
+  /** 横盘突破（白消后期横盘后放量突破） */
+  hengPanTuPo: boolean;
+  /** 企稳（价格企稳止跌） */
+  qiWen: boolean;
+  /** 条件成立（综合条件满足） */
+  tiaoJianChengLi: boolean;
+  /** 空的（无信号/仅观望） */
+  kong: boolean;
   /** 四大最佳买点详情 */
   bestBuyPoints: string[];
   /** 冲突信号 */

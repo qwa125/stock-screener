@@ -10,7 +10,8 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
   'diff' | 'dea' | 'lifeLine' | 'pressure' | 'baiXiao' | 'baiXiaoDays' | 'baiBu' | 'baiBuDays' | 'baiCoverTrend' |
   'diBuBuy' | 'gaoWeiHuiDiaoBuy' | 'zhuLiShiPan' | 'jiaCang' |
   'gaoKaiDiZouQingCang' | 'baoLiangFuGaiQingCang' | 'po5RiXian' | 'yinDiePoWei' |
-  'baiXiaoPureDays' | 'baiXiaoBuy1' | 'baiXiaoBuy2' | 'qiangShiHuiCai' | 'qiangZhiFuGai' | 'xiPanHuoMian' | 'safe' | 'baiBuArray' | 'baiXiaoArray'
+  'baiXiaoPureDays' | 'baiXiaoBuy1' | 'baiXiaoBuy2' | 'qiangShiHuiCai' | 'qiangZhiFuGai' | 'xiPanHuoMian' | 'safe' | 'baiBuArray' | 'baiXiaoArray' |
+  'hengPanTuPo' | 'qiWen' | 'tiaoJianChengLi' | 'kong'
 > {
   const C = engine.CLOSE;
   const H = engine.HIGH;
@@ -500,6 +501,10 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     qiangZhiFuGai: 强制覆盖[lastIdx],
     xiPanHuoMian: 洗盘豁免[lastIdx],
     safe: 安全[lastIdx] === 1,
+    hengPanTuPo: 白消买点2[lastIdx],
+    qiWen: 高位回调买点[lastIdx],
+    tiaoJianChengLi: BS_条件成立_filtered[lastIdx],
+    kong: false,
     baiBuArray: 覆盖中,
     baiXiaoArray: 白消状态,
   };

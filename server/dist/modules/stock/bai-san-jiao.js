@@ -295,6 +295,10 @@ function calcBaiSanJiao(engine) {
         xiPanSignal: 洗盘信号[lastIdx],
         coolingAfterSell: 卖出后冷却[lastIdx],
         coolingTrendBuy: 冷却期趋势买点[lastIdx],
+        zhenDangMaiDian: 买点_高位震荡[lastIdx],
+        zhongWeiZhuSheng: 买点_中位主升[lastIdx],
+        zhongGaoWeiZhuSheng: 买点_中转高主升[lastIdx],
+        gaoFengXianZhuSheng: 买点_高转风险主升[lastIdx],
         bestBuyPoints,
         conflict: 冲突,
     };

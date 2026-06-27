@@ -127,6 +127,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private refreshPromise: Promise<void> | null = null;
   private mainBoardCache: CacheEntry | null = null;
   private sellStateCache = new Map<string, { suggestion: string; timestamp: number }>();
+  private scanCache: any[] | null = null;
+
+  /** 更新指定缓存 */
+  updateCache(type: 'scan', data: any[]) {
+    if (type === 'scan') {
+      this.scanCache = data;
+    }
+  }
+
+  /** 读取指定缓存 */
+  getCache(type: 'scan'): any[] {
+    return type === 'scan' ? (this.scanCache || []) : [];
+  }
   private soldOutStocks = new Set<string>();
   private mainBoardRefreshPromise: Promise<void> | null = null;
   private sectorCache: CacheEntry | null = null;
@@ -3247,7 +3260,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const isGoldenCross = macdR?.isGoldenCross ?? false;
     const result = getTradingSuggestion(formulaInput);
     let suggestion = result.action;
-    const predictionText = result.prediction || '';
+    const predictionText = '';
     const reasonText = result.reason || '';
 
     // ─── 白布卖出信号检测（覆盖getTradingSuggestion，与determineBySignalRule一致）───

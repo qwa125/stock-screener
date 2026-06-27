@@ -81,6 +81,132 @@ export class StockService {
     } catch { /* ignore */ }
   }
 
+  /**
+   * 从前端提供的原始数据直接分析（不经过内部数据获取）
+   * 用于前端直连国内API后发送数据到后端缓存的场景
+   */
+  async analyzeFromRawData(params: {
+    code: string;
+    name: string;
+    currentPrice: number;
+    changePercent: number;
+    high?: number;
+    low?: number;
+    kline: Array<{ open: number; close: number; high: number; low: number; volume: number; amount?: number }>;
+  }) {
+    const { code, name, currentPrice, changePercent, high, low, kline } = params;
+
+    // 1. 创建公式引擎
+    const engine = new FormulaEngine({
+      open: kline.map(k => k.open),
+      close: kline.map(k => k.close),
+      high: kline.map(k => k.high),
+      low: kline.map(k => k.low),
+      volume: kline.map(k => k.volume),
+      amount: kline.map(k => k.amount ?? 0),
+    });
+
+    // 2. 计算四套公式
+    const baiSanJiaoResult = calcBaiSanJiao(engine);
+    const baiLingXingResult = calcBaiLingXing(engine);
+    const baiXingResult = calcBaiXing(engine);
+    const xingXingResult = calcXingXing(engine);
+
+    // 3. 计算集中度90
+    const hhv2 = engine.HHV(engine.HIGH, 2);
+    const llv2 = engine.LLV(engine.LOW, 2);
+    const lastHhv2 = hhv2[hhv2.length - 1];
+    const lastLlv2 = llv2[llv2.length - 1];
+    const concentrationDisplay = lastHhv2 + lastLlv2 > 0
+      ? parseFloat(((lastHhv2 - lastLlv2) / (lastHhv2 + lastLlv2) * 200).toFixed(2))
+      : 0;
+
+    // 4. 合并结果
+    const formulaResult = {
+      ...baiSanJiaoResult,
+      ...baiLingXingResult,
+      ...baiXingResult,
+      ...xingXingResult,
+      concentrationDisplay,
+    } as any;
+
+    // 5. 信号列表
+    const signals: SignalEntry[] = generateSignals({ formula: formulaResult });
+
+    // 6. 均线数据
+    const closePrices = kline.map(k => k.close);
+    const ma5 = closePrices.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    const ma10 = closePrices.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const ma5Up = closePrices[closePrices.length - 1] > closePrices[closePrices.length - 6];
+    const ma10Up = closePrices[closePrices.length - 1] > closePrices[closePrices.length - 11];
+    const pricePos = formulaResult.pricePosition ?? 50;
+
+    // 7. 交易建议
+    const stockInput: any = {
+      baiXiao: !!(formulaResult as any)?.baiXiao,
+      baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
+      baiBu: !!(formulaResult as any)?.baiBu,
+      baiBuDays: (formulaResult as any)?.baiBuDays ?? 0,
+      baiXiaoBuy1: !!(formulaResult as any)?.baiXiaoBuy1,
+      baiXiaoBuy2: !!(formulaResult as any)?.baiXiaoBuy2,
+      qiangShiHuiCai: !!(formulaResult as any)?.qiangShiHuiCai,
+      hengPanTuPo: !!(formulaResult as any)?.hengPanTuPo,
+      shortBuy: !!((formulaResult as any)?.shortBuy),
+      strictBuy: !!((formulaResult as any)?.strictBuy),
+      zhenDangMaiDian: !!(formulaResult as any)?.zhenDangMaiDian,
+      zhongWeiZhuSheng: !!(formulaResult as any)?.zhongWeiZhuSheng,
+      zhongGaoWeiZhuSheng: !!(formulaResult as any)?.zhongGaoWeiZhuSheng,
+      gaoFengXianZhuSheng: !!(formulaResult as any)?.gaoFengXianZhuSheng,
+      jiaCang: !!(formulaResult as any)?.jiaCang,
+      diBuBuy: !!(formulaResult as any)?.diBuBuy,
+      zhuLiShiPan: !!(formulaResult as any)?.zhuLiShiPan,
+      qiWen: !!(formulaResult as any)?.qiWen,
+      tiaoJianChengLi: !!(formulaResult as any)?.tiaoJianChengLi,
+      zhuLiChuHuo: !!(formulaResult as any)?.zhuLiChuHuo,
+      gaoKaiDiZouQingCang: !!(formulaResult as any)?.gaoKaiDiZouQingCang,
+      baoLiangFuGaiQingCang: !!(formulaResult as any)?.baoLiangFuGaiQingCang,
+      po5RiXian: !!(formulaResult as any)?.po5RiXian,
+      qiangZhiFuGai: !!(formulaResult as any)?.qiangZhiFuGai,
+      yinDiePoWei: !!(formulaResult as any)?.yinDiePoWei,
+      jiGouActiveScore: (formulaResult as any)?.jiGouHuoYueDu ?? 0,
+      ma5,
+      ma10,
+      currentPrice,
+      ma5Up,
+      ma10Up,
+      pricePosition: pricePos,
+      trendState: (formulaResult as any)?.trendState ?? 1,
+    };
+    const suggestion = getTradingSuggestion(stockInput);
+
+    // 8. 返回结果
+    const result = {
+      code,
+      name,
+      currentPrice,
+      changePercent,
+      high,
+      low,
+      klineCount: kline.length,
+      formula: formulaResult,
+      signals,
+      suggestion: suggestion.action,
+      reason: suggestion.reason,
+      score: suggestion.score,
+      entryTiming: suggestion.entryTiming,
+      ma5,
+      ma10,
+      ma5Up,
+      ma10Up,
+      pricePosition: pricePos,
+      baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
+      baiBu: !!(formulaResult as any)?.baiBu,
+      jiGouActiveScore: (formulaResult as any)?.jiGouHuoYueDu ?? 0,
+      isGoldenCross: ((formulaResult as any)?.diff ?? 0) > ((formulaResult as any)?.dea ?? 0),
+    };
+    return result;
+  }
+
   /** 检查是否有缓存的股票分析结果 */
   getCachedAnalysis(stockCode: string): any | null {
     return this.analysisCache.get(stockCode) || null;
@@ -330,30 +456,45 @@ export class StockService {
 
     // 使用共享的 getTradingSuggestion 算法（与前端和机会区一致）
     const stockInput: any = {
-      pricePosition: pricePos,
-      trendState,
-      trendStrength: (formulaResult as any)?.trendStrength ?? 0,
-      diff: macdDiff,
-      dea: macdDea,
-      shortBuy: (formulaResult as any)?.shortBuy ?? false,
-      strictBuy: (formulaResult as any)?.strictBuy ?? false,
-      jiaCang: (formulaResult as any)?.jiaCang ?? false,
-      shortSell: (formulaResult as any)?.shortSell ?? false,
-      strongSell: (formulaResult as any)?.strongSell ?? false,
-      safe: (formulaResult as any)?.safe ?? false,
-      macdGoldenCross: isGoldenCross,
-      macdDeathCross: false,
+      baiXiao: !!(formulaResult as any)?.baiXiao,
       baiXiaoDays: (formulaResult as any)?.baiXiaoDays ?? 0,
       baiBu: !!(formulaResult as any)?.baiBu,
       baiBuDays: (formulaResult as any)?.baiBuDays ?? 0,
-      baiCoverTrend: (formulaResult as any)?.baiCoverTrend ?? 'stable',
-      baiXiao: !!(formulaResult as any)?.baiXiao,
-      volumeStructure: (formulaResult as any)?.volumeStructure ?? 0,
+      baiXiaoBuy1: !!(formulaResult as any)?.baiXiaoBuy1,
+      baiXiaoBuy2: !!(formulaResult as any)?.baiXiaoBuy2,
+      qiangShiHuiCai: !!(formulaResult as any)?.qiangShiHuiCai,
+      hengPanTuPo: !!(formulaResult as any)?.hengPanTuPo,
+      shortBuy: !!((formulaResult as any)?.shortBuy),
+      strictBuy: !!((formulaResult as any)?.strictBuy),
+      zhenDangMaiDian: !!(formulaResult as any)?.zhenDangMaiDian,
+      zhongWeiZhuSheng: !!(formulaResult as any)?.zhongWeiZhuSheng,
+      zhongGaoWeiZhuSheng: !!(formulaResult as any)?.zhongGaoWeiZhuSheng,
+      gaoFengXianZhuSheng: !!(formulaResult as any)?.gaoFengXianZhuSheng,
+      jiaCang: !!((formulaResult as any)?.jiaCang),
+      diBuBuy: !!((formulaResult as any)?.diBuBuy),
+      zhuLiShiPan: !!((formulaResult as any)?.zhuLiShiPan),
+      qiWen: !!((formulaResult as any)?.qiWen),
+      tiaoJianChengLi: !!((formulaResult as any)?.tiaoJianChengLi),
+      zhuLiChuHuo: !!((formulaResult as any)?.zhuLiChuHuo),
+      gaoKaiDiZouQingCang: !!((formulaResult as any)?.gaoKaiDiZouQingCang),
+      baoLiangFuGaiQingCang: !!((formulaResult as any)?.baoLiangFuGaiQingCang),
+      po5RiXian: !!((formulaResult as any)?.po5RiXian),
+      qiangZhiFuGai: !!((formulaResult as any)?.qiangZhiFuGai),
+      yinDiePoWei: !!((formulaResult as any)?.yinDiePoWei),
+      jiGouActiveScore: (formulaResult as any)?.jiGouHuoYueDu ?? 0,
+      ma5,
+      ma10,
+      currentPrice: currentPrice ?? closePrices[closePrices.length - 1],
+      ma5Up: closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6],
+      ma10Up: closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11],
+      pricePosition: pricePos,
+      trendState,
     };
     const stockSuggestion = getTradingSuggestion(stockInput);
     const suggestion = stockSuggestion.action;
-    const prediction = stockSuggestion.prediction || '';
     const reason = stockSuggestion.reason || '';
+    const score = stockSuggestion.score || 0;
+    const prediction = '';
 
     // 14. 如果使用真实K线数据，动态缓存结果（避免模拟数据污染缓存）
     if (usesRealKline) {

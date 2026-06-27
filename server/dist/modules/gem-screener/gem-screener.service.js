@@ -35,6 +35,14 @@ function getOpportunityTTL() {
     return (0, market_time_1.isMarketOpen)() ? MARKET_OPEN_TTL : FROZEN_TTL;
 }
 let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
+    updateCache(type, data) {
+        if (type === 'scan') {
+            this.scanCache = data;
+        }
+    }
+    getCache(type) {
+        return type === 'scan' ? (this.scanCache || []) : [];
+    }
     get pgSql() {
         if (this._pgSql)
             return this._pgSql;
@@ -127,6 +135,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.refreshPromise = null;
         this.mainBoardCache = null;
         this.sellStateCache = new Map();
+        this.scanCache = null;
         this.soldOutStocks = new Set();
         this.mainBoardRefreshPromise = null;
         this.sectorCache = null;
@@ -2760,7 +2769,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const isGoldenCross = macdR?.isGoldenCross ?? false;
         const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
         let suggestion = result.action;
-        const predictionText = result.prediction || '';
+        const predictionText = '';
         const reasonText = result.reason || '';
         const baiBuState = !!baiXing?.baiBu;
         const hasStrongSell = !!(baiXing?.gaoKaiDiZouQingCang ||

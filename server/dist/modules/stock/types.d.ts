@@ -42,6 +42,14 @@ export interface FormulaResult {
     xiPanSignal: boolean;
     coolingAfterSell: boolean;
     coolingTrendBuy: boolean;
+    zhenDangMaiDian: boolean;
+    zhongWeiZhuSheng: boolean;
+    zhongGaoWeiZhuSheng: boolean;
+    gaoFengXianZhuSheng: boolean;
+    hengPanTuPo: boolean;
+    qiWen: boolean;
+    tiaoJianChengLi: boolean;
+    kong: boolean;
     bestBuyPoints: string[];
     conflict: string | null;
     buySignalDiamond: boolean;

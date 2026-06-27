@@ -289,10 +289,10 @@ async function handleBlurClick(){
     $("blurMsg").innerHTML="⚠️ 服务器连接失败，请检查网络后重试"
   }
 }
-// 主页面扫描按钮：立即触发扫描
+// 主页面扫描按钮：立即触发全市场重扫
 function handleScanClick(){
-  if(loading||_autoScanning)return
-  autoLightScan()
+  if(loading || _rescanAll) return
+  doFullRescan()
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
@@ -1062,51 +1062,21 @@ async function fetchWithRetry(url,retries){
   return null
 }
 
-// ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
+// ---------- 全市场重扫（前端拉取国内API → 发送后端分析） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');
-  // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
   if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
-  // 毛玻璃可见时（未注册）不执行任何操作
   var isBlurred=!$('pageBlur').classList.contains('hidden')
   if(isBlurred)return
   loading=true
   stopPriceRefresh()
-  setStatus('🔄 加载缓存数据（来自后端分析）...')
   
-  // 1. 缓存重分析（瞬间）
-  var newStocks=[]
-  try{
-    var cr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(15000)})
-    var cd=await cr.json()
-    newStocks=(cd.data||[]).slice()
-  }catch(e){
-    console.warn('⚠️ rescan超时或失败:', e.message)
-  }
-  
-  // rescan被拦截(429)时，不再从localStorage回退——数据空则显示空列表
-  if(newStocks.length===0){
-    console.warn('⚠️ 后端缓存为空，需先执行全市场重扫')
-    loading=false; doFreshSina=true
-  }else{
-    setStatus('🔄 缓存已分析 '+newStocks.length+' 只，并行抓取实时行情...')
-  }
-  
-  // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
-  //    覆盖：沪深主板(600601603605000001002) + 创业板(300301)
-  setStatus('🔄 缓存已分析 '+newStocks.length+' 只，从东方财富获取全量排序...')
-  
-  // 沪深主板：60开头（排除688科创板）, 00开头（含000/001/002）
-  function isMainBoard(c){return /^60/.test(c)||/^00/.test(c)}
-  // 创业板代码前缀
-  function isGEM(c){return /^30/.test(c)}
-  
-  // 浏览器直连新浪获取实时行情（不经过后端代理，避免US超时）
+  // 1. 浏览器直连Sina获取全市场实时行情
+  setStatus('🔄 浏览器拉取Sina全市场行情...')
   var emData=[]
   var scanCount=0
   try{
-    setStatus('🔄 浏览器拉取Sina全市场行情...')
-    async function fetchAllSinaPages2(node){
+    async function fetchSinaPages(node){
       var all=[]
       var promises=[]
       for(var p=1;p<=30;p++){
@@ -1128,7 +1098,7 @@ async function doFullRescan(){
       await Promise.all(promises)
       return all
     }
-    var [listSH,listSZ]=await Promise.all([fetchAllSinaPages2('sh_a'),fetchAllSinaPages2('sz_a')])
+    var [listSH,listSZ]=await Promise.all([fetchSinaPages('sh_a'),fetchSinaPages('sz_a')])
     var list=listSH.concat(listSZ)
     if(list&&list.length){
       var seenCodes={}
@@ -1136,356 +1106,198 @@ async function doFullRescan(){
         var sc=list[si],c=String(sc.code||'')
         if(!c||seenCodes[c])continue
         seenCodes[c]=1
-        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
+        emData.push({code:c,name:sc.name||'',price:parseFloat(sc.trade)||0,chg:parseFloat(sc.changepercent)||0,high:parseFloat(sc.high)||0,low:parseFloat(sc.low)||0})
       }
     }
     scanCount=emData.length
     window._lastScanCount=scanCount
     updateScanCount(scanCount)
-    setStatus('✅ 浏览器拉取Sina '+scanCount+' 只，与缓存合并排序中...')
+    setStatus('✅ 浏览器拉取Sina '+scanCount+' 只')
   }catch(e){
     console.log('⚠️ 浏览器Sina拉取失败:',e.message)
-    scanCount=newStocks.length
-    window._lastScanCount=scanCount
-    updateScanCount(scanCount)
-    setStatus('🔄 '+newStocks.length+' 只缓存，按信号+评分排序中...')
+    scanCount=0
+    window._lastScanCount=0
+    updateScanCount(0)
   }
   
-  var seen={}
-  for(var si2=0;si2<newStocks.length;si2++)if(newStocks[si2].code)seen[newStocks[si2].code]=1
-  var seenInSina={}  // 跟踪哪些缓存股在Sina中被找到
-  
-  var mainBoardCount=0,gemCount=0
-  
+  // 2. 过滤：主板(6/00开头) + 创业板(30开头)，排除ST/科创板/N/C
+  var filtered=[]
   for(var ei=0;ei<emData.length;ei++){
     var item=emData[ei]
-    var code=String(item.f12||'')
-    var name=(item.f14||'').trim()
+    var code=item.code
+    var name=(item.name||'').trim()
     if(!code||!name||name.startsWith('*')||name.startsWith('ST')||name.startsWith('N')||name.startsWith('C'))continue
-    
-    if(!isMainBoard(code)&&!isGEM(code))continue
-    
-    var price=parseFloat(item.f2)||0
-    if(price<3)continue
-    var chg=parseFloat(item.f3)||0
-    
-    // 基于今日涨幅计算实时信号/评分（缓存股和新股都用这个）
-    var liveScore=Math.round(30+Math.abs(chg)*2)
-    var liveSuggestion='持有'
-    // 涨停风险控制：10cm主板涨超6%不推荐追高；20cm创业板涨超15%同理
-    if((isMainBoard(code)&&chg>9)||(isGEM(code)&&chg>15))continue
-    if(chg>=9)liveSuggestion='重仓买入'
-    else if(chg>=6)liveSuggestion='买入'
-    else if(chg>=3)liveSuggestion='轻仓买入'
-    else if(chg>=1)liveSuggestion='持有'
-    var liveEntryTiming=chg>0?Math.round(Math.min(chg*10,100)):0
-    
-    // 判断市场是否有真实波动：交易时段且有实际涨跌
-    // 有真实涨跌幅则使用实时评分（Sina返回最后交易时段数据，非交易时段也有效）
-    var hasLiveData = true  // Sina返回的都有实时行情，chg=0说明真没涨跌
-    
-    // 已缓存个股：用实时数据更新价格/涨幅，同时按规则做信号合并
-    if(seen[code]){
-      for(var si3=0;si3<newStocks.length;si3++){
-        if(newStocks[si3].code===code){
-          newStocks[si3].currentPrice=price
-          newStocks[si3].changePercent=chg
-          newStocks[si3].intradayHigh=item.f15
-          newStocks[si3].intradayLow=item.f16
-          if(hasLiveData){
-            newStocks[si3].score=liveScore
-            newStocks[si3].entryTiming=liveEntryTiming
-            // ─── 信号合并规则 ───
-            // Step ②: 后端建议是观望/持有/减仓/卖出/不要介入 → 保持不动，不受chg影响
-            var BACKEND_SELL=['减仓','卖出','不要介入']
-            var backendSug=newStocks[si3].suggestion
-            if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
-              // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
-              var PRI_ORDER=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入']
-              var upgSug = liveSuggestion  // 默认用实时数据
-              var fp = newStocks[si3].forecast1_2Day
-              if(fp && fp.direction){
-                if(fp.direction === '强烈看涨'){
-                  // 评分预测强烈看涨 → 实时信号再升一级（买入→重仓买入）
-                  var idx=PRI_ORDER.indexOf(upgSug)
-                  if(idx>0) upgSug=PRI_ORDER[idx-1]
-                } else if(fp.direction==='震荡偏强'||fp.direction==='震荡'||fp.direction==='方向不明'){
-                  // 评分预测震荡或方向不明 → 不过度激进，保持后端原始信号
-                  upgSug = backendSug
-                }
-                // 看涨 → 用实时数据本身
-              }
-              if(PRI_ORDER.indexOf(upgSug) < PRI_ORDER.indexOf(backendSug)){
-                newStocks[si3].suggestion=upgSug
-              }
-            }
-            // ─── 实时三重卖点检测（仅后端未判定卖出时生效）───
-            if(BACKEND_SELL.indexOf(backendSug)===-1){
-              // ① 暴跌检测（chg ≤ -5%）→ 覆盖所有买入
-              if(chg <= -5){
-                newStocks[si3].suggestion='卖出'
-              }
-              // ② 均线死叉检测：MA5<MA10 死叉 + 反弹无力(chg<2%) → 不要介入
-              if(newStocks[si3].isGoldenCross===false && chg < 2 && chg >= 0){
-                newStocks[si3].suggestion='不要介入'
-              }
-              // ③ 破5日线检测：价 < MA5×0.98 或 价 < MA10 → 卖出
-              var ma5=newStocks[si3].ma5, ma10=newStocks[si3].ma10
-              if(ma5 && ma10){
-                if(price < ma5*0.98 || price < ma10){
-                  newStocks[si3].suggestion='卖出'
-                }
-              }
-            }
-          }
-          break
+    if(!/^60/.test(code)&&!/^00/.test(code)&&!/^30/.test(code))continue
+    if(/^688/.test(code)||/^689/.test(code))continue
+    if(item.price<3)continue
+    // 涨停排除：主板>9%，创业板>15%
+    if((/^60/.test(code)||/^00/.test(code))&&item.chg>9)continue
+    if(/^30/.test(code)&&item.chg>15)continue
+    filtered.push(item)
+  }
+  
+  // 3. 按涨跌幅绝对值排序，取前100只获取K线
+  filtered.sort(function(a,b){return Math.abs(b.chg)-Math.abs(a.chg)})
+  var top100=filtered.slice(0,100)
+  var totalScanned=filtered.length
+  
+  setStatus('🔄 从 '+totalScanned+' 只中取前100只获取K线...')
+  
+  // 4. 并行获取K线（通过后端代理，防跨域）
+  async function fetchKlineForStock(code){
+    try{
+      var market=code.startsWith('6')?'1.':'0.'
+      var r=await fetch('/api/gem/proxy/kline?code='+code+'&market='+market,{signal:AbortSignal.timeout(8000)})
+      var d=await r.json()
+      if(d.code===200&&d.data&&d.data.length>=20) return d.data
+    }catch(e){}
+    return null
+  }
+  
+  // 分批并行获取（每批10只）
+  var BATCH_SIZE=10
+  var stockDataList=[]
+  for(var bi=0;bi<top100.length;bi+=BATCH_SIZE){
+    var batch=top100.slice(bi,bi+BATCH_SIZE)
+    var promises=batch.map(function(stk){return fetchKlineForStock(stk.code).then(function(klines){return{...stk,klines}})})
+    var batchResults=await Promise.all(promises)
+    for(var br=0;br<batchResults.length;br++){
+      if(batchResults[br].klines) stockDataList.push(batchResults[br])
+    }
+    if(stockDataList.length>=50) break  // 有50只带K线的就够
+    setStatus('🔄 K线获取中...已获取 '+stockDataList.length+' 只带K线数据')
+  }
+  
+  if(stockDataList.length===0){
+    setStatus('❌ 无法获取K线数据，重扫失败')
+    loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+    return
+  }
+  
+  // 5. 发送到后端分析（POST /api/gem/cache-data）
+  setStatus('🔄 发送 '+stockDataList.length+' 只到后端分析...')
+  try{
+    var cr=await fetch(API+'/gem/cache-data',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stocks:stockDataList.map(function(s){return{
+        code:s.code,
+        name:s.name,
+        price:s.price,
+        changePercent:s.chg,
+        high:s.high,
+        low:s.low,
+        klines:s.klines
+      }})}),
+      signal:AbortSignal.timeout(60000)
+    })
+    var cd=await cr.json()
+    if(cd.code!==200){
+      setStatus('❌ 后端分析失败: '+(cd.msg||'未知错误'))
+      loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+      return
+    }
+    setStatus('✅ 后端分析完成，读取结果...')
+  }catch(e){
+    setStatus('❌ 发送后端分析失败: '+e.message)
+    loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+    return
+  }
+  
+  // 6. 读取分析结果（GET /api/gem/scan-result）
+  try{
+    var sr=await fetch(API+'/gem/scan-result?_='+Date.now(),{signal:AbortSignal.timeout(15000)})
+    var sd=await sr.json()
+    if(sd.code===200&&sd.data&&sd.data.opportunities){
+      var newStocks=sd.data.opportunities
+      
+      // 排序：信号优先级 → 入场时机 → 评分
+      var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+      newStocks.sort(function(a,b){
+        var pa=PRI[a.suggestion||'持有']??9,pb=PRI[b.suggestion||'持有']??9
+        if(pa!==pb) return pa-pb
+        var ea=a.entryTiming||0, eb=b.entryTiming||0
+        if(eb!==ea) return eb-ea
+        return (b.score||0)-(a.score||0)
+      })
+      
+      stocks=newStocks
+      
+      // 7. 前端升级规则：后端判断为买入类的，按实际涨跌幅升级
+      for(var si=0;si<stocks.length;si++){
+        var s=stocks[si]
+        var backendSug=s.suggestion||'持有'
+        var BACKEND_SELL=['减仓','卖出','不要介入']
+        if(BACKEND_SELL.indexOf(backendSug)!==-1) continue
+        
+        // 后端是买入/持有类，用实时涨跌幅做升级
+        var chg=s.changePercent||0
+        var upgSug=backendSug
+        if(chg>=9) upgSug='重仓买入'
+        else if(chg>=6) upgSug='买入'
+        else if(chg>=3) upgSug='轻仓买入'
+        else if(chg>=1) upgSug='持有'
+        else upgSug='持有'
+        
+        var PRI_ORDER=['重仓买入','买入','轻仓买入','持有']
+        if(PRI_ORDER.indexOf(upgSug)<PRI_ORDER.indexOf(backendSug)){
+          s.suggestion=upgSug
+        }
+        
+        // 实时三重卖点检测
+        if(chg<=-5) s.suggestion='卖出'
+        var price=s.currentPrice||0
+        var ma5=s.ma5, ma10=s.ma10
+        if(ma5&&ma10&&(price<ma5*0.98||price<ma10)){
+          s.suggestion='卖出'
         }
       }
-      seenInSina[code]=1  // 标记该缓存股在Sina中被找到
-      continue
-    }
-    
-    // ─── 新股二次安全校验：查后端缓存是否已有该股（可能seen匹配失败但缓存中确有数据）───
-    var _cacheInNewStk=null;
-    for(var _bb=0;_bb<newStocks.length;_bb++){
-      if(newStocks[_bb].code===code){_cacheInNewStk=newStocks[_bb];break}
-    }
-    if(_cacheInNewStk){
-      // 缓存已有该股且建议是持有/减仓/卖出/不要介入/观望 → 禁止用涨幅升级
-      if(['持有','减仓','卖出','不要介入','观望'].indexOf(_cacheInNewStk.suggestion)>=0){
-        _cacheInNewStk.currentPrice=price;
-        _cacheInNewStk.changePercent=chg;
-        _cacheInNewStk.intradayHigh=item.f15;
-        _cacheInNewStk.intradayLow=item.f16;
-        seenInSina[code]=1;
-        continue;  // 跳过新股路径，保持缓存原有建议
+      
+      // 8. 只保留重仓买入/买入
+      var ALLOWED={'重仓买入':1,'买入':1}
+      stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+      
+      if(stocks.length===0){
+        setStatus('⚠️ 无符合条件个股（今日无重仓买入/买入）')
+      }else{
+        setStatus('✅ 后端分析完成，Top'+stocks.length+' 只')
       }
-      // 缓存是买入信号但没匹配到seen → 走升级逻辑
-      // 更新实时数据后继续往下走（不添加为新股）
-      _cacheInNewStk.currentPrice=price;
-      _cacheInNewStk.changePercent=chg;
-      _cacheInNewStk.intradayHigh=item.f15;
-      _cacheInNewStk.intradayLow=item.f16;
-      _cacheInNewStk.score=liveScore;
-      _cacheInNewStk.entryTiming=liveEntryTiming;
-      var _bks=_cacheInNewStk.suggestion;
-      var _LIVE_PRI=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入'];
-      if(_LIVE_PRI.indexOf(liveSuggestion) < _LIVE_PRI.indexOf(_bks)){
-        _cacheInNewStk.suggestion=liveSuggestion;
-        console.log('🔍 降级修复：缓存股 '+code+' 未匹配seen，但允许从 '+_bks+' 升级到 '+liveSuggestion);
-      }
-      seenInSina[code]=1;
-      continue;
+      
+      lastScanTime=new Date().toLocaleString()
+      try{$('lastScanDisplay').textContent='数据更新于 '+lastScanTime}catch(e){}
+      
+      // 9. 获取实时行情
+      try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
+      selectedIdx=-1;$('detailArea').style.display='none'
+      renderList()
+      
+      // 10. 筹码分析
+      try{
+        stocks.forEach(function(s,idx){
+          var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
+          fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
+            .then(function(r){return r.json()})
+            .then(function(d){
+              if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
+                var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
+                var cp=calcChipAnalysis(kd)
+                s._chipAnalyzed=true;s._chipConc=cp.conc;s._chipPeak=cp.peak;s._chipPattern=cp.pattern
+                renderList()
+              }
+            }).catch(function(){})
+        })
+      }catch(e){}
+      
+      saveFrozenSnapshot(stocks)
+      startPriceRefresh(stocks)
+    }else{
+      setStatus('⚠️ 后端分析结果为空')
     }
-    // 新增个股数量控制（非缓存的分析新面孔）
-    if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
-    else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
-    seen[code]=1
-    seenInSina[code]=1  // 标记新股也在Sina中找到，避免被降级
-    
-    newStocks.push({code:code,name:name,currentPrice:price,
-      intradayHigh:item.f15,intradayLow:item.f16,
-      pricePosition:50,
-      // 新股按涨跌幅给基础评分（即使非交易时段也有排序依据）
-      suggestion:hasLiveData?liveSuggestion:'持有',
-      score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
-      entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
-      changePercent:chg,
-      chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
-      isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
+  }catch(e){
+    setStatus('❌ 读取分析结果失败: '+e.message)
   }
   
-  // ====== DEBUG: 记录Tencent处理后所有重仓买入股 ======
-  try{
-    var _debug_heavy = []
-    for(var _di=0;_di<newStocks.length;_di++){
-      if(newStocks[_di].suggestion==='重仓买入'){
-        _debug_heavy.push(newStocks[_di].code+' '+newStocks[_di].name+' chg='+newStocks[_di].changePercent+'%')
-      }
-    }
-    console.log('🔍 DEBUG: Tencent处理后重仓买入共 '+_debug_heavy.length+' 只:', _debug_heavy.join(' | '))
-  }catch(e){}
-  
-  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占）
-  var deprioritized=0
-  for(var di=0;di<newStocks.length;di++){
-    var ds=newStocks[di]
-    if(ds.code&&!seenInSina[ds.code]&&(ds.suggestion==='买入'||ds.suggestion==='重仓买入'||ds.suggestion==='轻仓买入'||ds.score>30)){
-      ds.suggestion='持有'
-      ds.score=20
-      ds.entryTiming=0
-      deprioritized++
-    }
-  }
-  if(deprioritized>0)setStatus('⚠️ 清除了 '+deprioritized+' 只停在历史数据的缓存股（Sina中已无该股）')
-  
-  // 万一Sina数据和后端缓存都为空，用硬编码兜底（防止全市场重扫无结果）
-  if(newStocks.length===0){
-    newStocks=[
-      {code:'000001',name:'平安银行',suggestion:'轻仓买入',score:35,entryTiming:30,changePercent:3.0},
-      {code:'000002',name:'万科A',suggestion:'轻仓买入',score:34,entryTiming:28,changePercent:2.8},
-      {code:'000333',name:'美的集团',suggestion:'轻仓买入',score:36,entryTiming:32,changePercent:3.2},
-      {code:'000651',name:'格力电器',suggestion:'轻仓买入',score:33,entryTiming:26,changePercent:2.6},
-      {code:'000858',name:'五粮液',suggestion:'轻仓买入',score:35,entryTiming:30,changePercent:3.0},
-    ]
-    setStatus('⚠️ 后端缓存不可用，使用默认数据...')
-  }
-
-  if(newStocks.length){
-    setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
-    stocks=newStocks
-    // 排序：信号优先级 → 入场时机 → 日内位置(低位优先) → 综合评分 → 今日涨幅(降序)
-    var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6 }
-    function calcIntradayScore(s){
-      var hi=s.intradayHigh||0, lo=s.intradayLow||0, p=s.currentPrice||0
-      if(!hi||!lo||hi<=lo) return 1
-      var pos=(p-lo)/(hi-lo)*100
-      return pos<25?3:pos<50?2:pos<75?1:0
-    }
-    // 保存缓存股最新数据（排序会打乱位置）
-    var cacheLatest=[]
-    for(var ci=0;ci<newStocks.length;ci++){cacheLatest.push(newStocks[ci])}
-    stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
-      if(pa!==pb) return pa-pb
-      // 第二排序：入场时机(高→低)
-      var ea=a.entryTiming||0, eb=b.entryTiming||0
-      if(eb!==ea) return eb-ea
-      // 第三排序：日内位置(低位优先，现价可介入排最前)
-      var ia=calcIntradayScore(a), ib=calcIntradayScore(b)
-      if(ia!==ib) return ib-ia
-      // 第四排序：综合评分(高→低)
-      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      // 第五排序：今日涨幅(高→低)，让强势股浮上来
-      return (b.changePercent||0)-(a.changePercent||0)
-    })
-    // 只保留重仓买入/买入的股票
-    var ALLOWED={'重仓买入':1,'买入':1}
-    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
-    // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
-    if(newStocks.length>0){
-      var inList={};stocks.forEach(function(s){inList[s.code]=1})
-      for(var ci=0;ci<newStocks.length;ci++){
-        // 使用更新后的数据('cacheLatest')而非原始newStocks
-        var cl=cacheLatest[ci]
-        if(ALLOWED[cl.suggestion]&&!inList[cl.code])
-          {stocks.push(cl);inList[cl.code]=1}
-      }
-    }
-    // 确保已知优质股出现在结果中（即使不在缓存里、即使当前涨幅低）
-    var SPECIAL_CODES=['300005']  // 探路者
-    var SOFT_ALLOWED={'重仓买入':1,'买入':1,'持有':1}
-    for(var si=0;si<newStocks.length;si++){
-      var ns=newStocks[si]
-      if(SPECIAL_CODES.indexOf(ns.code)>=0&&SOFT_ALLOWED[ns.suggestion]&&!inList[ns.code]){
-        stocks.push(ns);inList[ns.code]=1
-      }
-    }
-    // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按信号→入场时机→评分→涨幅重整）
-    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
-    stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
-      if(pa!==pb) return pa-pb
-      var ea=a.entryTiming||0, eb=b.entryTiming||0
-      if(eb!==ea) return eb-ea
-      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      return (b.changePercent||0)-(a.changePercent||0)
-    })
-    // ====== DEBUG: 排序后 ======
-    try{
-      var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
-      var _spD=[];if(_sigD['重仓买入']){_spD.push('🔥重仓买入'+_sigD['重仓买入']+'只')}if(_sigD['买入']){_spD.push('✅买入'+_sigD['买入']+'只')}if(_sigD['轻仓买入']){_spD.push('⚪轻仓买入'+_sigD['轻仓买入']+'只')}
-      console.log('🔍 DEBUG: 最终排序后共有 '+stocks.length+' 只: '+_spD.join(' | '))
-      stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
-    }catch(e){}
-    // 过滤：只保留重仓买入/买入
-    var ALLOWED={'重仓买入':1,'买入':1}
-    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
-    if(stocks.length===0){
-      setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
-    }
-    // 持久化到浏览器本地，服务器重启后可恢复
-    try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:newStocks,ts:Date.now()}))}catch(e){}
-    // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
-    // 不保存原始数据，后续由doScan保存最新分析结果
-    setStatus('🔄 获取实时行情...')
-    try{realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))}catch(e){}
-    selectedIdx=-1;$('detailArea').style.display='none'
-    lastScanTime=new Date().toLocaleString()
-    // 日志输出Top20信号分布，方便排查
-    console.log('📊 信号分布:', stocks.map(function(s){return s.code+' '+s.name+' '+s.suggestion+' chg='+(s.changePercent||'')+'%'}).join(' | '))
-    renderList() // 先显示——不缓存到localStorage，以最新数据为准
-    // ====== 状态栏显示信号分布摘要 ======
-    var sigSummary={};stocks.forEach(function(s){var sg=s.suggestion||'未知';sigSummary[sg]=(sigSummary[sg]||0)+1})
-    var sigParts=[]
-    if(sigSummary['重仓买入']){sigParts.push('🔥重仓买入'+sigSummary['重仓买入']+'只')}
-    if(sigSummary['买入']){sigParts.push('✅买入'+sigSummary['买入']+'只')}
-    if(sigSummary['轻仓买入']){sigParts.push('⚪轻仓买入'+sigSummary['轻仓买入']+'只')}
-    setStatus('📊 '+sigParts.join(' | ')+' (腾讯实时)')
-    try{
-      stocks.forEach(function(s,idx){
-        var em2=(s.code.startsWith('6')?'1.':'0.')+s.code
-        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em2+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
-          .then(function(r){return r.json()})
-          .then(function(d){
-            if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
-              var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
-              var cp=calcChipAnalysis(kd)
-              s._chipAnalyzed=true;s._chipConc=cp.conc;s._chipPeak=cp.peak;s._chipPattern=cp.pattern
-              renderList()
-            }
-          }).catch(function(){})
-      })
-    }catch(e){}
-    // 顶部已解锁，此处不再重复调用
-    var _sigSum2={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigSum2[sg]=(_sigSum2[sg]||0)+1});var _sp2=[];if(_sigSum2['重仓买入']){_sp2.push('🔥重仓买入'+_sigSum2['重仓买入']+'只')}if(_sigSum2['买入']){_sp2.push('✅买入'+_sigSum2['买入']+'只')}if(_sigSum2['轻仓买入']){_sp2.push('⚪轻仓买入'+_sigSum2['轻仓买入']+'只')};console.log('✅ 最终信号:',_sp2.join(' | '))
-    setStatus('✅ '+_sp2.join(' | ')+' | '+lastScanTime)
-  }else{
-    setStatus('❌ 重扫无结果')
-  }
   loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
-  // ─── Step ③: 前端升级信号回写到后端 ───
-  try{
-    var upgradeList=[]
-    for(var si=0;si<newStocks.length;si++){
-      var us=newStocks[si]
-      if(us.suggestion&&['重仓买入','买入','轻仓买入'].indexOf(us.suggestion)>=0){
-        upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
-      }
-    }
-    if(upgradeList.length>0){
-      fetch(API+'/gem/update-upgraded',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({list:upgradeList})
-      }).then(function(r){return r.json()}).then(function(j){
-        if(j.code===200)console.log('📤 前端升级信号已回写 '+upgradeList.length+' 只到后端缓存')
-      }).catch(function(){})
-    }
-  }catch(e){}
-  // ─── Step ④: 前端同步卖出锁定到后端持久化 ───
-  try{
-    var sellStates=[]
-    for(var si=0;si<newStocks.length;si++){
-      var ss=newStocks[si]
-      if(ss.suggestion==='卖出'){
-        sellStates.push({code:ss.code,suggestion:ss.suggestion})
-      }
-    }
-    if(sellStates.length>0){
-      fetch(API+'/gem/sync-sell-state',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({sellStates:sellStates})
-      }).catch(function(){})
-      console.log('🔒 前端同步 '+sellStates.length+' 只卖出锁定到后端')
-    }
-  }catch(e){}
-  // 新数据已包含分析缓存+东方财富实时数据，不再调doScan覆盖
-  // ─── 保存冻结快照（休盘后展示） ───
-  saveFrozenSnapshot(stocks)
-  // ─── 启动2秒实时价格刷新 ───
-  startPriceRefresh(stocks)
 }
 
 // ---------- 搜索缓存（东方财富全量） ----------
@@ -1892,107 +1704,105 @@ chip='+_dbg.chipPattern+'/'+_dbg.chipPeakPosition+' sellLock='+_dbg.sellLock+' k
   }
 }
 
-// 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
-[['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
-  var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
-});
+// ========== 扫描调度器 ==========
+// 交易日9:25首扫 → 9:40起每10分钟 → 11:30冻结 → 13:00解冻 → 15:00冻结
 
-// 每10分钟交易时段自动轻量扫描：拉热门股推送后端分析覆盖旧缓存
+// 设定固定时间点执行扫描
+function scheduleAt(hour, minute, label) {
+  var n=new Date(), t=new Date(n.getFullYear(), n.getMonth(), n.getDate(), hour, minute, 0, 0);
+  var diff = t.getTime() - n.getTime();
+  if (diff > 0) {
+    setTimeout(function() {
+      console.log('⏰ 定时扫描: ' + label);
+      if(!loading) doFullRescan();
+    }, diff);
+  }
+}
+
+// 9:25首扫
+scheduleAt(9, 25, '9:25首扫');
+// 11:30冻结前扫描
+scheduleAt(11, 30, '11:30冻结');
+// 13:00复盘扫描
+scheduleAt(13, 0, '13:00复盘');
+// 15:00收盘前扫描
+scheduleAt(15, 0, '15:00收盘');
+
+// 交易时段每10分钟自动重扫（9:40开始）
 setInterval(function(){
-  if(isTH()&&!loading){autoLightScan()}
+  if(isTH() && !loading) {
+    var h = new Date().getHours();
+    if (h === 9) {
+      var m = new Date().getMinutes();
+      if (m < 40) return; // 9:40前不触发
+    }
+    doFullRescan();
+  }
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
 },600000)
+
+// 每分钟刷新市场状态
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
-  fetchMarketState() // 每分钟刷新市场状态
+  fetchMarketState()
+  // 每整分钟检查是否需要启动/停止2秒刷新
+  if(isTH()) {
+    if(!priceTimer) startPriceRefresh(stocks);
+  } else {
+    stopPriceRefresh();
+  }
 },60000)
 
-// 首次加载（延迟3秒等初始化完成）
+// 首次加载：3秒延迟后尝试从后端读取缓存，交易时段则直接启动全扫
 setTimeout(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
-  fetchMarketState() // 首次加载市场状态
+  fetchMarketState()
   if(isTH()){
-    // 交易时段 → 先读后端缓存直接展示，后台渐进式刷新
-    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+    // 交易时段 → 先读取缓存展示（如果有），然后启动全扫
+    fetch(API+'/gem/scan-result?_='+Date.now(),{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json()})
       .then(function(d){
-        if(d.code===200&&d.data&&d.data.length){
+        if(d.code===200&&d.data&&d.data.opportunities&&d.data.opportunities.length){
           var ALLOWED={'重仓买入':1,'买入':1}
-          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          stocks=d.data.opportunities.filter(function(s){return ALLOWED[s.suggestion]?1:0})
           if(stocks.length){
-            // 持久化到浏览器本地，下次后端无缓存时可直接展示
-            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
           }else{
-            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+            setStatus('⏳ 缓存中有 '+d.data.opportunities.length+' 只，但无满足条件的买入信号')
           }
         }else{
-          // 后端无缓存 → 尝试恢复浏览器端本地快照
-          try{
-            var snap=localStorage.getItem('cache_snapshot')
-            if(snap){
-              var s=JSON.parse(snap)
-              if(s&&s.stocks&&s.stocks.length){
-                var ALLOWED={'重仓买入':1,'买入':1}
-                stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
-                if(stocks.length){
-                  renderList()
-                  setStatus('📋 本地快照恢复 '+stocks.length+' 只（服务器已重启，后台重建缓存中...）')
-                  return // 跳过下面的setStatus
-                }
-              }
-            }
-          }catch(e){}
           setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
         }
       })
       .catch(function(e){
         console.log('⚠️ 读缓存失败:',e.message)
-        // 网络异常时也尝试恢复本地快照
-        try{
-          var snap=localStorage.getItem('cache_snapshot')
-          if(snap){
-            var s=JSON.parse(snap)
-            if(s&&s.stocks&&s.stocks.length){
-              var ALLOWED={'重仓买入':1,'买入':1}
-              stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
-              if(stocks.length){
-                renderList()
-                setStatus('📋 本地快照恢复（网络异常，后台重试中...）')
-              }
-            }
-          }
-        }catch(e2){}
+        setStatus('⏳ 读缓存失败，正在启动扫描...')
       })
       .finally(function(){
-        // 无论有无缓存，后台启动渐进式扫描（构建新缓存 / 更新已有缓存）
+        // 后台启动全扫描
         setTimeout(function(){
-          if(!_autoScanning&&!loading) autoLightScan()
-        },1000)
+          if(!loading) doFullRescan()
+        },2000)
       })
   }else{
-    // 休盘/周末 → 优先从后端缓存加载（设备间共享），后端无缓存时回退到本地快照
-    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+    // 非交易时段 → 读取缓存展示
+    fetch(API+'/gem/scan-result?_='+Date.now(),{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json()})
       .then(function(d){
-        if(d.code===200&&d.data&&d.data.length){
-          // 后端缓存有效（盘后数据，设备间共享）
+        if(d.code===200&&d.data&&d.data.opportunities&&d.data.opportunities.length){
           var ALLOWED={'重仓买入':1,'买入':1}
-          stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          stocks=d.data.opportunities.filter(function(s){return ALLOWED[s.suggestion]?1:0})
           if(stocks.length){
-            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
-            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享）')
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据）')
           }else{
-            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+            setStatus('⏳ 缓存中有 '+d.data.opportunities.length+' 只，但无满足条件的买入信号')
           }
         }else{
-          // 后端无缓存 → 尝试本地快照
           var snap2=loadFrozenSnapshot()
           if(snap2&&snap2.length){
             stocks=snap2
@@ -2005,7 +1815,6 @@ setTimeout(function(){
       })
       .catch(function(e){
         console.log('⚠️ 读缓存失败:',e.message)
-        // 网络异常时尝试本地快照
         var snap3=loadFrozenSnapshot()
         if(snap3&&snap3.length){
           stocks=snap3

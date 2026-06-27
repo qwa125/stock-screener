@@ -382,6 +382,10 @@ function calcBaiXing(engine) {
         qiangZhiFuGai: 强制覆盖[lastIdx],
         xiPanHuoMian: 洗盘豁免[lastIdx],
         safe: 安全[lastIdx] === 1,
+        hengPanTuPo: 白消买点2[lastIdx],
+        qiWen: 高位回调买点[lastIdx],
+        tiaoJianChengLi: BS_条件成立_filtered[lastIdx],
+        kong: false,
         baiBuArray: 覆盖中,
         baiXiaoArray: 白消状态,
     };

@@ -83,6 +83,103 @@ let StockService = StockService_1 = class StockService {
         }
         catch { }
     }
+    async analyzeFromRawData(params) {
+        const { code, name, currentPrice, changePercent, high, low, kline } = params;
+        const engine = new formula_engine_1.FormulaEngine({
+            open: kline.map(k => k.open),
+            close: kline.map(k => k.close),
+            high: kline.map(k => k.high),
+            low: kline.map(k => k.low),
+            volume: kline.map(k => k.volume),
+            amount: kline.map(k => k.amount ?? 0),
+        });
+        const baiSanJiaoResult = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
+        const baiLingXingResult = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
+        const baiXingResult = (0, bai_xing_1.calcBaiXing)(engine);
+        const xingXingResult = (0, xing_xing_1.calcXingXing)(engine);
+        const hhv2 = engine.HHV(engine.HIGH, 2);
+        const llv2 = engine.LLV(engine.LOW, 2);
+        const lastHhv2 = hhv2[hhv2.length - 1];
+        const lastLlv2 = llv2[llv2.length - 1];
+        const concentrationDisplay = lastHhv2 + lastLlv2 > 0
+            ? parseFloat(((lastHhv2 - lastLlv2) / (lastHhv2 + lastLlv2) * 200).toFixed(2))
+            : 0;
+        const formulaResult = {
+            ...baiSanJiaoResult,
+            ...baiLingXingResult,
+            ...baiXingResult,
+            ...xingXingResult,
+            concentrationDisplay,
+        };
+        const signals = (0, rule_engine_1.generateSignals)({ formula: formulaResult });
+        const closePrices = kline.map(k => k.close);
+        const ma5 = closePrices.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const ma10 = closePrices.slice(-10).reduce((a, b) => a + b, 0) / 10;
+        const ma5Up = closePrices[closePrices.length - 1] > closePrices[closePrices.length - 6];
+        const ma10Up = closePrices[closePrices.length - 1] > closePrices[closePrices.length - 11];
+        const pricePos = formulaResult.pricePosition ?? 50;
+        const stockInput = {
+            baiXiao: !!formulaResult?.baiXiao,
+            baiXiaoDays: formulaResult?.baiXiaoDays ?? 0,
+            baiBu: !!formulaResult?.baiBu,
+            baiBuDays: formulaResult?.baiBuDays ?? 0,
+            baiXiaoBuy1: !!formulaResult?.baiXiaoBuy1,
+            baiXiaoBuy2: !!formulaResult?.baiXiaoBuy2,
+            qiangShiHuiCai: !!formulaResult?.qiangShiHuiCai,
+            hengPanTuPo: !!formulaResult?.hengPanTuPo,
+            shortBuy: !!(formulaResult?.shortBuy),
+            strictBuy: !!(formulaResult?.strictBuy),
+            zhenDangMaiDian: !!formulaResult?.zhenDangMaiDian,
+            zhongWeiZhuSheng: !!formulaResult?.zhongWeiZhuSheng,
+            zhongGaoWeiZhuSheng: !!formulaResult?.zhongGaoWeiZhuSheng,
+            gaoFengXianZhuSheng: !!formulaResult?.gaoFengXianZhuSheng,
+            jiaCang: !!formulaResult?.jiaCang,
+            diBuBuy: !!formulaResult?.diBuBuy,
+            zhuLiShiPan: !!formulaResult?.zhuLiShiPan,
+            qiWen: !!formulaResult?.qiWen,
+            tiaoJianChengLi: !!formulaResult?.tiaoJianChengLi,
+            zhuLiChuHuo: !!formulaResult?.zhuLiChuHuo,
+            gaoKaiDiZouQingCang: !!formulaResult?.gaoKaiDiZouQingCang,
+            baoLiangFuGaiQingCang: !!formulaResult?.baoLiangFuGaiQingCang,
+            po5RiXian: !!formulaResult?.po5RiXian,
+            qiangZhiFuGai: !!formulaResult?.qiangZhiFuGai,
+            yinDiePoWei: !!formulaResult?.yinDiePoWei,
+            jiGouActiveScore: formulaResult?.jiGouHuoYueDu ?? 0,
+            ma5,
+            ma10,
+            currentPrice,
+            ma5Up,
+            ma10Up,
+            pricePosition: pricePos,
+            trendState: formulaResult?.trendState ?? 1,
+        };
+        const suggestion = (0, trading_suggestion_1.getTradingSuggestion)(stockInput);
+        const result = {
+            code,
+            name,
+            currentPrice,
+            changePercent,
+            high,
+            low,
+            klineCount: kline.length,
+            formula: formulaResult,
+            signals,
+            suggestion: suggestion.action,
+            reason: suggestion.reason,
+            score: suggestion.score,
+            entryTiming: suggestion.entryTiming,
+            ma5,
+            ma10,
+            ma5Up,
+            ma10Up,
+            pricePosition: pricePos,
+            baiXiaoDays: formulaResult?.baiXiaoDays ?? 0,
+            baiBu: !!formulaResult?.baiBu,
+            jiGouActiveScore: formulaResult?.jiGouHuoYueDu ?? 0,
+            isGoldenCross: (formulaResult?.diff ?? 0) > (formulaResult?.dea ?? 0),
+        };
+        return result;
+    }
     getCachedAnalysis(stockCode) {
         return this.analysisCache.get(stockCode) || null;
     }
@@ -270,30 +367,45 @@ let StockService = StockService_1 = class StockService {
         }
         catch { }
         const stockInput = {
-            pricePosition: pricePos,
-            trendState,
-            trendStrength: formulaResult?.trendStrength ?? 0,
-            diff: macdDiff,
-            dea: macdDea,
-            shortBuy: formulaResult?.shortBuy ?? false,
-            strictBuy: formulaResult?.strictBuy ?? false,
-            jiaCang: formulaResult?.jiaCang ?? false,
-            shortSell: formulaResult?.shortSell ?? false,
-            strongSell: formulaResult?.strongSell ?? false,
-            safe: formulaResult?.safe ?? false,
-            macdGoldenCross: isGoldenCross,
-            macdDeathCross: false,
+            baiXiao: !!formulaResult?.baiXiao,
             baiXiaoDays: formulaResult?.baiXiaoDays ?? 0,
             baiBu: !!formulaResult?.baiBu,
             baiBuDays: formulaResult?.baiBuDays ?? 0,
-            baiCoverTrend: formulaResult?.baiCoverTrend ?? 'stable',
-            baiXiao: !!formulaResult?.baiXiao,
-            volumeStructure: formulaResult?.volumeStructure ?? 0,
+            baiXiaoBuy1: !!formulaResult?.baiXiaoBuy1,
+            baiXiaoBuy2: !!formulaResult?.baiXiaoBuy2,
+            qiangShiHuiCai: !!formulaResult?.qiangShiHuiCai,
+            hengPanTuPo: !!formulaResult?.hengPanTuPo,
+            shortBuy: !!(formulaResult?.shortBuy),
+            strictBuy: !!(formulaResult?.strictBuy),
+            zhenDangMaiDian: !!formulaResult?.zhenDangMaiDian,
+            zhongWeiZhuSheng: !!formulaResult?.zhongWeiZhuSheng,
+            zhongGaoWeiZhuSheng: !!formulaResult?.zhongGaoWeiZhuSheng,
+            gaoFengXianZhuSheng: !!formulaResult?.gaoFengXianZhuSheng,
+            jiaCang: !!(formulaResult?.jiaCang),
+            diBuBuy: !!(formulaResult?.diBuBuy),
+            zhuLiShiPan: !!(formulaResult?.zhuLiShiPan),
+            qiWen: !!(formulaResult?.qiWen),
+            tiaoJianChengLi: !!(formulaResult?.tiaoJianChengLi),
+            zhuLiChuHuo: !!(formulaResult?.zhuLiChuHuo),
+            gaoKaiDiZouQingCang: !!(formulaResult?.gaoKaiDiZouQingCang),
+            baoLiangFuGaiQingCang: !!(formulaResult?.baoLiangFuGaiQingCang),
+            po5RiXian: !!(formulaResult?.po5RiXian),
+            qiangZhiFuGai: !!(formulaResult?.qiangZhiFuGai),
+            yinDiePoWei: !!(formulaResult?.yinDiePoWei),
+            jiGouActiveScore: formulaResult?.jiGouHuoYueDu ?? 0,
+            ma5,
+            ma10,
+            currentPrice: currentPrice ?? closePrices[closePrices.length - 1],
+            ma5Up: closeArr[closeArr.length - 1] > closeArr[closeArr.length - 6],
+            ma10Up: closeArr[closeArr.length - 1] > closeArr[closeArr.length - 11],
+            pricePosition: pricePos,
+            trendState,
         };
         const stockSuggestion = (0, trading_suggestion_1.getTradingSuggestion)(stockInput);
         const suggestion = stockSuggestion.action;
-        const prediction = stockSuggestion.prediction || '';
         const reason = stockSuggestion.reason || '';
+        const score = stockSuggestion.score || 0;
+        const prediction = '';
         if (usesRealKline) {
             const cacheEntry = {
                 stock, currentPrice, changePercent, high, low,

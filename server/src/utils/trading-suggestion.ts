@@ -1,460 +1,316 @@
 /**
- * 交易建议共享算法 v2
- * 与前端 src/pages/index/index.tsx 的 getTradingSuggestion 保持完全一致
- *
- * 设计原则：
- * 1. 低位区：趋势刚拐头+强信号=重仓买入（用户核心需求）
- * 2. 信号等级：strongBuy > hasBuySignal > hasSellSignal > strongSell
- * 3. 趋势权重：ma5/ma10/ma20 三线关系
- * 4. 位置越低买入条件越宽松，位置越高买入条件越严格
+ * 交易建议系统 - 7级买卖规则
+ * 
+ * 规则体系（由用户指定）：
+ * 重仓买入 > 买入 > 轻仓买入 > 持有 > 减仓 > 卖出 > 不要介入
+ * 
+ * 核心逻辑：
+ * 1. 后端分析所有信号（白消/白三角/白菱形/机构活跃度/均线等）
+ * 2. 前端在后端判断为减仓/卖出/不要介入时直接使用后端结果
+ * 3. 前端在后端判断为买入类时根据实际涨跌幅可升级操作
  */
 
-export interface SuggestionResult {
-  action: string;
-  color: string;
-  reason: string;
-  prediction: string;
-}
-
-function getPositionLabel(position: number): string {
-  if (position < 25) return '低位区';
-  if (position < 45) return '中低位区';
-  if (position < 55) return '中位区';
-  if (position < 75) return '中高位区';
-  return '高位区';
-}
-
 export interface SuggestionInput {
-  pricePosition: number;
-  trendState: number;
-  trendStrength?: number;
-  diff: number;
-  dea: number;
-  shortBuy?: boolean;
-  strictBuy?: boolean;
-  jiaCang?: boolean;
-  shortSell?: boolean;
-  strongSell?: boolean;
-  safe?: boolean;
-  macdGoldenCross?: boolean;
-  macdDeathCross?: boolean;
-  baiBu?: boolean;
-  baiXiao?: boolean;
-  baiXiaoDays?: number;
-  baiBuDays?: number;
-  baiCoverTrend?: 'exiting' | 'entering' | 'stable';
-  volumeStructure?: number;
-  qiangZhiFuGai?: boolean;
+  name?: string
+  code?: string
+
+  // ---- 白消相关 ----
+  baiXiao: boolean
+  baiXiaoDays: number
+  baiBu: boolean
+  baiBuDays?: number
+  baiXiaoBuy1: boolean   // 白消启动
+  baiXiaoBuy2: boolean   // 白消买点2
+  qiangShiHuiCai: boolean // 强势回踩
+  hengPanTuPo: boolean    // 横盘突破
+
+  // ---- 白三角信号 ----
+  shortBuy: boolean       // 短线买入
+  strictBuy: boolean      // 严格买入
+  zhenDangMaiDian: boolean   // 震荡买点
+  zhongWeiZhuSheng: boolean   // 中位主升
+  zhongGaoWeiZhuSheng: boolean // 中高位主升
+  gaoFengXianZhuSheng: boolean // 高风险主升
+  jiaCang: boolean        // 加仓
+
+  // ---- 白消辅助信号 ----
+  diBuBuy: boolean        // 主力建仓
+  zhuLiShiPan: boolean    // 主力试盘
+  qiWen: boolean          // 企稳（maps to gaoWeiHuiDiaoBuy）
+  tiaoJianChengLi: boolean // 条件成立
+
+  // ---- 卖出信号 ----
+  zhuLiChuHuo: boolean    // 主力出货
+  gaoKaiDiZouQingCang: boolean  // 高开低走清仓
+  baoLiangFuGaiQingCang: boolean // 爆量覆盖清仓
+  po5RiXian: boolean      // 破5日线
+  qiangZhiFuGai: boolean  // 强制覆盖（紧急清仓）
+  yinDiePoWei: boolean    // 阴跌破位
+
+  // ---- 机构活跃度 ----
+  jiGouActiveScore: number // 0-20
+
+  // ---- 均线数据 ----
+  ma5: number
+  ma10: number
+  currentPrice: number
+
+  // ---- 补充计算字段（由调用方传入） ----
+  ma5Up?: boolean         // MA5方向向上
+  ma10Up?: boolean        // MA10方向向上
+  pricePosition?: number  // 价格位置 0-100
+  trendState?: number     // 趋势状态 0-3
 }
 
-export function getTradingSuggestion(f: SuggestionInput): SuggestionResult {
-  const pos = f.pricePosition ?? 50;
-  const trend = f.trendState ?? 1;
-  const zone = getPositionLabel(pos);
-  const diff = f.diff ?? 0;
-  const dea = f.dea ?? 0;
-  const macdBullish = diff > dea;
-  const volumeBullish = (f.volumeStructure ?? 50) > 50;
-  const safe = f.safe ?? false;
-  const hasBuySignal = !!(f.shortBuy || f.strictBuy || f.jiaCang || macdBullish);
-  const hasSellSignal = !!(f.shortSell || f.strongSell);
-  const longDecline = pos < 20 && (f.trendStrength ?? 0) < -3;
+export interface SuggestionResult {
+  action: '重仓买入' | '买入' | '轻仓买入' | '持有' | '减仓' | '卖出' | '不要介入'
+  reason: string
+  score: number           // 0-100 综合评分
+  entryTiming: number     // 0-100 入场时机评分
+}
 
-  const strongBuy =
-    (!!f.macdGoldenCross && volumeBullish) ||
-    (f.baiXiaoDays ?? 0) >= 3 ||
-    (!!f.shortBuy && volumeBullish);
+/**
+ * 核心建议函数
+ * 输入完整的股票分析数据，输出7级买卖建议
+ */
+export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
+  const {
+    baiXiao, baiXiaoDays, baiBu,
+    baiXiaoBuy1, qiangShiHuiCai, hengPanTuPo,
+    zhenDangMaiDian, zhongWeiZhuSheng, zhongGaoWeiZhuSheng, gaoFengXianZhuSheng,
+    jiaCang, diBuBuy, zhuLiShiPan, qiWen, tiaoJianChengLi,
+    zhuLiChuHuo, gaoKaiDiZouQingCang, baoLiangFuGaiQingCang,
+    po5RiXian, qiangZhiFuGai, yinDiePoWei,
+    jiGouActiveScore, ma5, ma10, currentPrice,
+  } = input;
 
-  const strongSell = !!f.macdDeathCross || !!f.strongSell;
-  const baiXiao = !!f.baiXiao;
-  const baiBu = !!f.baiBu;
-  const baiXiaoActive = baiXiao && (f.baiXiaoDays ?? 0) >= 1;
-  // XMA平移补偿：检测最近3根K线的覆盖状态变化趋势
-  const baiCoverTrend = f.baiCoverTrend ?? 'stable';
-  const baiXiaoFresh = baiXiao && baiCoverTrend === 'exiting';   // 刚出白布(白消恢复期)
-  const baiBuFresh = baiBu && baiCoverTrend === 'entering';      // 刚进白布(白布出现期)
+  // 计算MA5/MA10方向
+  const ma5Up = input.ma5Up !== undefined ? input.ma5Up : true
+  const ma10Up = input.ma10Up !== undefined ? input.ma10Up : true
 
-  // 强制覆盖白布：爆量/乖离率过大导致的强制白布，在强趋势中不是真正的卖出信号
-  const baiBuForcedStrong = baiBu && !!f.qiangZhiFuGai && trend >= 2;
+  // ---- 白消天数分组辅助 ----
+  const baiXiaoEarly = baiXiao && baiXiaoDays >= 1 && baiXiaoDays <= 6
+  const baiXiaoLate = baiXiao && baiXiaoDays >= 7
 
-  // ─── 1) 低位区 (<25%) ───
-  // 用户核心需求：ma5刚拐头(trend>=1) + 强信号 = 重仓买入
-  if (zone.includes('低位')) {
-    if (longDecline && trend <= 1 && !macdBullish && !volumeBullish) {
-      return {
-        action: '不要介入',
-        color: 'bg-gray-500',
-        reason: '长期下跌+无量能支撑，回避',
-        prediction: '未来1-2日无量能支撑，建议回避',
-      };
+  // ---- 白三角买入信号组合 ----
+  const hasBaiSanJiaoBuySignal = zhenDangMaiDian || zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang
+
+  // ---- 机构活跃度条件 ----
+  const jiGouActive = jiGouActiveScore >= 12
+
+  // ---- 均线条件 ----
+  const ma5AboveMa10 = ma5 > ma10
+  const ma5UpAndMa10Up = ma5Up && ma10Up  // 都往上
+  const ma10UpOnly = ma10Up && !ma5Up     // MA10往上但MA5往下
+  const ma10Down = !ma10Up                // MA10往下
+
+  // ================================================================
+  // 第一条防线：卖出信号（清仓/爆量覆盖/破线/紧急清仓/阴跌破位）
+  //   这些信号不论其他条件如何，直接判定为卖出
+  // ================================================================
+  if (gaoKaiDiZouQingCang || baoLiangFuGaiQingCang || po5RiXian || qiangZhiFuGai || yinDiePoWei) {
+    return {
+      action: '卖出',
+      reason: getSellReason(gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei),
+      score: 10,
+      entryTiming: 0,
     }
-    if (trend >= 1 && strongBuy) {
-      return {
-        action: '重仓买入',
-        color: 'bg-red-600',
-        reason: '低位+趋势拐头+强信号共振',
-        prediction: '未来1-2日有望放量启动，建议重仓买入',
-      };
-    }
-    if (trend >= 1 && hasBuySignal) {
-      return {
-        action: '买入',
-        color: 'bg-green-600',
-        reason: '低位+趋势拐头+买入信号',
-        prediction: '未来1-2日有望延续反弹，建议买入',
-      };
-    }
-    if (trend >= 1) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '低位+趋势拐头，等待信号确认',
-        prediction: '未来1-2日方向待确认，建议持有',
-      };
-    }
-    // trend === 0 — 下降趋势不产生任何买入信号
-    if (baiXiaoFresh) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '低位+刚出白布恢复期', 
-        prediction: '未来1-2日刚出白布恢复期有望反弹，建议轻仓买入',
-      };
-    }
-    if (baiXiaoActive) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '低位+白消恢复期，均线修复中',
-        prediction: '未来1-2日白消恢复期有望企稳，建议持有',
-      };
-    }
+  }
+
+  // ================================================================
+  // 第二条防线：不要介入（MA10往下）
+  // ================================================================
+  if (ma10Down) {
     return {
       action: '不要介入',
-      color: 'bg-gray-500',
-      reason: '低位+下降趋势，均线空头压制',
-      prediction: '未来1-2日预计继续探底，建议不要介入',
-    };
+      reason: '10日线往下，趋势走弱不介入',
+      score: 5,
+      entryTiming: 0,
+    }
   }
 
-  // ─── 2) 中低位区 (25-45%) ───
-  if (zone.includes('中低位')) {
-    if (trend >= 2 && strongBuy) {
-      return {
-        action: '买入',
-        color: 'bg-green-600',
-        reason: '中低位+上升趋势+强信号',
-        prediction: '未来1-2日有望延续上涨，建议买入',
-      };
-    }
-    if (trend >= 2 && hasBuySignal) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中低位+上升趋势+买入信号',
-        prediction: '未来1-2日有望继续上行，建议买入',
-      };
-    }
-    if (trend >= 1 && strongBuy) {
-      return {
-        action: '买入',
-        color: 'bg-green-600',
-        reason: '中低位+拐头+强信号',
-        prediction: '未来1-2日有望启动，建议买入',
-      };
-    }
-    if (trend >= 1 && hasBuySignal) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中低位+拐头+买入信号',
-        prediction: '未来1-2日有望回暖，建议买入',
-      };
-    }
-    if (trend >= 2) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中低位+上升趋势，等待信号',
-        prediction: '未来1-2日方向待确认，建议持有',
-      };
-    }
-    if (baiXiaoFresh) {
-      return {
-        action: '买入',
-        color: 'bg-green-600',
-        reason: '中低位+刚出白布恢复期，有望回暖',
-        prediction: '未来1-2日刚出白布恢复期有望反弹，建议买入',
-      };
-    }
-    if (baiXiaoActive) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中低位+白消恢复期，有望回暖',
-        prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
-      };
-    }
-    if (baiBuFresh && !baiBuForcedStrong) {
-      return {
-        action: '减仓',
-        color: 'bg-orange-500',
-        reason: '中低位+白布出现，可能继续走弱',
-        prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
-      };
-    }
+  // ================================================================
+  // 减仓：白消阶段出现主力出货
+  // ================================================================
+  if (baiXiao && zhuLiChuHuo) {
     return {
       action: '减仓',
-      color: 'bg-orange-500',
-      reason: '中低位+下降趋势，注意风险',
-      prediction: '未来1-2日预计偏弱，建议减仓',
-    };
+      reason: '白消阶段出现主力出货信号',
+      score: 20,
+      entryTiming: 10,
+    }
   }
 
-  // ─── 3) 中位区 (45-55%) ───
-  if (zone.includes('中位') && !zone.includes('低') && !zone.includes('高')) {
-    if (trend >= 2 && strongBuy) {
-      return {
-        action: '买入',
-        color: 'bg-green-600',
-        reason: '中位区+上升+强信号共振',
-        prediction: '未来1-2日有望延续上涨，建议买入',
-      };
-    }
-    if (trend >= 2 && hasBuySignal) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中位区+上升+买入信号',
-        prediction: '未来1-2日有望上涨，建议买入',
-      };
-    }
-    if (trend >= 2) {
-      if (strongSell) {
-        return {
-          action: '卖出',
-          color: 'bg-red-500',
-          reason: '中位区上升+卖出信号，清仓',
-          prediction: '未来1-2日预计回落，建议卖出',
-        };
-      }
-      if (hasSellSignal) {
-        return {
-          action: '减仓',
-          color: 'bg-orange-500',
-          reason: '中位区上升+减仓信号，控制风险',
-          prediction: '未来1-2日可能调整，建议减仓',
-        };
-      }
-      if (baiBuFresh && !baiBuForcedStrong) {
-        return {
-          action: '减仓',
-          color: 'bg-orange-500',
-          reason: '中位区上升+白布出现，趋势可能反转',
-          prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
-        };
-      }
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中位区+上升趋势，暂持',
-        prediction: '未来1-2日继续持有观察',
-      };
-    }
-    if (trend === 1 && strongBuy) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中位区+横盘+强信号，关注突破',
-        prediction: '未来1-2日有望启动，建议介入',
-      };
-    }
-    if (trend === 1) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中位区横盘，方向不明',
-        prediction: '未来1-2日方向待定，建议持有',
-      };
-    }
-    // trend === 0
-    if (strongBuy) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中位区下降+强信号，暂持',
-        prediction: '未来1-2日信号验证中，建议持有',
-      };
-    }
-    if (baiXiaoActive) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中位区下降+白消恢复期',
-        prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
-      };
-    }
-    return {
-      action: '减仓',
-      color: 'bg-orange-500',
-      reason: '中位区+下降趋势，控制风险',
-      prediction: '未来1-2日预计偏弱，建议减仓',
-    };
+  // ================================================================
+  // 持有：MA5和MA10都往上，或MA10往上但MA5往下
+  // ================================================================
+  if (ma5UpAndMa10Up || ma10UpOnly) {
+    // 但如果有强烈买入信号，可能升级
+    // 这里先返回持有，下面会覆盖
+    // 继续检查是否能升级为买入类信号
+  } else {
+    // MA10往上但价格跌破MA5 → 仍持有
+    // 这个分支由上面的 ma10UpOnly 覆盖
   }
 
-  // ─── 4) 中高位区 (55-75%) ───
-  if (zone.includes('中高位')) {
-    if (trend >= 2 && strongBuy) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中高位+上升+强信号，注意风险',
-        prediction: '未来1-2日有望突破，建议轻仓买入',
-      };
+  // ================================================================
+  // 重仓买入（白消第1-6天）
+  // ================================================================
+  if (baiXiaoEarly) {
+    // 条件A: 白消启动单独出现
+    if (baiXiaoBuy1) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，白消启动', 95, 85)
     }
-    if (trend >= 2) {
-      if (strongSell) {
-        return {
-          action: '卖出',
-          color: 'bg-red-500',
-          reason: '中高位上升+卖出信号，清仓',
-          prediction: '未来1-2日预计回落，建议卖出',
-        };
-      }
-      if (hasSellSignal) {
-        return {
-          action: '减仓',
-          color: 'bg-orange-500',
-          reason: '中高位上升+减仓信号，注意风险',
-          prediction: '未来1-2日可能调整，建议减仓',
-        };
-      }
-      if (baiBuFresh && !baiBuForcedStrong) {
-        return {
-          action: '减仓',
-          color: 'bg-orange-500',
-          reason: '中高位上升+白布出现，趋势可能反转',
-          prediction: '未来1-2日白布覆盖可能出现调整，建议减仓',
-        };
-      }
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '中高位+上升趋势，暂持',
-        prediction: '未来1-2日建议继续持有看突破',
-      };
+    // 条件B: 强势回踩单独出现
+    if (qiangShiHuiCai) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩', 93, 80)
     }
-    if (trend === 1) {
-      if (strongBuy) {
-        return {
-          action: '持有',
-          color: 'bg-yellow-500',
-          reason: '中高位+横盘+强信号，关注',
-          prediction: '未来1-2日有望突破，建议介入',
-        };
-      }
-      return {
-        action: '减仓',
-        color: 'bg-orange-500',
-        reason: '中高位横盘，控制仓位',
-        prediction: '未来1-2日预计震荡调整，建议减仓',
-      };
+    // 条件C: 强势回踩 + 白三角买入信号 同一天
+    if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 96, 88)
     }
-    // trend === 0
-    if (strongSell) {
-      return {
-        action: '卖出',
-        color: 'bg-red-500',
-        reason: '中高位下降+卖出信号',
-        prediction: '未来1-2日预计继续回落，建议卖出',
-      };
+    // 条件D: 白消启动 + 白三角买入信号
+    if (baiXiaoBuy1 && hasBaiSanJiaoBuySignal) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，启动+' + getBaiSanJiaoNames(input), 96, 88)
     }
-    if (baiXiaoActive) {
-      return {
-        action: '轻仓买入',
-        color: 'bg-green-500',
-        reason: '中高位下降+白消恢复期',
-        prediction: '未来1-2日白消恢复期有望反弹，建议轻仓买入',
-      };
+    // 条件E: 中位主升/中高位主升/高风险主升/加仓 单独出现
+    if (zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 92, 82)
     }
-    return {
-      action: '减仓',
-      color: 'bg-orange-500',
-      reason: '中高位+下降趋势',
-      prediction: '未来1-2日预计偏弱，建议减仓',
-    };
+    // 条件F: 震荡买点单独出现
+    if (zhenDangMaiDian) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，震荡买点信号', 88, 78)
+    }
+    // 条件G: 机构活跃度≥12 + 首次突破5日均线 + MA5/MA10往上
+    if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
+      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 87, 80)
+    }
   }
 
-  // ─── 5) 高位区 (>=75%) ───
-  if (trend === 0) {
-    if (strongSell) {
-      return {
-        action: '卖出',
-        color: 'bg-red-600',
-        reason: '高位下降+卖出信号，清仓离场',
-        prediction: '未来1-2日预计继续回落，建议卖出',
-      };
+  // ================================================================
+  // 买入（白消第7天及之后）
+  // ================================================================
+  if (baiXiaoLate) {
+    // 条件A: 横盘突破单独出现
+    if (hengPanTuPo) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破', 82, 72)
     }
-    return {
-      action: '卖出',
-      color: 'bg-red-500',
-      reason: '高位下降趋势，注意风险',
-      prediction: '未来1-2日预计偏弱，建议卖出',
-    };
-  }
-  if (trend === 1) {
-    if (strongBuy) {
-      return {
-        action: '持有',
-        color: 'bg-yellow-500',
-        reason: '高位横盘+强信号，关注突破',
-        prediction: '未来1-2日有望突破，建议介入',
-      };
+    // 条件B: 横盘突破 + 白三角买入信号
+    if (hengPanTuPo && hasBaiSanJiaoBuySignal) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破+' + getBaiSanJiaoNames(input), 86, 78)
     }
-    if (strongSell || (baiBuFresh && !baiBuForcedStrong)) {
-      return {
-        action: '卖出',
-        color: 'bg-red-500',
-        reason: strongSell ? '高位横盘+卖出信号' : '高位横盘+白布出现',
-        prediction: '未来1-2日预计回落，建议卖出',
-      };
+    // 条件C: 强势回踩 + 白三角买入信号
+    if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 84, 75)
     }
-    return {
-      action: '减仓',
-      color: 'bg-orange-500',
-      reason: '高位横盘，控制仓位',
-      prediction: '未来1-2日预计震荡调整，建议减仓',
-    };
+    // 条件D: 强势回踩单独出现
+    if (qiangShiHuiCai) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩', 80, 70)
+    }
+    // 条件E: 机构活跃度≥12 + 首次突破5日均线 + MA5/MA10往上
+    if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
+    }
+    // 条件F: 中位主升/中高位主升/高风险主升/加仓/震荡买点 单独出现
+    if (hasBaiSanJiaoBuySignal) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 78, 70)
+    }
   }
-  // trend >= 2
-  if (strongBuy) {
-    return {
-      action: '轻仓买入',
-      color: 'bg-green-500',
-      reason: '高位上升+强信号，强趋势延续',
-      prediction: '未来1-2日有望继续上攻，建议轻仓买入',
-    };
+
+  // ================================================================
+  // 轻仓买入（白布阶段）
+  // ================================================================
+  if (baiBu) {
+    // 条件A: 白布阶段 + 机构活跃度≥12 + 突破5日线 + MA5/MA10往上
+    if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
+      return buildResult('轻仓买入', '白布阶段，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 68, 60)
+    }
+    // 条件B: 白布阶段 + 主力建仓/企稳/主力试盘/成立/加仓
+    if (diBuBuy || qiWen || zhuLiShiPan || tiaoJianChengLi || jiaCang) {
+      const names: string[] = []
+      if (diBuBuy) names.push('主力建仓')
+      if (qiWen) names.push('企稳')
+      if (zhuLiShiPan) names.push('主力试盘')
+      if (tiaoJianChengLi) names.push('条件成立')
+      if (jiaCang) names.push('加仓')
+      return buildResult('轻仓买入', '白布阶段，' + names.join('+'), 65, 55)
+    }
   }
-  if (strongSell) {
-    return {
-      action: '卖出',
-      color: 'bg-red-500',
-      reason: '高位上升+卖出信号，清仓离场',
-      prediction: '未来1-2日预计回落，建议卖出',
-    };
+
+  // ================================================================
+  // 买入检测（非白消早期/晚期分类的剩余买入信号）
+  //   当不在白消1-6天也不在白消7+天时，但有明显买入信号
+  // ================================================================
+  // 机构活跃度≥12 + 突破5日线 + MA5/MA10往上
+  if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
+    // 如果还有白三角买入信号，算重仓买入
+    if (hasBaiSanJiaoBuySignal && baiXiao) {
+      return buildResult('重仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+' + getBaiSanJiaoNames(input), 90, 82)
+    }
+    if (baiXiaoLate) {
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
+    }
+    if (baiXiao) {
+      // 白消早期但没有明确信号组合
+      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0), 72, 65)
+    }
+    return buildResult('轻仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 65, 55)
   }
-  if (hasSellSignal) {
-    return {
-      action: '减仓',
-      color: 'bg-orange-500',
-      reason: '高位上升+减仓信号，控制仓位',
-      prediction: '未来1-2日可能调整，建议减仓',
-    };
+
+  // 白三角买入信号单独出现（不在白消/白布阶段）
+  if (hasBaiSanJiaoBuySignal && ma5UpAndMa10Up) {
+    return buildResult('买入', getBaiSanJiaoNames(input) + '+均线向上', 75, 65)
   }
+
+  // ================================================================
+  // 持有（兜底：只要MA10往上就持有）
+  // ================================================================
+  if (ma5UpAndMa10Up || ma10UpOnly) {
+    return {
+      action: '持有',
+      reason: ma5UpAndMa10Up ? '5日线和10日线都往上，趋势健康' : '10日线往上，趋势未破坏',
+      score: 45,
+      entryTiming: 30,
+    }
+  }
+
+  // ================================================================
+  // 默认：不要介入（所有条件都不满足）
+  // ================================================================
   return {
-    action: '持有',
-    color: 'bg-yellow-500',
-    reason: '高位但仍有上升动能，暂持',
-    prediction: '未来1-2日继续持有观察',
-  };
+    action: '不要介入',
+    reason: '均线走弱，无明确信号',
+    score: 5,
+    entryTiming: 0,
+  }
+}
+
+// ================================================================
+// 辅助函数
+// ================================================================
+
+function buildResult(action: SuggestionResult['action'], reason: string, score: number, entryTiming: number): SuggestionResult {
+  return { action, reason, score, entryTiming }
+}
+
+function getSellReason(
+  qingcang: boolean, baoliang: boolean, poxian: boolean, jinji: boolean, yinDie: boolean
+): string {
+  const reasons: string[] = []
+  if (qingcang) reasons.push('清仓信号')
+  if (baoliang) reasons.push('爆量覆盖')
+  if (poxian) reasons.push('破5日线')
+  if (jinji) reasons.push('紧急清仓')
+  if (yinDie) reasons.push('阴跌破位')
+  return '卖出信号：' + reasons.join('+')
+}
+
+function getBaiSanJiaoNames(input: SuggestionInput): string {
+  const names: string[] = []
+  if (input.zhenDangMaiDian) names.push('震荡买点')
+  if (input.zhongWeiZhuSheng) names.push('中位主升')
+  if (input.zhongGaoWeiZhuSheng) names.push('中高位主升')
+  if (input.gaoFengXianZhuSheng) names.push('高风险主升')
+  if (input.jiaCang) names.push('加仓')
+  return names.join('/') || '买入信号'
 }

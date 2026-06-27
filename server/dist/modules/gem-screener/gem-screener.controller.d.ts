@@ -1,11 +1,13 @@
 import { GemScreenerService } from './gem-screener.service';
 import { GemScreenerScheduler } from './gem-screener.scheduler';
+import { StockService } from '../stock/stock.service';
 import { Response } from 'express';
 export declare class GemScreenerController {
     private readonly gemScreener;
     private readonly scheduler;
+    private readonly stockService;
     private readonly logger;
-    constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler);
+    constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
     getMarketState(): Promise<{
         code: number;
         msg: string;
@@ -189,6 +191,35 @@ export declare class GemScreenerController {
         code: number;
         msg: any;
         data: never[];
+    }>;
+    cacheData(body: {
+        stocks: {
+            code: string;
+            name: string;
+            price: number;
+            changePercent: number;
+            high?: number;
+            low?: number;
+            klines: any[];
+        }[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: never[];
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            total: number;
+        };
+    }>;
+    getScanResult(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            opportunities: any[];
+            timestamp: number;
+        };
     }>;
     rescanMarket(): Promise<{
         code: number;

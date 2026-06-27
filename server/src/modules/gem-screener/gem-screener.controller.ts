@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Query, HttpCode, Logger, Res } from '@nest
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { GemScreenerService } from './gem-screener.service';
 import { GemScreenerScheduler } from './gem-screener.scheduler';
+import { StockService } from '../stock/stock.service';
 import * as iconv from 'iconv-lite';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -14,6 +15,7 @@ export class GemScreenerController {
   constructor(
     private readonly gemScreener: GemScreenerService,
     private readonly scheduler: GemScreenerScheduler,
+    private readonly stockService: StockService,
   ) {}
 
   /**
@@ -387,6 +389,76 @@ export class GemScreenerController {
       this.logger.error(`搜索失败: ${e.message}`);
       return { code: 500, msg: e.message, data: [] };
     }
+  }
+
+  /**
+   * 接收前端拉取的原始股票数据+K线，缓存并分析
+   * POST /api/gem/cache-data
+   */
+  @Post('cache-data')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async cacheData(@Body() body: { stocks: { code: string; name: string; price: number; changePercent: number; high?: number; low?: number; klines: any[] }[] }) {
+    try {
+      const stocks = body?.stocks || [];
+      if (!stocks.length) return { code: 400, msg: 'empty stocks', data: [] };
+
+      const results: any[] = [];
+      for (const s of stocks) {
+        try {
+          if (!s.klines || s.klines.length < 20) continue;
+          const normalKlines = s.klines.map(k => ({
+            open: k.open ?? k[1] ?? 0,
+            close: k.close ?? k[2] ?? 0,
+            high: k.high ?? k[3] ?? 0,
+            low: k.low ?? k[4] ?? 0,
+            volume: k.volume ?? k[5] ?? 0,
+            amount: k.amount ?? k[6] ?? 0,
+          }));
+          const result = await this.stockService.analyzeFromRawData({
+            code: s.code,
+            name: s.name,
+            currentPrice: s.price,
+            changePercent: s.changePercent,
+            high: s.high,
+            low: s.low,
+            kline: normalKlines,
+          });
+          results.push(result);
+        } catch (e) {
+          this.logger.warn(`分析失败: ${s.code} ${s.name} - ${(e as Error).message}`);
+        }
+      }
+
+      // 排序：优选的信号在前
+      const SIGNAL_ORDER: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
+      results.sort((a, b) => {
+        const ao = SIGNAL_ORDER[a.suggestion ?? '持有'] ?? 9;
+        const bo = SIGNAL_ORDER[b.suggestion ?? '持有'] ?? 9;
+        if (ao !== bo) return ao - bo;
+        return (b.score ?? 0) - (a.score ?? 0);
+      });
+
+      // 写入缓存
+      this.gemScreener.updateCache('scan', results);
+
+      this.logger.log(`📥 前端数据缓存+分析完成: ${results.length} 只`);
+      return { code: 200, msg: 'success', data: { total: results.length } };
+    } catch (e) {
+      this.logger.error(`缓存数据失败: ${(e as Error).message}`);
+      return { code: 500, msg: (e as Error).message, data: [] };
+    }
+  }
+
+  /**
+   * 读取分析后的扫描结果
+   * GET /api/gem/scan-result
+   */
+  @Get('scan-result')
+  @SkipAccessLimit()
+  async getScanResult() {
+    const cached = this.gemScreener.getCache('scan');
+    return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
   }
 
   @Get('rescan')
