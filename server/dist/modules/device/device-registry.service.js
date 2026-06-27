@@ -41,7 +41,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async initPostgres() {
         try {
-            const url = process.env.DATABASE_URL;
+            const url = process.env.DATABASE_URL || process.env.PGDATABASE_URL;
             if (!url) {
                 this.logger.warn('DATABASE_URL 未设置，跳过 PostgreSQL');
                 return null;
