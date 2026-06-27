@@ -2015,7 +2015,7 @@ async function doSearch(){
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(async function(){if(!loading){await fetchAndCacheSina();if(!loading)doFullRescan(false)}},t.getTime()-n.getTime());
+  if(n<t)setTimeout(async function(){if(!loading){await autoLightScan()}},t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动轻量扫描：拉热门股推送后端分析覆盖旧缓存
@@ -2055,15 +2055,10 @@ setTimeout(function(){
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
-            // 立即触发 doFullRescan（Sina数据已由上方fetchAndCacheSina提供或后续autoLightScan加载）
-            setTimeout(async function(){
-              if(!loading&&!window._cachedSinaEMData)await fetchAndCacheSina()
-              if(!loading)doFullRescan(false)
-            },1000)
+            // 立即触发全链路扫描（Sina+东财K线+分析+升级写回）
+            setTimeout(function(){if(!loading)autoLightScan()},1000)
           }else{
-            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
           }
-        }else{
           // 后端无缓存 → 尝试恢复浏览器端本地快照
           try{
             var snap=localStorage.getItem('cache_snapshot')
