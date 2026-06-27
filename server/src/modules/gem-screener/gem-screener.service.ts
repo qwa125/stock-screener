@@ -4417,16 +4417,39 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
-    // ─── MACD红峰/绿峰检测（暂存供后面结合信号确定最佳买卖价格） ───
-    // 绿峰(MACD柱<0局部最低)=买入区, 红峰(MACD柱>0局部最高)=卖出区
+    // ─── MACD红峰/绿峰检测（拐点检测：到高点往下=红峰，到低点走平往上=绿峰） ───
+    // 绿峰: MACD柱<0, 连续下降≥2根后开始回升 → 到低点走平往上的时候=最低点
+    // 红峰: MACD柱>0, 连续上升≥2根后开始下降 → 到高点往下的时候=最高点
     const _greenValleys: { idx: number; price: number; time: string }[] = [];
     const _redPeaks: { idx: number; price: number; time: string }[] = [];
-    for (let i = 2; i < len - 2; i++) {
-      if (macdHist[i] < 0 && macdHist[i] < macdHist[i-1] && macdHist[i] < macdHist[i-2] && macdHist[i] < macdHist[i+1] && macdHist[i] < macdHist[i+2]) {
-        _greenValleys.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+    for (let i = 3; i < len - 1; i++) {
+      // 绿峰: 绿柱(hist<0), 之前连续下降, 当前拐头向上
+      if (macdHist[i] < 0 && macdHist[i-1] < 0) {
+        const wasDropping = macdHist[i-1] <= macdHist[i-2] && macdHist[i-2] <= macdHist[i-3];
+        const turningUp = macdHist[i] > macdHist[i-1]; // 当前比前一根高=拐头
+        if (wasDropping && turningUp) {
+          const valleyIdx = macdHist[i-1] <= macdHist[i-2] ? i-1 : i-2;
+          const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
+          // 去重：与上一个绿峰间隔≥3根K线才记录
+          const last = _greenValleys[_greenValleys.length - 1];
+          if (!last || valleyIdx - last.idx >= 3) {
+            _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time });
+          }
+        }
       }
-      if (macdHist[i] > 0 && macdHist[i] > macdHist[i-1] && macdHist[i] > macdHist[i-2] && macdHist[i] > macdHist[i+1] && macdHist[i] > macdHist[i+2]) {
-        _redPeaks.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+      // 红峰: 红柱(hist>0), 之前连续上升, 当前拐头向下
+      if (macdHist[i] > 0 && macdHist[i-1] > 0) {
+        const wasRising = macdHist[i-1] >= macdHist[i-2] && macdHist[i-2] >= macdHist[i-3];
+        const turningDown = macdHist[i] < macdHist[i-1]; // 当前比前一根低=拐头
+        if (wasRising && turningDown) {
+          const peakIdx = macdHist[i-1] >= macdHist[i-2] ? i-1 : i-2;
+          const thisPrice = Math.round(close[peakIdx] * 100) / 100;
+          // 去重
+          const last = _redPeaks[_redPeaks.length - 1];
+          if (!last || peakIdx - last.idx >= 3) {
+            _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time });
+          }
+        }
       }
     }
 
@@ -4525,28 +4548,41 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
-    // ─── 结合MACD红峰/绿峰+信号确定最佳买卖价格 ───
-    // 最佳买入=有买入信号确认或最接近的绿峰价
+    // ─── 结合MACD红峰/绿峰+做T指标确定最佳买卖价格 ───
+    // 做T指标=通达信主力/散户低吸高抛信号
+    // 绿峰(到低点走平往上)+做T买入确认 → 最佳买入价（支撑区低吸）
+    // 红峰(到高点往下)+做T卖出确认 → 最佳卖出价（压力区高抛）
     let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
-    // 买入: 找最近且有买入信号确认的绿峰
+    // 最佳买入: 优先选MACD绿峰+做T买入信号双确认的，无则选最近绿峰
     for (let i = _greenValleys.length - 1; i >= 0; i--) {
       const gv = _greenValleys[i];
-      const confirmed = suggestions.some(s => s.type === '买入点' && Math.abs(s.idx - gv.idx) <= 5);
-      if (confirmed || i === _greenValleys.length - 1) {
-        bestBuyPrice = gv.price;
-        bestBuyTime = gv.time;
-        if (confirmed) break; // 有信号确认的优先
+      // 做T确认: 附近(±5bar)有zhuliBuyPoints或MACD金叉
+      const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
+      const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
+      const confirmed = confirmedByZhuLi || confirmedByMacd;
+      if (confirmed) {
+        bestBuyPrice = gv.price; bestBuyTime = gv.time;
+        break; // 最近且有信号确认的最优
       }
     }
-    // 卖出: 找最近且有卖出信号确认的红峰
+    if (!bestBuyPrice && _greenValleys.length > 0) {
+      bestBuyPrice = _greenValleys[_greenValleys.length-1].price;
+      bestBuyTime = _greenValleys[_greenValleys.length-1].time;
+    }
+    // 最佳卖出: 优先选MACD红峰+做T卖出信号双确认的，无则选最近红峰
     for (let i = _redPeaks.length - 1; i >= 0; i--) {
       const rp = _redPeaks[i];
-      const confirmed = suggestions.some(s => s.type === '卖出点' && Math.abs(s.idx - rp.idx) <= 5);
-      if (confirmed || i === _redPeaks.length - 1) {
-        bestSellPrice = rp.price;
-        bestSellTime = rp.time;
-        if (confirmed) break;
+      const confirmedByZhuLi = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5);
+      const confirmedByMacd = macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
+      const confirmed = confirmedByZhuLi || confirmedByMacd;
+      if (confirmed) {
+        bestSellPrice = rp.price; bestSellTime = rp.time;
+        break;
       }
+    }
+    if (!bestSellPrice && _redPeaks.length > 0) {
+      bestSellPrice = _redPeaks[_redPeaks.length-1].price;
+      bestSellTime = _redPeaks[_redPeaks.length-1].time;
     }
 
     return {

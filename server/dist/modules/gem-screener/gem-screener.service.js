@@ -3800,12 +3800,30 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         const _greenValleys = [];
         const _redPeaks = [];
-        for (let i = 2; i < len - 2; i++) {
-            if (macdHist[i] < 0 && macdHist[i] < macdHist[i - 1] && macdHist[i] < macdHist[i - 2] && macdHist[i] < macdHist[i + 1] && macdHist[i] < macdHist[i + 2]) {
-                _greenValleys.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+        for (let i = 3; i < len - 1; i++) {
+            if (macdHist[i] < 0 && macdHist[i - 1] < 0) {
+                const wasDropping = macdHist[i - 1] <= macdHist[i - 2] && macdHist[i - 2] <= macdHist[i - 3];
+                const turningUp = macdHist[i] > macdHist[i - 1];
+                if (wasDropping && turningUp) {
+                    const valleyIdx = macdHist[i - 1] <= macdHist[i - 2] ? i - 1 : i - 2;
+                    const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
+                    const last = _greenValleys[_greenValleys.length - 1];
+                    if (!last || valleyIdx - last.idx >= 3) {
+                        _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time });
+                    }
+                }
             }
-            if (macdHist[i] > 0 && macdHist[i] > macdHist[i - 1] && macdHist[i] > macdHist[i - 2] && macdHist[i] > macdHist[i + 1] && macdHist[i] > macdHist[i + 2]) {
-                _redPeaks.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+            if (macdHist[i] > 0 && macdHist[i - 1] > 0) {
+                const wasRising = macdHist[i - 1] >= macdHist[i - 2] && macdHist[i - 2] >= macdHist[i - 3];
+                const turningDown = macdHist[i] < macdHist[i - 1];
+                if (wasRising && turningDown) {
+                    const peakIdx = macdHist[i - 1] >= macdHist[i - 2] ? i - 1 : i - 2;
+                    const thisPrice = Math.round(close[peakIdx] * 100) / 100;
+                    const last = _redPeaks[_redPeaks.length - 1];
+                    if (!last || peakIdx - last.idx >= 3) {
+                        _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time });
+                    }
+                }
             }
         }
         const var3 = [];
@@ -3887,23 +3905,33 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
         for (let i = _greenValleys.length - 1; i >= 0; i--) {
             const gv = _greenValleys[i];
-            const confirmed = suggestions.some(s => s.type === '买入点' && Math.abs(s.idx - gv.idx) <= 5);
-            if (confirmed || i === _greenValleys.length - 1) {
+            const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
+            const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
+            const confirmed = confirmedByZhuLi || confirmedByMacd;
+            if (confirmed) {
                 bestBuyPrice = gv.price;
                 bestBuyTime = gv.time;
-                if (confirmed)
-                    break;
+                break;
             }
+        }
+        if (!bestBuyPrice && _greenValleys.length > 0) {
+            bestBuyPrice = _greenValleys[_greenValleys.length - 1].price;
+            bestBuyTime = _greenValleys[_greenValleys.length - 1].time;
         }
         for (let i = _redPeaks.length - 1; i >= 0; i--) {
             const rp = _redPeaks[i];
-            const confirmed = suggestions.some(s => s.type === '卖出点' && Math.abs(s.idx - rp.idx) <= 5);
-            if (confirmed || i === _redPeaks.length - 1) {
+            const confirmedByZhuLi = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5);
+            const confirmedByMacd = macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
+            const confirmed = confirmedByZhuLi || confirmedByMacd;
+            if (confirmed) {
                 bestSellPrice = rp.price;
                 bestSellTime = rp.time;
-                if (confirmed)
-                    break;
+                break;
             }
+        }
+        if (!bestSellPrice && _redPeaks.length > 0) {
+            bestSellPrice = _redPeaks[_redPeaks.length - 1].price;
+            bestSellTime = _redPeaks[_redPeaks.length - 1].time;
         }
         return {
             code,
