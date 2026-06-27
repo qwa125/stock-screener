@@ -36,6 +36,7 @@ deploy/
 dist-*/
 dist-web
 dist/
+!server/dist/
 node-compile-cache/
 node_modules/
 npm-debug.log*
