@@ -630,8 +630,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     for (const s of list) if (s?.code) map.set(s.code, s);
 
     // 更新主板缓存
+    let mainBoardChanged = false;
     if (this.mainBoardCache?.data?.length) {
-      let changed = false;
       for (let i = 0; i < this.mainBoardCache.data.length; i++) {
         const item = this.mainBoardCache.data[i];
         const upgraded = map.get(item.code);
@@ -639,15 +639,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
           item.suggestion = upgraded.suggestion;
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
-          changed = true;
+          mainBoardChanged = true;
         }
       }
-      if (changed) this.saveMainBoardCacheToDisk().catch(() => {});
+      if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
     }
 
     // 更新GEM缓存
+    let gemChanged = false;
     if (this.cache?.data?.length) {
-      let changed = false;
       for (let i = 0; i < this.cache.data.length; i++) {
         const item = this.cache.data[i];
         const upgraded = map.get(item.code);
@@ -655,13 +655,13 @@ export class GemScreenerService implements OnApplicationBootstrap {
           item.suggestion = upgraded.suggestion;
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
-          changed = true;
+          gemChanged = true;
         }
       }
-      if (changed) this.saveCacheToDisk().catch(() => {});
+      if (gemChanged) this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
     }
 
-    this.logger.log(`前端升级信号已回写: ${list.length}只`);
+    this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更）`);
   }
 
   /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
