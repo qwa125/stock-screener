@@ -13,7 +13,7 @@ const postgres = require('postgres')
 export class DeviceRegistryService implements OnModuleInit {
   private readonly logger = new Logger(DeviceRegistryService.name)
   private registry: DeviceRegistryEntry[] = []
-  private maxSlots = parseInt(process.env.MAX_SLOTS || '3', 10)
+  private maxSlots = parseInt(process.env.MAX_SLOTS || '100', 10)
   private registryLoaded = false
   private pgSql: any = null
   private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
@@ -75,7 +75,7 @@ export class DeviceRegistryService implements OnModuleInit {
         )
       `
       await sql`
-        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '100')
         ON CONFLICT (key) DO NOTHING
       `
       this.logger.log('✅ PostgreSQL 设备表创建/确认成功')

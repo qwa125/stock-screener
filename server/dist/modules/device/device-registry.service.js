@@ -17,7 +17,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
         this.registry = [];
-        this.maxSlots = parseInt(process.env.MAX_SLOTS || '3', 10);
+        this.maxSlots = parseInt(process.env.MAX_SLOTS || '100', 10);
         this.registryLoaded = false;
         this.pgSql = null;
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
@@ -77,7 +77,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
         )
       `;
             await sql `
-        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '3')
+        INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '100')
         ON CONFLICT (key) DO NOTHING
       `;
             this.logger.log('✅ PostgreSQL 设备表创建/确认成功');
