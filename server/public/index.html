@@ -1883,7 +1883,7 @@ async function doSearch(){
           o.suggestion=liveSug
         }
         isDetailView=true;startIntradayRefresh(stockCode,stockHigh,stockLow)
-          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow}):'')
+          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
       }else{
         throw new Error('分析无结果')
       }
