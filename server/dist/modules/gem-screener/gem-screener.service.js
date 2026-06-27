@@ -543,17 +543,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                 }
             }
+            const mainData = this.mainBoardCache?.data || [];
+            const gemData = this.cache?.data || [];
             for (const code of map.keys()) {
                 let found = false;
-                for (let i = 0; i < this.mainBoardCache.data.length; i++) {
-                    if (this.mainBoardCache.data[i].code === code) {
+                for (let i = 0; i < mainData.length; i++) {
+                    if (mainData[i].code === code) {
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
-                    for (let i = 0; i < this.cache.data.length; i++) {
-                        if (this.cache.data[i].code === code) {
+                    for (let i = 0; i < gemData.length; i++) {
+                        if (gemData[i].code === code) {
                             found = true;
                             break;
                         }

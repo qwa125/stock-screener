@@ -676,8 +676,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
       // 统计在两个缓存中都未找到的股票
-      const mainData = this.mainBoardCache.data || [];
-      const gemData = this.cache.data || [];
+      const mainData = this.mainBoardCache?.data || [];
+      const gemData = this.cache?.data || [];
       for (const code of map.keys()) {
         let found = false;
         for (let i = 0; i < mainData.length; i++) {
