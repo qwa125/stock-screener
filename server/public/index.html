@@ -439,10 +439,12 @@ async function autoLightScan(){
     if(!totalList.length)throw new Error('未获取到热门股票')
     setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
     // 保存Sina实时行情给doFullRescan复用（避免二次拉取失败导致机会区为空）
+    // 保存全部2000只（shStocks+szStocks），doFullRescan会自行isMainBoard/isGEM过滤
     try{
       var _se=[]
-      for(var _si=0;_si<totalList.length;_si++){
-        var _sc=totalList[_si],_c=String(_sc.code||'')
+      var _allStocks=shStocks.concat(szStocks)
+      for(var _si=0;_si<_allStocks.length;_si++){
+        var _sc=_allStocks[_si],_c=String(_sc.code||'')
         if(!_c)continue
         _se.push({f12:_c,f14:_sc.name||'',f2:parseFloat(_sc.trade)||0,f3:parseFloat(_sc.changepercent)||0,f15:parseFloat(_sc.high)||0,f16:parseFloat(_sc.low)||0})
       }

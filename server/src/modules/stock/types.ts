@@ -100,6 +100,8 @@ export interface FormulaResult {
   zhenShiChuHuo: boolean;
   /** 白◇-洗盘确认 */
   xiPanQueRen: boolean;
+  /** 白◇-紧急出货（主力出货+高位+跌破MA5/MA10+非洗盘） */
+  jinJiChuHuo: boolean;
 
   // === 白☆结果 ===
   /** DIFF值 */

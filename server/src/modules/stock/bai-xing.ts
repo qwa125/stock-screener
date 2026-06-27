@@ -534,6 +534,7 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     hengPanTuPo: 白消买点2[lastIdx],
     qiWen: 高位回调买点[lastIdx],
     tiaoJianChengLi: BS_条件成立_filtered[lastIdx],
+    // 空信号：实际未使用，暂留false占位
     kong: false,
     // XMA边缘效应：confirmedStart是第一个XMA不完整索引，其之前的数据100%可靠
     edgeIncomplete: edgeIncomplete,

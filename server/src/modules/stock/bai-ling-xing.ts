@@ -6,7 +6,7 @@ import { FormulaEngine } from './formula-engine';
 import { FormulaResult, TrendState, PositionZone } from './types';
 
 export function calcBaiLingXing(engine: FormulaEngine): Pick<FormulaResult,
-  'buySignalDiamond' | 'xiPanFanZhuanBuy' | 'zhuShengZhongWeiChuHuo' | 'zhenShiChuHuo' | 'xiPanQueRen'
+  'buySignalDiamond' | 'xiPanFanZhuanBuy' | 'zhuShengZhongWeiChuHuo' | 'zhenShiChuHuo' | 'xiPanQueRen' | 'jinJiChuHuo'
 > {
   const N = 500;
   const C = engine.CLOSE;

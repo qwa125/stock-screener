@@ -57,6 +57,7 @@ export interface FormulaResult {
     zhuShengZhongWeiChuHuo: boolean;
     zhenShiChuHuo: boolean;
     xiPanQueRen: boolean;
+    jinJiChuHuo: boolean;
     diff: number;
     dea: number;
     lifeLine: number;
