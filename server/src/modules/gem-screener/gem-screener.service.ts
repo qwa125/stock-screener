@@ -4585,6 +4585,24 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       bestSellTime = _redPeaks[_redPeaks.length-1].time;
     }
 
+    // ─── 只保留当天数据（日内分析不跨日） ───
+    const _td = minData[len - 1]?.time?.slice(0, 10) || '';
+    let todaySugs: any[] = [];
+    if (_td) {
+      const _f = suggestions.filter(s => s.time?.startsWith(_td));
+      if (_f.length > 0) {
+        todaySugs = _f.map(s => ({ ...s, time: s.time.slice(11, 16) }));
+        // 用当天MACD峰谷重新计算最佳买卖价
+        const _tG = _greenValleys.filter(v => v.time?.startsWith(_td));
+        const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
+        if (_tG.length > 0) { const _g = _tG[_tG.length-1]; bestBuyPrice = _g.price; bestBuyTime = _g.time.slice(11, 16); }
+        if (_tR.length > 0) { const _r = _tR[_tR.length-1]; bestSellPrice = _r.price; bestSellTime = _r.time.slice(11, 16); }
+      }
+    }
+    if (todaySugs.length === 0) {
+      todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
+    }
+
     return {
       code,
       date: new Date().toISOString().slice(0, 10),
@@ -4608,7 +4626,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         buySignals: zhuliBuyPoints,
         sellSignals: zhuliSellPoints,
       },
-      suggestions: suggestions.slice(-20), // 最近20个综合信号
+      suggestions: todaySugs, // 仅当天信号
       bestBuyPrice: bestBuyPrice || 0,
       bestBuyTime: bestBuyTime,
       bestSellPrice: bestSellPrice || 0,
