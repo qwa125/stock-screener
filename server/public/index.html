@@ -867,12 +867,7 @@ function buildDetail(s,rt,ta){
       // 布林带文字描述
       +(posStr?'<div style="color:#374151;font-size:10px;margin-bottom:5px">📍 价格位置：'+posStr+'</div>':'')
       // 指标网格
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:5px">'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">MACD</span><br><span style="font-weight:600">DIF '+ta.macd.dif.toFixed(3)+'<br>DEA '+ta.macd.dea.toFixed(3)+'<br>柱 '+(ta.macd.hist>=0?'+':'')+ta.macd.hist.toFixed(3)+'</span></div>'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">KDJ</span><br><span style="font-weight:600">K '+ta.kdj.k.toFixed(1)+'<br>D '+ta.kdj.d.toFixed(1)+'<br>J '+ta.kdj.j.toFixed(1)+'</span></div>'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">RSI</span><br><span style="font-weight:600;color:'+(ta.rsi>=70?'#ef4444':ta.rsi<=30?'#22c55e':'#1f2937')+'">RSI(14) '+ta.rsi.toFixed(1)+'<br>RSI(6) '+ta.rsi6.toFixed(1)+'</span></div>'
-        +'<div style="background:#fff;padding:4px 6px;border-radius:4px;font-size:9px"><span style="color:#6b7280">量比</span><br><span style="font-weight:600;color:'+(ta.volumeRatio>=1.5?'#ef4444':ta.volumeRatio>=0.8?'#ca8a04':'#6b7280')+'">'+(ta.volumeRatio>0?ta.volumeRatio.toFixed(2)+'x':'-')+'</span></div>'
-      +'</div>'
+      +'<div id="intradayMacd" style="padding:6px;background:#f8fafc;border-radius:6px;font-size:10px;text-align:center;color:#6b7280">⏳ 日内交易信号加载中...</div>'
       // 综合理由
       +'<div style="background:#fff;border-radius:4px;padding:5px 6px;margin-bottom:5px">'
         +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
@@ -1651,36 +1646,43 @@ async function fetchIntraday(code){
     return d&&d.data||null
   }catch(e){return null}
 }
-// 实时更新股价（每隔若干秒调用一次）
+// 实时更新股价+日内介入参考（每隔若干秒调用一次）
 async function refreshDetailPrice(code){
   var ia=await fetchIntraday(code)
   if(!ia)return
-  // 更新MACD信号区域
-  var macd=ia.macd||{},zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[]
-  var macdHtml='<div style="font-size:12px;padding:8px 12px;background:rgba(255,255,255,0.06);border-radius:12px;margin-top:8px">'
-  macdHtml+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
-  macdHtml+='<span>MACD(40,120,40)</span>'
-  macdHtml+='<span>金叉×'+((macd.goldenCrosses||0)+' 死叉×'+(macd.deathCrosses||0))+'</span></div>'
-  if(macd.signals&&macd.signals.length){
-    macdHtml+='<div style="max-height:100px;overflow-y:auto">'
-    for(var i=Math.max(0,macd.signals.length-3);i<macd.signals.length;i++){
-      var s=macd.signals[i]
-      macdHtml+='<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05)">'
-      macdHtml+='<span>'+(s.type||'')+'</span>'
-      macdHtml+='<span>'+s.time+' @¥'+s.price+'</span></div>'
-    }
-    macdHtml+='</div>'
-  }
-  // 主力散户
-  macdHtml+='<div style="display:flex;justify-content:space-between;margin:6px 0">'
-  macdHtml+='<span>主力: '+(zs.zhuli!==undefined?zs.zhuli.toFixed(1):'-')+'</span>'
-  macdHtml+='<span>散户: '+(zs.sanhu!==undefined?zs.sanhu.toFixed(1):'-')+'</span></div>'
+  var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||'-'
+  // 找最近的买入/卖出点
+  var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='-'
   if(sugs.length){
-    macdHtml+='<div style="font-weight:600;color:#4ecdc4">最优建议: '+sugs[0].type+'</div>'
+    bestSug=sugs[0].type||'-'
+    for(var si=0;si<sugs.length;si++){
+      var s=sugs[si]
+      if(s.type==='买入'&&buyPoint==='-'){buyPoint=s.time||'-';buyPrice=s.price||'-'}
+      if(s.type==='卖出'&&sellPoint==='-'){sellPoint=s.time||'-';sellPrice=s.price||'-'}
+    }
   }
-  macdHtml+='</div>'
+  var html='<div style="font-size:13px;padding:10px 14px;background:rgba(255,255,255,0.06);border-radius:12px;margin-top:8px">'
+  // 主力/散户
+  html+='<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+  html+='<span>🌟 主力: <strong>'+(zs.zhuli!==undefined?zs.zhuli.toFixed(1):'-')+'</strong></span>'
+  html+='<span>💡 散户: <strong>'+(zs.sanhu!==undefined?zs.sanhu.toFixed(1):'-')+'</strong></span></div>'
+  // 最佳介入点
+  html+='<div style="margin-bottom:6px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08)"><span style="font-weight:600;color:#4ecdc4">🎯 最佳介入点: '+bestSug+'</span></div>'
+  // 买入点/卖出点 + 价格
+  html+='<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid rgba(255,255,255,0.08)">'
+  html+='<span style="color:#ff6b6b">⬆ 买入点: '+buyPoint+(buyPrice!=='-'?' @¥'+buyPrice:'')+'</span>'
+  html+='<span style="color:#4ecdc4">⬇ 卖出点: '+sellPoint+(sellPrice!=='-'?' @¥'+sellPrice:'')+'</span></div>'
+  // 挂单参考
+  var refPrice=lastPrice
+  // 根据买卖点计算参考价格
+  var buyRef=sugs.length>0&&sugs[0].price?sugs[0].price:lastPrice
+  var sellRef=sugs.length>1&&sugs[1].price?sugs[1].price:lastPrice
+  html+='<div style="margin-top:6px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;font-size:12px">'
+  html+='<span>📝 挂单买入参考: ¥'+(typeof buyRef==='number'?buyRef.toFixed(2):buyRef)+'</span>'
+  html+='<span>📝 挂单卖出参考: ¥'+(typeof sellRef==='number'?sellRef.toFixed(2):sellRef)+'</span></div>'
+  html+='</div>'
   var el=$('intradayMacd')
-  if(el)el.innerHTML=macdHtml
+  if(el)el.innerHTML=html
   // 更新实时价格
   if(ia.currentPrice){
     var priceEl=$('livePrice')
