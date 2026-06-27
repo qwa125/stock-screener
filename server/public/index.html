@@ -438,6 +438,17 @@ async function autoLightScan(){
     var totalList=mainBoard.concat(gem)
     if(!totalList.length)throw new Error('未获取到热门股票')
     setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
+    // 保存Sina实时行情给doFullRescan复用（避免二次拉取失败导致机会区为空）
+    try{
+      var _se=[]
+      for(var _si=0;_si<totalList.length;_si++){
+        var _sc=totalList[_si],_c=String(_sc.code||'')
+        if(!_c)continue
+        _se.push({f12:_c,f14:_sc.name||'',f2:parseFloat(_sc.trade)||0,f3:parseFloat(_sc.changepercent)||0,f15:parseFloat(_sc.high)||0,f16:parseFloat(_sc.low)||0})
+      }
+      window._cachedSinaEMData=_se
+      console.log('💾 缓存Sina实时行情给doFullRescan复用:',_se.length,'只')
+    }catch(e){}
     // ④ 分批抓K线推送后端（每批20只，间隔200ms）
     var done=0,total=totalList.length
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
@@ -1065,7 +1076,16 @@ async function doFullRescan(){
   // 浏览器直连新浪获取实时行情（不经过后端代理，避免US超时）
   var emData=[]
   var scanCount=0
-  try{
+  // 优先使用autoLightScan已拉取的Sina数据（避免二次拉取失败导致机会区为空）
+  if(window._cachedSinaEMData && window._cachedSinaEMData.length){
+    emData=window._cachedSinaEMData.slice()
+    scanCount=emData.length
+    window._lastScanCount=scanCount
+    updateScanCount(scanCount)
+    window._cachedSinaEMData=null  // 用后清空
+    setStatus('🔄 复用autoLightScan行情 '+scanCount+' 只，与缓存合并排序中...')
+    console.log('📦 复用autoLightScan已拉取的Sina数据:',scanCount,'只')
+  }else try{
     setStatus('🔄 浏览器拉取Sina全市场行情...')
     async function fetchAllSinaPages2(node){
       var all=[]
@@ -1103,6 +1123,11 @@ async function doFullRescan(){
     scanCount=emData.length
     window._lastScanCount=scanCount
     updateScanCount(scanCount)
+    // 保存本次拉取的数据供下次doFullRescan复用
+    if(!window._cachedSinaEMData || emData.length > window._cachedSinaEMData.length){
+      window._cachedSinaEMData=emData.slice()
+      console.log('💾 缓存doFullRescan拉取的Sina数据:',emData.length,'只')
+    }
     setStatus('✅ 浏览器拉取Sina '+scanCount+' 只，与缓存合并排序中...')
   }catch(e){
     console.log('⚠️ 浏览器Sina拉取失败:',e.message)
