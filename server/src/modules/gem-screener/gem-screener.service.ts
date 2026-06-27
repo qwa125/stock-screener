@@ -545,8 +545,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
   recalculateSuggestions(data: OpportunityStock[]) {
     for (const s of data) {
       // 保护买入信号（来自 signalRule 的精准分析），不做兜底覆盖
-      // 非买入信号（持有/减仓/卖出/不要介入）允许兜底逻辑修正
       if (['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || '')) continue;
+
+      // 尊重 getTradingSuggestion 的卖出/不要介入结果（更精确的XMA边缘效应处理）
+      if (['卖出', '不要介入'].includes(s.suggestion || '')) continue;
 
       // 暴跌 → 卖出（兜底，正常情况下signalRule已处理）
       if (s.changePercent <= -5) {

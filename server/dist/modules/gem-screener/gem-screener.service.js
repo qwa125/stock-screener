@@ -432,6 +432,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (const s of data) {
             if (['重仓买入', '买入', '轻仓买入'].includes(s.suggestion || ''))
                 continue;
+            if (['卖出', '不要介入'].includes(s.suggestion || ''))
+                continue;
             if (s.changePercent <= -5) {
                 s.suggestion = '卖出';
                 s.score = Math.min(s.score, 35);
