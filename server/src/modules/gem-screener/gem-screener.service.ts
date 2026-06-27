@@ -4597,10 +4597,24 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
         if (_tG.length > 0) { const _g = _tG[_tG.length-1]; bestBuyPrice = _g.price; bestBuyTime = _g.time.slice(11, 16); }
         if (_tR.length > 0) { const _r = _tR[_tR.length-1]; bestSellPrice = _r.price; bestSellTime = _r.time.slice(11, 16); }
+        // 当天无MACD峰谷时，用建议列表回退
+        if (!bestBuyTime || bestBuyTime.includes('-')) {
+          const _tB = _f.filter(s => s.type === '买入点');
+          if (_tB.length > 0) { const _b = _tB.reduce((a,b) => a.price<b.price ? a : b); bestBuyPrice = _b.price; bestBuyTime = _b.time.slice(11,16); }
+          else { bestBuyPrice = 0; bestBuyTime = ''; }
+        }
+        if (!bestSellTime || bestSellTime.includes('-')) {
+          const _tS = _f.filter(s => s.type === '卖出点');
+          if (_tS.length > 0) { const _s = _tS.reduce((a,b) => a.price>b.price ? a : b); bestSellPrice = _s.price; bestSellTime = _s.time.slice(11,16); }
+          else { bestSellPrice = 0; bestSellTime = ''; }
+        }
       }
     }
     if (todaySugs.length === 0) {
       todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
+      // fallback: 无当天建议，清空最佳价（避免旧日期泄漏）
+      if (!bestBuyTime || bestBuyTime.includes('-')) { bestBuyPrice = 0; bestBuyTime = ''; }
+      if (!bestSellTime || bestSellTime.includes('-')) { bestSellPrice = 0; bestSellTime = ''; }
     }
 
     return {

@@ -3951,10 +3951,42 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     bestSellPrice = _r.price;
                     bestSellTime = _r.time.slice(11, 16);
                 }
+                if (!bestBuyTime || bestBuyTime.includes('-')) {
+                    const _tB = _f.filter(s => s.type === '买入点');
+                    if (_tB.length > 0) {
+                        const _b = _tB.reduce((a, b) => a.price < b.price ? a : b);
+                        bestBuyPrice = _b.price;
+                        bestBuyTime = _b.time.slice(11, 16);
+                    }
+                    else {
+                        bestBuyPrice = 0;
+                        bestBuyTime = '';
+                    }
+                }
+                if (!bestSellTime || bestSellTime.includes('-')) {
+                    const _tS = _f.filter(s => s.type === '卖出点');
+                    if (_tS.length > 0) {
+                        const _s = _tS.reduce((a, b) => a.price > b.price ? a : b);
+                        bestSellPrice = _s.price;
+                        bestSellTime = _s.time.slice(11, 16);
+                    }
+                    else {
+                        bestSellPrice = 0;
+                        bestSellTime = '';
+                    }
+                }
             }
         }
         if (todaySugs.length === 0) {
             todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
+            if (!bestBuyTime || bestBuyTime.includes('-')) {
+                bestBuyPrice = 0;
+                bestBuyTime = '';
+            }
+            if (!bestSellTime || bestSellTime.includes('-')) {
+                bestSellPrice = 0;
+                bestSellTime = '';
+            }
         }
         return {
             code,
