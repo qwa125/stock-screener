@@ -76,7 +76,7 @@ export class DeviceRegistryService implements OnModuleInit {
       `
       await sql`
         INSERT INTO public.device_settings (key, value) VALUES ('max_slots', '100')
-        ON CONFLICT (key) DO UPDATE SET value = '100'
+        ON CONFLICT (key) DO NOTHING
       `
       this.logger.log('✅ PostgreSQL 设备表创建/确认成功')
       return true
