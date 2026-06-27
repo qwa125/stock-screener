@@ -2054,9 +2054,7 @@ setTimeout(function(){
             // 持久化到浏览器本地，下次后端无缓存时可直接展示
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
-            setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
-            // 立即触发全链路扫描（Sina+东财K线+分析+升级写回）
-            setTimeout(function(){if(!loading)autoLightScan()},1000)
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（缓存已加载）')
           }else{
           }
           // 后端无缓存 → 尝试恢复浏览器端本地快照
@@ -2097,10 +2095,6 @@ setTimeout(function(){
         }catch(e2){}
       })
       .finally(function(){
-        // 无论有无缓存，后台启动渐进式扫描（构建新缓存 / 更新已有缓存）
-        setTimeout(function(){
-          if(!_autoScanning&&!loading) autoLightScan()
-        },1000)
       })
   }else{
     // 休盘/周末 → 优先从后端缓存加载（设备间共享），后端无缓存时回退到本地快照
