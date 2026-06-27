@@ -476,9 +476,9 @@ export class GemScreenerController {
 
   @Post('update-upgraded')
   @SkipAccessLimit()
-  async updateUpgraded(@Body() body: { data?: any[] }) {
+  async updateUpgraded(@Body() body: { list?: any[] }) {
     try {
-      const list = body?.data || [];
+      const list = body?.list || [];
       if (!list.length) return { code: 200, msg: 'empty', data: [] };
       this.gemScreener.updateUpgradedCache(list);
       return { code: 200, msg: `updated ${list.length} stocks`, data: list.length };
@@ -506,6 +506,17 @@ export class GemScreenerController {
     } catch (e) {
       return { code: 500, msg: e.message };
     }
+  }
+
+  @Post('sync-cache')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async syncCache(@Body() body: { stocks: any[] }) {
+    if (!body.stocks || !body.stocks.length) {
+      return { code: 400, msg: '无数据' };
+    }
+    const count = await this.gemScreener.syncUpgradedCache(body.stocks);
+    return { code: 200, msg: `同步 ${count} 只`, data: { count } };
   }
 
   @Post('rescan-batch')

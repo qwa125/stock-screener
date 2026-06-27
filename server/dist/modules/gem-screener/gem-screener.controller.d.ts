@@ -231,7 +231,7 @@ export declare class GemScreenerController {
         data: never[];
     }>;
     updateUpgraded(body: {
-        data?: any[];
+        list?: any[];
     }): Promise<{
         code: number;
         msg: string;
@@ -259,6 +259,19 @@ export declare class GemScreenerController {
     }): Promise<{
         code: number;
         msg: any;
+    }>;
+    syncCache(body: {
+        stocks: any[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            count: number;
+        };
     }>;
     rescanBatch(body: {
         codes: string[];

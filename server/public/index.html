@@ -1438,9 +1438,7 @@ async function doFullRescan(){
     var upgradeList=[]
     for(var si=0;si<newStocks.length;si++){
       var us=newStocks[si]
-      if(us.suggestion&&['重仓买入','买入','轻仓买入'].indexOf(us.suggestion)>=0){
         upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
-      }
     }
     if(upgradeList.length>0){
       fetch(API+'/gem/update-upgraded',{

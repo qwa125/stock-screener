@@ -715,6 +715,29 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * 接收前端doFullRescan升级后的全量数据, 覆盖缓存
+   */
+  async syncUpgradedCache(stocks: any[]): Promise<number> {
+    if (!stocks || !stocks.length) return 0;
+    const gemStocks: any[] = [];
+    const mainStocks: any[] = [];
+    for (const s of stocks) {
+      if (/^30/.test(s.code)) gemStocks.push(s);
+      else mainStocks.push(s);
+    }
+    if (gemStocks.length) {
+      this.cache = { data: gemStocks, timestamp: Date.now() };
+      await this.saveCacheToDisk();
+    }
+    if (mainStocks.length) {
+      this.mainBoardCache = { data: mainStocks, timestamp: Date.now() };
+      await this.saveMainBoardCacheToDisk();
+    }
+    this.logger.log(`📡 前端升级数据已同步: GEM ${gemStocks.length} 只, 主板 ${mainStocks.length} 只`);
+    return gemStocks.length + mainStocks.length;
+  }
+
   private triggerRefresh() {
     // 盘后/周末不刷新, 保留收盘数据
     if (!isMarketOpen()) {

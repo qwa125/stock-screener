@@ -576,6 +576,28 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
     }
+    async syncUpgradedCache(stocks) {
+        if (!stocks || !stocks.length)
+            return 0;
+        const gemStocks = [];
+        const mainStocks = [];
+        for (const s of stocks) {
+            if (/^30/.test(s.code))
+                gemStocks.push(s);
+            else
+                mainStocks.push(s);
+        }
+        if (gemStocks.length) {
+            this.cache = { data: gemStocks, timestamp: Date.now() };
+            await this.saveCacheToDisk();
+        }
+        if (mainStocks.length) {
+            this.mainBoardCache = { data: mainStocks, timestamp: Date.now() };
+            await this.saveMainBoardCacheToDisk();
+        }
+        this.logger.log(`📡 前端升级数据已同步: GEM ${gemStocks.length} 只, 主板 ${mainStocks.length} 只`);
+        return gemStocks.length + mainStocks.length;
+    }
     triggerRefresh() {
         if (!(0, market_time_1.isMarketOpen)()) {
             if (this.cache) {
