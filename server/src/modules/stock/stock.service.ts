@@ -163,6 +163,7 @@ export class StockService {
       qiWen: !!(formulaResult as any)?.qiWen,
       tiaoJianChengLi: !!(formulaResult as any)?.tiaoJianChengLi,
       zhuLiChuHuo: !!(formulaResult as any)?.zhuLiChuHuo,
+      jinJiChuHuo: !!(formulaResult as any)?.jinJiChuHuo,
       gaoKaiDiZouQingCang: !!(formulaResult as any)?.gaoKaiDiZouQingCang,
       baoLiangFuGaiQingCang: !!(formulaResult as any)?.baoLiangFuGaiQingCang,
       po5RiXian: !!(formulaResult as any)?.po5RiXian,

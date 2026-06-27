@@ -2783,7 +2783,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const pricePosForXmaPrediction = pricePos;
         const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
             lingXing?.zhuShengZhongWeiChuHuo ||
-            lingXing?.zhenShiChuHuo);
+            lingXing?.zhenShiChuHuo ||
+            lingXing?.jinJiChuHuo);
         const priceBelowMa10InBaiXiao = baiXiao && price <= ma10;
         const ma5DeathCrossInBaiXiao = baiXiao && ma5 < ma10 && pricePosForXmaPrediction >= 50;
         const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;

@@ -3286,7 +3286,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const hasChuHuo = !!(
       (sanJiao as any)?.zhuLiChuHuo ||
       (lingXing as any)?.zhuShengZhongWeiChuHuo ||
-      (lingXing as any)?.zhenShiChuHuo
+      (lingXing as any)?.zhenShiChuHuo ||
+      (lingXing as any)?.jinJiChuHuo
     );
     // 白消阶段XMA漂移早期预警：价格跌破MA10（领先XMA约1-2天）
     // K线领先XMA：价先破位 → XMA尾端漂移变白布

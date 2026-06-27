@@ -139,6 +139,7 @@ let StockService = StockService_1 = class StockService {
             qiWen: !!formulaResult?.qiWen,
             tiaoJianChengLi: !!formulaResult?.tiaoJianChengLi,
             zhuLiChuHuo: !!formulaResult?.zhuLiChuHuo,
+            jinJiChuHuo: !!formulaResult?.jinJiChuHuo,
             gaoKaiDiZouQingCang: !!formulaResult?.gaoKaiDiZouQingCang,
             baoLiangFuGaiQingCang: !!formulaResult?.baoLiangFuGaiQingCang,
             po5RiXian: !!formulaResult?.po5RiXian,

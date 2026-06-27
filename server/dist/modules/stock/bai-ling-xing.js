@@ -247,5 +247,6 @@ function calcBaiLingXing(engine) {
         zhuShengZhongWeiChuHuo: 主升中位出货[lastIdx],
         zhenShiChuHuo: 真实出货[lastIdx],
         xiPanQueRen: 洗盘确认[lastIdx],
+        jinJiChuHuo: 紧急出货[lastIdx],
     };
 }
