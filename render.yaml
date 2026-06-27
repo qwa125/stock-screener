@@ -2,5 +2,5 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: corepack enable && cd server && pnpm install && pnpm run build
+    buildCommand: corepack enable && pnpm install && cd server && pnpm run build
     startCommand: cd server && node dist/main.js
