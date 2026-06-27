@@ -1611,14 +1611,13 @@ async function refreshDetailPrice(code,low,high){
   // 高低价优先用传入的，否则用接口的
   var dayLow=low||ia.dayLow||lastPrice*0.95
   var dayHigh=high||ia.dayHigh||lastPrice*1.05
-  // 找最近的买入/卖出点
+  // 找最近的买入/卖出点(后端返回type为'买入点'/'卖出点')
   var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='持有'
   if(sugs.length){
-    bestSug=sugs[0].type||'持有'
-    for(var si=0;si<sugs.length;si++){
+    for(var si=sugs.length-1;si>=0;si--){ // 从最新的开始找
       var s=sugs[si]
-      if(s.type==='买入'&&buyPoint==='-'){buyPoint=s.time||'-';buyPrice=typeof s.price==='number'?s.price:lastPrice}
-      if(s.type==='卖出'&&sellPoint==='-'){sellPoint=s.time||'-';sellPrice=typeof s.price==='number'?s.price:lastPrice}
+      if((s.type==='买入点'||s.type==='买入')&&buyPoint==='-'){buyPoint=s.time||'-';buyPrice=typeof s.price==='number'?s.price:lastPrice}
+      if((s.type==='卖出点'||s.type==='卖出')&&sellPoint==='-'){sellPoint=s.time||'-';sellPrice=typeof s.price==='number'?s.price:lastPrice}
     }
   }
   // 挂单参考：基于当日支撑/压力区计算最佳范围
@@ -1627,19 +1626,25 @@ async function refreshDetailPrice(code,low,high){
   var buyHigh=dayLow+gap*0.15  // 买入上限 = 最低价+15%振幅(支撑区上沿)
   var sellLow=dayHigh-gap*0.15  // 卖出下限 = 最高价-15%振幅(压力区下沿)
   var sellHigh=dayHigh  // 卖出的上限 = 最高价
-  // 最佳介入点信号文本
+  // 最佳介入点信号文本(根据实际买卖点数据生成实用提示)
   var sigText=''
-  if(bestSug==='买入'||bestSug==='重仓买入')sigText='🚀 强势买入信号，建议现价介入'
-  else if(bestSug==='轻仓买入')sigText='📈 买入信号偏弱，可轻仓试水'
-  else if(bestSug==='持有')sigText='⏳ 持有观望，等待明确信号'
-  else if(bestSug==='减仓')sigText='⚠️ 建议减仓，降低风险'
-  else sigText='🔻 '+bestSug+'，暂时避免介入'
+  if(buyPrice!=='-'&&sellPrice!=='-'){
+    if(lastPrice<=buyPrice*1.01)sigText='📈 现价可买入，建议价格 '+buyPrice.toFixed(2)
+    else if(lastPrice>=sellPrice*0.99)sigText='📉 目前是卖出点，建议卖出价格 '+sellPrice.toFixed(2)
+    else sigText='⏳ 目前不是最佳介入点，最佳介入价格 '+buyPrice.toFixed(2)+'，建议卖出价格 '+sellPrice.toFixed(2)
+  }else if(buyPrice!=='-'){
+    if(lastPrice<=buyPrice*1.02)sigText='📈 现价能买入，建议价格 '+buyPrice.toFixed(2)
+    else sigText='⏳ 目前不是最佳介入点，最佳介入价格 '+buyPrice.toFixed(2)
+  }else if(sellPrice!=='-'){
+    if(lastPrice>=sellPrice*0.98)sigText='📉 目前是卖出点，建议卖出价格 '+sellPrice.toFixed(2)
+    else sigText='⏳ 目前不是最佳卖出点，建议卖出价格 '+sellPrice.toFixed(2)
+  }else{sigText='⏳ 暂无明确买卖信号，观望为主'}
   // 主力散户买卖点
   var html='<div style="font-size:13px;text-align:left">'
   // 主力/散户双栏
   html+='<div style="display:flex;justify-content:space-around;margin-bottom:6px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:8px;padding:8px 6px">'
-  html+='<div><div style="font-size:9px;opacity:.8">🌟 主力</div><div style="font-size:15px;font-weight:700">'+(zs.zhuli!==undefined?zs.zhuli.toFixed(1):'-')+'</div></div>'
-  html+='<div><div style="font-size:9px;opacity:.8">💡 散户</div><div style="font-size:15px;font-weight:700">'+(zs.sanhu!==undefined?zs.sanhu.toFixed(1):'-')+'</div></div>'
+  html+='<div><div style="font-size:9px;opacity:.8">🌟 主力</div><div style="font-size:15px;font-weight:700">'+(zs.main!==undefined?zs.main.toFixed(1):'-')+'</div></div>'
+  html+='<div><div style="font-size:9px;opacity:.8">💡 散户</div><div style="font-size:15px;font-weight:700">'+(zs.retail!==undefined?zs.retail.toFixed(1):'-')+'</div></div>'
   html+='</div>'
   // 📊 日内价格位置条形图(最高价-最低价+三角形箭头标记当前价)
   var pricePosPercent=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPrice-dayLow)/(dayHigh-dayLow)*100)):50
@@ -1661,8 +1666,8 @@ async function refreshDetailPrice(code,low,high){
   html+='<div style="padding:6px 0">'
   html+='<div style="font-weight:600;font-size:13px;margin-bottom:4px">🎯 <span style="color:#16a34a">最佳介入点</span>：'+sigText+'</div>'
   html+='<div style="display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:4px">'
-  html+='<span style="color:#ef4444;font-weight:600">⬆ 买入点: '+buyPoint+(buyPrice!=='-'?' @'+Number(buyPrice).toFixed(2):'')+'</span>'
-  html+='<span style="color:#22c55e;font-weight:600">⬇ 卖出点: '+sellPoint+(sellPrice!=='-'?' @'+Number(sellPrice).toFixed(2):'')+'</span>'
+  html+='<span style="color:#ef4444;font-weight:600">⬆ 买入点: '+(buyPrice!=='-'?buyPoint+' @'+Number(buyPrice).toFixed(2):'暂无信号')+'</span>'
+  html+='<span style="color:#22c55e;font-weight:600">⬇ 卖出点: '+(sellPrice!=='-'?sellPoint+' @'+Number(sellPrice).toFixed(2):'暂无信号')+'</span>'
   html+='</div></div>'
   // 挂单参考
   html+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
