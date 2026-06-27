@@ -44,7 +44,7 @@ export class DeviceRegistryService implements OnModuleInit {
         this.logger.warn('DATABASE_URL 未设置，跳过 PostgreSQL')
         return null
       }
-      this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 })
+      this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10, ssl: { rejectUnauthorized: false } })
       // postgres() 是惰性连接，必须验证一次才能确认连接有效
       await this.pgSql`SELECT 1`
       this.logger.log('✅ DeviceRegistry 连接 PostgreSQL 成功')
