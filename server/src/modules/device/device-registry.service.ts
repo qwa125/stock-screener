@@ -39,9 +39,13 @@ export class DeviceRegistryService implements OnModuleInit {
 
   private async initPostgres() {
     try {
-      const url = process.env.DATABASE_URL || process.env.PGDATABASE_URL
+      const url = process.env.PGDATABASE_URL || process.env.DATABASE_URL
       if (!url) {
         this.logger.warn('DATABASE_URL 未设置，跳过 PostgreSQL')
+        return null
+      }
+      if (!/^postgres(ql)?:\/\//.test(url)) {
+        this.logger.warn(`DATABASE_URL 格式无效，跳过 PostgreSQL: ${url.slice(0,20)}...`)
         return null
       }
       this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10, ssl: { rejectUnauthorized: false } })

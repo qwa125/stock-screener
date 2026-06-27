@@ -46,9 +46,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     get pgSql() {
         if (this._pgSql)
             return this._pgSql;
-        const url = process.env.DATABASE_URL;
+        const url = process.env.PGDATABASE_URL || process.env.DATABASE_URL;
         if (!url)
             return null;
+        if (!/^postgres(ql)?:\/\//.test(url)) {
+            this.logger.warn(`⚠️ DATABASE_URL 格式无效（需要 postgres:// 开头），跳过 PostgreSQL`);
+            return null;
+        }
         try {
             this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
             this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
