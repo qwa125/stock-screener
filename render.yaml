@@ -2,5 +2,5 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: echo "skipping build - dist is pre-built"
+    buildCommand: cd server && npm install --ignore-scripts && npm run build
     startCommand: cd server && node dist/main.js
