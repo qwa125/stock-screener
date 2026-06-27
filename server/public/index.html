@@ -1608,9 +1608,19 @@ async function refreshDetailPrice(code,low,high){
   var ia=await fetchIntraday(code)
   if(!ia)return
   var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||0
-  // 高低价优先用传入的，否则用接口的
-  var dayLow=low||ia.dayLow||lastPrice*0.95
-  var dayHigh=high||ia.dayHigh||lastPrice*1.05
+  // 高低价优先用传入的有效值，否则从信号价格推算，最后才用现价估算
+  var dayLow=low>0?low:0,dayHigh=high>0?high:0
+  if(sugs.length>0){
+    var sugP=[]
+    for(var si=0;si<sugs.length;si++){if(typeof sugs[si].price==='number'&&sugs[si].price>0)sugP.push(sugs[si].price)}
+    if(sugP.length>0){
+      var sugMin=Math.min.apply(null,sugP),sugMax=Math.max.apply(null,sugP)
+      if(dayLow<=0||dayLow>sugMin)dayLow=sugMin*0.98
+      if(dayHigh<=0||dayHigh<sugMax)dayHigh=sugMax*1.02
+    }
+  }
+  if(dayLow<=0)dayLow=lastPrice*0.95
+  if(dayHigh<=0)dayHigh=lastPrice*1.05
   // 找最近的买入/卖出点(后端返回type为'买入点'/'卖出点')
   var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='持有'
   if(sugs.length){
@@ -1666,8 +1676,8 @@ async function refreshDetailPrice(code,low,high){
   html+='<div style="padding:6px 0">'
   html+='<div style="font-weight:600;font-size:13px;margin-bottom:4px">🎯 <span style="color:#16a34a">最佳介入点</span>：'+sigText+'</div>'
   html+='<div style="display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:4px">'
-  html+='<span style="color:#ef4444;font-weight:600">⬆ 买入点: '+(buyPrice!=='-'?buyPoint+' @'+Number(buyPrice).toFixed(2):'暂无信号')+'</span>'
-  html+='<span style="color:#22c55e;font-weight:600">⬇ 卖出点: '+(sellPrice!=='-'?sellPoint+' @'+Number(sellPrice).toFixed(2):'暂无信号')+'</span>'
+  html+='<div style="display:flex;flex-direction:column;align-items:flex-start"><span style="color:#ef4444;font-weight:600;font-size:11px">⬆ 买入点 '+(buyPrice!=='-'?buyPoint:'暂无信号')+'</span><span style="color:#dc2626;font-weight:700;font-size:14px">'+(buyPrice!=='-'?Number(buyPrice).toFixed(2):'')+'</span></div>'
+  html+='<div style="display:flex;flex-direction:column;align-items:flex-end"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点 '+(sellPrice!=='-'?sellPoint:'暂无信号')+'</span><span style="color:#16a34a;font-weight:700;font-size:14px">'+(sellPrice!=='-'?Number(sellPrice).toFixed(2):'')+'</span></div>'
   html+='</div></div>'
   // 挂单参考
   html+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
@@ -1782,8 +1792,7 @@ async function doSearch(){
       forecast1_2Day: localStock?localStock.forecast1_2Day:null,
       mainForceInflow: localStock?localStock.mainForceInflow:0
     }
-    da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-      +'<div style="padding:16px;text-align:center;color:#666;font-size:13px">⏳ 正在分析该股票……</div>'
+    da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">🔍 搜索 '+stockName+' ('+stockCode+') — ⏳ 正在分析该股票……</div>'
     scrollTo(0,da.offsetTop-80)
     
     // 第三步：通过后端代理拉K线（解决跨域）→ POST给后端即时分析
@@ -1928,7 +1937,7 @@ async function doSearch(){
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          startIntradayRefresh(stockCode,o2.name)
+          startIntradayRefresh(stockCode,stockHigh,stockLow)
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})+'<div id="intradayMacd" style="margin-top:6px;padding:10px;background:#f8f9fa;border-radius:8px;font-size:12px;line-height:1.6"><span style="color:#888">⏳ 加载日内数据…</span></div>'
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
