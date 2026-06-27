@@ -2066,26 +2066,29 @@ setTimeout(function(){
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（缓存已加载）')
+            return // ← 关键修复：后端有数据直接返回，避免被下方localStorage旧快照覆盖
           }else{
+            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+            return
           }
-          // 后端无缓存 → 尝试恢复浏览器端本地快照
-          try{
-            var snap=localStorage.getItem('cache_snapshot')
-            if(snap){
-              var s=JSON.parse(snap)
-              if(s&&s.stocks&&s.stocks.length){
-                var ALLOWED={'重仓买入':1,'买入':1}
-                stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
-                if(stocks.length){
-                  renderList()
-                  setStatus('📋 本地快照恢复 '+stocks.length+' 只（服务器已重启，后台重建缓存中...）')
-                  return // 跳过下面的setStatus
-                }
+        }
+        // 后端无缓存 → 尝试恢复浏览器端本地快照
+        try{
+          var snap=localStorage.getItem('cache_snapshot')
+          if(snap){
+            var s=JSON.parse(snap)
+            if(s&&s.stocks&&s.stocks.length){
+              var ALLOWED={'重仓买入':1,'买入':1}
+              stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
+              if(stocks.length){
+                renderList()
+                setStatus('📋 本地快照恢复 '+stocks.length+' 只（服务器已重启，后台重建缓存中...）')
+                return // 跳过下面的setStatus
               }
             }
-          }catch(e){}
-          setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
-        }
+          }
+        }catch(e){}
+        setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
       })
       .catch(function(e){
         console.log('⚠️ 读缓存失败:',e.message)
