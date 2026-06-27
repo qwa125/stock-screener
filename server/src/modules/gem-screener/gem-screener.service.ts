@@ -3277,9 +3277,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       suggestion = '不要介入';
     }
 
-    // ─── 白布卖出信号检测（覆盖getTradingSuggestion/不要介入，与determineBySignalRule一致）───
-    // [!] 注意：calcBaiXing返回对象使用拼音key(baiBu/gaoKaiDiZouQingCang)，不是中文
-    const baiBuState = !!(baiXing as any)?.baiBu;
+    // ─── 高位白消提前卖出预测（XMA漂移补偿）───
+    // XMA未来函数导致：高位+卖出信号出现时，当前白消尾部2根K线随数据推移会漂成白布
+    // 必须提前卖出，等白布出现已错失2天利润
+    const pricePosForXmaPrediction = pricePos;
     const hasStrongSell = !!(
       (baiXing as any)?.gaoKaiDiZouQingCang ||
       (baiXing as any)?.baoLiangFuGaiQingCang ||
@@ -3291,6 +3292,16 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       (lingXing as any)?.zhuShengZhongWeiChuHuo ||
       (lingXing as any)?.zhenShiChuHuo
     );
+    // 高位(价格位置≥60%) + 白消 + 卖出信号 → 提前卖出
+    const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
+    if (isHighWithBaiXiao && (hasStrongSell || hasChuHuo)) {
+      suggestion = '卖出';
+      this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+卖出信号，XMA漂移预期变白布，提前卖出`);
+    }
+
+    // ─── 白布卖出信号检测（覆盖getTradingSuggestion/不要介入，与determineBySignalRule一致）───
+    // [!] 注意：calcBaiXing返回对象使用拼音key(baiBu/gaoKaiDiZouQingCang)，不是中文
+    const baiBuState = !!(baiXing as any)?.baiBu;
     if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (sanJiao as any)?.strongSell)) {
       suggestion = '卖出';
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);

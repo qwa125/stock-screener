@@ -2780,7 +2780,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
             suggestion = '不要介入';
         }
-        const baiBuState = !!baiXing?.baiBu;
+        const pricePosForXmaPrediction = pricePos;
         const hasStrongSell = !!(baiXing?.gaoKaiDiZouQingCang ||
             baiXing?.baoLiangFuGaiQingCang ||
             baiXing?.po5RiXian ||
@@ -2788,6 +2788,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
             lingXing?.zhuShengZhongWeiChuHuo ||
             lingXing?.zhenShiChuHuo);
+        const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
+        if (isHighWithBaiXiao && (hasStrongSell || hasChuHuo)) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+卖出信号，XMA漂移预期变白布，提前卖出`);
+        }
+        const baiBuState = !!baiXing?.baiBu;
         if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
