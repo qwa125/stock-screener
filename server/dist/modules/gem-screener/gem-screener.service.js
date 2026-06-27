@@ -523,6 +523,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
         }
         let gemChanged = false;
+        let leftover = 0;
         if (this.cache?.data?.length) {
             for (let i = 0; i < this.cache.data.length; i++) {
                 const item = this.cache.data[i];
@@ -542,10 +543,31 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                 }
             }
+            for (const code of map.keys()) {
+                let found = false;
+                for (let i = 0; i < this.mainBoardCache.data.length; i++) {
+                    if (this.mainBoardCache.data[i].code === code) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    for (let i = 0; i < this.cache.data.length; i++) {
+                        if (this.cache.data[i].code === code) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found)
+                    leftover++;
+            }
+            if (leftover > 0)
+                this.logger.warn(`⚠️ ${leftover}只股票在两个缓存中都未找到，信号未更新`);
             if (gemChanged)
                 this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
         }
-        this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged ? '有' : '无'}变更, GEM${gemChanged ? '有' : '无'}变更）`);
+        this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged ? '有' : '无'}变更, GEM${gemChanged ? '有' : '无'}变更${leftover > 0 ? `, ${leftover}只未找到` : ''}）`);
     }
     async updateSingleStockInCache(opp) {
         const code = opp.code;
