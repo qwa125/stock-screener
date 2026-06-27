@@ -45,6 +45,8 @@ export class DeviceRegistryService implements OnModuleInit {
         return null
       }
       this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 })
+      // postgres() 是惰性连接，必须验证一次才能确认连接有效
+      await this.pgSql`SELECT 1`
       this.logger.log('✅ DeviceRegistry 连接 PostgreSQL 成功')
       return this.pgSql
     } catch (e) {

@@ -47,6 +47,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 return null;
             }
             this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
+            await this.pgSql `SELECT 1`;
             this.logger.log('✅ DeviceRegistry 连接 PostgreSQL 成功');
             return this.pgSql;
         }
