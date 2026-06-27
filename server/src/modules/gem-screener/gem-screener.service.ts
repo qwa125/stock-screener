@@ -2306,7 +2306,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     pricePosition: number,
     trendState: number,
   ): { suggestion: string; changed: boolean } {
-    if (!prevSuggestion || prevSuggestion === '观望' || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
+    if (!prevSuggestion || prevSuggestion === '不要介入' || prevSuggestion === '持有') {
       return { suggestion: currentSuggestion, changed: false };
     }
 

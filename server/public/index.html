@@ -1187,7 +1187,7 @@ async function doFullRescan(){
             var backendSug=newStocks[si3].suggestion
             if(backendSug && BACKEND_SELL.indexOf(backendSug)===-1){
               // 后端是买入信号（重仓买入/买入/轻仓买入）→ 结合评分预测+实时数据做升级
-              var PRI_ORDER=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入']
+              var PRI_ORDER=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
               var upgSug = liveSuggestion  // 默认用实时数据
               var fp = newStocks[si3].forecast1_2Day
               if(fp && fp.direction){
@@ -1238,7 +1238,7 @@ async function doFullRescan(){
     }
     if(_cacheInNewStk){
       // 缓存已有该股且建议是持有/减仓/卖出/不要介入/观望 → 禁止用涨幅升级
-      if(['持有','减仓','卖出','不要介入','观望'].indexOf(_cacheInNewStk.suggestion)>=0){
+      if(['持有','减仓','卖出','不要介入'].indexOf(_cacheInNewStk.suggestion)>=0){
         _cacheInNewStk.currentPrice=price;
         _cacheInNewStk.changePercent=chg;
         _cacheInNewStk.intradayHigh=item.f15;
@@ -1255,7 +1255,7 @@ async function doFullRescan(){
       _cacheInNewStk.score=liveScore;
       _cacheInNewStk.entryTiming=liveEntryTiming;
       var _bks=_cacheInNewStk.suggestion;
-      var _LIVE_PRI=['重仓买入','买入','轻仓买入','观望','持有','减仓','卖出','不要介入'];
+      var _LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'];
       if(_LIVE_PRI.indexOf(liveSuggestion) < _LIVE_PRI.indexOf(_bks)){
         _cacheInNewStk.suggestion=liveSuggestion;
         console.log('🔍 降级修复：缓存股 '+code+' 未匹配seen，但允许从 '+_bks+' 升级到 '+liveSuggestion);
