@@ -202,6 +202,8 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
+// 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
+var _lockedBuyPrice=null,_lockedBuyTime='',_lockedSellPrice=null,_lockedSellTime=''
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
 var FROZEN_KEY='frozenSnapshot'
 function saveFrozenSnapshot(arr){
@@ -1677,6 +1679,21 @@ async function refreshDetailPrice(code,low,high){
 	    if(bestProfit>0&&tmpBuy&&tmpSell){
 	      buyPoint=tmpBuy.time||'-';buyPrice=tmpBuy.price
 	      sellPoint=tmpSell.time||'-';sellPrice=tmpSell.price
+	      // ─── 锁定机制：首次有效买卖点锁定，后续只优化卖点不降低买点 ───
+	      if(_lockedBuyPrice===null){
+	        _lockedBuyPrice=buyPrice;_lockedBuyTime=buyPoint
+	        _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
+	      }else{
+	        // 买入价格锁定不变（你已按该价格买入，不因新低而改变）
+	        buyPrice=_lockedBuyPrice;buyPoint=_lockedBuyTime
+	        // 卖出价格只升不降（如果有更高卖点则更新，提供更好止盈参考）
+	        if(sellPrice>_lockedSellPrice){
+	          _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
+	          sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
+	        }else{
+	          sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
+	        }
+	      }
 	    }
 	  }
   var gap=dayHigh-dayLow
@@ -1745,6 +1762,8 @@ async function refreshDetailPrice(code,low,high){
 }
 function startIntradayRefresh(code,high,low){
   stopIntradayRefresh()
+  // 切换股票时重置买卖点锁定
+  _lockedBuyPrice=null;_lockedBuyTime='';_lockedSellPrice=null;_lockedSellTime=''
   refreshDetailPrice(code,low,high) // 立即执行一次
   intradayTimer=setInterval(function(){refreshDetailPrice(code,low,high)},2000)
 }

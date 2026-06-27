@@ -122,6 +122,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.STALE_TTL = 30 * 60 * 1000;
         this.REFRESH_INTERVAL = 5 * 60 * 1000;
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
+        this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
@@ -3815,7 +3816,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (let i = 0; i < len; i++)
             macdHist.push(2 * (diff[i] - dea[i]));
         const macdSignals = [];
-        for (let i = 1; i < len; i++) {
+        for (let i = 1; i < len - 1; i++) {
             if (diff[i - 1] < dea[i - 1] && diff[i] >= dea[i]) {
                 macdSignals.push({ time: minData[i].time, type: '金叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
             }
@@ -3881,7 +3882,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const mainDown = mainLine.map((v, i) => i === 0 ? false : v < mainLine[i - 1]);
         const zhuliBuyPoints = [];
         const zhuliSellPoints = [];
-        for (let i = 3; i < len; i++) {
+        for (let i = 3; i < len - 1; i++) {
             const crossBuy = mainLine[i - 1] <= retailLine[i - 1] && mainLine[i] > retailLine[i];
             const buyCond = crossBuy && mainLine[i] < 20 && mainUp[i];
             if (buyCond) {
@@ -4013,6 +4014,40 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 bestSellTime = '';
             }
         }
+        const _today = new Date().toISOString().slice(0, 10);
+        const _cacheKey = `${code}:${_today}`;
+        const _cached = this.intradaySignalCache.get(_cacheKey);
+        if (_cached && _cached.date === _today) {
+            const _newKeySet = new Set(todaySugs.map(s => `${s.time}|${s.type}|${s.source}`));
+            const _oldOnly = _cached.suggestions.filter(s => !_newKeySet.has(`${s.time}|${s.type}|${s.source}`));
+            if (_oldOnly.length > 0) {
+                todaySugs = [..._oldOnly, ...todaySugs];
+                const _buySugs = todaySugs.filter(s => s.type === '买入点');
+                const _sellSugs = todaySugs.filter(s => s.type === '卖出点');
+                if (_buySugs.length > 0) {
+                    const _lockedLowest = _buySugs.reduce((a, b) => a.price < b.price ? a : b);
+                    bestBuyPrice = _lockedLowest.price;
+                    bestBuyTime = _lockedLowest.time;
+                }
+                if (_sellSugs.length > 0) {
+                    const _lockedHighest = _sellSugs.reduce((a, b) => a.price > b.price ? a : b);
+                    bestSellPrice = _lockedHighest.price;
+                    bestSellTime = _lockedHighest.time;
+                }
+                this.logger.log(`📌 日内缓存 ${code}: 保留 ${_oldOnly.length} 个历史信号，新增 ${todaySugs.length - _oldOnly.length} 个新信号`);
+            }
+        }
+        this.intradaySignalCache.set(_cacheKey, {
+            date: _today,
+            barCount: len,
+            suggestions: todaySugs,
+            bestBuyPrice,
+            bestBuyTime,
+            bestSellPrice,
+            bestSellTime,
+            summary,
+            lastRefresh: Date.now(),
+        });
         return {
             code,
             date: new Date().toISOString().slice(0, 10),

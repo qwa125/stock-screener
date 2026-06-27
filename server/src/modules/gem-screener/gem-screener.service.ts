@@ -107,6 +107,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly STALE_TTL = 30 * 60 * 1000;
   private readonly REFRESH_INTERVAL = 5 * 60 * 1000; // 盘中每5分钟全量扫描
   private readonly CACHE_FILE = '/tmp/gem-opportunities-cache.json';
+
+  /** 日内分析信号缓存：同一只股票、同一天内，已发现的买入/卖出点永不消失 */
+  private intradaySignalCache = new Map<string, {
+    date: string;
+    barCount: number;
+    suggestions: any[];
+    bestBuyPrice: number;
+    bestBuyTime: string;
+    bestSellPrice: number;
+    bestSellTime: string;
+    summary: string;
+    lastRefresh: number;
+  }>();
   private readonly SELL_STATE_FILE = '/tmp/sell-state-cache.json';
   private readonly BUNDLED_GEM_CACHE = join(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
   private readonly BATCH_SIZE = 20;
@@ -4441,9 +4454,9 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const macdHist: number[] = [];
     for (let i = 0; i < len; i++) macdHist.push(2 * (diff[i] - dea[i]));
 
-    // 找到MACD金叉/死叉
+    // 找到MACD金叉/死叉（仅基于已闭合K线，最后一条形成中K线跳过，保证信号稳定）
     const macdSignals: { time: string; type: '金叉' | '死叉'; idx: number; price: number; diff: number; dea: number }[] = [];
-    for (let i = 1; i < len; i++) {
+    for (let i = 1; i < len - 1; i++) {
       if (diff[i - 1] < dea[i - 1] && diff[i] >= dea[i]) {
         macdSignals.push({ time: minData[i].time, type: '金叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
       } else if (diff[i - 1] > dea[i - 1] && diff[i] <= dea[i]) {
@@ -4525,10 +4538,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const mainUp = mainLine.map((v, i) => i === 0 ? false : v > mainLine[i - 1]);
     const mainDown = mainLine.map((v, i) => i === 0 ? false : v < mainLine[i - 1]);
 
-    // 买卖点（剔除3日重复）
+    // 买卖点（剔除3日重复，跳过最后一条形成中K线）
     const zhuliBuyPoints: { time: string; idx: number; price: number; main: number; retail: number }[] = [];
     const zhuliSellPoints: { time: string; idx: number; price: number; main: number; retail: number }[] = [];
-    for (let i = 3; i < len; i++) {
+    for (let i = 3; i < len - 1; i++) {
       // 买入: CROSS(主力,散户) AND 主力<20 AND 主力升
       const crossBuy = mainLine[i - 1] <= retailLine[i - 1] && mainLine[i] > retailLine[i];
       const buyCond = crossBuy && mainLine[i] < 20 && mainUp[i];
@@ -4650,6 +4663,47 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       if (!bestBuyTime || bestBuyTime.includes('-')) { bestBuyPrice = 0; bestBuyTime = ''; }
       if (!bestSellTime || bestSellTime.includes('-')) { bestSellPrice = 0; bestSellTime = ''; }
     }
+
+    // ─── 信号缓存合并：已发现信号永不消失，只追加不覆盖 ───
+    const _today = new Date().toISOString().slice(0, 10);
+    const _cacheKey = `${code}:${_today}`;
+    const _cached = this.intradaySignalCache.get(_cacheKey);
+    if (_cached && _cached.date === _today) {
+      // 用时间+类型+来源作为唯一键判断是否已存在
+      const _newKeySet = new Set(todaySugs.map(s => `${s.time}|${s.type}|${s.source}`));
+      const _oldOnly = _cached.suggestions.filter(s => !_newKeySet.has(`${s.time}|${s.type}|${s.source}`));
+      if (_oldOnly.length > 0) {
+        // 有旧信号在当前分析中未发现 → 保留旧信号（已锁定，永不消失）
+        todaySugs = [..._oldOnly, ...todaySugs];
+        // 重新计算最佳买卖价（考虑旧信号的锁定值）
+        const _buySugs = todaySugs.filter(s => s.type === '买入点');
+        const _sellSugs = todaySugs.filter(s => s.type === '卖出点');
+        if (_buySugs.length > 0) {
+          // 最佳买入价取已锁定买点中的最低价（但锁定的买点不应低于已显示的价格）
+          const _lockedLowest = _buySugs.reduce((a, b) => a.price < b.price ? a : b);
+          bestBuyPrice = _lockedLowest.price;
+          bestBuyTime = _lockedLowest.time;
+        }
+        if (_sellSugs.length > 0) {
+          const _lockedHighest = _sellSugs.reduce((a, b) => a.price > b.price ? a : b);
+          bestSellPrice = _lockedHighest.price;
+          bestSellTime = _lockedHighest.time;
+        }
+        this.logger.log(`📌 日内缓存 ${code}: 保留 ${_oldOnly.length} 个历史信号，新增 ${todaySugs.length - _oldOnly.length} 个新信号`);
+      }
+    }
+    // 更新缓存
+    this.intradaySignalCache.set(_cacheKey, {
+      date: _today,
+      barCount: len,
+      suggestions: todaySugs,
+      bestBuyPrice,
+      bestBuyTime,
+      bestSellPrice,
+      bestSellTime,
+      summary,
+      lastRefresh: Date.now(),
+    });
 
     return {
       code,

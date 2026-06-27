@@ -60,6 +60,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly STALE_TTL;
     private readonly REFRESH_INTERVAL;
     private readonly CACHE_FILE;
+    private intradaySignalCache;
     private readonly SELL_STATE_FILE;
     private readonly BUNDLED_GEM_CACHE;
     private readonly BATCH_SIZE;
