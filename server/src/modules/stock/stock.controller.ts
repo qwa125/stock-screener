@@ -69,6 +69,39 @@ export class StockController {
     }
   }
 
+  @Get('quote')
+  async quote(@Query('code') code: string) {
+    if (!code) return { code: 200, msg: 'success', data: null };
+    try {
+      const prefix = code.startsWith('6') || code.startsWith('68') ? 'sh' : 'sz';
+      const url = `https://hq.sinajs.cn/list=${prefix}${code}`;
+      const resp = await fetch(url, {
+        headers: { Referer: 'https://finance.sina.com.cn/' },
+        signal: AbortSignal.timeout(5000),
+      });
+      const text = await resp.text();
+      // var hq_str_sh603200="上海洗霸,17.880,17.860,17.610,17.940,17.490,17.610,17.620,...";
+      const match = text.match(/"(.+)"/);
+      if (!match) return { code: 200, msg: 'success', data: null };
+      const parts = match[1].split(',');
+      const name = parts[0];
+      const open = parseFloat(parts[1]);
+      const yClose = parseFloat(parts[2]);
+      const price = parseFloat(parts[3]);
+      const high = parseFloat(parts[4]);
+      const low = parseFloat(parts[5]);
+      const pChg = price - yClose;
+      const pct = yClose > 0 ? (pChg / yClose) * 100 : 0;
+      return {
+        code: 200, msg: 'success',
+        data: { code, name, price: price || 0, trade: price || 0, open, high, low, yClose, change: pChg, changePercent: Math.round(pct * 100) / 100 },
+      };
+    } catch (e: any) {
+      this.logger.error(`获取实时行情失败: ${e.message}`);
+      return { code: 200, msg: 'success', data: null };
+    }
+  }
+
   @Get('search')
   async search(@Query('q') query: string) {
     if (!query || query.trim().length < 1) {

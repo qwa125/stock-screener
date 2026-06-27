@@ -86,8 +86,51 @@ export default function Index() {
   const [detailStock, setDetailStock] = useState<StockItem | null>(null);
   const [iaData, setIaData] = useState<IntradayAnalysis | null>(null);
   const [iaLoading, setIaLoading] = useState(false);
+  const [iaUpdating, setIaUpdating] = useState(false); // 自动刷新中
 
   const scanStopRef = useRef(false);
+  const detailCodeRef = useRef<string | null>(null); // 用于自动刷新
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 自动刷新：进入详情后每2秒更新数据
+  useEffect(() => {
+    if (detailStock?.code) {
+      const code = detailStock.code;
+      detailCodeRef.current = code;
+      // 启动2秒定时器
+      autoRefreshRef.current = setInterval(async () => {
+        if (detailCodeRef.current !== code) return; // 已切换
+        try {
+          // 实时股价
+          const qRes = await Network.request({ url: `/api/stock/quote?code=${code}`, method: 'GET' });
+          const qItem = qRes.data?.data || null;
+          if (qItem && detailCodeRef.current === code) {
+            setDetailStock(prev => prev ? {
+              ...prev,
+              price: qItem.trade ?? qItem.price,
+              changePercent: qItem.changePercent,
+              name: qItem.name || prev.name,
+            } : null);
+          }
+          // 日内分析（静默刷新，不显示骨架）
+          setIaUpdating(true);
+          const iaRes = await Network.request({ url: `/api/gem/intraday-analysis?code=${code}`, method: 'GET' });
+          if (detailCodeRef.current === code) {
+            setIaData(iaRes.data?.data || null);
+          }
+        } catch (_) {}
+        setIaUpdating(false);
+      }, 2000);
+      // 清理
+      return () => {
+        detailCodeRef.current = null;
+        if (autoRefreshRef.current) {
+          clearInterval(autoRefreshRef.current);
+          autoRefreshRef.current = null;
+        }
+      };
+    }
+  }, [detailStock?.code]);
 
   // 获取股票列表
   const fetchStocks = useCallback(async () => {
@@ -169,7 +212,7 @@ export default function Index() {
     }
   }, [query]);
 
-  // 获取日内分析
+  // 获取日内分析（初始加载用，会显示骨架）
   const fetchIntraday = useCallback(async (code: string) => {
     setIaLoading(true);
     setIaData(null);
@@ -347,11 +390,25 @@ export default function Index() {
             </View>
           </View>
 
+          {iaData?.currentTime && (
+            <View className="px-4 pt-1">
+              <Text className="block text-xs text-gray-400">最新行情时间：{fmtTime(iaData.currentTime)}</Text>
+            </View>
+          )}
+
           {/* MACD状态 */}
           <View className="px-4 pt-3">
-            <View className="flex flex-row items-center gap-1 mb-2">
-              <Activity size={16} color="#6366f1" />
-              <Text className="block text-sm font-semibold text-gray-700">MACD(40,120,40) 分时分析</Text>
+            <View className="flex flex-row items-center justify-between mb-2">
+              <View className="flex flex-row items-center gap-1">
+                <Activity size={16} color="#6366f1" />
+                <Text className="block text-sm font-semibold text-gray-700">MACD(40,120,40) 分时分析</Text>
+              </View>
+              {iaUpdating && (
+                <View className="flex flex-row items-center gap-1">
+                  <View className="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
+                  <Text className="block text-xs text-green-500">实时</Text>
+                </View>
+              )}
             </View>
             {iaLoading ? (
               <Card>
