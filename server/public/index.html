@@ -746,9 +746,8 @@ function showDetail(i){
   ;(async function(){
     try{
       var code=s.code
-      var sec=(code.startsWith('6')?'1.':'0.')+code
-      // 先拉K线
-      var kr=await fetch('/api/proxy/kline?sec='+sec+'&_='+Date.now())
+      // 先拉K线（通过后端代理避免CORS）
+      var kr=await fetch('/api/gem/proxy/kline?code='+code+'&_='+Date.now())
       var kj=await kr.json()
       var kd=kj.data||kj
       // 再分析
