@@ -3280,29 +3280,47 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     // ─── 高位白消提前卖出预测（XMA漂移补偿）───
     // XMA未来函数导致：高位+卖出信号出现时，当前白消尾部2根K线随数据推移会漂成白布
     // 必须提前卖出，等白布出现已错失2天利润
+    // [!] 注意：高开低走清仓/爆量覆盖清仓/白布破5日线/阴跌破位 只出现在白布状态
+    //     白消阶段只有：主力出货（三角/菱形）和紧急清仓是独立信号
     const pricePosForXmaPrediction = pricePos;
-    const hasStrongSell = !!(
-      (baiXing as any)?.gaoKaiDiZouQingCang ||
-      (baiXing as any)?.baoLiangFuGaiQingCang ||
-      (baiXing as any)?.po5RiXian ||
-      (baiXing as any)?.yinDiePoWei
-    );
     const hasChuHuo = !!(
       (sanJiao as any)?.zhuLiChuHuo ||
       (lingXing as any)?.zhuShengZhongWeiChuHuo ||
       (lingXing as any)?.zhenShiChuHuo
     );
-    // 高位(价格位置≥60%) + 白消 + 卖出信号 → 提前卖出
+    // 白消阶段XMA漂移早期预警：价格跌破MA10（领先XMA约1-2天）
+    // K线领先XMA：价先破位 → XMA尾端漂移变白布
+    const priceBelowMa10InBaiXiao = baiXiao && price <= ma10;
+    // MA5下穿MA10死叉形成中 + 高位 → XMA漂移高概率
+    const ma5DeathCrossInBaiXiao = baiXiao && ma5 < ma10 && pricePosForXmaPrediction >= 50;
+    // 高位(价格位置≥60%) + 白消 + 独立卖出信号 → 提前卖出
     const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
-    if (isHighWithBaiXiao && (hasStrongSell || hasChuHuo)) {
+    if (isHighWithBaiXiao && hasChuHuo) {
       suggestion = '卖出';
-      this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+卖出信号，XMA漂移预期变白布，提前卖出`);
+      this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+主力出货，XMA漂移预期变白布，提前卖出`);
+    } else if (baiXiao && pricePosForXmaPrediction >= 55 && priceBelowMa10InBaiXiao && hasChuHuo) {
+      suggestion = '卖出';
+      this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 白消+价破MA10+主力出货，XMA漂移预期变白布，提前卖出`);
+    } else if (isHighWithBaiXiao && priceBelowMa10InBaiXiao) {
+      // 仅高位+白消+跌破MA10（无主力出货也触发，XMA漂移确定性高）
+      suggestion = '卖出';
+      this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+价破MA10，XMA漂移预期变白布，提前卖出`);
+    } else if (ma5DeathCrossInBaiXiao && priceBelowMa10InBaiXiao) {
+      // MA5死叉+跌破MA10 → XMA漂移确定性非常高
+      suggestion = '减仓';
+      this.logger.log(`🟡 [白消减仓预警] ${name}(${code}) 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓`);
     }
 
     // ─── 白布卖出信号检测（覆盖getTradingSuggestion/不要介入，与determineBySignalRule一致）───
     // [!] 注意：calcBaiXing返回对象使用拼音key(baiBu/gaoKaiDiZouQingCang)，不是中文
     const baiBuState = !!(baiXing as any)?.baiBu;
-    if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (sanJiao as any)?.strongSell)) {
+    const hasBaiBuSellSignals = !!(
+      (baiXing as any)?.gaoKaiDiZouQingCang ||
+      (baiXing as any)?.baoLiangFuGaiQingCang ||
+      (baiXing as any)?.po5RiXian ||
+      (baiXing as any)?.yinDiePoWei
+    );
+    if (baiBuState && (hasBaiBuSellSignals || hasChuHuo || (sanJiao as any)?.shortSell || (sanJiao as any)?.strongSell)) {
       suggestion = '卖出';
       this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
     }

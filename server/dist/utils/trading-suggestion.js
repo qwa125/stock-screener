@@ -23,18 +23,8 @@ function getTradingSuggestion(input) {
     const isHighPosition = (input.pricePosition ?? 50) >= 60;
     if (baiXiao && isHighPosition) {
         const sellReasons = [];
-        if (gaoKaiDiZouQingCang)
-            sellReasons.push('高开低走');
-        if (baoLiangFuGaiQingCang)
-            sellReasons.push('爆量覆盖');
         if (zhuLiChuHuo)
             sellReasons.push('主力出货');
-        if (po5RiXian)
-            sellReasons.push('破5日线');
-        if (yinDiePoWei)
-            sellReasons.push('阴跌破位');
-        if (qiangZhiFuGai)
-            sellReasons.push('强制覆盖');
         if (sellReasons.length > 0) {
             return {
                 action: '卖出',
@@ -51,6 +41,23 @@ function getTradingSuggestion(input) {
                 entryTiming: 0,
             };
         }
+        const price = input.currentPrice ?? 0;
+        if (baiXiao && price > 0 && price <= ma10) {
+            return {
+                action: '卖出',
+                reason: '⚠️ 高位白消+价破MA10，XMA漂移预期变白布，提前卖出',
+                score: 11,
+                entryTiming: 0,
+            };
+        }
+    }
+    if (baiXiao && ma5 < ma10 && (input.currentPrice ?? 0) <= ma10 && (input.currentPrice ?? 0) > 0) {
+        return {
+            action: '减仓',
+            reason: '⚠️ 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓',
+            score: 8,
+            entryTiming: 0,
+        };
     }
     if (gaoKaiDiZouQingCang || baoLiangFuGaiQingCang || po5RiXian || qiangZhiFuGai || yinDiePoWei) {
         return {

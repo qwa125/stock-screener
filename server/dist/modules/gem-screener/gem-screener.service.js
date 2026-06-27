@@ -2781,20 +2781,34 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             suggestion = '不要介入';
         }
         const pricePosForXmaPrediction = pricePos;
-        const hasStrongSell = !!(baiXing?.gaoKaiDiZouQingCang ||
-            baiXing?.baoLiangFuGaiQingCang ||
-            baiXing?.po5RiXian ||
-            baiXing?.yinDiePoWei);
         const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
             lingXing?.zhuShengZhongWeiChuHuo ||
             lingXing?.zhenShiChuHuo);
+        const priceBelowMa10InBaiXiao = baiXiao && price <= ma10;
+        const ma5DeathCrossInBaiXiao = baiXiao && ma5 < ma10 && pricePosForXmaPrediction >= 50;
         const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
-        if (isHighWithBaiXiao && (hasStrongSell || hasChuHuo)) {
+        if (isHighWithBaiXiao && hasChuHuo) {
             suggestion = '卖出';
-            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+卖出信号，XMA漂移预期变白布，提前卖出`);
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+主力出货，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (baiXiao && pricePosForXmaPrediction >= 55 && priceBelowMa10InBaiXiao && hasChuHuo) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 白消+价破MA10+主力出货，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (isHighWithBaiXiao && priceBelowMa10InBaiXiao) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+价破MA10，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (ma5DeathCrossInBaiXiao && priceBelowMa10InBaiXiao) {
+            suggestion = '减仓';
+            this.logger.log(`🟡 [白消减仓预警] ${name}(${code}) 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓`);
         }
         const baiBuState = !!baiXing?.baiBu;
-        if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
+        const hasBaiBuSellSignals = !!(baiXing?.gaoKaiDiZouQingCang ||
+            baiXing?.baoLiangFuGaiQingCang ||
+            baiXing?.po5RiXian ||
+            baiXing?.yinDiePoWei);
+        if (baiBuState && (hasBaiBuSellSignals || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
             suggestion = '卖出';
             this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
         }

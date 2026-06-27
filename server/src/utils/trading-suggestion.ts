@@ -132,16 +132,14 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
   // 高位白消提前卖出（XMA漂移补偿）
   // 高位(价格位置≥60%)+白消+主力出货/强卖出→XMA漂移下当前白消2天后会变白布
   // 提前卖出比等白布出现早2天，避免错失利润
+  // [!] 注意：高开低走/爆量覆盖/破5日线/阴跌破位/强制覆盖 只在白布状态出现
+  //     白消阶段仅有 主力出货(zhuLiChuHuo) 是独立信号
   // ================================================================
   const isHighPosition = (input.pricePosition ?? 50) >= 60;
   if (baiXiao && isHighPosition) {
     const sellReasons: string[] = [];
-    if (gaoKaiDiZouQingCang) sellReasons.push('高开低走');
-    if (baoLiangFuGaiQingCang) sellReasons.push('爆量覆盖');
+    // 白消阶段只有主力出货是真正可用的信号
     if (zhuLiChuHuo) sellReasons.push('主力出货');
-    if (po5RiXian) sellReasons.push('破5日线');
-    if (yinDiePoWei) sellReasons.push('阴跌破位');
-    if (qiangZhiFuGai) sellReasons.push('强制覆盖');
     if (sellReasons.length > 0) {
       return {
         action: '卖出',
@@ -159,6 +157,25 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
         entryTiming: 0,
       };
     }
+    // 高位白消 + 价跌破MA10（K线领先XMA约1-2天，XMA漂移会将当前白消变白布）
+    const price = input.currentPrice ?? 0;
+    if (baiXiao && price > 0 && price <= ma10) {
+      return {
+        action: '卖出',
+        reason: '⚠️ 高位白消+价破MA10，XMA漂移预期变白布，提前卖出',
+        score: 11,
+        entryTiming: 0,
+      };
+    }
+  }
+  // 白消+MA5<MA10+价破MA10 → MA5死叉+破位，XMA漂移高概率
+  if (baiXiao && ma5 < ma10 && (input.currentPrice ?? 0) <= ma10 && (input.currentPrice ?? 0) > 0) {
+    return {
+      action: '减仓',
+      reason: '⚠️ 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓',
+      score: 8,
+      entryTiming: 0,
+    };
   }
 
   // ================================================================
