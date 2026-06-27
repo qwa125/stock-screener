@@ -3798,6 +3798,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 macdSignals.push({ time: minData[i].time, type: '死叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
             }
         }
+        const _greenValleys = [];
+        const _redPeaks = [];
+        for (let i = 2; i < len - 2; i++) {
+            if (macdHist[i] < 0 && macdHist[i] < macdHist[i - 1] && macdHist[i] < macdHist[i - 2] && macdHist[i] < macdHist[i + 1] && macdHist[i] < macdHist[i + 2]) {
+                _greenValleys.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+            }
+            if (macdHist[i] > 0 && macdHist[i] > macdHist[i - 1] && macdHist[i] > macdHist[i - 2] && macdHist[i] > macdHist[i + 1] && macdHist[i] > macdHist[i + 2]) {
+                _redPeaks.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+            }
+        }
         const var3 = [];
         for (let i = 0; i < len; i++)
             var3.push((2 * close[i] + high[i] + low[i]) / 4);
@@ -3874,6 +3884,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
+        let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
+        for (let i = _greenValleys.length - 1; i >= 0; i--) {
+            const gv = _greenValleys[i];
+            const confirmed = suggestions.some(s => s.type === '买入点' && Math.abs(s.idx - gv.idx) <= 5);
+            if (confirmed || i === _greenValleys.length - 1) {
+                bestBuyPrice = gv.price;
+                bestBuyTime = gv.time;
+                if (confirmed)
+                    break;
+            }
+        }
+        for (let i = _redPeaks.length - 1; i >= 0; i--) {
+            const rp = _redPeaks[i];
+            const confirmed = suggestions.some(s => s.type === '卖出点' && Math.abs(s.idx - rp.idx) <= 5);
+            if (confirmed || i === _redPeaks.length - 1) {
+                bestSellPrice = rp.price;
+                bestSellTime = rp.time;
+                if (confirmed)
+                    break;
+            }
+        }
         return {
             code,
             date: new Date().toISOString().slice(0, 10),
@@ -3898,6 +3929,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 sellSignals: zhuliSellPoints,
             },
             suggestions: suggestions.slice(-20),
+            bestBuyPrice: bestBuyPrice || 0,
+            bestBuyTime: bestBuyTime,
+            bestSellPrice: bestSellPrice || 0,
+            bestSellTime: bestSellTime,
             summary,
         };
     }

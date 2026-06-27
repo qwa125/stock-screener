@@ -4417,6 +4417,19 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
+    // ─── MACD红峰/绿峰检测（暂存供后面结合信号确定最佳买卖价格） ───
+    // 绿峰(MACD柱<0局部最低)=买入区, 红峰(MACD柱>0局部最高)=卖出区
+    const _greenValleys: { idx: number; price: number; time: string }[] = [];
+    const _redPeaks: { idx: number; price: number; time: string }[] = [];
+    for (let i = 2; i < len - 2; i++) {
+      if (macdHist[i] < 0 && macdHist[i] < macdHist[i-1] && macdHist[i] < macdHist[i-2] && macdHist[i] < macdHist[i+1] && macdHist[i] < macdHist[i+2]) {
+        _greenValleys.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+      }
+      if (macdHist[i] > 0 && macdHist[i] > macdHist[i-1] && macdHist[i] > macdHist[i-2] && macdHist[i] > macdHist[i+1] && macdHist[i] > macdHist[i+2]) {
+        _redPeaks.push({ idx: i, price: Math.round(close[i] * 100) / 100, time: minData[i].time });
+      }
+    }
+
     // ─── 主力/散户指标（通达信做T公式） ───
     // VAR3=(2*CLOSE+HIGH+LOW)/4
     // VAR4=LLV(LOW,21) VAR5=HHV(HIGH,21)
@@ -4512,6 +4525,30 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
+    // ─── 结合MACD红峰/绿峰+信号确定最佳买卖价格 ───
+    // 最佳买入=有买入信号确认或最接近的绿峰价
+    let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
+    // 买入: 找最近且有买入信号确认的绿峰
+    for (let i = _greenValleys.length - 1; i >= 0; i--) {
+      const gv = _greenValleys[i];
+      const confirmed = suggestions.some(s => s.type === '买入点' && Math.abs(s.idx - gv.idx) <= 5);
+      if (confirmed || i === _greenValleys.length - 1) {
+        bestBuyPrice = gv.price;
+        bestBuyTime = gv.time;
+        if (confirmed) break; // 有信号确认的优先
+      }
+    }
+    // 卖出: 找最近且有卖出信号确认的红峰
+    for (let i = _redPeaks.length - 1; i >= 0; i--) {
+      const rp = _redPeaks[i];
+      const confirmed = suggestions.some(s => s.type === '卖出点' && Math.abs(s.idx - rp.idx) <= 5);
+      if (confirmed || i === _redPeaks.length - 1) {
+        bestSellPrice = rp.price;
+        bestSellTime = rp.time;
+        if (confirmed) break;
+      }
+    }
+
     return {
       code,
       date: new Date().toISOString().slice(0, 10),
@@ -4536,6 +4573,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         sellSignals: zhuliSellPoints,
       },
       suggestions: suggestions.slice(-20), // 最近20个综合信号
+      bestBuyPrice: bestBuyPrice || 0,
+      bestBuyTime: bestBuyTime,
+      bestSellPrice: bestSellPrice || 0,
+      bestSellTime: bestSellTime,
       summary,
     };
   }
