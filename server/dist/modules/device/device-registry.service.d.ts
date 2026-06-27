@@ -5,23 +5,18 @@ export declare class DeviceRegistryService implements OnModuleInit {
     private registry;
     private maxSlots;
     private registryLoaded;
-    private supabase;
     private pgSql;
     private readonly filePath;
     private readonly settingsPath;
     onModuleInit(): Promise<void>;
-    private initSupabase;
     private initPostgres;
-    private createTablesIfNeeded;
     private createPGTables;
-    private warmUpSchema;
     private saveToFile;
     private loadFromFile;
     private loadSettingsFromDB;
     private saveSettingsToDB;
-    private writeSettingsFileFallback;
     private ensureLoaded;
-    private loadRegistry;
+    private loadRegistryFromPG;
     touchDevice(deviceId: string, ua: string, isAdmin?: boolean): Promise<{
         allowed: boolean;
         message?: string;
@@ -48,6 +43,4 @@ export declare class DeviceRegistryService implements OnModuleInit {
         success: boolean;
     }>;
     private getEffectiveMax;
-    private getOrInitSupabase;
-    private syncRegistryToSupabase;
 }
