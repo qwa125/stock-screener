@@ -2,6 +2,7 @@
   "name": "server",
   "version": "1.0.0",
   "private": true,
+  "main": "dist/main.js",
   "description": "NestJS server application",
   "scripts": {
     "build": "nest build",

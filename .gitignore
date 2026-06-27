@@ -1,6 +1,6 @@
 
 !dist-web/
-!server/dist/
+# server/dist is excluded - Render builds from source
 # .env.local
 # But allow deploy build artifacts (pre-built for Docker)
 # Dependencies
