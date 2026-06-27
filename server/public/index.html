@@ -960,7 +960,7 @@ async function doScan(){
       if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
       // 后端无数据→自动切全市场重扫（先拉Sina行情再doFullRescan）
       setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
-      fetchAndCacheSina().then(function(){doFullRescan()});return
+      fetchAndCacheSina().then(function(){doFullRescan(false)});return
     }
     stocks=d.data.opportunities
 	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
@@ -980,7 +980,7 @@ async function doScan(){
       setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
       // 不存2只到缓存（避免页面加载时显示过时数据）
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
-      fetchAndCacheSina().then(function(){doFullRescan()})
+      fetchAndCacheSina().then(function(){doFullRescan(false)})
       return
     }
     // 不再缓存到localStorage，每次展示以最新数据计算为准
@@ -1080,7 +1080,7 @@ async function fetchAndCacheSina(){
 }
 
 // ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
-async function doFullRescan(){
+async function doFullRescan(saveToBackend){
   var btn=$('rescanBtn');
   // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
   if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
@@ -1422,8 +1422,8 @@ async function doFullRescan(){
     setStatus('❌ 重扫无结果')
   }
   loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
-  // ─── Step ③: 前端升级信号回写到后端 ───
-  try{
+  // ─── Step ③: 前端升级信号回写到后端（仅autoLightScan带K线分析时执行） ───
+  if(saveToBackend!==false) try{
     var upgradeList=[]
     for(var si=0;si<newStocks.length;si++){
       var us=newStocks[si]
@@ -2015,7 +2015,7 @@ async function doSearch(){
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(async function(){if(!loading){await fetchAndCacheSina();if(!loading)doFullRescan()}},t.getTime()-n.getTime());
+  if(n<t)setTimeout(async function(){if(!loading){await fetchAndCacheSina();if(!loading)doFullRescan(false)}},t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动轻量扫描：拉热门股推送后端分析覆盖旧缓存
@@ -2058,7 +2058,7 @@ setTimeout(function(){
             // 立即触发 doFullRescan（Sina数据已由上方fetchAndCacheSina提供或后续autoLightScan加载）
             setTimeout(async function(){
               if(!loading&&!window._cachedSinaEMData)await fetchAndCacheSina()
-              if(!loading)doFullRescan()
+              if(!loading)doFullRescan(false)
             },1000)
           }else{
             setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
