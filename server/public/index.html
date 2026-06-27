@@ -957,9 +957,9 @@ async function doScan(){
     var d=await r.json()
     if(d.code!==200||!d.data||!d.data.opportunities){
       if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
-      // 后端无数据→自动切全市场重扫
+      // 后端无数据→自动切全市场重扫（先拉Sina行情再doFullRescan）
       setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
-      doFullRescan();return
+      fetchAndCacheSina().then(function(){doFullRescan()});return
     }
     stocks=d.data.opportunities
 	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
@@ -979,7 +979,7 @@ async function doScan(){
       setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
       // 不存2只到缓存（避免页面加载时显示过时数据）
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
-      doFullRescan()
+      fetchAndCacheSina().then(function(){doFullRescan()})
       return
     }
     // 不再缓存到localStorage，每次展示以最新数据计算为准
@@ -1076,68 +1076,55 @@ async function doFullRescan(){
   // 创业板代码前缀
   function isGEM(c){return /^30/.test(c)}
   
-  // 浏览器直连新浪获取实时行情（不经过后端代理，避免US超时）
-  var emData=[]
-  var scanCount=0
-  // 优先使用autoLightScan已拉取的Sina数据（避免二次拉取失败导致机会区为空）
-  if(window._cachedSinaEMData && window._cachedSinaEMData.length){
-    emData=window._cachedSinaEMData.slice()
-    scanCount=emData.length
-    window._lastScanCount=scanCount
-    updateScanCount(scanCount)
-    window._cachedSinaEMData=null  // 用后清空
-    setStatus('🔄 复用autoLightScan行情 '+scanCount+' 只，与缓存合并排序中...')
-    console.log('📦 复用autoLightScan已拉取的Sina数据:',scanCount,'只')
-  }else try{
-    setStatus('🔄 浏览器拉取Sina全市场行情...')
-    async function fetchAllSinaPages2(node){
-      var all=[]
-      var promises=[]
-      for(var p=1;p<=30;p++){
-        promises.push(
-          fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node,{signal:AbortSignal.timeout(15000)})
-            .then(function(r){return r.text()})
-            .then(function(src){
-              src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-              try{
-                var d=JSON.parse(src)
-                if(d&&d.length)all=all.concat(d)
-              }catch(e){
-                var m=src.match(/\[[\s\S]*\]/)
-                if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
-              }
-            })
-        )
-      }
-      await Promise.all(promises)
-      return all
-    }
-    var [listSH,listSZ]=await Promise.all([fetchAllSinaPages2('sh_a'),fetchAllSinaPages2('sz_a')])
-    var list=listSH.concat(listSZ)
-    if(list&&list.length){
-      var seenCodes={}
-      for(var si=0;si<list.length;si++){
-        var sc=list[si],c=String(sc.code||'')
-        if(!c||seenCodes[c])continue
-        seenCodes[c]=1
-        emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
-      }
-    }
-    scanCount=emData.length
-    window._lastScanCount=scanCount
-    updateScanCount(scanCount)
-    // 保存本次拉取的数据供下次doFullRescan复用
-    if(!window._cachedSinaEMData || emData.length > window._cachedSinaEMData.length){
-      window._cachedSinaEMData=emData.slice()
-      console.log('💾 缓存doFullRescan拉取的Sina数据:',emData.length,'只')
-    }
-    setStatus('✅ 浏览器拉取Sina '+scanCount+' 只，与缓存合并排序中...')
-  }catch(e){
-    console.log('⚠️ 浏览器Sina拉取失败:',e.message)
-    scanCount=newStocks.length
-    window._lastScanCount=scanCount
-    updateScanCount(scanCount)
-    setStatus('🔄 '+newStocks.length+' 只缓存，按信号+评分排序中...')
+  // 浏览器直连新浪获取实时行情（纯前端拉取，不经过后端）
+async function fetchAllSinaPages2(node){
+  var all=[],promises=[]
+  for(var p=1;p<=30;p++){
+    promises.push(
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node,{signal:AbortSignal.timeout(15000)})
+        .then(function(r){return r.text()})
+        .then(function(src){
+          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+          try{
+            var d=JSON.parse(src)
+            if(d&&d.length)all=all.concat(d)
+          }catch(e){
+            var m=src.match(/\[[\s\S]*\]/)
+            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+          }
+        })
+    )
+  }
+  await Promise.all(promises)
+  return all
+}
+// 拉取Sina全市场数据→构建emData→存入_cachedSinaEMData（供doFullRescan消费）
+async function fetchAndCacheSina(){
+  var listSH=await fetchAllSinaPages2('sh_a'),listSZ=await fetchAllSinaPages2('sz_a')
+  var list=listSH.concat(listSZ),emData=[],seenCodes={}
+  for(var si=0;si<list.length;si++){
+    var sc=list[si],c=String(sc.code||'')
+    if(!c||seenCodes[c])continue
+    seenCodes[c]=1
+    emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
+  }
+  window._cachedSinaEMData=emData
+  window._lastScanCount=emData.length
+  updateScanCount(emData.length)
+  return emData
+}
+  
+  // 消费Sina实时行情数据：优先用缓存，无缓存则降级为仅显示缓存数据（不降级不升级）
+  var emData=window._cachedSinaEMData&&window._cachedSinaEMData.length?window._cachedSinaEMData.slice():[]
+  var scanCount=emData.length
+  window._lastScanCount=scanCount
+  updateScanCount(scanCount)
+  window._cachedSinaEMData=null  // 用后清空，下次需要重新fetch
+  if(emData.length){
+    setStatus('🔄 Sina行情 '+scanCount+' 只，与缓存合并排序中...')
+    console.log('📦 Sina行情数据,',scanCount,'只')
+  } else {
+    setStatus('🔄 无Sina行情，仅按缓存信号排序展示...')
   }
   
   var seen={}
@@ -2029,7 +2016,7 @@ async function doSearch(){
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(function(){if(!loading)doFullRescan()},t.getTime()-n.getTime());
+  if(n<t)setTimeout(async function(){if(!loading){await fetchAndCacheSina();if(!loading)doFullRescan()}},t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动轻量扫描：拉热门股推送后端分析覆盖旧缓存
@@ -2069,8 +2056,11 @@ setTimeout(function(){
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（后台刷新中...）')
-            // 立即触发 doFullRescan 获取完整的 Sina 升级数据
-            setTimeout(function(){if(!loading)doFullRescan()},1000)
+            // 立即触发 doFullRescan（Sina数据已由上方fetchAndCacheSina提供或后续autoLightScan加载）
+            setTimeout(async function(){
+              if(!loading&&!window._cachedSinaEMData)await fetchAndCacheSina()
+              if(!loading)doFullRescan()
+            },1000)
           }else{
             setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
           }
