@@ -3,4 +3,4 @@ services:
     name: stock-screener
     env: node
     buildCommand: corepack enable && pnpm install && cd server && pnpm run build
-    startCommand: cd server && node dist/main.js// "last_deploy_attempt": "2026-06-22T16:17:35Z"
+    startCommand: cd server && node dist/main.js
