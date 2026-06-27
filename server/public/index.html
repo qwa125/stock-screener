@@ -1621,18 +1621,38 @@ async function refreshDetailPrice(code,low,high){
   }
   if(dayLow<=0)dayLow=lastPrice*0.95
   if(dayHigh<=0)dayHigh=lastPrice*1.05
-  // 最佳买卖价优先用后端MACD红峰/绿峰推算的结果，更精准
-  var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='持有'
-  if(ia.bestBuyPrice>0&&ia.bestBuyTime){buyPoint=ia.bestBuyTime;buyPrice=ia.bestBuyPrice}
-  if(ia.bestSellPrice>0&&ia.bestSellTime){sellPoint=ia.bestSellTime;sellPrice=ia.bestSellPrice}
-  // 回退: 后端无最佳价时从sugs找最新的
-  if(buyPrice==='-'&&sugs.length){
-    for(var si=sugs.length-1;si>=0;si--){var s=sugs[si];if((s.type==='买入点'||s.type==='买入')&&buyPoint==='-'){buyPoint=s.time||'-';buyPrice=typeof s.price==='number'?s.price:lastPrice}}
-  }
-  if(sellPrice==='-'&&sugs.length){
-    for(var si=sugs.length-1;si>=0;si--){var s=sugs[si];if((s.type==='卖出点'||s.type==='卖出')&&sellPoint==='-'){sellPoint=s.time||'-';sellPrice=typeof s.price==='number'?s.price:lastPrice}}
-  }
-  // 挂单参考：基于当日支撑/压力区计算最佳范围
+	  // 从suggestions中找有效做T配对（确保买入价<卖出价）
+	  var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='持有'
+	  if(sugs.length>0){
+	    var sorted=[...sugs].sort((a,b)=>(a.time||'').localeCompare(b.time||''))
+	    var bestProfit=-Infinity,tmpBuy=null,tmpSell=null
+	    // 先买后卖: 买入点之后找最高卖出点
+	    for(var bi=0;bi<sorted.length;bi++){
+	      if(sorted[bi].type==='买入点'||sorted[bi].type==='买入'){
+	        for(var si=bi+1;si<sorted.length;si++){
+	          if((sorted[si].type==='卖出点'||sorted[si].type==='卖出')&&sorted[si].price>sorted[bi].price){
+	            var profit=sorted[si].price-sorted[bi].price
+	            if(profit>bestProfit){bestProfit=profit;tmpBuy=sorted[bi];tmpSell=sorted[si]}
+	          }
+	        }
+	      }
+	    }
+	    // 先卖后买: 卖出点之后找最低买入点
+	    for(var si=0;si<sorted.length;si++){
+	      if(sorted[si].type==='卖出点'||sorted[si].type==='卖出'){
+	        for(var bi=si+1;bi<sorted.length;bi++){
+	          if((sorted[bi].type==='买入点'||sorted[bi].type==='买入')&&sorted[si].price>sorted[bi].price){
+	            var profit=sorted[si].price-sorted[bi].price
+	            if(profit>bestProfit){bestProfit=profit;tmpBuy=sorted[bi];tmpSell=sorted[si]}
+	          }
+	        }
+	      }
+	    }
+	    if(bestProfit>0&&tmpBuy&&tmpSell){
+	      buyPoint=tmpBuy.time||'-';buyPrice=tmpBuy.price
+	      sellPoint=tmpSell.time||'-';sellPrice=tmpSell.price
+	    }
+	  }
   var gap=dayHigh-dayLow
   var buyLow=dayLow  // 买入下限 = 最低价
   var buyHigh=dayLow+gap*0.15  // 买入上限 = 最低价+15%振幅(支撑区上沿)
