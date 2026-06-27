@@ -2958,6 +2958,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 finalSuggestion = '不要介入';
             }
         }
+        const quickBaiBuDays = baiXing?.baiBuDays ?? 0;
+        if (finalSuggestion === '卖出' && quickBaiBuDays >= 3) {
+            this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+            finalSuggestion = '不要介入';
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 白布${quickBaiBuDays}天+卖出，自动锁定为不要介入`);
+        }
         if (finalSuggestion === '卖出') {
             this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
             this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);

@@ -3489,6 +3489,15 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         }
       }
 
+      // ─── 持续白布状态自动锁仓（首次搜索即生效）───
+      // 白布持续>=3天+卖出信号=确认下跌趋势，直接锁定为不要介入
+      const quickBaiBuDays = (baiXing as any)?.baiBuDays ?? 0;
+      if (finalSuggestion === '卖出' && quickBaiBuDays >= 3) {
+        this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+        finalSuggestion = '不要介入';
+        this.logger.log(`🔒 [实时分析] ${name}(${code}) 白布${quickBaiBuDays}天+卖出，自动锁定为不要介入`);
+      }
+
       // ─── 实时分析也写入卖出锁定（与determineBySignalRule一致）───
       if (finalSuggestion === '卖出') {
         this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
