@@ -469,7 +469,8 @@ async function autoLightScan(){
     }
     if(txt)txt.textContent='轻量扫描完成!'
     if(bar)bar.style.width='100%'
-    // ⑤ 刷新机会区
+    // ⑤ 前端读取缓存→按实时涨跌幅升级→写回后端（缓存即前端计算后的最终信号）
+    // ⑥ 刷新机会区（从后端读取已升级的最终缓存）
     await doFullRescan()
     setStatus('✅ 轻量扫描 '+total+' 只完成，覆盖旧缓存')
   }catch(e){
@@ -1037,6 +1038,47 @@ async function fetchWithRetry(url,retries){
   return null
 }
 
+// 全局工具函数：主板/创业板判断
+function isMainBoard(c){return /^60/.test(c)||/^00/.test(c)}
+function isGEM(c){return /^30/.test(c)}
+
+// 拉取Sina全市场行情数据 → 存入_cachedSinaEMData（前置于doFullRescan，外部定时器可调用）
+async function fetchAllSinaPages2(node){
+  var all=[],promises=[]
+  for(var p=1;p<=30;p++){
+    promises.push(
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node,{signal:AbortSignal.timeout(15000)})
+        .then(function(r){return r.text()})
+        .then(function(src){
+          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+          try{
+            var d=JSON.parse(src)
+            if(d&&d.length)all=all.concat(d)
+          }catch(e){
+            var m=src.match(/\[[\s\S]*\]/)
+            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+          }
+        })
+    )
+  }
+  await Promise.all(promises)
+  return all
+}
+async function fetchAndCacheSina(){
+  var listSH=await fetchAllSinaPages2('sh_a'),listSZ=await fetchAllSinaPages2('sz_a')
+  var list=listSH.concat(listSZ),emData=[],seenCodes={}
+  for(var si=0;si<list.length;si++){
+    var sc=list[si],c=String(sc.code||'')
+    if(!c||seenCodes[c])continue
+    seenCodes[c]=1
+    emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
+  }
+  window._cachedSinaEMData=emData
+  window._lastScanCount=emData.length
+  updateScanCount(emData.length)
+  return emData
+}
+
 // ---------- 全市场重扫（东方财富全量：主板+创业板） ----------
 async function doFullRescan(){
   var btn=$('rescanBtn');
@@ -1070,49 +1112,6 @@ async function doFullRescan(){
   // 2. 从东方财富获取全量股票（取代原Sina代理多页并行）
   //    覆盖：沪深主板(600601603605000001002) + 创业板(300301)
   setStatus('🔄 缓存已分析 '+newStocks.length+' 只，从东方财富获取全量排序...')
-  
-  // 沪深主板：60开头（排除688科创板）, 00开头（含000/001/002）
-  function isMainBoard(c){return /^60/.test(c)||/^00/.test(c)}
-  // 创业板代码前缀
-  function isGEM(c){return /^30/.test(c)}
-  
-  // 浏览器直连新浪获取实时行情（纯前端拉取，不经过后端）
-async function fetchAllSinaPages2(node){
-  var all=[],promises=[]
-  for(var p=1;p<=30;p++){
-    promises.push(
-      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node,{signal:AbortSignal.timeout(15000)})
-        .then(function(r){return r.text()})
-        .then(function(src){
-          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-          try{
-            var d=JSON.parse(src)
-            if(d&&d.length)all=all.concat(d)
-          }catch(e){
-            var m=src.match(/\[[\s\S]*\]/)
-            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
-          }
-        })
-    )
-  }
-  await Promise.all(promises)
-  return all
-}
-// 拉取Sina全市场数据→构建emData→存入_cachedSinaEMData（供doFullRescan消费）
-async function fetchAndCacheSina(){
-  var listSH=await fetchAllSinaPages2('sh_a'),listSZ=await fetchAllSinaPages2('sz_a')
-  var list=listSH.concat(listSZ),emData=[],seenCodes={}
-  for(var si=0;si<list.length;si++){
-    var sc=list[si],c=String(sc.code||'')
-    if(!c||seenCodes[c])continue
-    seenCodes[c]=1
-    emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
-  }
-  window._cachedSinaEMData=emData
-  window._lastScanCount=emData.length
-  updateScanCount(emData.length)
-  return emData
-}
   
   // 消费Sina实时行情数据：优先用缓存，无缓存则降级为仅显示缓存数据（不降级不升级）
   var emData=window._cachedSinaEMData&&window._cachedSinaEMData.length?window._cachedSinaEMData.slice():[]
