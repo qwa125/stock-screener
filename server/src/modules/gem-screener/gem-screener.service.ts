@@ -3478,7 +3478,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       // ─── 卖出锁定检查（实时分析也受锁定约束）───
       const sellEntry = this.sellStateCache.get(code);
       if (sellEntry) {
-        const hasBuySignal = ['重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
+        // 用户要求：轻仓买入/买入/重仓买入均可解锁卖出锁定
+        const hasBuySignal = ['轻仓买入', '重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
         if (hasBuySignal) {
           this.sellStateCache.delete(code);
           this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
@@ -3486,6 +3487,12 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           this.logger.log(`🕵️ [DEBUG 卖出锁] ${name}(${code}) sellLock=卖出锁定, finalSug=${finalSuggestion} gc=${isGoldenCross} et=${entryTiming} → 覆盖为不要介入`);
           finalSuggestion = '不要介入';
         }
+      }
+
+      // ─── 实时分析也写入卖出锁定（与determineBySignalRule一致）───
+      if (finalSuggestion === '卖出') {
+        this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+        this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
       }
 
       // ═══ 共享技术面预测：与机会区缓存使用同一算法 ═══

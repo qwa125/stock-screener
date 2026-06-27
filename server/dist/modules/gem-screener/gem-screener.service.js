@@ -2948,7 +2948,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
         const sellEntry = this.sellStateCache.get(code);
         if (sellEntry) {
-            const hasBuySignal = ['重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
+            const hasBuySignal = ['轻仓买入', '重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
             if (hasBuySignal) {
                 this.sellStateCache.delete(code);
                 this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
@@ -2957,6 +2957,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`🕵️ [DEBUG 卖出锁] ${name}(${code}) sellLock=卖出锁定, finalSug=${finalSuggestion} gc=${isGoldenCross} et=${entryTiming} → 覆盖为不要介入`);
                 finalSuggestion = '不要介入';
             }
+        }
+        if (finalSuggestion === '卖出') {
+            this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
         }
         const forecast1_2Day = GemScreenerService_1.computeTechnicalForecast({
             entryTiming,
