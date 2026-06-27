@@ -2773,6 +2773,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         let suggestion = result.action;
         const predictionText = '';
         const reasonText = result.reason || '';
+        const ma10_1dAgo = closeArr.length > 11
+            ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
+            : 0;
+        const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+        if (ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
+            suggestion = '不要介入';
+        }
         const baiBuState = !!baiXing?.baiBu;
         const hasStrongSell = !!(baiXing?.gaoKaiDiZouQingCang ||
             baiXing?.baoLiangFuGaiQingCang ||
@@ -2783,14 +2790,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             lingXing?.zhenShiChuHuo);
         if (baiBuState && (hasStrongSell || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
             suggestion = '卖出';
-            this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
-        }
-        const ma10_1dAgo = closeArr.length > 11
-            ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
-            : 0;
-        const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
-        if (suggestion !== '卖出' && ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
-            suggestion = '不要介入';
+            this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
         }
         if (suggestion === '不要介入') {
             const ma10Prev5 = closeArr.length > 15

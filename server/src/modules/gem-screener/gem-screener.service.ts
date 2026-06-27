@@ -3265,7 +3265,19 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const predictionText = '';
     const reasonText = result.reason || '';
 
-    // ─── 白布卖出信号检测（覆盖getTradingSuggestion，与determineBySignalRule一致）───
+    // ─── 计算MA10短期趋势（1日对比/5日对比，用于后续判断）───
+    const ma10_1dAgo = closeArr.length > 11
+      ? closeArr.slice(-11, -1).reduce((a: number, b: number) => a + b, 0) / 10
+      : 0;
+    const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+
+    // ─── 下跌趋势(MA5<MA10 + MA10环比下降)兜底：仅双边下行才判不要介入 ───
+    // 白消恢复期+MA10已转头->跳过此检查（DIFF已金叉突破，均线正在修复，不应被5日MA10趋势拖死）
+    if (ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
+      suggestion = '不要介入';
+    }
+
+    // ─── 白布卖出信号检测（覆盖getTradingSuggestion/不要介入，与determineBySignalRule一致）───
     // [!] 注意：calcBaiXing返回对象使用拼音key(baiBu/gaoKaiDiZouQingCang)，不是中文
     const baiBuState = !!(baiXing as any)?.baiBu;
     const hasStrongSell = !!(
@@ -3281,19 +3293,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     );
     if (baiBuState && (hasStrongSell || hasChuHuo || (sanJiao as any)?.shortSell || (sanJiao as any)?.strongSell)) {
       suggestion = '卖出';
-      this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖getTradingSuggestion结果`);
-    }
-
-    // ─── 计算MA10短期趋势（1日对比/5日对比，用于后续判断）───
-    const ma10_1dAgo = closeArr.length > 11
-      ? closeArr.slice(-11, -1).reduce((a: number, b: number) => a + b, 0) / 10
-      : 0;
-    const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
-
-    // ─── 下跌趋势(MA5<MA10 + MA10环比下降)兜底：仅双边下行才判不要介入 ───
-    // 白消恢复期+MA10已转头->跳过此检查（DIFF已金叉突破，均线正在修复，不应被5日MA10趋势拖死）
-    if (suggestion !== '卖出' && ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
-      suggestion = '不要介入';
+      this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
     }
 
     // ─── 深度洗盘后期特殊判断：MA5<MA10但MA10向上 + 站上5日线 + 机构活跃 ───
