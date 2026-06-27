@@ -13,7 +13,7 @@ const postgres = require('postgres')
 export class DeviceRegistryService implements OnModuleInit {
   private readonly logger = new Logger(DeviceRegistryService.name)
   private registry: DeviceRegistryEntry[] = []
-  private maxSlots = parseInt(process.env.MAX_SLOTS || '100', 10)
+  private maxSlots = parseInt(process.env.MAX_SLOTS || process.env.DEFAULT_MAX_SLOTS || '100', 10)
   private registryLoaded = false
   private pgSql: any = null
   private readonly filePath = path.resolve(process.cwd(), '.device_registry.json')
@@ -152,16 +152,33 @@ export class DeviceRegistryService implements OnModuleInit {
         }
       }
     }
-    // 最后兜底：环境变量 DEFAULT_MAX_SLOTS（可在 Render dashboard 设置）
+    // 最后兜底：环境变量 + 仓库默认设置文件
     if (!loaded) {
-      const envVal = process.env.DEFAULT_MAX_SLOTS
+      const envVal = process.env.DEFAULT_MAX_SLOTS || process.env.MAX_SLOTS
       if (envVal) {
         const parsed = parseInt(envVal, 10)
         if (parsed > 0) {
           this.maxSlots = parsed
-          this.logger.log(`⚙️ 从环境变量 DEFAULT_MAX_SLOTS 加载: 设备限额 ${this.maxSlots}`)
+          this.logger.log(`⚙️ 从环境变量加载: 设备限额 ${this.maxSlots}`)
           loaded = true
         }
+      }
+    }
+    // 最终兜底：仓库中的默认设置文件（跟随部署）
+    if (!loaded) {
+      const repoDefaultsPath = path.resolve(process.cwd(), 'default-settings.json')
+      try {
+        if (fs.existsSync(repoDefaultsPath)) {
+          const raw = fs.readFileSync(repoDefaultsPath, 'utf-8')
+          const data = JSON.parse(raw)
+          if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+            this.maxSlots = data.maxSlots
+            this.logger.log(`⚙️ 从仓库默认设置文件加载: 设备限额 ${this.maxSlots}`)
+            loaded = true
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`仓库默认设置文件加载失败: ${(e as Error).message}`)
       }
     }
     if (!loaded) {

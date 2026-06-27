@@ -17,7 +17,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
         this.registry = [];
-        this.maxSlots = parseInt(process.env.MAX_SLOTS || '100', 10);
+        this.maxSlots = parseInt(process.env.MAX_SLOTS || process.env.DEFAULT_MAX_SLOTS || '100', 10);
         this.registryLoaded = false;
         this.pgSql = null;
         this.filePath = path.resolve(process.cwd(), '.device_registry.json');
@@ -153,14 +153,31 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             }
         }
         if (!loaded) {
-            const envVal = process.env.DEFAULT_MAX_SLOTS;
+            const envVal = process.env.DEFAULT_MAX_SLOTS || process.env.MAX_SLOTS;
             if (envVal) {
                 const parsed = parseInt(envVal, 10);
                 if (parsed > 0) {
                     this.maxSlots = parsed;
-                    this.logger.log(`⚙️ 从环境变量 DEFAULT_MAX_SLOTS 加载: 设备限额 ${this.maxSlots}`);
+                    this.logger.log(`⚙️ 从环境变量加载: 设备限额 ${this.maxSlots}`);
                     loaded = true;
                 }
+            }
+        }
+        if (!loaded) {
+            const repoDefaultsPath = path.resolve(process.cwd(), 'default-settings.json');
+            try {
+                if (fs.existsSync(repoDefaultsPath)) {
+                    const raw = fs.readFileSync(repoDefaultsPath, 'utf-8');
+                    const data = JSON.parse(raw);
+                    if (typeof data.maxSlots === 'number' && data.maxSlots > 0) {
+                        this.maxSlots = data.maxSlots;
+                        this.logger.log(`⚙️ 从仓库默认设置文件加载: 设备限额 ${this.maxSlots}`);
+                        loaded = true;
+                    }
+                }
+            }
+            catch (e) {
+                this.logger.warn(`仓库默认设置文件加载失败: ${e.message}`);
             }
         }
         if (!loaded) {
