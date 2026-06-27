@@ -1295,18 +1295,21 @@ async function doFullRescan(){
     console.log('🔍 DEBUG: Tencent处理后重仓买入共 '+_debug_heavy.length+' 只:', _debug_heavy.join(' | '))
   }catch(e){}
   
-  // 缓存股在Sina中未被找到的，降级为'观望'+低分（防止过期数据霸占）
+  // 缓存股在Sina中未被找到的，降级为'持有'+低分（防止过期数据霸占）
+  // 但仅当Sina数据拉取成功时才降级（emData>0），避免因Sina拉取失败而误杀全部买入选股
   var deprioritized=0
-  for(var di=0;di<newStocks.length;di++){
-    var ds=newStocks[di]
-    if(ds.code&&!seenInSina[ds.code]&&(ds.suggestion==='买入'||ds.suggestion==='重仓买入'||ds.suggestion==='轻仓买入'||ds.score>30)){
-      ds.suggestion='持有'
-      ds.score=20
-      ds.entryTiming=0
-      deprioritized++
+  if(scanCount>0){
+    for(var di=0;di<newStocks.length;di++){
+      var ds=newStocks[di]
+      if(ds.code&&!seenInSina[ds.code]&&(ds.suggestion==='买入'||ds.suggestion==='重仓买入'||ds.suggestion==='轻仓买入'||ds.score>30)){
+        ds.suggestion='持有'
+        ds.score=20
+        ds.entryTiming=0
+        deprioritized++
+      }
     }
+    if(deprioritized>0)setStatus('⚠️ 清除了 '+deprioritized+' 只停在历史数据的缓存股（Sina中已无该股）')
   }
-  if(deprioritized>0)setStatus('⚠️ 清除了 '+deprioritized+' 只停在历史数据的缓存股（Sina中已无该股）')
   
   // 万一Sina数据和后端缓存都为空，用硬编码兜底（防止全市场重扫无结果）
   if(newStocks.length===0){
@@ -2124,6 +2127,14 @@ setTimeout(function(){
           // 后端缓存有效（盘后数据，设备间共享）
           var ALLOWED={'重仓买入':1,'买入':1}
           stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
+          var PM={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+          stocks.sort(function(a,b){
+            var pa=PM[a.suggestion]||99,pb=PM[b.suggestion]||99
+            if(pa!==pb)return pa-pb
+            var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
+            if(ta!==tb)return tb-ta
+            return (b.score||0)-(a.score||0)
+          })
           if(stocks.length){
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
@@ -2135,7 +2146,15 @@ setTimeout(function(){
           // 后端无缓存 → 尝试本地快照
           var snap2=loadFrozenSnapshot()
           if(snap2&&snap2.length){
-            stocks=snap2
+            stocks=snap2.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
+            var PM2={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+            stocks.sort(function(a,b){
+              var pa=PM2[a.suggestion]||99,pb=PM2[b.suggestion]||99
+              if(pa!==pb)return pa-pb
+              var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
+              if(ta!==tb)return tb-ta
+              return (b.score||0)-(a.score||0)
+            })
             renderList()
             setStatus('📋 冻数据 '+(snap2.length||0))
           }else{
