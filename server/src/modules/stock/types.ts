@@ -168,6 +168,12 @@ export interface FormulaResult {
   baiBuArray?: boolean[];
   /** 白消状态完整数组 */
   baiXiaoArray?: boolean[];
+  /** 尾部XMA不完整K线数(因XMA未来函数导致的可变区间) */
+  edgeIncomplete?: number;
+  /** 基于XMA完整区间的确认白消天数 */
+  confirmedBaiXiaoDays?: number;
+  /** 基于XMA完整区间的确认白布天数 */
+  confirmedBaiBuDays?: number;
 }
 
 /** 回测统计结果 */

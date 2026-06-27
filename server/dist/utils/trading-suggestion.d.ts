@@ -34,6 +34,9 @@ export interface SuggestionInput {
     ma10Up?: boolean;
     pricePosition?: number;
     trendState?: number;
+    edgeIncomplete?: number;
+    confirmedBaiXiaoDays?: number;
+    confirmedBaiBuDays?: number;
 }
 export interface SuggestionResult {
     action: '重仓买入' | '买入' | '轻仓买入' | '持有' | '减仓' | '卖出' | '不要介入';

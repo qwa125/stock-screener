@@ -347,6 +347,29 @@ function calcBaiXing(engine) {
             安全[i] = 1;
         }
     }
+    const xmaHalves = [3, 5, 8, 13, 21].map(n => Math.floor((n - 1) / 2));
+    const maxXmaHalf = Math.max(...xmaHalves);
+    const edgeIncomplete = Math.min(maxXmaHalf, engine.length - 1);
+    const confirmedStart = Math.max(0, engine.length - edgeIncomplete);
+    const confirmedEnd = confirmedStart - 1;
+    let confirmedBaiXiaoDays = 0;
+    if (confirmedEnd >= 0) {
+        for (let i = confirmedEnd; i >= 0; i--) {
+            if (白消状态[i])
+                confirmedBaiXiaoDays++;
+            else
+                break;
+        }
+    }
+    let confirmedBaiBuDays = 0;
+    if (confirmedEnd >= 0) {
+        for (let i = confirmedEnd; i >= 0; i--) {
+            if (覆盖中[i])
+                confirmedBaiBuDays++;
+            else
+                break;
+        }
+    }
     const lastIdx = engine.length - 1;
     return {
         diff: DIFF[lastIdx],
@@ -386,6 +409,9 @@ function calcBaiXing(engine) {
         qiWen: 高位回调买点[lastIdx],
         tiaoJianChengLi: BS_条件成立_filtered[lastIdx],
         kong: false,
+        edgeIncomplete: edgeIncomplete,
+        confirmedBaiXiaoDays: confirmedBaiXiaoDays,
+        confirmedBaiBuDays: confirmedBaiBuDays,
         baiBuArray: 覆盖中,
         baiXiaoArray: 白消状态,
     };

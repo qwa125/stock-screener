@@ -5,9 +5,16 @@ function getTradingSuggestion(input) {
     const { baiXiao, baiXiaoDays, baiBu, baiXiaoBuy1, qiangShiHuiCai, hengPanTuPo, zhenDangMaiDian, zhongWeiZhuSheng, zhongGaoWeiZhuSheng, gaoFengXianZhuSheng, jiaCang, diBuBuy, zhuLiShiPan, qiWen, tiaoJianChengLi, zhuLiChuHuo, gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei, jiGouActiveScore, ma5, ma10, currentPrice, } = input;
     const ma5Up = input.ma5Up !== undefined ? input.ma5Up : true;
     const ma10Up = input.ma10Up !== undefined ? input.ma10Up : true;
-    const baiXiaoEarly = baiXiao && baiXiaoDays >= 1 && baiXiaoDays <= 6;
-    const baiXiaoLate = baiXiao && baiXiaoDays >= 7;
+    const confirmedDays = input.confirmedBaiXiaoDays !== undefined ? input.confirmedBaiXiaoDays : baiXiaoDays;
+    const edgeOnlyBaiXiao = baiXiao && confirmedDays === 0 && baiXiaoDays > 0;
+    const edgeInflated = confirmedDays > 0 && baiXiaoDays > confirmedDays;
+    const conservativeDays = confirmedDays;
+    const baiXiaoEarly = baiXiao && conservativeDays >= 1 && conservativeDays <= 6;
+    const baiXiaoLate = baiXiao && conservativeDays >= 7;
     const hasBaiSanJiaoBuySignal = zhenDangMaiDian || zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang;
+    const baiBuConfirmed = input.confirmedBaiBuDays !== undefined
+        ? input.confirmedBaiBuDays > 0
+        : baiBu;
     const jiGouActive = jiGouActiveScore >= 12;
     const ma5AboveMa10 = ma5 > ma10;
     const ma5UpAndMa10Up = ma5Up && ma10Up;
@@ -16,7 +23,8 @@ function getTradingSuggestion(input) {
     if (gaoKaiDiZouQingCang || baoLiangFuGaiQingCang || po5RiXian || qiangZhiFuGai || yinDiePoWei) {
         return {
             action: '卖出',
-            reason: getSellReason(gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei),
+            reason: getSellReason(gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei) +
+                (edgeOnlyBaiXiao ? '（注意：XMA边缘效应，白消状态可能偏移）' : ''),
             score: 10,
             entryTiming: 0,
         };
@@ -43,48 +51,48 @@ function getTradingSuggestion(input) {
     }
     if (baiXiaoEarly) {
         if (baiXiaoBuy1) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，白消启动', 95, 85);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，白消启动' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 95, 85);
         }
         if (qiangShiHuiCai) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩', 93, 80);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，强势回踩' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 93, 80);
         }
         if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 96, 88);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，强势回踩+' + getBaiSanJiaoNames(input) + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 96, 88);
         }
         if (baiXiaoBuy1 && hasBaiSanJiaoBuySignal) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，启动+' + getBaiSanJiaoNames(input), 96, 88);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，启动+' + getBaiSanJiaoNames(input) + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 96, 88);
         }
         if (zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 92, 82);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，' + getBaiSanJiaoNames(input) + '信号', 92, 82);
         }
         if (zhenDangMaiDian) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，震荡买点信号', 88, 78);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，震荡买点信号', 88, 78);
         }
         if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
-            return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 87, 80);
+            return buildResult('重仓买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 87, 80);
         }
     }
     if (baiXiaoLate) {
         if (hengPanTuPo) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破', 82, 72);
+            return buildResult('买入', '白消第' + conservativeDays + '天，横盘突破' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 82, 72);
         }
         if (hengPanTuPo && hasBaiSanJiaoBuySignal) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破+' + getBaiSanJiaoNames(input), 86, 78);
+            return buildResult('买入', '白消第' + conservativeDays + '天，横盘突破+' + getBaiSanJiaoNames(input), 86, 78);
         }
         if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 84, 75);
+            return buildResult('买入', '白消第' + conservativeDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 84, 75);
         }
         if (qiangShiHuiCai) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩', 80, 70);
+            return buildResult('买入', '白消第' + conservativeDays + '天，强势回踩', 80, 70);
         }
         if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72);
+            return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72);
         }
         if (hasBaiSanJiaoBuySignal) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 78, 70);
+            return buildResult('买入', '白消第' + conservativeDays + '天，' + getBaiSanJiaoNames(input) + '信号', 78, 70);
         }
     }
-    if (baiBu) {
+    if (baiBuConfirmed) {
         if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
             return buildResult('轻仓买入', '白布阶段，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 68, 60);
         }
@@ -108,10 +116,10 @@ function getTradingSuggestion(input) {
             return buildResult('重仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+' + getBaiSanJiaoNames(input), 90, 82);
         }
         if (baiXiaoLate) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72);
+            return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72);
         }
         if (baiXiao) {
-            return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0), 72, 65);
+            return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0), 72, 65);
         }
         return buildResult('轻仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 65, 55);
     }

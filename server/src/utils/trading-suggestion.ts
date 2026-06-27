@@ -60,6 +60,14 @@ export interface SuggestionInput {
   ma10Up?: boolean        // MA10方向向上
   pricePosition?: number  // 价格位置 0-100
   trendState?: number     // 趋势状态 0-3
+
+  // ---- XMA边缘效应（因XMA未来函数，尾部N根K线可能偏移） ----
+  /** XMA不完整导致的尾部不可靠K线数 */
+  edgeIncomplete?: number
+  /** 基于XMA完整区间的确认白消天数（不会因未来数据偏移） */
+  confirmedBaiXiaoDays?: number
+  /** 基于XMA完整区间的确认白布天数 */
+  confirmedBaiBuDays?: number
 }
 
 export interface SuggestionResult {
@@ -88,12 +96,28 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
   const ma5Up = input.ma5Up !== undefined ? input.ma5Up : true
   const ma10Up = input.ma10Up !== undefined ? input.ma10Up : true
 
-  // ---- 白消天数分组辅助 ----
-  const baiXiaoEarly = baiXiao && baiXiaoDays >= 1 && baiXiaoDays <= 6
-  const baiXiaoLate = baiXiao && baiXiaoDays >= 7
+  // ---- XMA边缘效应修正 ----
+  // confirmedBaiXiaoDays 基于XMA完整数据，不会因未来数据偏移
+  // 而 baiXiaoDays 可能因尾部XMA不完整而高估或虚增
+  const confirmedDays = input.confirmedBaiXiaoDays !== undefined ? input.confirmedBaiXiaoDays : baiXiaoDays
+  // 判断白消是否仅出现在XMA不完整的尾部（高概率消失的虚假信号）
+  const edgeOnlyBaiXiao = baiXiao && confirmedDays === 0 && baiXiaoDays > 0
+  // 判断白消天数是否被XMA尾部虚增
+  const edgeInflated = confirmedDays > 0 && baiXiaoDays > confirmedDays
+  // 使用保守的白消天数：确认天数作为真实下限，尾部不完整区间单独评估
+  const conservativeDays = confirmedDays
+
+  // ---- 白消天数分组辅助（使用保守确认天数） ----
+  const baiXiaoEarly = baiXiao && conservativeDays >= 1 && conservativeDays <= 6
+  const baiXiaoLate = baiXiao && conservativeDays >= 7
 
   // ---- 白三角买入信号组合 ----
   const hasBaiSanJiaoBuySignal = zhenDangMaiDian || zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang
+
+  // ---- 白布阶段判断（使用保守确认天数） ----
+  const baiBuConfirmed = input.confirmedBaiBuDays !== undefined
+    ? input.confirmedBaiBuDays > 0
+    : baiBu
 
   // ---- 机构活跃度条件 ----
   const jiGouActive = jiGouActiveScore >= 12
@@ -105,13 +129,12 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
   const ma10Down = !ma10Up                // MA10往下
 
   // ================================================================
-  // 第一条防线：卖出信号（清仓/爆量覆盖/破线/紧急清仓/阴跌破位）
-  //   这些信号不论其他条件如何，直接判定为卖出
-  // ================================================================
+  // 卖出信号（同前，无变化）
   if (gaoKaiDiZouQingCang || baoLiangFuGaiQingCang || po5RiXian || qiangZhiFuGai || yinDiePoWei) {
     return {
       action: '卖出',
-      reason: getSellReason(gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei),
+      reason: getSellReason(gaoKaiDiZouQingCang, baoLiangFuGaiQingCang, po5RiXian, qiangZhiFuGai, yinDiePoWei) + 
+        (edgeOnlyBaiXiao ? '（注意：XMA边缘效应，白消状态可能偏移）' : ''),
       score: 10,
       entryTiming: 0,
     }
@@ -154,73 +177,73 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
   }
 
   // ================================================================
-  // 重仓买入（白消第1-6天）
+  // 重仓买入（白消第1-6天，基于XMA确认天数）
   // ================================================================
   if (baiXiaoEarly) {
     // 条件A: 白消启动单独出现
     if (baiXiaoBuy1) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，白消启动', 95, 85)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，白消启动' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 95, 85)
     }
     // 条件B: 强势回踩单独出现
     if (qiangShiHuiCai) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩', 93, 80)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，强势回踩' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 93, 80)
     }
     // 条件C: 强势回踩 + 白三角买入信号 同一天
     if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 96, 88)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，强势回踩+' + getBaiSanJiaoNames(input) + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 96, 88)
     }
     // 条件D: 白消启动 + 白三角买入信号
     if (baiXiaoBuy1 && hasBaiSanJiaoBuySignal) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，启动+' + getBaiSanJiaoNames(input), 96, 88)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，启动+' + getBaiSanJiaoNames(input) + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 96, 88)
     }
     // 条件E: 中位主升/中高位主升/高风险主升/加仓 单独出现
     if (zhongWeiZhuSheng || zhongGaoWeiZhuSheng || gaoFengXianZhuSheng || jiaCang) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 92, 82)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，' + getBaiSanJiaoNames(input) + '信号', 92, 82)
     }
     // 条件F: 震荡买点单独出现
     if (zhenDangMaiDian) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，震荡买点信号', 88, 78)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，震荡买点信号', 88, 78)
     }
     // 条件G: 机构活跃度≥12 + 首次突破5日均线 + MA5/MA10往上
     if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
-      return buildResult('重仓买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 87, 80)
+      return buildResult('重仓买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 87, 80)
     }
   }
 
   // ================================================================
-  // 买入（白消第7天及之后）
+  // 买入（白消第7天及之后，基于XMA确认天数）
   // ================================================================
   if (baiXiaoLate) {
     // 条件A: 横盘突破单独出现
     if (hengPanTuPo) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破', 82, 72)
+      return buildResult('买入', '白消第' + conservativeDays + '天，横盘突破' + (edgeInflated ? '(尾部虚增' + baiXiaoDays + '天)' : ''), 82, 72)
     }
     // 条件B: 横盘突破 + 白三角买入信号
     if (hengPanTuPo && hasBaiSanJiaoBuySignal) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，横盘突破+' + getBaiSanJiaoNames(input), 86, 78)
+      return buildResult('买入', '白消第' + conservativeDays + '天，横盘突破+' + getBaiSanJiaoNames(input), 86, 78)
     }
     // 条件C: 强势回踩 + 白三角买入信号
     if (qiangShiHuiCai && hasBaiSanJiaoBuySignal) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 84, 75)
+      return buildResult('买入', '白消第' + conservativeDays + '天，强势回踩+' + getBaiSanJiaoNames(input), 84, 75)
     }
     // 条件D: 强势回踩单独出现
     if (qiangShiHuiCai) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，强势回踩', 80, 70)
+      return buildResult('买入', '白消第' + conservativeDays + '天，强势回踩', 80, 70)
     }
     // 条件E: 机构活跃度≥12 + 首次突破5日均线 + MA5/MA10往上
     if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
+      return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
     }
     // 条件F: 中位主升/中高位主升/高风险主升/加仓/震荡买点 单独出现
     if (hasBaiSanJiaoBuySignal) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，' + getBaiSanJiaoNames(input) + '信号', 78, 70)
+      return buildResult('买入', '白消第' + conservativeDays + '天，' + getBaiSanJiaoNames(input) + '信号', 78, 70)
     }
   }
 
   // ================================================================
   // 轻仓买入（白布阶段）
   // ================================================================
-  if (baiBu) {
+  if (baiBuConfirmed) {
     // 条件A: 白布阶段 + 机构活跃度≥12 + 突破5日线 + MA5/MA10往上
     if (jiGouActive && ma5UpAndMa10Up && currentPrice >= ma5) {
       return buildResult('轻仓买入', '白布阶段，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 68, 60)
@@ -248,11 +271,11 @@ export function getTradingSuggestion(input: SuggestionInput): SuggestionResult {
       return buildResult('重仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+' + getBaiSanJiaoNames(input), 90, 82)
     }
     if (baiXiaoLate) {
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
+      return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 80, 72)
     }
     if (baiXiao) {
       // 白消早期但没有明确信号组合
-      return buildResult('买入', '白消第' + baiXiaoDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0), 72, 65)
+      return buildResult('买入', '白消第' + conservativeDays + '天，机构活跃度' + jiGouActiveScore.toFixed(0), 72, 65)
     }
     return buildResult('轻仓买入', '机构活跃度' + jiGouActiveScore.toFixed(0) + '+突破5日线', 65, 55)
   }

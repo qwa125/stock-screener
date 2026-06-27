@@ -11,7 +11,8 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
   'diBuBuy' | 'gaoWeiHuiDiaoBuy' | 'zhuLiShiPan' | 'jiaCang' |
   'gaoKaiDiZouQingCang' | 'baoLiangFuGaiQingCang' | 'po5RiXian' | 'yinDiePoWei' |
   'baiXiaoPureDays' | 'baiXiaoBuy1' | 'baiXiaoBuy2' | 'qiangShiHuiCai' | 'qiangZhiFuGai' | 'xiPanHuoMian' | 'safe' | 'baiBuArray' | 'baiXiaoArray' |
-  'hengPanTuPo' | 'qiWen' | 'tiaoJianChengLi' | 'kong'
+  'hengPanTuPo' | 'qiWen' | 'tiaoJianChengLi' | 'kong' |
+  'confirmedBaiXiaoDays' | 'confirmedBaiBuDays' | 'edgeIncomplete'
 > {
   const C = engine.CLOSE;
   const H = engine.HIGH;
@@ -463,6 +464,35 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     }
   }
 
+  // ===== XMA边缘效应计算 =====
+  // 均线XMA使用了XMA(C,3/5/8/13/21)，它们未来函数的half不同
+  // XMA(n)的尾部half=floor((n-1)/2)根K线数据不完整，会随未来数据偏移
+  const xmaHalves = [3,5,8,13,21].map(n => Math.floor((n-1)/2));
+  const maxXmaHalf = Math.max(...xmaHalves); // =10 (来自XMA21)
+  const edgeIncomplete = Math.min(maxXmaHalf, engine.length - 1);
+
+  // 从尾部倒数第edgeIncomplete+1根开始的数据才是XMA完整可靠的
+  const confirmedStart = Math.max(0, engine.length - edgeIncomplete); // 第一个不可靠的索引
+  const confirmedEnd = confirmedStart - 1; // 最后一个可靠的索引
+
+  // 基于可靠数据计算确认的连续白消天数
+  let confirmedBaiXiaoDays = 0;
+  if (confirmedEnd >= 0) {
+    for (let i = confirmedEnd; i >= 0; i--) {
+      if (白消状态[i]) confirmedBaiXiaoDays++;
+      else break;
+    }
+  }
+
+  // 基于可靠数据计算确认的连续白布天数
+  let confirmedBaiBuDays = 0;
+  if (confirmedEnd >= 0) {
+    for (let i = confirmedEnd; i >= 0; i--) {
+      if (覆盖中[i]) confirmedBaiBuDays++;
+      else break;
+    }
+  }
+
   const lastIdx = engine.length - 1;
   return {
     diff: DIFF[lastIdx],
@@ -505,6 +535,12 @@ export function calcBaiXing(engine: FormulaEngine): Pick<FormulaResult,
     qiWen: 高位回调买点[lastIdx],
     tiaoJianChengLi: BS_条件成立_filtered[lastIdx],
     kong: false,
+    // XMA边缘效应：confirmedStart是第一个XMA不完整索引，其之前的数据100%可靠
+    edgeIncomplete: edgeIncomplete,
+    // 确认的连续白消天数（仅使用XMA完整可靠区间的数据）
+    confirmedBaiXiaoDays: confirmedBaiXiaoDays,
+    // 确认的连续白布天数
+    confirmedBaiBuDays: confirmedBaiBuDays,
     baiBuArray: 覆盖中,
     baiXiaoArray: 白消状态,
   };

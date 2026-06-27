@@ -88,6 +88,9 @@ export interface FormulaResult {
     jiGouHuoYueDuArray?: number[];
     baiBuArray?: boolean[];
     baiXiaoArray?: boolean[];
+    edgeIncomplete?: number;
+    confirmedBaiXiaoDays?: number;
+    confirmedBaiBuDays?: number;
 }
 export interface BacktestStats {
     patternName: string;
