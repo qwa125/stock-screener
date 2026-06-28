@@ -283,10 +283,10 @@ async function handleBlurClick(){
     if(regRes.status===429){showBlocked(true);return}
     if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
-    doScan()
+    // 不自动开始扫描，用户可手动点击扫描
   }catch(e){
-    hideBlocked()
-    if(stocks&&stocks.length){renderList()}
+    var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    $('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试'
   }
 }
 // 主页面扫描按钮：立即触发扫描
