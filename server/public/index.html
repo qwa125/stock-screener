@@ -2460,8 +2460,7 @@ setInterval(function(){
 ;(function initFirstLoad(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
-  // 已注册用户直接隐藏毛玻璃
-  try{if(localStorage.getItem('deviceRegistered'))hideBlocked()}catch(e){}
+  // 所有用户都必须点击毛玻璃按钮进入
   fetchMarketState() // 首次加载市场状态
 
   // ─── 优先从 localStorage 加载上一次的数据（<1ms，无需等后端）───
