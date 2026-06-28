@@ -752,9 +752,10 @@ export class GemScreenerService implements OnApplicationBootstrap {
         }
       }
     }
+    const now = Date.now();
+    if (mainBoardChanged && this.mainBoardCache) { this.mainBoardCache.timestamp = now; this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`)); }
+    if (gemChanged && this.cache) { this.cache.timestamp = now; this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`)); }
     if (newAdded > 0) this.logger.warn(`🆕 新股已加入缓存: ${newAdded}只`);
-    if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
-    if (gemChanged) this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
 
     this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更${newAdded>0?`, ${newAdded}只新股已加入`:''}）`);
   }
@@ -907,18 +908,18 @@ export class GemScreenerService implements OnApplicationBootstrap {
     await this.ensurePgTable();
     const pgGem = await this.loadCacheFromPg<{ data: any[]; timestamp: number }>('gem');
     if (pgGem && pgGem.data && pgGem.data.length > 0) {
-      if (!this.cache || this.cache.data.length === 0) {
+      if (pgGem.timestamp > (this.cache?.timestamp || 0)) {
         this.cache = pgGem;
-        this.logger.log(`✅ PostgreSQL 创业板缓存恢复: ${pgGem.data.length} 只`);
+        this.logger.log(`✅ PostgreSQL 创业板缓存恢复: ${pgGem.data.length} 只 (ts=${pgGem.timestamp})`);
       }
       // 即使内存有缓存，也确保 /tmp 有最新副本（修复首次部署/assets比PG旧的问题）
       try { await fs.writeFile(this.CACHE_FILE, JSON.stringify(pgGem), 'utf-8'); } catch {}
     }
     const pgMain = await this.loadCacheFromPg<{ data: any[]; timestamp: number }>('main_board');
     if (pgMain && pgMain.data && pgMain.data.length > 0) {
-      if (!this.mainBoardCache || this.mainBoardCache.data.length === 0) {
+      if (pgMain.timestamp > (this.mainBoardCache?.timestamp || 0)) {
         this.mainBoardCache = pgMain;
-        this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只`);
+        this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只 (ts=${pgMain.timestamp})`);
       }
       try { await fs.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8'); } catch {}
     }
