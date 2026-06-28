@@ -117,6 +117,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .admin-login-msg{font-size:12px;color:#6b7280;text-align:center;padding:20px 0}
 .admin-device-item .dev-remark{font-size:10px;color:#10b981;margin-top:1px}
 	.blur-btn:disabled{opacity:0.6;cursor:not-allowed}
+.gap-dot{font-size:9px;margin-left:3px;display:inline-block;width:14px;text-align:center}
+.gap-up{color:#ef4444;font-weight:700}
+.gap-down{color:#22c55e;font-weight:700}
+.gap-flat{color:#999}
+.gap-bar{margin:0;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:600;color:#fff;display:flex;align-items:center;gap:4px}
 </style>
 </head>
 <body>
@@ -465,7 +470,7 @@ async function autoLightScan(){
           var bList=bj.data.filter(function(s){return s.code&&(s.code.startsWith('60')||s.code.startsWith('00'))}).slice(0,500)
           var bGem=bj.data.filter(function(s){return s.code&&s.code.startsWith('30')}).slice(0,500)
           totalList=bList.concat(bGem)
-          window._cachedSinaEMData=bj.data.map(function(s){return{f12:s.code,f14:s.name||'',f2:s.trade||0,f3:s.changepercent||0,f15:s.high||0,f16:s.low||0}})
+          window._cachedSinaEMData=bj.data.map(function(s){return{f12:s.code,f14:s.name||'',f2:s.trade||0,f3:s.changepercent||0,f15:s.high||0,f16:s.low||0,f17:s.open||0}})
         }
       }catch(e){}
     }
@@ -505,6 +510,12 @@ async function fetchKlineAndAnalyze(s){
     var curPrice=parseFloat(s.trade)||parseFloat(s.price)||0
     var chg=parseFloat(s.changepercent)||parseFloat(s.chg)||0
     if(!curPrice)return
+    var openPrice=parseFloat(s.open)||0
+    var gapPercent=0
+    if(openPrice>0&&chg!==0){
+      var prevClose=curPrice/(1+chg/100)
+      gapPercent=Math.round((openPrice/prevClose-1)*1000)/10
+    }
 
     // 多源K线强制拉取：东财→新浪→腾讯（必须拉到至少5条）
     var klines=null
@@ -584,7 +595,7 @@ async function fetchKlineAndAnalyze(s){
     }
 
     // 始终推送基础数据到后端（含或不含K线）
-    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0 }
+    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
     if(klines&&klines.length>=5)payload.kline=klines
     await fetch(API+'/gem/analyze',{
       method:'POST',
@@ -685,6 +696,17 @@ function futurePrediction(s){
   return'暂无明确信号，未来1-2日等待方向选择'
 }
 
+function _getGapHtml(code){
+  var _em=window._cachedSinaEMData||[]
+  var _s=_em.find(function(x){return String(x.f12)===String(code)})
+  if(!_s||!_s.f17)return''
+  var _price=parseFloat(_s.f2)||0,_chg=parseFloat(_s.f3)||0
+  if(!_price||!_chg)return''
+  var _prev=_price/(1+_chg/100)
+  var _gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
+  if(Math.abs(_gap)<0.5)return'<span class="gap-dot gap-flat">→</span>'
+  return'<span class="gap-dot ' + (_gap>0?'gap-up":"gap-down")+'">'+(_gap>0?'↑':'↓')+'</span>'
+}
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
 
@@ -881,6 +903,24 @@ function buildDetail(s,rt,ta){
   var gc=s.isGoldenCross
   var bai=s.baiXiaoDays||0
   var sig=s.suggestion||'持有'
+  // 开盘方向分析
+  var _gapHtml=''
+  var _em=window._cachedSinaEMData||[]
+  var _gs=_em.find(function(x){return String(x.f12)===String(s.code)})
+  if(_gs&&_gs.f17){
+    var _gp=parseFloat(_gs.f2)||0,_gc=parseFloat(_gs.f3)||0
+    if(_gp&&_gc){
+      var _pv=_gp/(1+_gc/100)
+      var _gap=Math.round((parseFloat(_gs.f17)/_pv-1)*1000)/10
+      if(Math.abs(_gap)>=0.5){
+        var _dir=_gap>0?'高开↑ 注意冲高回落':'低开↓ 注意探底回升'
+        var _clr=_gap>0?'#ef4444':'#22c55e'
+        _gapHtml='<div class="gap-bar" style="background:'+_clr+'">集合竞价 '+_dir+' <span style="opacity:.7">('+(_gap>0?'+':'')+_gap+'%)</span></div>'
+      }else{
+        _gapHtml='<div class="gap-bar" style="background:#6b7280">集合竞价 平开 观望</div>'
+      }
+    }
+  }
   // 前端推导信号组合（后端旧缓存可能没有）
   var comb=s.signalCombination||''
   if(!comb){
@@ -893,8 +933,17 @@ function buildDetail(s,rt,ta){
   var jiGou=s.jiGouActiveScore||0
   if(!jiGou) jiGou=Math.round((entry||0)/100*20*100)/100
 
+  // 开盘竞价分析
+  var gcGapHtml='',_em2=window._cachedSinaEMData||[]
+  var _gs2=_em2.find(function(x){return String(x.f12)===String(s.code)})
+  if(_gs2&&_gs2.f17){var _gp2=parseFloat(_gs2.f2)||0,_gc2=parseFloat(_gs2.f3)||0
+    if(_gp2&&_gc2){var _pv2=_gp2/(1+_gc2/100),_gap2=Math.round((parseFloat(_gs2.f17)/_pv2-1)*1000)/10
+      if(Math.abs(_gap2)>=0.5){var _d2=_gap2>0?'高开↑ 注意冲高回落':'低开↓ 注意探底回升',_c2=_gap2>0?'#ef4444':'#22c55e'
+        gcGapHtml='<div style="padding:0 12px 6px"><div class="gap-bar" style="background:'+_c2+'">集竞 '+_d2+' <span style="opacity:.7">('+(_gap2>0?'+':'')+_gap2+'%)</span></div></div>'
+      }else{gcGapHtml='<div style="padding:0 12px 6px"><div class="gap-bar" style="background:#6b7280">集竞 平开 观望</div></div>'}
+    }}
   // 信号标签
-  var tags='<div class="signal-tags">'
+  var tags=(gcGapHtml||'')+'<div class="signal-tags">'
     +'<span class="signal-tag" style="background:'+posTClr+'">'+posTag+' '+p.toFixed(0)+'%</span>'
     +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'金叉✓':'未金叉')+'</span>'
     +'<span class="signal-tag" style="background:#7c3aed">白消'+bai+'天</span>'
@@ -1026,7 +1075,7 @@ function renderList(){
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
     var card=document.createElement('div');card.className='stock-card'+(selectedIdx===i?' selected':'')
     card.onclick=function(){showDetail(i)}
-    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
+    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+_getGapHtml(s.code)+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
   })
 }
