@@ -607,6 +607,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return { total, updated: total };
   }
 
+  /** 获取缓存时间戳（取主板和创业板中较新的） */
+  getCacheTimestamp(): number {
+    return Math.max(this.mainBoardCache?.timestamp || 0, this.cache?.timestamp || 0);
+  }
+
   /** 获取全量缓存（仅主板60/00 + 创业板30，过滤科创板688/689） */
   getCacheAll(): OpportunityStock[] {
     const all: OpportunityStock[] = [];

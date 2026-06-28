@@ -121,6 +121,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         total: number;
         updated: number;
     }>;
+    getCacheTimestamp(): number;
     getCacheAll(): OpportunityStock[];
     updateUpgradedCache(list: any[]): void;
     updateSingleStockInCache(opp: OpportunityStock): Promise<void>;

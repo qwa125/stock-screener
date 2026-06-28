@@ -476,6 +476,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.logger.log(`✅ 缓存信号重算完成: ${total}只`);
         return { total, updated: total };
     }
+    getCacheTimestamp() {
+        return Math.max(this.mainBoardCache?.timestamp || 0, this.cache?.timestamp || 0);
+    }
     getCacheAll() {
         const all = [];
         if (this.cache?.data)
