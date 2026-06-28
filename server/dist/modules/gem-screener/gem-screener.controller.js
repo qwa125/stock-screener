@@ -399,12 +399,38 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async rescanMarket() {
         try {
             const snap = this.gemScreener.getUpgradedSnapshot();
+            let data = [];
+            let updatedAt = 0;
             if (snap?.list?.length) {
-                return { code: 200, msg: 'ok', data: snap.list, updatedAt: snap.timestamp, isSnapshot: true };
+                data = snap.list;
+                updatedAt = snap.timestamp;
+                this.logger.log(`📤 rescan返回快照: ${data.length}只, timestamp=${updatedAt}`);
             }
-            const results = this.gemScreener.getCacheAll();
-            const ts = this.gemScreener.getCacheTimestamp();
-            return { code: 200, msg: 'ok', data: results, updatedAt: ts };
+            else {
+                data = this.gemScreener.getCacheAll();
+                updatedAt = this.gemScreener.getCacheTimestamp();
+                this.logger.log(`📤 rescan返回主缓存: ${data.length}只, timestamp=${updatedAt}`);
+            }
+            const PRI_ORDER = {
+                '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
+                '减仓': 4, '卖出': 5, '不要介入': 6,
+            };
+            data.sort((a, b) => {
+                const pa = PRI_ORDER[a.suggestion] ?? 9;
+                const pb = PRI_ORDER[b.suggestion] ?? 9;
+                if (pa !== pb)
+                    return pa - pb;
+                const ea = a.entryTiming || 0;
+                const eb = b.entryTiming || 0;
+                if (eb !== ea)
+                    return eb - ea;
+                const sa = a.score || 0;
+                const sb = b.score || 0;
+                if (sb !== sa)
+                    return sb - sa;
+                return (b.changePercent || 0) - (a.changePercent || 0);
+            });
+            return { code: 200, msg: 'ok', data, updatedAt };
         }
         catch (e) {
             this.logger.error(`读取缓存失败: ${e.message}`);
