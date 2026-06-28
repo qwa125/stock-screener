@@ -909,21 +909,20 @@ function showDetail(i){
   da.style.display='block'
   da.style.minHeight='';da.innerHTML=buildDetail(s,rt)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
-  // 若实时数据缺少高低价（价格刷新未就绪），异步补拉一份
+  renderList()
+  // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
+  if(!isTH()&&s.suggestion){
+    startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
+    return
+  }
+  // 交易时段：若实时数据缺少高低价，异步补拉一份
   if(!rt.high&&!rt.low&&s.code){
     fetchRealtime([s.code]).then(function(fr){
       var nr=fr&&fr[s.code]
       if(nr&&nr.high&&nr.low){
         da.style.minHeight='';da.innerHTML=buildDetail(s,nr)
-        if(!isTH())startIntradayRefresh(s.code,nr.high,nr.low,nr.price)
       }
     }).catch(function(){})
-  }
-  renderList()
-  // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
-  if(!isTH()&&s.suggestion){
-    startIntradayRefresh(s.code,rt.high||s.intradayHigh,rt.low||s.intradayLow,rt.price||s.currentPrice)
-    return
   }
   // ★ 异步拉取完整分析（统一7级买卖系统）
   ;(async function(){
