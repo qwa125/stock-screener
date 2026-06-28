@@ -262,9 +262,9 @@ export class DeviceRegistryService implements OnModuleInit {
     if (existing) {
       existing.lastSeen = Date.now()
       if (existing.isAdmin) return { allowed: true }
-      // 按注册先后检查是否在限额内
-      const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen)
-      const rank = sorted.findIndex(e => e.fingerprint === deviceId)
+      // 按注册先后检查是否在限额内（仅统计非管理员设备）
+      const nonAdminDevices = this.registry.filter(d => !d.isAdmin).sort((a, b) => a.firstSeen - b.firstSeen)
+      const rank = nonAdminDevices.findIndex(e => e.fingerprint === deviceId)
       if (rank >= limit) {
         return { allowed: false, message: `设备限额 ${limit} 台，请先移除不常用设备` }
       }
@@ -291,8 +291,9 @@ export class DeviceRegistryService implements OnModuleInit {
       return { allowed: true }
     }
 
-    // 新设备 → 检查限额
-    if (this.registry.length >= limit) {
+    // 新设备 → 检查限额（不计管理员）
+    const nonAdminCount = this.registry.filter(d => !d.isAdmin).length
+    if (nonAdminCount >= limit) {
       return { allowed: false, message: `最多允许 ${limit} 个不同设备访问` }
     }
 

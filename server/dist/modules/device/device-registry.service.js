@@ -261,8 +261,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             existing.lastSeen = Date.now();
             if (existing.isAdmin)
                 return { allowed: true };
-            const sorted = [...this.registry].sort((a, b) => a.firstSeen - b.firstSeen);
-            const rank = sorted.findIndex(e => e.fingerprint === deviceId);
+            const nonAdminDevices = this.registry.filter(d => !d.isAdmin).sort((a, b) => a.firstSeen - b.firstSeen);
+            const rank = nonAdminDevices.findIndex(e => e.fingerprint === deviceId);
             if (rank >= limit) {
                 return { allowed: false, message: `设备限额 ${limit} 台，请先移除不常用设备` };
             }
@@ -286,7 +286,8 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             this.saveToFile();
             return { allowed: true };
         }
-        if (this.registry.length >= limit) {
+        const nonAdminCount = this.registry.filter(d => !d.isAdmin).length;
+        if (nonAdminCount >= limit) {
             return { allowed: false, message: `最多允许 ${limit} 个不同设备访问` };
         }
         this.registry.push({ fingerprint: deviceId, ua, displayName, firstSeen: Date.now(), lastSeen: Date.now() });
