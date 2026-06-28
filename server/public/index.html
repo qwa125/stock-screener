@@ -2109,32 +2109,11 @@ setInterval(function(){
   $('scanBtn').textContent='🔄 立即扫描'
   fetchMarketState() // 首次加载市场状态
 
-  // ─── 快速通道：优先从 TOS 云快照读取（<1s，Render 休眠也不影响）───
-  var cloudUrl=null;try{cloudUrl=localStorage.getItem('cloud_snapshot_url')}catch(e){}
-  if(cloudUrl){
-    setStatus('⏳ 读取云快照...')
-    fetch(cloudUrl,{signal:AbortSignal.timeout(8000)})
-      .then(function(r){return r.json()})
-      .then(function(snap){
-        if(snap&&snap.list&&snap.list.length){
-          var all=snap.list,ts=snap.timestamp||0
-          stocks=all.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
-          if(stocks.length){
-            renderList()
-            setStatus('☁️ 云快照 '+stocks.length+' 只'+(ts?'('+new Date(ts).toLocaleString('zh-CN')+')':'')+'，后台同步最新数据...')
-          }
-        }
-      })
-      .catch(function(){}) // 云快照失败无所谓，下面还有后端兜底
-  }
-
   if(isTH()){
-    // 交易时段 → 先读后端缓存直接展示，后台渐进式刷新
+    // 交易时段 → 读后端缓存直接展示
     fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
       .then(function(r){return r.json()})
       .then(function(d){
-        // 保存云快照URL到localStorage，下次冷启动时直接用
-        if(d.cloudSnapshotUrl){try{localStorage.setItem('cloud_snapshot_url',d.cloudSnapshotUrl)}catch(e){}}
         if(d.code===200&&d.data&&d.data.length){
           stocks=d.data.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
           if(stocks.length){
@@ -2197,8 +2176,6 @@ setInterval(function(){
     fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
       .then(function(r){return r.json()})
       .then(function(d){
-        // 保存云快照URL到localStorage，下次冷启动时直接用
-        if(d.cloudSnapshotUrl){try{localStorage.setItem('cloud_snapshot_url',d.cloudSnapshotUrl)}catch(e){}}
         if(d.code===200&&d.data&&d.data.length){
           var ALLOWED={'重仓买入':1,'买入':1}
           stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
