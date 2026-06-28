@@ -941,6 +941,15 @@ function buildDetail(s,rt,ta){
 
 // ---------- 渲染列表 ----------
 function renderList(){
+  // 渲染前重算日内位置（修复旧snapshot中pricePosition=0的问题）
+  for(var _ri=0;_ri<stocks.length;_ri++){
+    var _rs=stocks[_ri]
+    if(_rs.intradayHigh&&_rs.intradayLow&&_rs.intradayHigh>_rs.intradayLow&&_rs.currentPrice){
+      _rs.pricePosition=Math.round(((_rs.currentPrice-_rs.intradayLow)/(_rs.intradayHigh-_rs.intradayLow))*100)
+    }else if(_rs.pricePosition==null){
+      _rs.pricePosition=50
+    }
+  }
   // 毛玻璃可见时只缓存不渲染UI
   var isBlurred=!$('pageBlur').classList.contains('hidden')
   if(isBlurred&&stocks.length){return}
