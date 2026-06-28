@@ -4173,10 +4173,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
         const _signalList = [];
-        const _sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-        for (const gv of _sortedValleys) {
+        const _isOpen30Min = (t) => {
+            const h = parseInt(t.slice(11, 13), 10);
+            const m = parseInt(t.slice(14, 16), 10);
+            return (h === 9 && m >= 30) || (h === 10 && m === 0);
+        };
+        for (const gv of _greenValleys) {
             if (_signalList.filter(s => s.type === '买入点').length >= 2)
                 break;
+            if (_isOpen30Min(gv.time))
+                continue;
             const _tooClose = _signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30);
             if (_tooClose)
                 continue;
@@ -4186,10 +4192,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
             _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点', source: '最佳买入(主力信号)' });
         }
-        const _sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-        for (const rp of _sortedPeaks) {
+        for (const rp of _redPeaks) {
             if (_signalList.filter(s => s.type === '卖出点').length >= 2)
                 break;
+            if (_isOpen30Min(rp.time))
+                continue;
             const _tooClose = _signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30);
             if (_tooClose)
                 continue;
