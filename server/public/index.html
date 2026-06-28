@@ -1923,6 +1923,34 @@ async function fetchIntraday(code){
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 async function refreshDetailPrice(code,low,high,lastPrice){
+  // 非交易时段：不走后端，直接用缓存数据渲染价格条+挂单参考
+  if(!isTH()){
+    var lastPriceH=lastPrice||0
+    if(lastPriceH>0&&low>0&&high>0&&low<high){
+      var dayLow=low,dayHigh=high,gap=dayHigh-dayLow
+      var buyLow=dayLow,buyHigh=dayLow+gap*0.15
+      var sellLow=dayHigh-gap*0.15,sellHigh=dayHigh
+      var pct=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPriceH-dayLow)/(dayHigh-dayLow)*100)):50
+      var h='<div style="font-size:13px;text-align:left">'
+      h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;margin-bottom:8px;font-size:11px;color:#92400e;text-align:center">🕐 非交易时段 · 基于缓存数据</div>'
+      h+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
+      h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:2px">'
+      h+='<span>最低 '+dayLow.toFixed(2)+'</span><span style="font-weight:600;color:#1f2937">当前 '+lastPriceH.toFixed(2)+'</span><span>最高 '+dayHigh.toFixed(2)+'</span></div>'
+      h+='<div style="position:relative;height:6px;background:linear-gradient(to right,#22c55e,#eab308,#ef4444);border-radius:3px;margin:4px 0">'
+      h+='<div style="position:absolute;left:'+pct+'%;top:50%;transform:translate(-50%,-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:10px solid #1f2937"></div></div>'
+      h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:#9ca3af">'
+      h+='<span>支撑区</span><span style="font-weight:500;color:#374151">⬆ 价格位置 '+pct.toFixed(0)+'%</span><span>压力区</span></div></div>'
+      h+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
+      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围（基于缓存数据）</div>'
+      h+='<div style="display:flex;justify-content:space-between">'
+      h+='<span style="color:#16a34a;font-weight:600">📝 买入参考: '+(buyLow>0?buyLow.toFixed(2):'-')+'~'+(buyHigh>0?buyHigh.toFixed(2):'-')+'</span>'
+      h+='<span style="color:#ef4444;font-weight:600">📝 卖出参考: '+(sellLow>0?sellLow.toFixed(2):'-')+'~'+(sellHigh>0?sellHigh.toFixed(2):'-')+'</span>'
+      h+='</div></div></div>'
+      var e=$('intradayMacd')
+      if(e)e.innerHTML=h
+    }
+    return
+  }
   var ia=await fetchIntraday(code)
   // 检查数据是否有效：有实时价格且有建议才算有效，否则用缓存数据渲染
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
@@ -2221,6 +2249,7 @@ async function doSearch(){
     // 非交易时段且已有缓存数据 → 直接展示，不拉K线+后端分析
 	    if(!isTH()&&localStock){
 	      da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+tmpStock.name+' ('+tmpStock.code+')</div>'+buildDetail(tmpStock,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow},tmpStock)
+	      startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)
 	      return
 	    }
 
