@@ -1427,7 +1427,7 @@ async function doFullRescan(saveToBackend){
     var sigCount={}
     for(var si=0;si<newStocks.length;si++){
       var us=newStocks[si]
-      upgradeList.push({code:us.code,suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming})
+      upgradeList.push({code:us.code,name:us.name||'',suggestion:us.suggestion,score:us.score,entryTiming:us.entryTiming,currentPrice:us.currentPrice||0,changePercent:us.changePercent||0,pricePosition:us.pricePosition||0,priceIncrease:us.priceIncrease||0,safetyScore:us.safetyScore||0,capitalRank:us.capitalRank||999,mainForceInflow:us.mainForceInflow||0,baiXiaoDays:us.baiXiaoDays||0})
       sigCount[us.suggestion]=(sigCount[us.suggestion]||0)+1
     }
     console.log('📤 Step③ 准备写回后端, upgradeList='+upgradeList.length+' 只, 信号分布:', JSON.stringify(sigCount))

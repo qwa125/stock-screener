@@ -505,18 +505,31 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const item = this.mainBoardCache.data[i];
                 const upgraded = map.get(item.code);
                 if (upgraded) {
-                    if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                    mainBoardChanged = true;
+                    if (upgraded.name !== undefined)
+                        item.name = upgraded.name;
+                    if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion)
                         item.suggestion = upgraded.suggestion;
-                        mainBoardChanged = true;
-                    }
-                    if (upgraded.score !== undefined && upgraded.score !== item.score) {
+                    if (upgraded.score !== undefined)
                         item.score = upgraded.score;
-                        mainBoardChanged = true;
-                    }
-                    if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
+                    if (upgraded.entryTiming !== undefined)
                         item.entryTiming = upgraded.entryTiming;
-                        mainBoardChanged = true;
-                    }
+                    if (upgraded.currentPrice !== undefined)
+                        item.currentPrice = upgraded.currentPrice;
+                    if (upgraded.changePercent !== undefined)
+                        item.changePercent = upgraded.changePercent;
+                    if (upgraded.pricePosition !== undefined)
+                        item.pricePosition = upgraded.pricePosition;
+                    if (upgraded.priceIncrease !== undefined)
+                        item.priceIncrease = upgraded.priceIncrease;
+                    if (upgraded.safetyScore !== undefined)
+                        item.safetyScore = upgraded.safetyScore;
+                    if (upgraded.capitalRank !== undefined)
+                        item.capitalRank = upgraded.capitalRank;
+                    if (upgraded.mainForceInflow !== undefined)
+                        item.mainForceInflow = upgraded.mainForceInflow;
+                    if (upgraded.baiXiaoDays !== undefined)
+                        item.baiXiaoDays = upgraded.baiXiaoDays;
                 }
             }
             if (mainBoardChanged)
@@ -528,18 +541,31 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const item = this.cache.data[i];
                 const upgraded = map.get(item.code);
                 if (upgraded) {
-                    if (upgraded.suggestion && upgraded.suggestion !== item.suggestion) {
+                    gemChanged = true;
+                    if (upgraded.name !== undefined)
+                        item.name = upgraded.name;
+                    if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion)
                         item.suggestion = upgraded.suggestion;
-                        gemChanged = true;
-                    }
-                    if (upgraded.score !== undefined && upgraded.score !== item.score) {
+                    if (upgraded.score !== undefined)
                         item.score = upgraded.score;
-                        gemChanged = true;
-                    }
-                    if (upgraded.entryTiming !== undefined && upgraded.entryTiming !== item.entryTiming) {
+                    if (upgraded.entryTiming !== undefined)
                         item.entryTiming = upgraded.entryTiming;
-                        gemChanged = true;
-                    }
+                    if (upgraded.currentPrice !== undefined)
+                        item.currentPrice = upgraded.currentPrice;
+                    if (upgraded.changePercent !== undefined)
+                        item.changePercent = upgraded.changePercent;
+                    if (upgraded.pricePosition !== undefined)
+                        item.pricePosition = upgraded.pricePosition;
+                    if (upgraded.priceIncrease !== undefined)
+                        item.priceIncrease = upgraded.priceIncrease;
+                    if (upgraded.safetyScore !== undefined)
+                        item.safetyScore = upgraded.safetyScore;
+                    if (upgraded.capitalRank !== undefined)
+                        item.capitalRank = upgraded.capitalRank;
+                    if (upgraded.mainForceInflow !== undefined)
+                        item.mainForceInflow = upgraded.mainForceInflow;
+                    if (upgraded.baiXiaoDays !== undefined)
+                        item.baiXiaoDays = upgraded.baiXiaoDays;
                 }
             }
         }
@@ -574,14 +600,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         suggestion: upgraded.suggestion || '持有',
                         score: upgraded.score ?? 50,
                         entryTiming: upgraded.entryTiming ?? 0,
-                        capitalRank: 0,
-                        mainForceInflow: 0,
-                        baiXiaoDays: 0,
-                        currentPrice: 0,
-                        changePercent: 0,
-                        pricePosition: 0,
-                        priceIncrease: 0,
-                        safetyScore: 0,
+                        currentPrice: upgraded.currentPrice ?? 0,
+                        changePercent: upgraded.changePercent ?? 0,
+                        pricePosition: upgraded.pricePosition ?? 0,
+                        priceIncrease: upgraded.priceIncrease ?? 0,
+                        safetyScore: upgraded.safetyScore ?? 0,
+                        capitalRank: upgraded.capitalRank ?? 999,
+                        mainForceInflow: upgraded.mainForceInflow ?? 0,
+                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
                     });
                     gemChanged = true;
                     newAdded++;
@@ -595,14 +621,14 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         suggestion: upgraded.suggestion || '持有',
                         score: upgraded.score ?? 50,
                         entryTiming: upgraded.entryTiming ?? 0,
-                        capitalRank: 0,
-                        mainForceInflow: 0,
-                        baiXiaoDays: 0,
-                        currentPrice: 0,
-                        changePercent: 0,
-                        pricePosition: 0,
-                        priceIncrease: 0,
-                        safetyScore: 0,
+                        currentPrice: upgraded.currentPrice ?? 0,
+                        changePercent: upgraded.changePercent ?? 0,
+                        pricePosition: upgraded.pricePosition ?? 0,
+                        priceIncrease: upgraded.priceIncrease ?? 0,
+                        safetyScore: upgraded.safetyScore ?? 0,
+                        capitalRank: upgraded.capitalRank ?? 999,
+                        mainForceInflow: upgraded.mainForceInflow ?? 0,
+                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
                     });
                     mainBoardChanged = true;
                     newAdded++;
