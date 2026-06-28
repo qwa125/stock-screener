@@ -2218,31 +2218,35 @@ setTimeout(function(){
                 if(snap2&&snap2.length){
                   stocks=snap2.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
                   var PM2={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
-            stocks.sort(function(a,b){
-              var pa=PM2[a.suggestion]||99,pb=PM2[b.suggestion]||99
-              if(pa!==pb)return pa-pb
-              var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
-              if(ta!==tb)return tb-ta
-              return (b.score||0)-(a.score||0)
+                  stocks.sort(function(a,b){
+                    var pa=PM2[a.suggestion]||99,pb=PM2[b.suggestion]||99
+                    if(pa!==pb)return pa-pb
+                    var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
+                    if(ta!==tb)return tb-ta
+                    return (b.score||0)-(a.score||0)
+                  })
+                  renderList()
+                  setStatus('📋 冻数据 '+(snap2.length||0))
+                }else{
+                  setStatus('⏸️ 等待扫描')
+                }
+              }
             })
-            renderList()
-            setStatus('📋 冻数据 '+(snap2.length||0))
-          }else{
-            setStatus('⏸️ 等待扫描')
-          }
+            .catch(function(e){
+              console.log('⚠️ 读缓存失败:',e.message)
+              var snap3=loadFrozenSnapshot()
+              if(snap3&&snap3.length){
+                stocks=snap3
+                renderList()
+                setStatus('📋 本地快照恢复（盘后，网络异常）')
+              }else{
+                setStatus('⏸️ 等待扫描')
+              }
+            })
         }
       })
       .catch(function(e){
-        console.log('⚠️ 读缓存失败:',e.message)
-        // 网络异常时尝试本地快照
-        var snap3=loadFrozenSnapshot()
-        if(snap3&&snap3.length){
-          stocks=snap3
-          renderList()
-          setStatus('📋 本地快照恢复（盘后，网络异常）')
-        }else{
-          setStatus('⏸️ 等待扫描')
-        }
+        console.log('⚠️ Step③快照读取失败:',e.message)
       })
   }
 },3000)
