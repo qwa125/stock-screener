@@ -637,18 +637,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const upgraded = map.get(item.code);
         if (upgraded) {
           mainBoardChanged = true;
-          if (upgraded.name !== undefined) item.name = upgraded.name;
-          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
-          if (upgraded.score !== undefined) item.score = upgraded.score;
-          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+          // 实时数据字段（Sina提供）：始终更新
           if (upgraded.currentPrice !== undefined) item.currentPrice = upgraded.currentPrice;
           if (upgraded.changePercent !== undefined) item.changePercent = upgraded.changePercent;
-          if (upgraded.pricePosition !== undefined) item.pricePosition = upgraded.pricePosition;
-          if (upgraded.priceIncrease !== undefined) item.priceIncrease = upgraded.priceIncrease;
-          if (upgraded.safetyScore !== undefined) item.safetyScore = upgraded.safetyScore;
           if (upgraded.capitalRank !== undefined) item.capitalRank = upgraded.capitalRank;
           if (upgraded.mainForceInflow !== undefined) item.mainForceInflow = upgraded.mainForceInflow;
           if (upgraded.baiXiaoDays !== undefined) item.baiXiaoDays = upgraded.baiXiaoDays;
+          // 分析字段（suggestion/score/entryTiming等由后端K-line引擎计算）：
+          // 只有当缓存还没有K-line分析结果（score=0）时才用Sina数据回填
+          if (upgraded.name !== undefined) item.name = upgraded.name;
+          if ((item.score ?? 0) === 0) {
+            if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
+            if (upgraded.score !== undefined) item.score = upgraded.score;
+            if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+            if (upgraded.pricePosition !== undefined) item.pricePosition = upgraded.pricePosition;
+            if (upgraded.priceIncrease !== undefined) item.priceIncrease = upgraded.priceIncrease;
+            if (upgraded.safetyScore !== undefined) item.safetyScore = upgraded.safetyScore;
+          }
         }
       }
       if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
@@ -662,18 +667,23 @@ export class GemScreenerService implements OnApplicationBootstrap {
         const upgraded = map.get(item.code);
         if (upgraded) {
           gemChanged = true;
-          if (upgraded.name !== undefined) item.name = upgraded.name;
-          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
-          if (upgraded.score !== undefined) item.score = upgraded.score;
-          if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+          // 实时数据字段（Sina提供）：始终更新
           if (upgraded.currentPrice !== undefined) item.currentPrice = upgraded.currentPrice;
           if (upgraded.changePercent !== undefined) item.changePercent = upgraded.changePercent;
-          if (upgraded.pricePosition !== undefined) item.pricePosition = upgraded.pricePosition;
-          if (upgraded.priceIncrease !== undefined) item.priceIncrease = upgraded.priceIncrease;
-          if (upgraded.safetyScore !== undefined) item.safetyScore = upgraded.safetyScore;
           if (upgraded.capitalRank !== undefined) item.capitalRank = upgraded.capitalRank;
           if (upgraded.mainForceInflow !== undefined) item.mainForceInflow = upgraded.mainForceInflow;
           if (upgraded.baiXiaoDays !== undefined) item.baiXiaoDays = upgraded.baiXiaoDays;
+          // 分析字段（suggestion/score/entryTiming等由后端K-line引擎计算）：
+          // 只有当缓存还没有K-line分析结果（score=0）时才用Sina数据回填
+          if (upgraded.name !== undefined) item.name = upgraded.name;
+          if ((item.score ?? 0) === 0) {
+            if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
+            if (upgraded.score !== undefined) item.score = upgraded.score;
+            if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
+            if (upgraded.pricePosition !== undefined) item.pricePosition = upgraded.pricePosition;
+            if (upgraded.priceIncrease !== undefined) item.priceIncrease = upgraded.priceIncrease;
+            if (upgraded.safetyScore !== undefined) item.safetyScore = upgraded.safetyScore;
+          }
         }
       }
     }
