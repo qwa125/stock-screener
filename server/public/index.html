@@ -1141,6 +1141,8 @@ function renderList(){
     }
   }
   var list=$('stockList');list.innerHTML=''
+  // 毛玻璃可见时（未注册），不展示内容（但仍然可以缓存数据）
+  if($('pageBlur')&&!$('pageBlur').classList.contains('hidden')){list.innerHTML='<div class="empty">🔒 请先完成设备注册以解锁机会区</div>';return}
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   var scanSummary='✅ Top'+stocks.length+' | 实时 | 10分钟自动刷新·覆盖旧数据'
   if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
