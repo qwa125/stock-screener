@@ -1790,8 +1790,9 @@ async function fetchIntraday(code){
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 async function refreshDetailPrice(code,low,high){
   var ia=await fetchIntraday(code)
-  if(!ia){
-    // 非交易时段：用缓存的 low/high/price 渲染价格条+挂单参考
+  // 检查数据是否有效：有实时价格且有建议才算有效，否则用缓存数据渲染
+  if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
+    // 非交易时段/无数据：用缓存的 low/high/price 渲染价格条+挂单参考
     var priceEl=$('livePrice'),lastPriceH=priceEl?parseFloat(priceEl.textContent):0
     if(lastPriceH>0&&low>0&&high>0&&low<high){
       var dayLow=low,dayHigh=high,gap=dayHigh-dayLow
