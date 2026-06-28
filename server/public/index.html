@@ -1150,9 +1150,9 @@ function isGEM(c){return /^30/.test(c)}
 // 拉取Sina全市场行情数据 → 存入_cachedSinaEMData（前置于doFullRescan，外部定时器可调用）
 async function fetchAllSinaPages2(node){
   var all=[],promises=[]
-  for(var p=1;p<=30;p++){
+  for(var p=1;p<=15;p++){
     promises.push(
-      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=symbol&asc=1&node='+node,{signal:AbortSignal.timeout(15000)})
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,{signal:AbortSignal.timeout(15000)})
         .then(function(r){return r.text()})
         .then(function(src){
           src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
@@ -1170,7 +1170,7 @@ async function fetchAllSinaPages2(node){
   return all
 }
 async function fetchAndCacheSina(){
-  // ★ 首选：新浪（30页×100只，按代码排序遍历全市场）
+  // ★ 首选：新浪（15页×100只，按涨跌幅降序取全市场前1500只）
   var listSH,listSZ
   try{
     listSH=await fetchAllSinaPages2('sh_a'),listSZ=await fetchAllSinaPages2('sz_a')
