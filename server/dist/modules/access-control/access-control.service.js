@@ -73,11 +73,21 @@ let AccessControlService = AccessControlService_1 = class AccessControlService {
     hasAvailableSlot() {
         return this.getUsedSlots() < this.registry.maxSlots;
     }
-    async registerDevice(deviceId, fingerprint) {
+    async registerDevice(deviceId, fingerprint, isAdmin = false) {
         if (this.registry.devices[deviceId]) {
             this.registry.devices[deviceId].lastSeen = Date.now();
             await this.saveRegistry();
             return { success: true };
+        }
+        if (isAdmin) {
+            this.registry.devices[deviceId] = {
+                registeredAt: Date.now(),
+                lastSeen: Date.now(),
+                fingerprint,
+            };
+            await this.saveRegistry();
+            this.logger.log(`✅ 管理员设备注册成功 [${deviceId.slice(0, 8)}...], 不占名额`);
+            return { success: true, isAdmin: true };
         }
         if (!this.hasAvailableSlot()) {
             return { success: false, reason: '名额已满, 请联系管理员扩容' };

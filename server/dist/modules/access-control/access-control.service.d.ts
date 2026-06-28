@@ -12,9 +12,10 @@ export declare class AccessControlService implements OnApplicationBootstrap {
     setMaxSlots(n: number): Promise<void>;
     isDeviceRegistered(deviceId: string): boolean;
     hasAvailableSlot(): boolean;
-    registerDevice(deviceId: string, fingerprint: Record<string, any>): Promise<{
+    registerDevice(deviceId: string, fingerprint: Record<string, any>, isAdmin?: boolean): Promise<{
         success: boolean;
         reason?: string;
+        isAdmin?: boolean;
     }>;
     resetRegistry(): Promise<void>;
     getStatus(deviceId?: string): {

@@ -89,12 +89,24 @@ export class AccessControlService implements OnApplicationBootstrap {
   }
 
   /** 注册新设备 */
-  async registerDevice(deviceId: string, fingerprint: Record<string, any>): Promise<{ success: boolean; reason?: string }> {
+  async registerDevice(deviceId: string, fingerprint: Record<string, any>, isAdmin = false): Promise<{ success: boolean; reason?: string; isAdmin?: boolean }> {
     // 已注册 → 更新最后访问时间, 不消耗额外名额
     if (this.registry.devices[deviceId]) {
       this.registry.devices[deviceId].lastSeen = Date.now();
       await this.saveRegistry();
       return { success: true };
+    }
+
+    // 管理员不占名额
+    if (isAdmin) {
+      this.registry.devices[deviceId] = {
+        registeredAt: Date.now(),
+        lastSeen: Date.now(),
+        fingerprint,
+      };
+      await this.saveRegistry();
+      this.logger.log(`✅ 管理员设备注册成功 [${deviceId.slice(0, 8)}...], 不占名额`);
+      return { success: true, isAdmin: true };
     }
 
     // 名额已满

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Headers, HttpCode } from '@nestjs/common';
 import { AccessControlService } from './access-control.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
@@ -16,8 +16,11 @@ export class AccessControlController {
   @HttpCode(200)
   async register(
     @Body() body: { deviceId: string; fingerprint: Record<string, any> },
+    @Headers('x-admin-token') adminToken?: string,
   ) {
-    const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {});
+    const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
+    const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
+    const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {}, isAdmin);
     return {
       code: result.success ? 200 : 403,
       msg: result.success ? '注册成功' : (result.reason || '访问被拒绝'),

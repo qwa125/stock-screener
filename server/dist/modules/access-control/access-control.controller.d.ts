@@ -7,7 +7,7 @@ export declare class AccessControlController {
     register(body: {
         deviceId: string;
         fingerprint: Record<string, any>;
-    }): Promise<{
+    }, adminToken?: string): Promise<{
         code: number;
         msg: string;
         data: {

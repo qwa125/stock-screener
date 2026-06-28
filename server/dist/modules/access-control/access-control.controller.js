@@ -22,8 +22,10 @@ let AccessControlController = class AccessControlController {
         this.service = service;
         this.deviceRegistry = deviceRegistry;
     }
-    async register(body) {
-        const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {});
+    async register(body, adminToken) {
+        const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
+        const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
+        const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {}, isAdmin);
         return {
             code: result.success ? 200 : 403,
             msg: result.success ? '注册成功' : (result.reason || '访问被拒绝'),
@@ -96,8 +98,9 @@ __decorate([
     (0, common_1.Post)('register'),
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Headers)('x-admin-token')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], AccessControlController.prototype, "register", null);
 __decorate([
