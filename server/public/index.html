@@ -921,7 +921,7 @@ function buildDetail(s,rt,ta){
   // 统一日内介入参考主框
   entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
     +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考</div>'
-    +'<div id="intradayMacd" style="padding:8px;background:#f8fafc;border-radius:6px;font-size:12px;text-align:center;color:#6b7280">⏳ 日内数据加载中...</div>'
+    +'<div id="intradayMacd" style="padding:8px;background:#f8fafc;border-radius:6px;font-size:12px;text-align:center;color:#6b7280">'+(ta&&ta.entryScore!=null&&!isTH()?'<div style="text-align:left;line-height:1.8"><div style="font-size:10px;color:#888;margin-bottom:4px">📌 非交易时段，数据已冻结</div><span style="font-size:11px;color:#374151">综合评分 </span><span style="font-size:15px;font-weight:700;color:#16a34a">'+ta.entryScore+'</span>'+(ta.bollinger?'<span style="font-size:10px;color:#888;margin-left:8px">布林 '+(ta.bollinger.position=='upper'?'上轨':ta.bollinger.position=='lower'?'下轨':'中轨附近')+'</span>':'')+'<br><span style="font-size:10px;color:#888">⬇ 支撑 '+(ta.supportLevel!==undefined?ta.supportLevel.toFixed(2):'-')+' | ⬆ 压力 '+(ta.resistanceLevel!==undefined?ta.resistanceLevel.toFixed(2):'-')+' | 最佳介入 '+(ta.bestEntryPrice!==undefined?ta.bestEntryPrice.toFixed(2):'-')+'</span></div>':'⏳ 日内数据加载中...')+'</div>'
     +bestEntryHtml
     +'<div style="margin-top:6px;padding:5px 6px;background:#fff;border-radius:4px">'
       +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
@@ -2086,7 +2086,7 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        isDetailView=true;startIntradayRefresh(stockCode,stockHigh,stockLow)
+        isDetailView=true;if(isTH()) startIntradayRefresh(stockCode,stockHigh,stockLow)
           da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
       }else{
         throw new Error('分析无结果')
@@ -2111,8 +2111,8 @@ async function doSearch(){
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          startIntradayRefresh(stockCode,stockHigh,stockLow)
-          da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})+'<div id="intradayMacd" style="margin-top:6px;padding:10px;background:#f8f9fa;border-radius:8px;font-size:12px;line-height:1.6"><span style="color:#888">⏳ 加载日内数据…</span></div>'
+          if(isTH()) startIntradayRefresh(stockCode,stockHigh,stockLow)
+          da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
             +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
