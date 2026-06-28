@@ -486,6 +486,7 @@ export class GemScreenerController {
       for (const s of list) { const sig = s.suggestion || '无'; sigCount[sig] = (sigCount[sig] || 0) + 1; }
       this.logger.log(`📦 Step③收到升级信号: ${list.length}只, 分布=${JSON.stringify(sigCount)}, 前5=${list.slice(0,5).map(s => s.code + '-' + s.suggestion).join(',')}`);
       this.gemScreener.updateUpgradedCache(list);
+      this.gemScreener.setUpgradedSnapshot(list);
       // debug: 验证关键股票写入结果
       const debugCodes = ['300260', '300749', '300088', '300321', '001335', '002456'];
       const allData = this.gemScreener.getCacheAll();
@@ -501,6 +502,13 @@ export class GemScreenerController {
       this.logger.error(`更新升级缓存失败: ${e.message}`);
       return { code: 500, msg: e.message, data: 0 };
     }
+  }
+
+  @Get('upgraded-snapshot')
+  @SkipAccessLimit()
+  async getUpgradedSnapshot() {
+    const data = this.gemScreener.getUpgradedSnapshot();
+    return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
   }
 
   @Post('refresh-all')

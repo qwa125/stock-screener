@@ -124,6 +124,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
         this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
+        this.upgradedSnapshot = { list: [], timestamp: 0 };
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
         this.POSITION_THRESHOLD = 92;
@@ -494,6 +495,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return false;
             return true;
         });
+    }
+    setUpgradedSnapshot(list) {
+        this.upgradedSnapshot = { list, timestamp: Date.now() };
+        this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
+    }
+    getUpgradedSnapshot() {
+        return this.upgradedSnapshot;
     }
     updateUpgradedCache(list) {
         if (!list?.length)

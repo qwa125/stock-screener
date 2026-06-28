@@ -419,6 +419,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
             this.logger.log(`📦 Step③收到升级信号: ${list.length}只, 分布=${JSON.stringify(sigCount)}, 前5=${list.slice(0, 5).map(s => s.code + '-' + s.suggestion).join(',')}`);
             this.gemScreener.updateUpgradedCache(list);
+            this.gemScreener.setUpgradedSnapshot(list);
             const debugCodes = ['300260', '300749', '300088', '300321', '001335', '002456'];
             const allData = this.gemScreener.getCacheAll();
             if (allData?.length) {
@@ -434,6 +435,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             this.logger.error(`更新升级缓存失败: ${e.message}`);
             return { code: 500, msg: e.message, data: 0 };
         }
+    }
+    async getUpgradedSnapshot() {
+        const data = this.gemScreener.getUpgradedSnapshot();
+        return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
     }
     async refreshAll(body) {
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
@@ -905,6 +910,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "updateUpgraded", null);
+__decorate([
+    (0, common_1.Get)('upgraded-snapshot'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getUpgradedSnapshot", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

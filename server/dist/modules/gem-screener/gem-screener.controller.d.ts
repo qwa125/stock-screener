@@ -243,6 +243,12 @@ export declare class GemScreenerController {
         msg: any;
         data: number;
     }>;
+    getUpgradedSnapshot(): Promise<{
+        code: number;
+        msg: string;
+        data: any[];
+        updatedAt: number;
+    }>;
     refreshAll(body: {
         stocks: any[];
     }): Promise<{

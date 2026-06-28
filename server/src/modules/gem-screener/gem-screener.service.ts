@@ -121,6 +121,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
     lastRefresh: number;
   }>();
   private readonly SELL_STATE_FILE = '/tmp/sell-state-cache.json';
+  /** Step③ 升级后的精确快照，供其他设备直接读取 */
+  private upgradedSnapshot: { list: any[]; timestamp: number } = { list: [], timestamp: 0 };
   private readonly BUNDLED_GEM_CACHE = join(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
   private readonly BATCH_SIZE = 20;
   private readonly POSITION_THRESHOLD = 92;
@@ -627,6 +629,16 @@ export class GemScreenerService implements OnApplicationBootstrap {
     });
   }
 
+  /** 保存 Step③ 升级后的精确快照 */
+  setUpgradedSnapshot(list: any[]): void {
+    this.upgradedSnapshot = { list, timestamp: Date.now() };
+    this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
+  }
+
+  /** 获取 Step③ 升级后的精确快照 */
+  getUpgradedSnapshot(): { list: any[]; timestamp: number } {
+    return this.upgradedSnapshot;
+  }
 
   /** 接收前端升级后的信号并更新缓存 */
   updateUpgradedCache(list: any[]) {

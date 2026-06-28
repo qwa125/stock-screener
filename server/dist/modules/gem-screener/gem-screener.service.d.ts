@@ -62,6 +62,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly CACHE_FILE;
     private intradaySignalCache;
     private readonly SELL_STATE_FILE;
+    private upgradedSnapshot;
     private readonly BUNDLED_GEM_CACHE;
     private readonly BATCH_SIZE;
     private readonly POSITION_THRESHOLD;
@@ -123,6 +124,11 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     }>;
     getCacheTimestamp(): number;
     getCacheAll(): OpportunityStock[];
+    setUpgradedSnapshot(list: any[]): void;
+    getUpgradedSnapshot(): {
+        list: any[];
+        timestamp: number;
+    };
     updateUpgradedCache(list: any[]): void;
     updateSingleStockInCache(opp: OpportunityStock): Promise<void>;
     syncUpgradedCache(stocks: any[]): Promise<number>;
