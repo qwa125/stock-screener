@@ -915,6 +915,7 @@ function showDetail(i){
       var nr=fr&&fr[s.code]
       if(nr&&nr.high&&nr.low){
         da.style.minHeight='';da.innerHTML=buildDetail(s,nr)
+        if(!isTH())startIntradayRefresh(s.code,nr.high,nr.low,nr.price)
       }
     }).catch(function(){})
   }
