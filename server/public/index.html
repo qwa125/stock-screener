@@ -272,13 +272,6 @@ function showBlocked(isLimited){
 }
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
-  if(stocks&&stocks.length){
-    renderList()
-  }else{
-    setStatus('⏳ 正在加载股票数据，请稍候...')
-    // 首次注册后遮罩移除，自动触发轻量级加载
-    setTimeout(function(){doFullRescan(true)}, 200)
-  }
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
@@ -2445,6 +2438,8 @@ setInterval(function(){
 ;(function initFirstLoad(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
+  // 已注册用户直接隐藏毛玻璃
+  try{if(localStorage.getItem('deviceRegistered'))hideBlocked()}catch(e){}
   fetchMarketState() // 首次加载市场状态
 
   // ─── 优先从 localStorage 加载上一次的数据（<1ms，无需等后端）───
