@@ -572,11 +572,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         code,
                         name: upgraded.name || '',
                         suggestion: upgraded.suggestion || '持有',
-                        score: upgraded.score || 50,
-                        entryTiming: upgraded.entryTiming,
+                        score: upgraded.score ?? 50,
+                        entryTiming: upgraded.entryTiming ?? 0,
                         capitalRank: 0,
                         mainForceInflow: 0,
                         baiXiaoDays: 0,
+                        currentPrice: 0,
+                        changePercent: 0,
+                        pricePosition: 0,
+                        priceIncrease: 0,
+                        safetyScore: 0,
                     });
                     gemChanged = true;
                     newAdded++;
@@ -588,11 +593,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         code,
                         name: upgraded.name || '',
                         suggestion: upgraded.suggestion || '持有',
-                        score: upgraded.score || 50,
-                        entryTiming: upgraded.entryTiming,
+                        score: upgraded.score ?? 50,
+                        entryTiming: upgraded.entryTiming ?? 0,
                         capitalRank: 0,
                         mainForceInflow: 0,
                         baiXiaoDays: 0,
+                        currentPrice: 0,
+                        changePercent: 0,
+                        pricePosition: 0,
+                        priceIncrease: 0,
+                        safetyScore: 0,
                     });
                     mainBoardChanged = true;
                     newAdded++;
