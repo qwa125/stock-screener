@@ -5,6 +5,7 @@ interface DeviceRecord {
   registeredAt: number;
   lastSeen: number;
   fingerprint: Record<string, any>;
+  isAdmin?: boolean;
 }
 
 interface DeviceRegistry {
@@ -69,7 +70,7 @@ export class AccessControlService implements OnApplicationBootstrap {
   }
 
   getUsedSlots(): number {
-    return Object.keys(this.registry.devices).length;
+    return Object.values(this.registry.devices).filter(d => !d.isAdmin).length;
   }
 
   /** 设置最大名额 */
@@ -103,6 +104,7 @@ export class AccessControlService implements OnApplicationBootstrap {
         registeredAt: Date.now(),
         lastSeen: Date.now(),
         fingerprint,
+        isAdmin: true,
       };
       await this.saveRegistry();
       this.logger.log(`✅ 管理员设备注册成功 [${deviceId.slice(0, 8)}...], 不占名额`);

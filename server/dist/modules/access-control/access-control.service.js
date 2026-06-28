@@ -61,7 +61,7 @@ let AccessControlService = AccessControlService_1 = class AccessControlService {
         return this.registry.maxSlots;
     }
     getUsedSlots() {
-        return Object.keys(this.registry.devices).length;
+        return Object.values(this.registry.devices).filter(d => !d.isAdmin).length;
     }
     async setMaxSlots(n) {
         this.registry.maxSlots = n;
@@ -84,6 +84,7 @@ let AccessControlService = AccessControlService_1 = class AccessControlService {
                 registeredAt: Date.now(),
                 lastSeen: Date.now(),
                 fingerprint,
+                isAdmin: true,
             };
             await this.saveRegistry();
             this.logger.log(`✅ 管理员设备注册成功 [${deviceId.slice(0, 8)}...], 不占名额`);
