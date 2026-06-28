@@ -764,6 +764,11 @@ function showDetail(i){
     }).catch(function(){})
   }
   renderList()
+  // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
+  if(!isTH()&&s.suggestion){
+    startIntradayRefresh(s.code,rt.high,rt.low)
+    return
+  }
   // ★ 异步拉取完整分析（统一7级买卖系统）
   ;(async function(){
     try{
