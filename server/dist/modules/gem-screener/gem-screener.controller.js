@@ -411,7 +411,22 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             const list = body?.list || [];
             if (!list.length)
                 return { code: 200, msg: 'empty', data: [] };
+            const sigCount = {};
+            for (const s of list) {
+                const sig = s.suggestion || '无';
+                sigCount[sig] = (sigCount[sig] || 0) + 1;
+            }
+            this.logger.log(`📦 Step③收到升级信号: ${list.length}只, 分布=${JSON.stringify(sigCount)}, 前5=${list.slice(0, 5).map(s => s.code + '-' + s.suggestion).join(',')}`);
             this.gemScreener.updateUpgradedCache(list);
+            const debugCodes = ['300260', '300749', '300088', '300321', '001335', '002456'];
+            const allData = this.gemScreener.getCacheAll();
+            if (allData?.length) {
+                const debugInfo = debugCodes.map(c => {
+                    const s = allData.find(x => x.code === c);
+                    return s ? `${c}-${s.name}-${s.suggestion}-${s.currentPrice}` : `${c}-未找到`;
+                }).join(' | ');
+                this.logger.log(`📦 Step③写入后验证: 缓存共${allData.length}只, 关键股=${debugInfo}`);
+            }
             return { code: 200, msg: `updated ${list.length} stocks`, data: list.length };
         }
         catch (e) {

@@ -638,7 +638,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
         if (upgraded) {
           mainBoardChanged = true;
           if (upgraded.name !== undefined) item.name = upgraded.name;
-          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
+          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
+            if (item.code === '300260' || item.code === '300749') {
+              this.logger.log(`📦 updateUpgraded: ${item.code} ${upgraded.suggestion} !== ${item.suggestion} → 更新为${upgraded.suggestion}`);
+            }
+            item.suggestion = upgraded.suggestion;
+          }
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
           if (upgraded.currentPrice !== undefined) item.currentPrice = upgraded.currentPrice;
@@ -663,7 +668,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
         if (upgraded) {
           gemChanged = true;
           if (upgraded.name !== undefined) item.name = upgraded.name;
-          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) item.suggestion = upgraded.suggestion;
+          if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
+            if (item.code === '300260' || item.code === '300749') {
+              this.logger.log(`📦 updateUpgraded(GEM): ${item.code} ${upgraded.suggestion} !== ${item.suggestion} → 更新为${upgraded.suggestion}`);
+            }
+            item.suggestion = upgraded.suggestion;
+          }
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
           if (upgraded.currentPrice !== undefined) item.currentPrice = upgraded.currentPrice;
