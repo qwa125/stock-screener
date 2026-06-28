@@ -782,6 +782,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
           if (upgraded.intradayHigh !== undefined) item.intradayHigh = upgraded.intradayHigh;
           if (upgraded.intradayLow !== undefined) item.intradayLow = upgraded.intradayLow;
+        }
       }
     }
 

@@ -674,94 +674,91 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         item.intradayLow = upgraded.intradayLow;
                 }
             }
-            let newAdded = 0;
-            const mainData = this.mainBoardCache?.data || [];
-            const gemData = this.cache?.data || [];
-            for (const [code, upgraded] of map) {
-                let found = false;
-                for (let i = 0; i < mainData.length; i++) {
-                    if (mainData[i].code === code) {
+        }
+        let newAdded = 0;
+        const mainData = this.mainBoardCache?.data || [];
+        const gemData = this.cache?.data || [];
+        for (const [code, upgraded] of map) {
+            let found = false;
+            for (let i = 0; i < mainData.length; i++) {
+                if (mainData[i].code === code) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                for (let i = 0; i < gemData.length; i++) {
+                    if (gemData[i].code === code) {
                         found = true;
                         break;
                     }
                 }
-                if (!found) {
-                    for (let i = 0; i < gemData.length; i++) {
-                        if (gemData[i].code === code) {
-                            found = true;
-                            break;
-                        }
-                    }
+            }
+            if (!found) {
+                const isGEM = /^30/.test(code);
+                const isMainBoard = /^60/.test(code) || /^00/.test(code);
+                if (isGEM) {
+                    if (!this.cache)
+                        this.cache = { data: [], timestamp: Date.now() };
+                    this.cache.data.push({
+                        code,
+                        name: upgraded.name || '',
+                        suggestion: upgraded.suggestion || '持有',
+                        score: upgraded.score ?? 50,
+                        entryTiming: upgraded.entryTiming ?? 0,
+                        currentPrice: upgraded.currentPrice ?? 0,
+                        changePercent: upgraded.changePercent ?? 0,
+                        pricePosition: upgraded.pricePosition ?? 0,
+                        priceIncrease: upgraded.priceIncrease ?? 0,
+                        safetyScore: upgraded.safetyScore ?? 0,
+                        capitalRank: upgraded.capitalRank ?? 999,
+                        mainForceInflow: upgraded.mainForceInflow ?? 0,
+                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
+                    });
+                    gemChanged = true;
+                    newAdded++;
                 }
-                if (!found) {
-                    const isGEM = /^30/.test(code);
-                    const isMainBoard = /^60/.test(code) || /^00/.test(code);
-                    if (isGEM) {
-                        if (!this.cache)
-                            this.cache = { data: [], timestamp: Date.now() };
-                        this.cache.data.push({
-                            code,
-                            name: upgraded.name || '',
-                            suggestion: upgraded.suggestion || '持有',
-                            score: upgraded.score ?? 50,
-                            entryTiming: upgraded.entryTiming ?? 0,
-                            currentPrice: upgraded.currentPrice ?? 0,
-                            changePercent: upgraded.changePercent ?? 0,
-                            pricePosition: upgraded.pricePosition ?? 0,
-                            priceIncrease: upgraded.priceIncrease ?? 0,
-                            safetyScore: upgraded.safetyScore ?? 0,
-                            capitalRank: upgraded.capitalRank ?? 999,
-                            mainForceInflow: upgraded.mainForceInflow ?? 0,
-                            baiXiaoDays: upgraded.baiXiaoDays ?? 0,
-                        });
-                        gemChanged = true;
-                        newAdded++;
-                    }
-                    else if (isMainBoard) {
-                        if (!this.mainBoardCache)
-                            this.mainBoardCache = { data: [], timestamp: Date.now() };
-                        this.mainBoardCache.data.push({
-                            code,
-                            name: upgraded.name || '',
-                            suggestion: upgraded.suggestion || '持有',
-                            score: upgraded.score ?? 50,
-                            entryTiming: upgraded.entryTiming ?? 0,
-                            currentPrice: upgraded.currentPrice ?? 0,
-                            changePercent: upgraded.changePercent ?? 0,
-                            pricePosition: upgraded.pricePosition ?? 0,
-                            priceIncrease: upgraded.priceIncrease ?? 0,
-                            safetyScore: upgraded.safetyScore ?? 0,
-                            capitalRank: upgraded.capitalRank ?? 999,
-                            mainForceInflow: upgraded.mainForceInflow ?? 0,
-                            baiXiaoDays: upgraded.baiXiaoDays ?? 0,
-                        });
-                        mainBoardChanged = true;
-                        newAdded++;
-                    }
+                else if (isMainBoard) {
+                    if (!this.mainBoardCache)
+                        this.mainBoardCache = { data: [], timestamp: Date.now() };
+                    this.mainBoardCache.data.push({
+                        code,
+                        name: upgraded.name || '',
+                        suggestion: upgraded.suggestion || '持有',
+                        score: upgraded.score ?? 50,
+                        entryTiming: upgraded.entryTiming ?? 0,
+                        currentPrice: upgraded.currentPrice ?? 0,
+                        changePercent: upgraded.changePercent ?? 0,
+                        pricePosition: upgraded.pricePosition ?? 0,
+                        priceIncrease: upgraded.priceIncrease ?? 0,
+                        safetyScore: upgraded.safetyScore ?? 0,
+                        capitalRank: upgraded.capitalRank ?? 999,
+                        mainForceInflow: upgraded.mainForceInflow ?? 0,
+                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
+                    });
+                    mainBoardChanged = true;
+                    newAdded++;
                 }
             }
-            const now = Date.now();
-            if (mainBoardChanged && this.mainBoardCache) {
-                this.mainBoardCache.timestamp = now;
-                this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
-            }
-            if (gemChanged && this.cache) {
-                this.cache.timestamp = now;
-                this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
-            }
-            if (newAdded > 0)
-                this.logger.warn(`🆕 新股已加入缓存: ${newAdded}只`);
-            this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged ? '有' : '无'}变更, GEM${gemChanged ? '有' : '无'}变更${newAdded > 0 ? `, ${newAdded}只新股已加入` : ''}）`);
         }
-        async;
-        updateSingleStockInCache(opp, OpportunityStock);
-        Promise < void  > {
-            const: code = opp.code,
-            const: isMainBoardStock = /^60/.test(code) || /^00/.test(code),
-            const: isGEMStock = /^30/.test(code),
-            : .cache
-        };
-        {
+        const now = Date.now();
+        if (mainBoardChanged && this.mainBoardCache) {
+            this.mainBoardCache.timestamp = now;
+            this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
+        }
+        if (gemChanged && this.cache) {
+            this.cache.timestamp = now;
+            this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
+        }
+        if (newAdded > 0)
+            this.logger.warn(`🆕 新股已加入缓存: ${newAdded}只`);
+        this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged ? '有' : '无'}变更, GEM${gemChanged ? '有' : '无'}变更${newAdded > 0 ? `, ${newAdded}只新股已加入` : ''}）`);
+    }
+    async updateSingleStockInCache(opp) {
+        const code = opp.code;
+        const isMainBoardStock = /^60/.test(code) || /^00/.test(code);
+        const isGEMStock = /^30/.test(code);
+        if (!this.cache) {
             this.cache = { data: [], timestamp: Date.now() };
         }
         {
