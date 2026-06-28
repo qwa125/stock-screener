@@ -1179,7 +1179,7 @@ function renderList(){
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
     var card=document.createElement('div');card.className='stock-card'+(selectedIdx===i?' selected':'')
     card.onclick=function(){showDetail(i)}
-    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999;display:flex;align-items:center;gap:3px">'+s.code+_getGapHtml(s.code)+'<span id="auction-badge-'+i+'" style="font-size:9px;opacity:0.7"></span></div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
+    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
   })
 }
@@ -1244,18 +1244,8 @@ async function doScan(){
     startPriceRefresh(stocks)
     // 后台同步到缓存: 拉新浪实时行情+升级信号→覆写后端缓存
     backgroundSyncWithKline()
-    // 后台拉取集合竞价数据（top20综合研判）
-    fetchAuctionData(stocks.slice(0,20).map(function(s){return s.code}),5).then(function(){
-      // 更新扫描列表的竞价徽标
-      stocks.forEach(function(s,i){
-        var el=document.getElementById('auction-badge-'+i)
-        if(!el)return
-        var j=auctionJudge(s.code,s)
-        if(j){el.textContent=j.short
-          var m={neutral:'#6b7280',watch:'#eab308',buy:'#dc2626',buy_weak:'#059669',sell:'#22c55e',caution:'#ea580c'}
-          el.style.color=m[j.sig]||'#6b7280'}
-      })
-    })
+    // 后台拉取集合竞价数据（top20综合研判，供详情页使用）
+    fetchAuctionData(stocks.slice(0,20).map(function(s){return s.code}),5)
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
