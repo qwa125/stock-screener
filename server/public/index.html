@@ -1835,51 +1835,36 @@ async function refreshDetailPrice(code,low,high,lastPrice){
   }
   if(dayLow<=0)dayLow=lastPrice*0.95
   if(dayHigh<=0)dayHigh=lastPrice*1.05
-	  // 从suggestions中找有效做T配对（确保买入价<卖出价）
+	  // 从suggestions中找买卖点：各自独立显示，出现即提示不等配对
 	  var buyPoint='-',buyPrice='-',sellPoint='-',sellPrice='-',bestSug='持有'
 	  if(sugs.length>0){
 	    var sorted=[...sugs].sort((a,b)=>(a.time||'').localeCompare(b.time||''))
-	    var bestProfit=-Infinity,tmpBuy=null,tmpSell=null
-	    // 先买后卖: 买入点之后找最高卖出点
-	    for(var bi=0;bi<sorted.length;bi++){
-	      if(sorted[bi].type==='买入点'||sorted[bi].type==='买入'){
-	        for(var si=bi+1;si<sorted.length;si++){
-	          if((sorted[si].type==='卖出点'||sorted[si].type==='卖出')&&sorted[si].price>sorted[bi].price){
-	            var profit=sorted[si].price-sorted[bi].price
-	            if(profit>bestProfit){bestProfit=profit;tmpBuy=sorted[bi];tmpSell=sorted[si]}
-	          }
-	        }
-	      }
+	    // 按时间倒序，找最新的买入点和卖出点
+	    var latestBuy=null,latestSell=null
+	    for(var i=sorted.length-1;i>=0;i--){
+	      if((sorted[i].type==='买入点'||sorted[i].type==='买入')&&!latestBuy)latestBuy=sorted[i]
+	      if((sorted[i].type==='卖出点'||sorted[i].type==='卖出')&&!latestSell)latestSell=sorted[i]
+	      if(latestBuy&&latestSell)break
 	    }
-	    // 先卖后买: 卖出点之后找最低买入点
-	    for(var si=0;si<sorted.length;si++){
-	      if(sorted[si].type==='卖出点'||sorted[si].type==='卖出'){
-	        for(var bi=si+1;bi<sorted.length;bi++){
-	          if((sorted[bi].type==='买入点'||sorted[bi].type==='买入')&&sorted[si].price>sorted[bi].price){
-	            var profit=sorted[si].price-sorted[bi].price
-	            if(profit>bestProfit){bestProfit=profit;tmpBuy=sorted[bi];tmpSell=sorted[si]}
-	          }
-	        }
-	      }
+	    // 有买入点就立即显示，不等卖出点配对
+	    if(latestBuy){buyPoint=latestBuy.time||'-';buyPrice=latestBuy.price}
+	    // 有卖出点就立即显示，不等买入点配对
+	    if(latestSell){sellPoint=latestSell.time||'-';sellPrice=latestSell.price}
+	    // 锁定机制：首次出现买入价即锁定（已按该价买入），卖出价持续优化
+	    if(buyPrice!=='-'&&_lockedBuyPrice===null){
+	      _lockedBuyPrice=buyPrice;_lockedBuyTime=buyPoint
 	    }
-	    if(bestProfit>0&&tmpBuy&&tmpSell){
-	      buyPoint=tmpBuy.time||'-';buyPrice=tmpBuy.price
-	      sellPoint=tmpSell.time||'-';sellPrice=tmpSell.price
-	      // ─── 锁定机制：首次有效买卖点锁定，后续只优化卖点不降低买点 ───
-	      if(_lockedBuyPrice===null){
-	        _lockedBuyPrice=buyPrice;_lockedBuyTime=buyPoint
-	        _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
-	      }else{
-	        // 买入价格锁定不变（你已按该价格买入，不因新低而改变）
-	        buyPrice=_lockedBuyPrice;buyPoint=_lockedBuyTime
-	        // 卖出价格只升不降（如果有更高卖点则更新，提供更好止盈参考）
-	        if(sellPrice>_lockedSellPrice){
-	          _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
-	          sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
-	        }else{
-	          sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
-	        }
-	      }
+	    if(_lockedBuyPrice!==null){
+	      buyPrice=_lockedBuyPrice;buyPoint=_lockedBuyTime
+	    }
+	    // 卖出价只升不降
+	    if(sellPrice!=='-'&&_lockedSellPrice===null){
+	      _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
+	    }else if(sellPrice!=='-'&&sellPrice>_lockedSellPrice){
+	      _lockedSellPrice=sellPrice;_lockedSellTime=sellPoint
+	      sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
+	    }else if(_lockedSellPrice!==null){
+	      sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
 	    }
 	  }
   var gap=dayHigh-dayLow
@@ -1890,15 +1875,15 @@ async function refreshDetailPrice(code,low,high,lastPrice){
   // 最佳介入点信号文本(根据实际买卖点数据生成实用提示)
   var sigText=''
   if(buyPrice!=='-'&&sellPrice!=='-'){
-    if(lastPrice<=buyPrice*1.01)sigText='📈 现价可买入，建议价格 '+buyPrice.toFixed(2)
-    else if(lastPrice>=sellPrice*0.99)sigText='📉 目前是卖出点，建议卖出价格 '+sellPrice.toFixed(2)
-    else sigText='⏳ 目前不是最佳介入点，最佳介入价格 '+buyPrice.toFixed(2)+'，建议卖出价格 '+sellPrice.toFixed(2)
+    if(lastPrice<=buyPrice*1.01)sigText='📈 现价可买入，建议价格 '+buyPrice.toFixed(2)+'（买入信号@'+buyPoint+'）'
+    else if(lastPrice>=sellPrice*0.99)sigText='📉 目前是卖出点，建议卖出价格 '+sellPrice.toFixed(2)+'（卖出信号@'+sellPoint+'）'
+    else sigText='⏳ 最佳介入 '+buyPrice.toFixed(2)+'（@'+buyPoint+'）→ 止盈 '+sellPrice.toFixed(2)+'（@'+sellPoint+'）'
   }else if(buyPrice!=='-'){
-    if(lastPrice<=buyPrice*1.02)sigText='📈 现价能买入，建议价格 '+buyPrice.toFixed(2)
-    else sigText='⏳ 目前不是最佳介入点，最佳介入价格 '+buyPrice.toFixed(2)
+    if(lastPrice<=buyPrice*1.02)sigText='📈 出现买入信号 @'+buyPoint+'，现价 '+lastPrice.toFixed(2)+' ≤ 建议价 '+buyPrice.toFixed(2)+'，可介入'
+    else sigText='📈 出现买入信号 @'+buyPoint+'，建议价 '+buyPrice.toFixed(2)+'，现价偏高等待回落'
   }else if(sellPrice!=='-'){
-    if(lastPrice>=sellPrice*0.98)sigText='📉 目前是卖出点，建议卖出价格 '+sellPrice.toFixed(2)
-    else sigText='⏳ 目前不是最佳卖出点，建议卖出价格 '+sellPrice.toFixed(2)
+    if(lastPrice>=sellPrice*0.98)sigText='📉 出现卖出信号 @'+sellPoint+'，现价 '+lastPrice.toFixed(2)+' ≥ 建议价 '+sellPrice.toFixed(2)+'，可卖出'
+    else sigText='📉 出现卖出信号 @'+sellPoint+'，建议价 '+sellPrice.toFixed(2)+'，等待反弹'
   }else{sigText='⏳ 暂无明确买卖信号，观望为主'}
   // 主力散户买卖点
   var html='<div style="font-size:13px;text-align:left">'
