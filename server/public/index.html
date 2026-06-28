@@ -258,7 +258,7 @@ window.fetch=function(u,o){
   })
 }
 function showBlocked(isLimited){
-  $("pageBlur").classList.remove("hidden")
+  $("pageBlur").style.display='flex'
   if(isLimited){
     $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
   } else {
@@ -266,7 +266,7 @@ function showBlocked(isLimited){
   }
 }
 function hideBlocked(){
-  $("pageBlur").classList.add("hidden")
+  $("pageBlur").style.display='none'
   // 恢复因 blur 遮挡而未渲染的列表
   if(stocks&&stocks.length){renderList()}
 }
@@ -398,7 +398,7 @@ var _autoScanning=false
 async function autoLightScan(){
   if(_autoScanning||loading||_rescanAll)return
   // 毛玻璃遮罩未关闭时不执行（用户尚未进入页面）
-  if(!document.getElementById('pageBlur').classList.contains('hidden'))return
+  if($('pageBlur')&&$('pageBlur').style.display!=='none')return
   _autoScanning=true
   try{
     setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
@@ -1142,7 +1142,7 @@ function renderList(){
   }
   var list=$('stockList');list.innerHTML=''
   // 毛玻璃可见时（未注册），不展示内容（但仍然可以缓存数据）
-  if($('pageBlur')&&!$('pageBlur').classList.contains('hidden')){list.innerHTML='<div class="empty">🔒 请先完成设备注册以解锁机会区</div>';return}
+  if($('pageBlur')&&$('pageBlur').style.display!=='none'){list.innerHTML='<div class="empty">🔒 请先完成设备注册以解锁机会区</div>';return}
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   var scanSummary='✅ Top'+stocks.length+' | 实时 | 10分钟自动刷新·覆盖旧数据'
   if(window._lastScanCount&&window._lastScanCount>0)scanSummary+=' | 已扫描 '+window._lastScanCount+' 只股票'
@@ -1173,7 +1173,7 @@ function renderList(){
 // ---------- 扫描 ----------
 async function doScan(){
   // 毛玻璃可见时（未注册），仅缓存数据不更新界面
-  var isBlurred=!$('pageBlur').classList.contains('hidden')
+  var isBlurred=$('pageBlur').style.display!=='none'
   if(isBlurred&&loading)return
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   stopPriceRefresh()
@@ -1349,7 +1349,7 @@ async function doFullRescan(saveToBackend){
   // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
   if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
   // 毛玻璃可见时（未注册）不执行任何操作
-  var isBlurred=!$('pageBlur').classList.contains('hidden')
+  var isBlurred=$('pageBlur').style.display!=='none'
   if(isBlurred)return
   loading=true
   stopPriceRefresh()
@@ -2883,6 +2883,6 @@ function changeAdminPwd(){
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
-<script>showBlocked(false)</script>
+<script>(function(){var e=document.getElementById('pageBlur');if(e)e.style.display='flex'})()</script>
 </body>
 </html>
