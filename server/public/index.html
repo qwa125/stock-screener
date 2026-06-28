@@ -800,6 +800,7 @@ function buildDetail(s,rt,ta){
   var p=s.pricePosition??50
   var posTag=posLabel(p)
   var posTClr=TAG_COLORS[posTag]||'#6b7280'
+  var posClr=p<50?'#22c55e':p<80?'#eab308':'#ef4444'
   var entry=s.entryTiming||0
   var safe=s.safetyScore||0
   var sc=s.score||0
@@ -889,9 +890,23 @@ function buildDetail(s,rt,ta){
     +'</div>'
   }
   // 统一日内介入参考主框
+  var cachedEntryHtml=''
+  if(!(ta&&ta.entryScore!=null) && (entry||s.forecast1_2Day)){
+    // 无异步分析但有缓存数据 → 直接用已算好的数据展示（休盘/冷启动）
+    var et=s.entryTiming||0
+    var etClr=et>=70?'#16a34a':et>=45?'#ca8a04':et>=20?'#6b7280':'#dc2626'
+    var etLbl=et>=70?'极佳 ⭐':et>=45?'良好 ✓':et>=20?'观望 −':'不宜 ✗'
+    var fp=s.forecast1_2Day
+    cachedEntryHtml='<div style="padding:8px;background:#f8fafc;border-radius:6px;font-size:11px">'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="background:'+etClr+';color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">入场时机 '+etLbl+'（'+et.toFixed(0)+'分）</span>'
+      +'<span style="font-size:10px;color:'+posClr+'">日内位置 '+p.toFixed(0)+'%</span></div>'
+      +(fp?'<div style="color:#374151;font-size:10px;margin-bottom:2px">📋 未来1-2日：<span style="font-weight:600;color:'+(fp.direction==='强烈看涨'||fp.direction==='看涨'?'#16a34a':'#ca8a04')+'">'+(fp.direction||'-')+'</span>（'+(fp.reason||'')+'）</div>':'')
+      +'<div style="color:#6b7280;font-size:9px">安全评分 '+(s.safetyScore||0).toFixed(0)+' | '+(s.isGoldenCross?'✅ 金叉':'❌ 非金叉')+'</div>'
+    +'</div>'
+  }
   entryHtml='<div style="margin:0 12px 8px;padding:10px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;line-height:1.6">'
     +'<div style="font-weight:600;color:#166534;margin-bottom:6px">🕐 日内介入参考</div>'
-    +'<div id="intradayMacd" style="padding:8px;background:#f8fafc;border-radius:6px;font-size:12px;text-align:center;color:#6b7280">⏳ 日内数据加载中...</div>'
+    +(cachedEntryHtml||'<div id="intradayMacd" style="padding:8px;background:#f8fafc;border-radius:6px;font-size:12px;text-align:center;color:#6b7280">⏳ 日内数据加载中...</div>')
     +bestEntryHtml
     +'<div style="margin-top:6px;padding:5px 6px;background:#fff;border-radius:4px">'
       +'<div style="font-weight:600;color:#374151;font-size:9px;margin-bottom:2px">📋 分析理由</div>'
@@ -1190,6 +1205,11 @@ async function doFullRescan(saveToBackend){
           newStocks[si3].changePercent=chg
           newStocks[si3].intradayHigh=item.f15
           newStocks[si3].intradayLow=item.f16
+          // 实时计算日内位置：现价在当天高低的百分比（低位=可介入空间大）
+          var hi=item.f15, lo=item.f16
+          if(hi&&lo&&hi>lo){
+            newStocks[si3].pricePosition=Math.round(((price-lo)/(hi-lo))*100)
+          }
           if(hasLiveData){
             newStocks[si3].score=liveScore
             newStocks[si3].entryTiming=liveEntryTiming
