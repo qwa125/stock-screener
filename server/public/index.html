@@ -285,9 +285,10 @@ async function handleBlurClick(){
   btn.disabled=true;btn.textContent='⏳ 服务器唤醒中...'
   $("blurMsg").innerHTML="⏳ 正在连接服务器，请稍候..."
   try{
-    var regRes=await fetch("/api/device/register",{
+    var regRes=await fetch("/api/access/register",{
       method:"POST",
-      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({deviceId:getOrCreateDeviceId()})
     })
     if(regRes.status===429){
       $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
@@ -320,9 +321,10 @@ async function handleRescanClick(){
   if(btn)btn.textContent='⏳ 全市场重扫中...'
   if(prog)prog.style.display='block'
   try{
-    var regRes=await fetch("/api/device/register",{
+    var regRes=await fetch("/api/access/register",{
       method:"POST",
-      headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({deviceId:getOrCreateDeviceId()})
     })
     if(regRes.status===429||regRes.status!==200){
       showBlocked(true);return
@@ -2159,7 +2161,7 @@ async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   // 先检查设备权限：搜股票也要经过后端 guard 验证
   try{
-    var _reg=await fetch('/api/device/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId(),'Content-Type':'application/json'},body:'{}'})
+    var _reg=await fetch('/api/access/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:getOrCreateDeviceId()})})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none';isDetailView=false
