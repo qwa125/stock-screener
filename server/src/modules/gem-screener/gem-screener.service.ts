@@ -99,6 +99,10 @@ export interface OpportunityStock {
     confidence: string;   // 高|中|低|--
     detail: string;       // 预测依据说明
   };
+  /** 日内最高价（来自Sina EM实时行情） */
+  intradayHigh?: number;
+  /** 日内最低价（来自Sina EM实时行情） */
+  intradayLow?: number;
 }
 
 @Injectable()

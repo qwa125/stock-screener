@@ -51,6 +51,8 @@ export interface OpportunityStock {
         confidence: string;
         detail: string;
     };
+    intradayHigh?: number;
+    intradayLow?: number;
 }
 export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly dataFetcher;
