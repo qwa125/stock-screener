@@ -4797,6 +4797,26 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       ...macdSignals.filter(s => s.type === '金叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '买入点' as const, source: 'MACD金叉' })),
       ...macdSignals.filter(s => s.type === '死叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '卖出点' as const, source: 'MACD死叉' })),
     ];
+    // 补充价格级别的高低点（无需等待MACD金叉/死叉，直接找K线局部低点/高点）
+    // 局部低点: 比前后各2根K线的低点都低 → 日内买点
+    // 局部高点: 比前后各2根K线的高点都高 → 日内卖点
+    for (let i = 2; i < len - 2; i++) {
+      // 低点检测
+      if (low[i] < low[i-1] && low[i] < low[i-2] && low[i] < low[i+1] && low[i] < low[i+2]) {
+        // 去重：离上一个买入点≥3根K线
+        const lastBuy = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '买入点') : null;
+        if (!lastBuy || i - lastBuy.idx >= 3) {
+          allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '买入点' as const, source: '价格低点' });
+        }
+      }
+      // 高点检测
+      if (high[i] > high[i-1] && high[i] > high[i-2] && high[i] > high[i+1] && high[i] > high[i+2]) {
+        const lastSell = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '卖出点') : null;
+        if (!lastSell || i - lastSell.idx >= 3) {
+          allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '卖出点' as const, source: '价格高点' });
+        }
+      }
+    }
     allPoints.sort((a, b) => a.idx - b.idx);
     suggestions.push(...allPoints);
 

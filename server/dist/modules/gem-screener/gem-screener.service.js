@@ -4159,6 +4159,20 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             ...macdSignals.filter(s => s.type === '金叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '买入点', source: 'MACD金叉' })),
             ...macdSignals.filter(s => s.type === '死叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '卖出点', source: 'MACD死叉' })),
         ];
+        for (let i = 2; i < len - 2; i++) {
+            if (low[i] < low[i - 1] && low[i] < low[i - 2] && low[i] < low[i + 1] && low[i] < low[i + 2]) {
+                const lastBuy = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '买入点') : null;
+                if (!lastBuy || i - lastBuy.idx >= 3) {
+                    allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '买入点', source: '价格低点' });
+                }
+            }
+            if (high[i] > high[i - 1] && high[i] > high[i - 2] && high[i] > high[i + 1] && high[i] > high[i + 2]) {
+                const lastSell = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '卖出点') : null;
+                if (!lastSell || i - lastSell.idx >= 3) {
+                    allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '卖出点', source: '价格高点' });
+                }
+            }
+        }
         allPoints.sort((a, b) => a.idx - b.idx);
         suggestions.push(...allPoints);
         const lastIdx = len - 1;

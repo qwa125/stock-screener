@@ -1911,9 +1911,34 @@ async function refreshDetailPrice(code,low,high,lastPrice){
   // 最佳介入点 + 买入点/卖出点
   html+='<div style="padding:6px 0">'
   html+='<div style="font-weight:600;font-size:13px;margin-bottom:4px">🎯 <span style="color:#16a34a">最佳介入点</span>：'+sigText+'</div>'
-  html+='<div style="display:flex;justify-content:space-between;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:4px">'
-  html+='<div style="display:flex;flex-direction:column;align-items:flex-start"><span style="color:#ef4444;font-weight:600;font-size:11px">⬆ 买入点 '+(buyPrice!=='-'?buyPoint:'暂无信号')+'</span><span style="color:#dc2626;font-weight:700;font-size:14px">'+(buyPrice!=='-'?Number(buyPrice).toFixed(2):'')+'</span></div>'
-  html+='<div style="display:flex;flex-direction:column;align-items:flex-end"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点 '+(sellPrice!=='-'?sellPoint:'暂无信号')+'</span><span style="color:#16a34a;font-weight:700;font-size:14px">'+(sellPrice!=='-'?Number(sellPrice).toFixed(2):'')+'</span></div>'
+  // ——— 全部信号列表 ———
+  var buyList=sugs.filter(function(s){return s.type==='买入点'||s.type==='买入'})
+  var sellList=sugs.filter(function(s){return s.type==='卖出点'||s.type==='卖出'})
+  html+='<div style="border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:4px">'
+  if(buyList.length>0){
+    html+='<div style="margin-bottom:2px"><span style="color:#ef4444;font-weight:600;font-size:11px">⬆ 买入点('+buyList.length+'个)</span></div>'
+    for(var bi=0;bi<buyList.length;bi++){
+      var b=buyList[bi]
+      html+='<div style="display:flex;justify-content:space-between;padding:1px 0;font-size:12px;line-height:1.6">'
+      html+='<span style="color:#6b7280">'+b.time+'</span>'
+      html+='<span style="color:#dc2626;font-weight:400">'+b.price.toFixed(2)+'</span>'
+      html+='</div>'
+    }
+  }else{
+    html+='<div style="margin-bottom:2px"><span style="color:#ef4444;font-weight:600;font-size:11px">⬆ 买入点</span> <span style="color:#9ca3af;font-size:11px">暂无信号</span></div>'
+  }
+  if(sellList.length>0){
+    html+='<div style="margin-top:4px;margin-bottom:2px"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点('+sellList.length+'个)</span></div>'
+    for(var si=0;si<sellList.length;si++){
+      var s=sellList[si]
+      html+='<div style="display:flex;justify-content:space-between;padding:1px 0;font-size:12px;line-height:1.6">'
+      html+='<span style="color:#6b7280">'+s.time+'</span>'
+      html+='<span style="color:#16a34a;font-weight:400">'+s.price.toFixed(2)+'</span>'
+      html+='</div>'
+    }
+  }else{
+    html+='<div style="margin-top:4px;margin-bottom:2px"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点</span> <span style="color:#9ca3af;font-size:11px">暂无信号</span></div>'
+  }
   html+='</div></div>'
   // 挂单参考
   html+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
