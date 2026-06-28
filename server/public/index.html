@@ -2157,16 +2157,22 @@ setTimeout(function(){
               if(stocks.length){
                 renderList()
                 setStatus('📋 本地快照恢复（网络异常，后台重试中...）')
+              }else{
+                setStatus('⏳ 服务器正在启动中，请耐心等待...（冷启动约15~30秒）')
               }
+            }else{
+              setStatus('⏳ 服务器正在启动中，请耐心等待...（冷启动约15~30秒）')
             }
+          }else{
+            setStatus('⏳ 服务器正在启动中，请耐心等待...（冷启动约15~30秒）')
           }
-        }catch(e2){}
+        }catch(e2){setStatus('⏳ 服务器正在启动中，请耐心等待...（冷启动约15~30秒）')}
       })
       .finally(function(){
       })
   }else{
     // 休盘/周末 → 读 rescan（后端已改造：有快照时直接返回 Step③ 精确数据）
-    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.code===200&&d.data&&d.data.length){
@@ -2207,6 +2213,8 @@ setTimeout(function(){
           stocks=snapData.stocks
           renderList()
           setStatus('📋 本地快照恢复（盘后）')
+        }else{
+          setStatus('⏳ 服务器正在启动中，请耐心等待...（冷启动约15~30秒）')
         }
       })
   }
