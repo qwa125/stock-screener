@@ -748,23 +748,33 @@ function showDetail(i){
   }
   renderList()
   // ★ 异步拉取完整分析（统一7级买卖系统）
-  ;(async function(){
-    try{
-      var code=s.code
-      // 先拉K线（通过后端代理避免CORS）
-      var kr=await fetch('/api/gem/proxy/kline?code='+code+'&_='+Date.now())
-      var kj=await kr.json()
-      var kd=kj.data||kj
-      // 再分析
-      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kd)?kd:kd.list||kd.kline||[]})})
-      var aj=await ar.json()
-      var ad=aj.data||aj
-      if(ad&&ad.suggestion){
-        da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
-        startIntradayRefresh(code,rt.high,rt.low)
-      }
-    }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
-  })()
+  if(isTH()){
+    // 交易时段：拉K线+后端分析+2秒实时刷新
+    ;(async function(){
+      try{
+        var code=s.code
+        // 先拉K线（通过后端代理避免CORS）
+        var kr=await fetch('/api/gem/proxy/kline?code='+code+'&_='+Date.now())
+        var kj=await kr.json()
+        var kd=kj.data||kj
+        // 再分析
+        var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kd)?kd:kd.list||kd.kline||[]})})
+        var aj=await ar.json()
+        var ad=aj.data||aj
+        if(ad&&ad.suggestion){
+          da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
+          startIntradayRefresh(code,rt.high,rt.low)
+        }
+      }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
+    })()
+  } else {
+    // 非交易时段：直接展示缓存数据，无需异步
+    da.style.minHeight=''
+    da.innerHTML=buildDetail(s,rt,s)
+    // 替换"加载中"为缓存提示
+    var macdEl=$('intradayMacd')
+    if(macdEl)macdEl.innerHTML='<div style="padding:12px;text-align:center;color:#6b7280;font-size:11px">⚡ 非交易时段 · 数据来自最近一次交易日的缓存分析</div>'
+  }
 }
 
 // ---------- 腾讯实时行情 ----------
@@ -1837,6 +1847,10 @@ function startIntradayRefresh(code,high,low){
   stopIntradayRefresh()
   // 切换股票时重置买卖点锁定
   _lockedBuyPrice=null;_lockedBuyTime='';_lockedSellPrice=null;_lockedSellTime=''
+  if(!isTH()){
+    // 非交易时段：无需实时刷新，缓存数据已渲染
+    return
+  }
   refreshDetailPrice(code,low,high) // 立即执行一次
   intradayTimer=setInterval(function(){refreshDetailPrice(code,low,high)},2000)
 }
