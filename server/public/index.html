@@ -831,7 +831,7 @@ function _getGapHtml(code){
   var _prev=_price/(1+_chg/100)
   var _gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
   if(Math.abs(_gap)<0.5)return'<span class="gap-dot gap-flat">→</span>'
-  return'<span class="gap-dot ' + (_gap>0?'gap-up":"gap-down")+'">'+(_gap>0?'↑':'↓')+'</span>'
+  return'<span class="gap-dot ' + (_gap>0?' gap-up':' gap-down')+'">'+(_gap>0?'↑':'↓')+'</span>'
 }
 
 /** 详情页用的详细集合竞价条（含综合研判） */
@@ -1926,7 +1926,6 @@ function onSearchInput(){
             html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
             html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
             html+='</div>'
-  }
           }
           dd.innerHTML=html
           dd.style.display='block'
