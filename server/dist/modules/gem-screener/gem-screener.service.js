@@ -577,7 +577,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         capitalRank: 0,
                         mainForceInflow: 0,
                         baiXiaoDays: 0,
-                        priceArea: '',
                     });
                     gemChanged = true;
                     newAdded++;
@@ -594,7 +593,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         capitalRank: 0,
                         mainForceInflow: 0,
                         baiXiaoDays: 0,
-                        priceArea: '',
                     });
                     mainBoardChanged = true;
                     newAdded++;

@@ -705,7 +705,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
             capitalRank: 0,
             mainForceInflow: 0,
             baiXiaoDays: 0,
-            priceArea: '',
           });
           gemChanged = true;
           newAdded++;
@@ -720,7 +719,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
             capitalRank: 0,
             mainForceInflow: 0,
             baiXiaoDays: 0,
-            priceArea: '',
           });
           mainBoardChanged = true;
           newAdded++;
