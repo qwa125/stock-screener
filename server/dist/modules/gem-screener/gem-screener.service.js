@@ -4172,72 +4172,61 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
-        let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
-        if (_greenValleys.length > 0) {
-            const sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-            for (const gv of sortedValleys) {
-                const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
-                const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
-                if (confirmedByZhuLi || confirmedByMacd) {
-                    bestBuyPrice = gv.price;
-                    bestBuyTime = gv.time;
-                    break;
-                }
-            }
-            if (!bestBuyPrice) {
-                const lowest = _greenValleys.reduce((a, b) => a.price < b.price ? a : b);
-                bestBuyPrice = lowest.price;
-                bestBuyTime = lowest.time;
-            }
+        const _signalList = [];
+        const _sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+        for (const gv of _sortedValleys) {
+            if (_signalList.filter(s => s.type === '买入点').length >= 2)
+                break;
+            const confirmed = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5) ||
+                macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
+            _signalList.push({
+                time: gv.time.slice(11, 16), price: gv.price,
+                type: '买入点',
+                source: confirmed ? '最佳买入(主力确认)' : '最佳买入',
+            });
         }
-        else if (zhuliBuyPoints.length > 0) {
+        if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
             const lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
-            bestBuyPrice = lowest.price;
-            bestBuyTime = lowest.time;
+            _signalList.push({ time: lowest.time.slice(11, 16), price: lowest.price, type: '买入点', source: '最佳买入(主力信号)' });
         }
-        if (_redPeaks.length > 0) {
-            const sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-            for (const rp of sortedPeaks) {
-                const confirmedByZhuLi = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5);
-                const confirmedByMacd = macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
-                if (confirmedByZhuLi || confirmedByMacd) {
-                    bestSellPrice = rp.price;
-                    bestSellTime = rp.time;
-                    break;
-                }
-            }
-            if (!bestSellPrice) {
-                const highest = _redPeaks.reduce((a, b) => a.price > b.price ? a : b);
-                bestSellPrice = highest.price;
-                bestSellTime = highest.time;
-            }
+        const _sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+        for (const rp of _sortedPeaks) {
+            if (_signalList.filter(s => s.type === '卖出点').length >= 2)
+                break;
+            const confirmed = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5) ||
+                macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
+            _signalList.push({
+                time: rp.time.slice(11, 16), price: rp.price,
+                type: '卖出点',
+                source: confirmed ? '最佳卖出(主力确认)' : '最佳卖出',
+            });
         }
-        else if (zhuliSellPoints.length > 0) {
+        if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
             const highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
-            bestSellPrice = highest.price;
-            bestSellTime = highest.time;
+            _signalList.push({ time: highest.time.slice(11, 16), price: highest.price, type: '卖出点', source: '最佳卖出(主力信号)' });
         }
+        suggestions.length = 0;
+        _signalList.sort((a, b) => a.time.localeCompare(b.time));
+        for (const s of _signalList)
+            suggestions.push(s);
+        const _todaySugsBuy = suggestions.filter(s => s.type === '买入点');
+        const _todaySugsSell = suggestions.filter(s => s.type === '卖出点');
+        let bestBuyPrice = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).price : 0;
+        let bestBuyTime = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).time : '';
+        let bestSellPrice = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).price : 0;
+        let bestSellTime = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).time : '';
         const _td = minData[len - 1]?.time?.slice(0, 10) || '';
         let todaySugs = [];
         if (_td) {
-            suggestions.length = 0;
-            if (bestBuyPrice > 0 && bestBuyTime) {
-                const t = bestBuyTime.includes(':') ? bestBuyTime.slice(11, 16) : bestBuyTime;
-                suggestions.push({ time: t, idx: 0, price: bestBuyPrice, type: '买入点', source: '最佳买入' });
-            }
-            if (bestSellPrice > 0 && bestSellTime) {
-                const t = bestSellTime.includes(':') ? bestSellTime.slice(11, 16) : bestSellTime;
-                suggestions.push({ time: t, idx: 0, price: bestSellPrice, type: '卖出点', source: '最佳卖出' });
-            }
             todaySugs = [...suggestions];
         }
-        if (todaySugs.length === 0) {
-            todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
-            if (!bestBuyTime || bestBuyTime.includes('-')) {
+        else {
+            todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time : s.time }));
+            if (!bestBuyTime) {
                 bestBuyPrice = 0;
                 bestBuyTime = '';
             }
-            if (!bestSellTime || bestSellTime.includes('-')) {
+            if (!bestSellTime) {
                 bestSellPrice = 0;
                 bestSellTime = '';
             }
