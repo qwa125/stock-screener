@@ -492,8 +492,10 @@ async function fetchKlineAndAnalyze(s){
     // 多源K线强制拉取：东财→新浪→腾讯（必须拉到至少5条）
     var klines=null
     if(!window._klineCache)window._klineCache={}
+    if(!window._emFailCount)window._emFailCount={}
     var _hasCache=window._klineCache[code]&&window._klineCache[code].length>=10
-    var lmt=_hasCache?2:120
+    var _failCnt=window._emFailCount[code]||0
+    var lmt=_hasCache?(_failCnt>0?Math.min(120,Math.max(10,_failCnt*2+5)):2):120
     var emCode=code.startsWith('6')?'1.'+code:'0.'+code
     var sinCode=(code.startsWith('6')?'sh':'sz')+code
     var gtCode=sinCode  // 腾讯同sinCode格式
@@ -503,6 +505,7 @@ async function fetchKlineAndAnalyze(s){
       var kr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+lmt,{signal:ac.signal,mode:'cors'}).then(function(r){return r.json()})
       clearTimeout(tid)
       if(kr&&kr.data&&kr.data.klines){
+        window._emFailCount[code]=0
         var _newLines=kr.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
         if(_hasCache){
           var _merged={}
@@ -512,7 +515,7 @@ async function fetchKlineAndAnalyze(s){
         }else{klines=_newLines}
         window._klineCache[code]=klines
       }
-    }catch(e){console.warn('东财K线失败('+code+'):',e.message)}
+    }catch(e){console.warn('东财K线失败('+code+'):',e.message);window._emFailCount[code]=(window._emFailCount[code]||0)+1}
     // 新浪回退
     if(!klines||klines.length<5){
       try{
@@ -548,6 +551,7 @@ async function fetchKlineAndAnalyze(s){
         var kr2=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+lmt,{signal:ac4.signal,mode:'cors'}).then(function(r){return r.json()})
         clearTimeout(tid4)
         if(kr2&&kr2.data&&kr2.data.klines){
+          window._emFailCount[code]=0
           var _newL=kr2.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
           if(_hasCache){
             var _merged={}
