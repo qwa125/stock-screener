@@ -275,9 +275,6 @@ console.log('页面初始化完成')
 async function handleBlurClick(){
   var btn=$("pageBlur").querySelector('.blur-btn')
   if(btn.disabled)return
-  if(localStorage.getItem('deviceRegistered')==='1'){
-    hideBlocked();return
-  }
   btn.disabled=true;btn.textContent='⏳ 验证中...'
   try{
     var regRes=await fetch("/api/device/register",{
@@ -285,8 +282,8 @@ async function handleBlurClick(){
       headers:{"X-Device-Id":getOrCreateDeviceId(),"Content-Type":"application/json"}
     })
     if(regRes.status===429){
-      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-      showBlocked(true);return
+      $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
+      return  // 按钮保持禁用，用户需刷新页面重试
     }
     localStorage.setItem('deviceRegistered','1')
     hideBlocked()

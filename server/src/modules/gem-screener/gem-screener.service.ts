@@ -655,7 +655,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
     // 更新GEM缓存
     let gemChanged = false;
-    let leftover = 0;
     if (this.cache?.data?.length) {
       for (let i = 0; i < this.cache.data.length; i++) {
         const item = this.cache.data[i];
@@ -675,26 +674,64 @@ export class GemScreenerService implements OnApplicationBootstrap {
           }
         }
       }
-      // 统计在两个缓存中都未找到的股票
-      const mainData = this.mainBoardCache?.data || [];
-      const gemData = this.cache?.data || [];
-      for (const code of map.keys()) {
-        let found = false;
-        for (let i = 0; i < mainData.length; i++) {
-          if (mainData[i].code === code) { found = true; break; }
-        }
-        if (!found) {
-          for (let i = 0; i < gemData.length; i++) {
-            if (gemData[i].code === code) { found = true; break; }
-          }
-        }
-        if (!found) leftover++;
-      }
-      if (leftover > 0) this.logger.warn(`⚠️ ${leftover}只股票在两个缓存中都未找到，信号未更新`);
-      if (gemChanged) this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
     }
 
-    this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更${leftover>0?`, ${leftover}只未找到`:''}）`);
+    // 处理新股：在缓存中未找到的股票作为新股加入
+    let newAdded = 0;
+    const mainData = this.mainBoardCache?.data || [];
+    const gemData = this.cache?.data || [];
+    for (const [code, upgraded] of map) {
+      let found = false;
+      for (let i = 0; i < mainData.length; i++) {
+        if (mainData[i].code === code) { found = true; break; }
+      }
+      if (!found) {
+        for (let i = 0; i < gemData.length; i++) {
+          if (gemData[i].code === code) { found = true; break; }
+        }
+      }
+      if (!found) {
+        // 新股：加入对应缓存
+        const isGEM = /^30/.test(code);
+        const isMainBoard = /^60/.test(code) || /^00/.test(code);
+        if (isGEM) {
+          if (!this.cache) this.cache = { data: [], timestamp: Date.now() };
+          this.cache.data.push({
+            code,
+            name: upgraded.name || '',
+            suggestion: upgraded.suggestion || '持有',
+            score: upgraded.score || 50,
+            entryTiming: upgraded.entryTiming,
+            capitalRank: 0,
+            mainForceInflow: 0,
+            baiXiaoDays: 0,
+            priceArea: '',
+          });
+          gemChanged = true;
+          newAdded++;
+        } else if (isMainBoard) {
+          if (!this.mainBoardCache) this.mainBoardCache = { data: [], timestamp: Date.now() };
+          this.mainBoardCache.data.push({
+            code,
+            name: upgraded.name || '',
+            suggestion: upgraded.suggestion || '持有',
+            score: upgraded.score || 50,
+            entryTiming: upgraded.entryTiming,
+            capitalRank: 0,
+            mainForceInflow: 0,
+            baiXiaoDays: 0,
+            priceArea: '',
+          });
+          mainBoardChanged = true;
+          newAdded++;
+        }
+      }
+    }
+    if (newAdded > 0) this.logger.warn(`🆕 新股已加入缓存: ${newAdded}只`);
+    if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
+    if (gemChanged) this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
+
+    this.logger.log(`前端升级信号已回写: ${list.length}只（主板${mainBoardChanged?'有':'无'}变更, GEM${gemChanged?'有':'无'}变更${newAdded>0?`, ${newAdded}只新股已加入`:''}）`);
   }
 
   /** 单只股票分析后更新缓存：搜索/分析接口调用后写回，机会列表自动同步 */
