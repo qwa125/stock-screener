@@ -272,8 +272,13 @@ function showBlocked(isLimited){
 }
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
-  // 恢复可能因 blur 遮挡而未渲染的数据
-  if(stocks&&stocks.length){renderList()}
+  if(stocks&&stocks.length){
+    renderList()
+  }else{
+    setStatus('⏳ 正在加载股票数据，请稍候...')
+    // 首次注册后遮罩移除，自动触发轻量级加载
+    setTimeout(function(){doFullRescan(true)}, 200)
+  }
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
