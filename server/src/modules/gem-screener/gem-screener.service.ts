@@ -4,7 +4,7 @@ import { FormulaEngine } from '../stock/formula-engine';
 import { calcBaiSanJiao } from '../stock/bai-san-jiao';
 import { calcBaiLingXing } from '../stock/bai-ling-xing';
 import { calcXingXing } from '../stock/xing-xing';
-import { promises as fs, existsSync, readFileSync, unlinkSync } from 'fs';
+import { promises as fs, existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'node:path';
 import * as iconv from 'iconv-lite';
 import { DataFetcherService } from '../stock/data-fetcher.service';
@@ -107,6 +107,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly STALE_TTL = 30 * 60 * 1000;
   private readonly REFRESH_INTERVAL = 5 * 60 * 1000; // 盘中每5分钟全量扫描
   private readonly CACHE_FILE = '/tmp/gem-opportunities-cache.json';
+  private readonly SNAPSHOT_FILE = '/tmp/gem-upgraded-snapshot.json';
 
   /** 日内分析信号缓存：同一只股票、同一天内，已发现的买入/卖出点永不消失 */
   private intradaySignalCache = new Map<string, {
@@ -246,6 +247,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.loadMainBoardCacheFromDisk();
     this.loadSectorCacheFromDisk();
     this.loadSellStateCache();
+    this.loadSnapshotFromDisk();
   }
 
   // ---------------------------------------------------------------------------
@@ -446,6 +448,29 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.logger.log(`📝 前端同步卖出锁定: ${sellStates.length} 条`);
   }
 
+  /** 启动时从磁盘加载快照 */
+  loadSnapshotFromDisk() {
+    try {
+      const raw = readFileSync(this.SNAPSHOT_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.list && Array.isArray(parsed.list)) {
+        this.upgradedSnapshot = parsed;
+        this.logger.log(`📸 加载磁盘快照: ${parsed.list.length} 只, 时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
+      }
+    } catch {
+      this.logger.log('📸 无磁盘快照（首次部署或未扫描）');
+    }
+  }
+
+  /** 每次 Step③ 保存快照到磁盘 */
+  private saveSnapshotToDisk() {
+    try {
+      writeFileSync(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
+    } catch (e) {
+      this.logger.error('📸 保存快照到磁盘失败', e);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // 公开 API
   // ---------------------------------------------------------------------------
@@ -632,6 +657,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   /** 保存 Step③ 升级后的精确快照 */
   setUpgradedSnapshot(list: any[]): void {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
+    this.saveSnapshotToDisk();
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 

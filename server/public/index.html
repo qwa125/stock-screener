@@ -2175,9 +2175,9 @@ setTimeout(function(){
     fetch(API+'/gem/upgraded-snapshot',{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json()})
       .then(function(snap){
-        if(snap.code===200 && snap.data && snap.data.length){
+        if(snap.code===200 && snap.data && snap.data.list && snap.data.list.length){
           // Step③ 精确快照存在 → 直接使用（跨设备共享，与扫描结果完全一致）
-          stocks=snap.data;
+          stocks=snap.data.list;
           var PM={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
           stocks.sort(function(a,b){
             var pa=PM[a.suggestion]||99,pb=PM[b.suggestion]||99
@@ -2186,9 +2186,9 @@ setTimeout(function(){
             if(ta!==tb)return tb-ta
             return (b.score||0)-(a.score||0)
           })
-          try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:snap.data,ts:Date.now()}))}catch(e){}
+          try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:snap.data.list,ts:Date.now()}))}catch(e){}
           renderList()
-          setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享@'+snap.updatedAt+'）')
+          setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享@'+snap.data.timestamp+'）')
         }else{
           // 无精确快照 → 兜底读取缓存
           fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
@@ -2247,6 +2247,17 @@ setTimeout(function(){
       })
       .catch(function(e){
         console.log('⚠️ Step③快照读取失败:',e.message)
+        // 快照失败时降级走 rescan
+        var snapData=null
+        try{
+          var ls=localStorage.getItem('cache_snapshot')
+          if(ls)snapData=JSON.parse(ls)
+        }catch(ex){}
+        if(snapData&&snapData.stocks&&snapData.stocks.length){
+          stocks=snapData.stocks
+          renderList()
+          setStatus('📋 本地快照恢复（盘后）')
+        }
       })
   }
 },3000)

@@ -60,6 +60,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly STALE_TTL;
     private readonly REFRESH_INTERVAL;
     private readonly CACHE_FILE;
+    private readonly SNAPSHOT_FILE;
     private intradaySignalCache;
     private readonly SELL_STATE_FILE;
     private upgradedSnapshot;
@@ -111,6 +112,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         code: string;
         suggestion: string;
     }[]): void;
+    loadSnapshotFromDisk(): void;
+    private saveSnapshotToDisk;
     getOpportunities(): Promise<{
         opportunities: OpportunityStock[];
         timestamp: number;

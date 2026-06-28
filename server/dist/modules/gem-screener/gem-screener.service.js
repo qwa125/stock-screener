@@ -122,6 +122,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.STALE_TTL = 30 * 60 * 1000;
         this.REFRESH_INTERVAL = 5 * 60 * 1000;
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
+        this.SNAPSHOT_FILE = '/tmp/gem-upgraded-snapshot.json';
         this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.upgradedSnapshot = { list: [], timestamp: 0 };
@@ -160,6 +161,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.loadMainBoardCacheFromDisk();
         this.loadSectorCacheFromDisk();
         this.loadSellStateCache();
+        this.loadSnapshotFromDisk();
     }
     isFrozenSchedule() {
         const now = new Date();
@@ -344,6 +346,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.saveSellStateCache();
         this.logger.log(`📝 前端同步卖出锁定: ${sellStates.length} 条`);
     }
+    loadSnapshotFromDisk() {
+        try {
+            const raw = (0, fs_1.readFileSync)(this.SNAPSHOT_FILE, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.list && Array.isArray(parsed.list)) {
+                this.upgradedSnapshot = parsed;
+                this.logger.log(`📸 加载磁盘快照: ${parsed.list.length} 只, 时间 ${new Date(parsed.timestamp).toLocaleString('zh-CN')}`);
+            }
+        }
+        catch {
+            this.logger.log('📸 无磁盘快照（首次部署或未扫描）');
+        }
+    }
+    saveSnapshotToDisk() {
+        try {
+            (0, fs_1.writeFileSync)(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
+        }
+        catch (e) {
+            this.logger.error('📸 保存快照到磁盘失败', e);
+        }
+    }
     async getOpportunities() {
         const allData = [];
         let latestTs = 0;
@@ -498,6 +521,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     setUpgradedSnapshot(list) {
         this.upgradedSnapshot = { list, timestamp: Date.now() };
+        this.saveSnapshotToDisk();
         this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
     }
     getUpgradedSnapshot() {
