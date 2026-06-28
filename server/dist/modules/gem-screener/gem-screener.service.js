@@ -418,6 +418,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (!data || data.length === 0)
             return;
         for (const s of data) {
+            if (s.forecast1_2Day && typeof s.forecast1_2Day === 'object' && s.forecast1_2Day.direction) {
+                continue;
+            }
             s.forecast1_2Day = GemScreenerService_1.computeTechnicalForecast({
                 entryTiming: s.entryTiming ?? 0,
                 isGoldenCross: s.isGoldenCross ?? false,
@@ -569,6 +572,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         item.mainForceInflow = upgraded.mainForceInflow;
                     if (upgraded.baiXiaoDays !== undefined)
                         item.baiXiaoDays = upgraded.baiXiaoDays;
+                    if (upgraded.forecast1_2Day !== undefined)
+                        item.forecast1_2Day = upgraded.forecast1_2Day;
+                    if (upgraded.ma5 !== undefined)
+                        item.ma5 = upgraded.ma5;
+                    if (upgraded.ma10 !== undefined)
+                        item.ma10 = upgraded.ma10;
                 }
             }
             if (mainBoardChanged)
@@ -609,6 +618,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         item.mainForceInflow = upgraded.mainForceInflow;
                     if (upgraded.baiXiaoDays !== undefined)
                         item.baiXiaoDays = upgraded.baiXiaoDays;
+                    if (upgraded.forecast1_2Day !== undefined)
+                        item.forecast1_2Day = upgraded.forecast1_2Day;
+                    if (upgraded.ma5 !== undefined)
+                        item.ma5 = upgraded.ma5;
+                    if (upgraded.ma10 !== undefined)
+                        item.ma10 = upgraded.ma10;
                 }
             }
         }

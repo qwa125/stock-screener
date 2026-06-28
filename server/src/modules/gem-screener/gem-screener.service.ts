@@ -544,7 +544,11 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private addForecastToCache(data: OpportunityStock[]) {
     if (!data || data.length === 0) return;
     for (const s of data) {
-      // 无论是否已有预测，都重新计算（确保格式统一为对象，兼容旧缓存的JSON字符串）
+      // 已有有效预测对象则保留（Step③已保存精确的forecast1_2Day）
+      if (s.forecast1_2Day && typeof s.forecast1_2Day === 'object' && s.forecast1_2Day.direction) {
+        continue;
+      }
+      // 兼容旧缓存的JSON字符串格式，或完全缺失时重新计算
       s.forecast1_2Day = GemScreenerService.computeTechnicalForecast({
         entryTiming: s.entryTiming ?? 0,
         isGoldenCross: s.isGoldenCross ?? false,
@@ -697,6 +701,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.capitalRank !== undefined) item.capitalRank = upgraded.capitalRank;
           if (upgraded.mainForceInflow !== undefined) item.mainForceInflow = upgraded.mainForceInflow;
           if (upgraded.baiXiaoDays !== undefined) item.baiXiaoDays = upgraded.baiXiaoDays;
+          if (upgraded.forecast1_2Day !== undefined) item.forecast1_2Day = upgraded.forecast1_2Day;
+          if (upgraded.ma5 !== undefined) item.ma5 = upgraded.ma5;
+          if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
         }
       }
       if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
@@ -727,6 +734,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.capitalRank !== undefined) item.capitalRank = upgraded.capitalRank;
           if (upgraded.mainForceInflow !== undefined) item.mainForceInflow = upgraded.mainForceInflow;
           if (upgraded.baiXiaoDays !== undefined) item.baiXiaoDays = upgraded.baiXiaoDays;
+          if (upgraded.forecast1_2Day !== undefined) item.forecast1_2Day = upgraded.forecast1_2Day;
+          if (upgraded.ma5 !== undefined) item.ma5 = upgraded.ma5;
+          if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
         }
       }
     }
