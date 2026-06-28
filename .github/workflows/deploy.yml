@@ -19,8 +19,8 @@ jobs:
           echo "--- 响应 ---"
           cat /tmp/render-deploy.log
           echo ""
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ 部署已触发！"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
+            echo "✅ 部署已触发 (HTTP $HTTP_CODE)！"
           else
             echo "⚠️ 部署触发响应: $HTTP_CODE"
             exit 1
