@@ -207,7 +207,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
+var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
 // 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
 var _lockedBuyPrice=null,_lockedBuyTime='',_lockedSellPrice=null,_lockedSellTime=''
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
@@ -267,7 +267,8 @@ function showBlocked(isLimited){
 }
 function hideBlocked(){
   $("pageBlur").style.display='none'
-  // 恢复因 blur 遮挡而未渲染的列表
+  deviceRegistered=true
+  // 注册成功后渲染股票（如有缓存数据）
   if(stocks&&stocks.length){renderList()}
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
@@ -1131,6 +1132,10 @@ function buildDetail(s,rt,ta){
 
 // ---------- 渲染列表 ----------
 function renderList(){
+  if(!deviceRegistered){
+    $('stockList').innerHTML='<div class="lock-placeholder">🔒 请先完成设备注册以解锁机会区</div>'
+    return
+  }
   // 渲染前重算日内位置（修复旧snapshot中pricePosition=0的问题）
   for(var _ri=0;_ri<stocks.length;_ri++){
     var _rs=stocks[_ri]
@@ -1172,9 +1177,7 @@ function renderList(){
 
 // ---------- 扫描 ----------
 async function doScan(){
-  // 毛玻璃可见时（未注册），仅缓存数据不更新界面
-  var isBlurred=$('pageBlur').style.display!=='none'
-  if(isBlurred&&loading)return
+  if(!deviceRegistered)return  // 未注册不扫描
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   stopPriceRefresh()
   setStatus('🔄 获取分析数据...')
@@ -1200,11 +1203,6 @@ async function doScan(){
       return
     }
     // 不再缓存到localStorage，每次展示以最新数据计算为准
-    // 毛玻璃可见时不显示结果，只缓存
-    if(isBlurred){
-      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
-      return
-    }
     setStatus('🔄 获取实时行情...')
     realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
     selectedIdx=-1;isDetailView=false;$('detailArea').style.display='none'
@@ -1348,9 +1346,8 @@ async function doFullRescan(saveToBackend){
   var btn=$('rescanBtn');
   // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
   if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
-  // 毛玻璃可见时（未注册）不执行任何操作
-  var isBlurred=$('pageBlur').style.display!=='none'
-  if(isBlurred)return
+  // 未注册时不允许扫描
+  if(!deviceRegistered)return
   loading=true
   stopPriceRefresh()
   setStatus('🔄 加载缓存数据（来自后端分析）...')
@@ -2142,12 +2139,7 @@ function stopIntradayRefresh(){
 // ---------- 搜索（前端先拿真实名称+股价，再调后端分析） ----------
 async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
-  // 先检查设备权限：搜股票也要经过后端 guard 验证
-  try{
-    var _reg=await fetch('/api/access/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId()}})
-    if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
-    if(_reg.status!==200){showBlocked(true);return}
-  }catch(e){/* 网络异常，放行 */}
+  if(!deviceRegistered){showBlocked(true);return}
   var da=$('detailArea');da.style.display='none';isDetailView=false
 
   // 兼容指数代码：1A0001=上证指数
