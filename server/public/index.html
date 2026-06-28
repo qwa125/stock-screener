@@ -542,6 +542,7 @@ async function fetchKlineAndAnalyze(s){
         clearTimeout(tid2)
         if(sr&&sr.data&&sr.data.length){
           klines=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
+          window._klineCache[code]=klines
         }
       }catch(e){console.warn('新浪K线失败('+code+'):',e.message)}
     }
@@ -556,6 +557,7 @@ async function fetchKlineAndAnalyze(s){
         var tj=JSON.parse(tr)
         if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
           klines=tj.data[gtCode].m5.map(function(l){return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0}})
+          window._klineCache[code]=klines
         }
       }catch(e){console.warn('腾讯K线失败('+code+'):',e.message)}
     }
@@ -787,7 +789,7 @@ function showDetail(i){
   renderList()
   // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
   if(!isTH()&&s.suggestion){
-    startIntradayRefresh(s.code,rt.high,rt.low)
+    startIntradayRefresh(s.code,rt.high,rt.low,rt.price)
     return
   }
   // ★ 异步拉取完整分析（统一7级买卖系统）
@@ -833,7 +835,7 @@ function showDetail(i){
       if(ad&&ad.suggestion){
         da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
         // 交易时段才启动2秒刷新，非交易时段仅静态展示分析结果
-        startIntradayRefresh(code,rt.high,rt.low) // 交易时段2秒刷新，非交易时段静态渲染
+        startIntradayRefresh(code,rt.high,rt.low,rt.price)
       }
     }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
   })()
@@ -1788,12 +1790,12 @@ async function fetchIntraday(code){
   }catch(e){return null}
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
-async function refreshDetailPrice(code,low,high){
+async function refreshDetailPrice(code,low,high,lastPrice){
   var ia=await fetchIntraday(code)
   // 检查数据是否有效：有实时价格且有建议才算有效，否则用缓存数据渲染
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
     // 非交易时段/无数据：用缓存的 low/high/price 渲染价格条+挂单参考
-    var priceEl=$('livePrice'),lastPriceH=priceEl?parseFloat(priceEl.textContent):0
+    var lastPriceH=lastPrice||0
     if(lastPriceH>0&&low>0&&high>0&&low<high){
       var dayLow=low,dayHigh=high,gap=dayHigh-dayLow
       var buyLow=dayLow,buyHigh=dayLow+gap*0.15
@@ -1944,17 +1946,17 @@ async function refreshDetailPrice(code,low,high){
     if(priceEl)priceEl.innerHTML=lastPrice.toFixed(2)
   }
 }
-function startIntradayRefresh(code,high,low){
+function startIntradayRefresh(code,high,low,price){
   stopIntradayRefresh()
   // 切换股票时重置买卖点锁定
   _lockedBuyPrice=null;_lockedBuyTime='';_lockedSellPrice=null;_lockedSellTime=''
   if(!isTH()){
     // 非交易时段：渲染一次（无轮询），展示完整的做T指标系统
-    refreshDetailPrice(code,low,high)
+    refreshDetailPrice(code,low,high,price)
     return
   }
-  refreshDetailPrice(code,low,high) // 立即执行一次
-  intradayTimer=setInterval(function(){refreshDetailPrice(code,low,high)},2000)
+  refreshDetailPrice(code,low,high,price) // 立即执行一次
+  intradayTimer=setInterval(function(){refreshDetailPrice(code,low,high,price)},2000)
 }
 function stopIntradayRefresh(){
   if(intradayTimer){clearInterval(intradayTimer);intradayTimer=null}
@@ -2174,8 +2176,8 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        isDetailView=true;startIntradayRefresh(stockCode,stockHigh,stockLow)
-          da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        isDetailView=true;da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        setTimeout(function(){startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)},0)
       }else{
         throw new Error('分析无结果')
       }
@@ -2199,8 +2201,8 @@ async function doSearch(){
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          startIntradayRefresh(stockCode,stockHigh,stockLow)
           da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        setTimeout(function(){startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)},0)
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
             +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
