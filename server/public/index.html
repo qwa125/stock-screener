@@ -282,7 +282,7 @@ async function handleBlurClick(){
   try{
     var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
     var regRes=await fetch("/api/access/register",{method:"POST",headers:regHeaders})
-    if(regRes.status===429){clickedRegistration=false;showBlocked(true);return}
+    if(regRes.status===429){showBlocked(true);return}
     if(regRes.status!==200){clickedRegistration=false;showBlocked(false);return}
     hideBlocked()
     // 不自动开始扫描，用户可手动点击扫描
