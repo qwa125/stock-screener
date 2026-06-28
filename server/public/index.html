@@ -278,7 +278,8 @@ async function handleBlurClick(){
   if(loading)return
   var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
   try{
-    var regRes=await fetch("/api/access/register",{method:"POST",headers:{"X-Device-Id":getOrCreateDeviceId()}})
+    var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
+    var regRes=await fetch("/api/access/register",{method:"POST",headers:regHeaders})
     if(regRes.status===429){showBlocked(true);return}
     if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
@@ -1139,9 +1140,6 @@ function renderList(){
       _rs.pricePosition=50
     }
   }
-  // 毛玻璃可见时只缓存不渲染UI
-  var isBlurred=!$('pageBlur').classList.contains('hidden')
-  if(isBlurred&&stocks.length){return}
   var list=$('stockList');list.innerHTML=''
   if(stocks.length===0){list.innerHTML='<div class="empty">暂无符合条件的个股</div>';$('footer').textContent='⏸️ 等待扫描';return}
   var scanSummary='✅ Top'+stocks.length+' | 实时 | 10分钟自动刷新·覆盖旧数据'
