@@ -497,6 +497,15 @@ export class GemScreenerController {
         const ea = a.entryTiming || 0;
         const eb = b.entryTiming || 0;
         if (eb !== ea) return eb - ea;
+        // 第三排序：日内位置（低位优先，与前端 doFullRescan 一致）
+        const calcIntradayScore = (s: any) => {
+          const hi = s.intradayHigh || 0, lo = s.intradayLow || 0, p = s.currentPrice || 0;
+          if (!hi || !lo || hi <= lo) return 1;
+          const pos = ((p - lo) / (hi - lo)) * 100;
+          return pos < 25 ? 3 : pos < 50 ? 2 : pos < 75 ? 1 : 0;
+        };
+        const ia = calcIntradayScore(a), ib = calcIntradayScore(b);
+        if (ia !== ib) return ib - ia;
         const sa = a.score || 0;
         const sb = b.score || 0;
         if (sb !== sa) return sb - sa;
