@@ -465,7 +465,12 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async rescanMarket() {
     try {
-      // 直接返回缓存数据，不再重新分析（quickAnalyze已分析过）
+      // 优先使用 Step③ 快照（精确的 Sina 实时升级结果，覆盖主缓存）
+      const snap = this.gemScreener.getUpgradedSnapshot();
+      if (snap?.list?.length) {
+        return { code: 200, msg: 'ok', data: snap.list, updatedAt: snap.timestamp, isSnapshot: true };
+      }
+      // 无快照时回退到主缓存（K线分析结果）
       const results = this.gemScreener.getCacheAll();
       const ts = this.gemScreener.getCacheTimestamp();
       return { code: 200, msg: 'ok', data: results, updatedAt: ts };

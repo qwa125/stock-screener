@@ -398,6 +398,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     async rescanMarket() {
         try {
+            const snap = this.gemScreener.getUpgradedSnapshot();
+            if (snap?.list?.length) {
+                return { code: 200, msg: 'ok', data: snap.list, updatedAt: snap.timestamp, isSnapshot: true };
+            }
             const results = this.gemScreener.getCacheAll();
             const ts = this.gemScreener.getCacheTimestamp();
             return { code: 200, msg: 'ok', data: results, updatedAt: ts };

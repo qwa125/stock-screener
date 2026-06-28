@@ -224,13 +224,21 @@ export declare class GemScreenerController {
     rescanMarket(): Promise<{
         code: number;
         msg: string;
+        data: any[];
+        updatedAt: number;
+        isSnapshot: boolean;
+    } | {
+        code: number;
+        msg: string;
         data: import("./gem-screener.service").OpportunityStock[];
         updatedAt: number;
+        isSnapshot?: undefined;
     } | {
         code: number;
         msg: any;
         data: never[];
         updatedAt?: undefined;
+        isSnapshot?: undefined;
     }>;
     updateUpgraded(body: {
         list?: any[];
