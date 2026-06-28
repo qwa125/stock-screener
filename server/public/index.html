@@ -125,6 +125,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 </style>
 </head>
 <body>
+<div class="page-blur" id="pageBlur">
+  <div class="blur-btn-wrap">
+    <button class="blur-btn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
+  </div>
+  <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
+</div>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v2</span></h1>
@@ -2909,11 +2915,5 @@ function changeAdminPwd(){
 }
 // ========== End Admin Panel ==========
 </script>
-<div class="page-blur" id="pageBlur">
-  <div class="blur-btn-wrap">
-    <button class="blur-btn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
-  </div>
-  <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
-</div>
 </body>
 </html>
