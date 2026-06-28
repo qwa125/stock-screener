@@ -959,7 +959,7 @@ async function doScan(){
       if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
       // 后端无数据→自动切全市场重扫（先拉Sina行情再doFullRescan）
       setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
-      fetchAndCacheSina().then(function(){doFullRescan()});return
+      backgroundSyncWithKline();return
     }
     stocks=d.data.opportunities
 	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
@@ -1012,9 +1012,37 @@ async function doScan(){
     saveFrozenSnapshot(stocks) // 保存冻结快照（休盘后展示）
     startPriceRefresh(stocks)
     // 后台同步到缓存: 拉新浪实时行情+升级信号→覆写后端缓存
-    fetchAndCacheSina().then(function(){doFullRescan()}).catch(function(e){console.warn('后台同步缓存失败(不影响当前展示):',e.message)})
+    backgroundSyncWithKline()
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
+}
+
+/** 后台全量同步：拉Sina → 推K线 → doFullRescan（和autoLightScan完全一致） */
+async function backgroundSyncWithKline(){
+  try{
+    await fetchAndCacheSina()
+    var emData=window._cachedSinaEMData||[]
+    var mainBoard=[],gem=[]
+    for(var si=0;si<emData.length;si++){
+      var c=String(emData[si].f12||'')
+      if(c.startsWith('60')||c.startsWith('00')){mainBoard.push(emData[si])}
+      else if(c.startsWith('30')){gem.push(emData[si])}
+    }
+    mainBoard=mainBoard.slice(0,500);gem=gem.slice(0,500)
+    var totalList=mainBoard.concat(gem)
+    if(totalList.length){
+      var bar=$('rescanBar'),txt=$('rescanText')
+      for(var i=0;i<totalList.length;i+=20){
+        var batch=totalList.slice(i,i+20)
+        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
+        var done=Math.min(i+20,totalList.length)
+        if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length+' ('+Math.round(done/totalList.length*100)+'%)'
+        if(bar)bar.style.width=Math.round(done/totalList.length*100)+'%'
+        if(i+20<totalList.length)await new Promise(function(r){setTimeout(r,200)})
+      }
+    }
+    await doFullRescan()
+  }catch(e){console.warn('后台全量同步失败:',e.message)}
 }
 
 /** 带重试的fetch，处理429限流+502偶尔打不开+网络闪断 */
@@ -1423,7 +1451,7 @@ async function doFullRescan(saveToBackend){
     setStatus('❌ 重扫无结果')
   }
   loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
-  // ─── Step ③: 前端升级信号回写到后端（仅autoLightScan带K线分析时执行） ───
+  // ─── Step ③: 前端升级信号回写到后端（全量覆盖缓存，供其他设备读取） ───
   if(saveToBackend!==false) try{
     var upgradeList=[]
     var sigCount={}
