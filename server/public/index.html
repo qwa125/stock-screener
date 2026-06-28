@@ -964,24 +964,7 @@ async function doScan(){
     }
     stocks=d.data.opportunities
 	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
-    // 排序：信号优先级 → 入场时机 → 日内位置(低位优先) → 综合评分 → 今日涨幅(降序)
-    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
-    function calcIntradayScore(s){
-      var hi=s.intradayHigh||0, lo=s.intradayLow||0, p=s.currentPrice||0
-      if(!hi||!lo||hi<=lo) return 1
-      var pos=(p-lo)/(hi-lo)*100
-      return pos<25?3:pos<50?2:pos<75?1:0
-    }
-    stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'持有']??9,pb=PRI[b.suggestion||'持有']??9
-      if(pa!==pb) return pa-pb
-      var ea=a.entryTiming||0, eb=b.entryTiming||0
-      if(eb!==ea) return eb-ea
-      var ia=calcIntradayScore(a), ib=calcIntradayScore(b)
-      if(ia!==ib) return ib-ia
-      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      return (b.changePercent||0)-(a.changePercent||0)
-    })
+    // 后端已排好序（信号→entryTiming→intradayScore→score→change%），直接展示
     // 后端数据不足时(＜5只)，自动切换到全市场重扫（通过聚合端点抓实时Sina数据）
     if(stocks&&stocks.length<5){
       console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
