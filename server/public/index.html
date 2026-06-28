@@ -775,7 +775,7 @@ function showDetail(i){
         var sinaPrefix=code.startsWith('6')?'sh':'sz'
         var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+code+'&scale=240&ma=no&datalen=120'
         var srr=await fetch(sinaUrl,{signal:8000})
-        if(srr.ok){try{var srd=await srr.json()}catch(ee){srd=null};if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}});console.log('[detail] sina kline got '+kdata.length+' bars')}}}
+        if(srr.ok){try{var srd=await srr.json()}catch(ee){srd=null};if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}});console.log('[detail] sina kline got '+kdata.length+' bars')}}
       }catch(e){}
       // ★ 备选3：后端代理→东方财富（兜底）
       if(!kdata){
