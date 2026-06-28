@@ -2109,6 +2109,20 @@ setInterval(function(){
   $('scanBtn').textContent='🔄 立即扫描'
   fetchMarketState() // 首次加载市场状态
 
+  // ─── 优先从 localStorage 加载上一次的数据（<1ms，无需等后端）───
+  try{
+    var cached=localStorage.getItem('lastStocks')
+    if(cached){
+      var cs=JSON.parse(cached)
+      if(cs&&cs.list&&cs.list.length&&Date.now()-cs.ts<6*3600000){ // 6小时内有效
+        stocks=cs.list
+        renderList()
+        setStatus('📋 缓存 '+stocks.length+' 只（本地快照）')
+        console.log('📋 本地缓存加载成功')
+      }
+    }
+  }catch(e){}
+
   if(isTH()){
     // 交易时段 → 读后端缓存直接展示
     fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
@@ -2119,6 +2133,8 @@ setInterval(function(){
           if(stocks.length){
             // 持久化到浏览器本地，下次后端无缓存时可直接展示
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
+            // 同时保存 filtered stocks 到 lastStocks，供 init 秒级展示
+            try{localStorage.setItem('lastStocks',JSON.stringify({list:stocks,ts:Date.now()}))}catch(e){}
             renderList()
             setStatus('📋 缓存已加载 '+stocks.length+' 只（缓存已加载）')
             return // ← 关键修复：后端有数据直接返回，避免被下方localStorage旧快照覆盖
