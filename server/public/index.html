@@ -251,7 +251,7 @@ window.fetch=function(u,o){
     }catch(e){}
   }
   return _origFetch.call(this,u,o).then(function(r){
-    if(typeof u==='string'&&u==='/api/access/register'&&r.status===429){
+    if(typeof u==='string'&&u==='/api/device/register'&&r.status===429){
       showBlocked(true)
     }
     return r
@@ -280,7 +280,7 @@ async function handleBlurClick(){
   var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
   try{
     var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
-    var regRes=await fetch("/api/access/register",{method:"POST",headers:regHeaders})
+    var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders})
     btn.disabled=false;btn.textContent='📊 点击扫描解锁'
     if(regRes.status===429){showBlocked(true);return}
     if(regRes.status!==200){showBlocked(false);return}
