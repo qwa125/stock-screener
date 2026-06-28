@@ -290,12 +290,15 @@ async function handleBlurClick(){
       body:JSON.stringify({deviceId:getOrCreateDeviceId()}),
       signal:AbortSignal.timeout(35000)
     })
-    if(regRes.status===429){
-      $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
+    var regData
+    try{regData=await regRes.json()}catch(e){regData={code:500}}
+    if(regRes.status===429||regData.code!==200){
+      var denyMsg=regData.msg||(regRes.status===429?'名额不足，请联系管理员增加设备访问名额':'访问被拒绝，请联系管理员')
+      $("blurMsg").innerHTML='⚠️ '+denyMsg
       btn.disabled=false;btn.textContent='📊 点击扫描解锁'
       return
     }
-    console.log('✅ 设备注册成功, status='+regRes.status)
+    console.log('✅ 设备注册成功')
     localStorage.setItem('deviceRegistered','1')
     hideBlocked()
   }catch(e){
@@ -333,6 +336,8 @@ async function handleRescanClick(){
     if(regRes.status===429||(regRes.status!==200&&regRes.status!==201)){
       showBlocked(true);return
     }
+    var _regData=await regRes.json()
+    if(_regData.code!==200){showBlocked(true);return}
     hideBlocked()
     // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
     setStatus('正在获取热门A股...')
@@ -2166,6 +2171,9 @@ async function doSearch(){
   try{
     var _reg=await fetch('/api/access/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:getOrCreateDeviceId()})})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
+    var _regBody
+    try{_regBody=await _reg.json()}catch(e){_regBody={code:500}}
+    if(_regBody.code!==200){showBlocked(true);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none';isDetailView=false
 
