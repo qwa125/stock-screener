@@ -959,7 +959,7 @@ async function doScan(){
       if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
       // 后端无数据→自动切全市场重扫（先拉Sina行情再doFullRescan）
       setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
-      fetchAndCacheSina().then(function(){doFullRescan(false)});return
+      fetchAndCacheSina().then(function(){doFullRescan()});return
     }
     stocks=d.data.opportunities
 	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
@@ -979,7 +979,7 @@ async function doScan(){
       setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
       // 不存2只到缓存（避免页面加载时显示过时数据）
       loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
-      fetchAndCacheSina().then(function(){doFullRescan(false)})
+      fetchAndCacheSina().then(function(){doFullRescan()})
       return
     }
     // 不再缓存到localStorage，每次展示以最新数据计算为准
@@ -1011,6 +1011,8 @@ async function doScan(){
     setStatus('✅ 实时数据已更新')
     saveFrozenSnapshot(stocks) // 保存冻结快照（休盘后展示）
     startPriceRefresh(stocks)
+    // 后台同步到缓存: 拉新浪实时行情+升级信号→覆写后端缓存
+    fetchAndCacheSina().then(function(){doFullRescan()}).catch(function(e){console.warn('后台同步缓存失败(不影响当前展示):',e.message)})
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
