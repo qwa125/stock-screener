@@ -4817,18 +4817,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 	    // 核心原则：按时间顺序检测，先出现先标记，不用未来数据排序
 	    // 后面有更大的峰也不覆盖前面的，缓存合并确保历史信号不消失
 	    // 每天最多2个买点+2个卖点，同类型间隔>30分钟
-	    // 开盘前30分钟(09:30-10:00)信号跳过（开盘波动不稳定，等MACD稳定）
 	    const _signalList: any[] = [];
-	    const _isOpen30Min = (t: string) => {
-	      const h = parseInt(t.slice(11, 13), 10);
-	      const m = parseInt(t.slice(14, 16), 10);
-	      return (h === 9 && m >= 30) || (h === 10 && m === 0);
-	    };
 
 	    // ─── 买入点（最多2个，按时间顺序，绿峰间隔>30分钟） ───
 	    for (const gv of _greenValleys) {
 	      if (_signalList.filter(s => s.type === '买入点').length >= 2) break;
-	      if (_isOpen30Min(gv.time)) continue;
 	      const _tooClose = _signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30);
 	      if (_tooClose) continue;
 	      _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点' as const, source: '最佳买入' });
@@ -4842,7 +4835,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 	    // ─── 卖出点（最多2个，按时间顺序，红峰间隔>30分钟） ───
 	    for (const rp of _redPeaks) {
 	      if (_signalList.filter(s => s.type === '卖出点').length >= 2) break;
-	      if (_isOpen30Min(rp.time)) continue;
 	      const _tooClose = _signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30);
 	      if (_tooClose) continue;
 	      _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点' as const, source: '最佳卖出' });
