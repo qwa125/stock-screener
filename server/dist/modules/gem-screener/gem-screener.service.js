@@ -4030,13 +4030,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         return { code, ...result };
     }
     async intradayAnalysis(code) {
-        const minData = await this.fetchMinuteKLine(code, 5);
+        const minData = await this.fetchMinuteKLine(code, 1);
         if (!minData || minData.length < 50) {
             return {
                 code,
                 date: new Date().toISOString().slice(0, 10),
                 status: '数据不足',
-                reason: `5分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
+                reason: `1分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
                 macdSignals: [],
                 zhuliSanhu: { signals: [] },
                 suggestions: [],
@@ -4156,8 +4156,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const allPoints = [
             ...zhuliBuyPoints.map(p => ({ ...p, type: '买入点', source: '主力低吸' })),
             ...zhuliSellPoints.map(p => ({ ...p, type: '卖出点', source: '主力高抛' })),
-            ...macdSignals.filter(s => s.type === '金叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '买入点', source: 'MACD金叉' })),
-            ...macdSignals.filter(s => s.type === '死叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '卖出点', source: 'MACD死叉' })),
+            ..._greenValleys.filter(v => v.macdVal < -0.05).map(v => ({ time: v.time, idx: v.idx, price: v.price, type: '买入点', source: 'MACD绿峰' })),
+            ..._redPeaks.filter(p => p.macdVal > 0.05).map(p => ({ time: p.time, idx: p.idx, price: p.price, type: '卖出点', source: 'MACD红峰' })),
         ];
         for (let i = 2; i < len - 2; i++) {
             if (low[i] < low[i - 1] && low[i] < low[i - 2] && low[i] < low[i + 1] && low[i] < low[i + 2]) {

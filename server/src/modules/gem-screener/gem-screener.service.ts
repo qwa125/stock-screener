@@ -4639,13 +4639,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
    * 通过5分钟K线数据分析当日最佳低点买入/高点卖出位置
    */
   async intradayAnalysis(code: string): Promise<any> {
-    const minData = await this.fetchMinuteKLine(code, 5); // 5分钟K线
+    const minData = await this.fetchMinuteKLine(code, 1); // 1分钟K线
     if (!minData || minData.length < 50) {
       return {
         code,
         date: new Date().toISOString().slice(0, 10),
         status: '数据不足',
-        reason: `5分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
+        reason: `1分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
         macdSignals: [],
         zhuliSanhu: { signals: [] },
         suggestions: [],
@@ -4794,8 +4794,9 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const allPoints = [
       ...zhuliBuyPoints.map(p => ({ ...p, type: '买入点' as const, source: '主力低吸' })),
       ...zhuliSellPoints.map(p => ({ ...p, type: '卖出点' as const, source: '主力高抛' })),
-      ...macdSignals.filter(s => s.type === '金叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '买入点' as const, source: 'MACD金叉' })),
-      ...macdSignals.filter(s => s.type === '死叉').map(s => ({ time: s.time, idx: s.idx, price: s.price, type: '卖出点' as const, source: 'MACD死叉' })),
+      // 红峰→卖出点, 绿峰→买入点（不等金叉死叉，拐头即触发，抓住最佳时机）
+      ..._greenValleys.filter(v => v.macdVal < -0.05).map(v => ({ time: v.time, idx: v.idx, price: v.price, type: '买入点' as const, source: 'MACD绿峰' })),
+      ..._redPeaks.filter(p => p.macdVal > 0.05).map(p => ({ time: p.time, idx: p.idx, price: p.price, type: '卖出点' as const, source: 'MACD红峰' })),
     ];
     // 补充价格级别的高低点（无需等待MACD金叉/死叉，直接找K线局部低点/高点）
     // 局部低点: 比前后各2根K线的低点都低 → 日内买点
