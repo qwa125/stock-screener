@@ -1,4 +1,4 @@
-<!-- Core v20250627-inline3 -->
+<!-- Core v20250628-inline4 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -254,12 +254,8 @@ window.fetch=function(u,o){
   }
   return _origFetch.call(this,u,o).then(function(r){
     // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
-    if(typeof u==='string'&&u.indexOf('/api/')===0){
-      if(r.status===429){
-        // 已注册用户忽略 429（避免后台数据刷新时的误拦截）
-        var _isReg=false;try{_isReg=!!localStorage.getItem('deviceRegistered')}catch(e){}
-        if(!_isReg)showBlocked(true)
-      }
+    if(typeof u==='string'&&u.indexOf('/api/')===0&&r.status===429){
+      showBlocked(true)
     }
     return r
   })
@@ -2908,11 +2904,12 @@ function changeAdminPwd(){
 }
 // ========== End Admin Panel ==========
 </script>
-<div class="page-blur" id="pageBlur">
+<div class="page-blur" id="pageBlur" style="display:flex;position:fixed;top:0;left:0;right:0;bottom:0;z-index:90;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.87)">
   <div class="blur-btn-wrap">
     <button class="blur-btn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
+<!-- v20250701-inline6 -->
 </body>
 </html>
