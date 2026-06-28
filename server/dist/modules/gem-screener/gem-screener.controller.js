@@ -399,7 +399,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async rescanMarket() {
         try {
             const results = this.gemScreener.getCacheAll();
-            return { code: 200, msg: 'ok', data: results };
+            const mainTs = this.gemScreener.mainBoardCache?.timestamp || 0;
+            const gemTs = this.gemScreener.cache?.timestamp || 0;
+            return { code: 200, msg: 'ok', data: results, updatedAt: Math.max(mainTs, gemTs) };
         }
         catch (e) {
             this.logger.error(`读取缓存失败: ${e.message}`);

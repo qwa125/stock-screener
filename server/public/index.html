@@ -2190,7 +2190,7 @@ setTimeout(function(){
           if(stocks.length){
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
-            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享）')
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享@'+d.updatedAt+'）')
           }else{
             setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
           }

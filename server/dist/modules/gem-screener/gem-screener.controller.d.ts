@@ -225,10 +225,12 @@ export declare class GemScreenerController {
         code: number;
         msg: string;
         data: import("./gem-screener.service").OpportunityStock[];
+        updatedAt: number;
     } | {
         code: number;
         msg: any;
         data: never[];
+        updatedAt?: undefined;
     }>;
     updateUpgraded(body: {
         list?: any[];

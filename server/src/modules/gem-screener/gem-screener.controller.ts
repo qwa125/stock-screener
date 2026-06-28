@@ -467,7 +467,9 @@ export class GemScreenerController {
     try {
       // 直接返回缓存数据，不再重新分析（quickAnalyze已分析过）
       const results = this.gemScreener.getCacheAll();
-      return { code: 200, msg: 'ok', data: results };
+      const mainTs = this.gemScreener.mainBoardCache?.timestamp || 0;
+      const gemTs = this.gemScreener.cache?.timestamp || 0;
+      return { code: 200, msg: 'ok', data: results, updatedAt: Math.max(mainTs, gemTs) };
     } catch (e) {
       this.logger.error(`读取缓存失败: ${e.message}`);
       return { code: 500, msg: e.message, data: [] };
