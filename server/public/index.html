@@ -262,7 +262,7 @@ function showBlocked(isLimited){
   if(isLimited){
     $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
   } else {
-    $("blurMsg").innerHTML="首次访问请点击上方扫描按钮以注册设备"
+    $.blurMsg.innerHTML="首次访问请点击上方扫描按钮以注册设备"
   }
 }
 function hideBlocked(){
@@ -275,7 +275,8 @@ console.log('页面初始化完成')
 async function handleBlurClick(){
   var btn=$("pageBlur").querySelector('.blur-btn')
   if(btn.disabled)return
-  btn.disabled=true;btn.textContent='⏳ 验证中...'
+  btn.disabled=true;btn.textContent='⏳ 服务器唤醒中...'
+  $("blurMsg").innerHTML="⏳ 正在连接服务器，请稍候..."
   try{
     var regRes=await fetch("/api/device/register",{
       method:"POST",
@@ -1473,7 +1474,7 @@ async function doFullRescan(saveToBackend){
         console.log('✅ Step③ 写回成功: '+j.msg+' data='+JSON.stringify(j.data))
         // 立即读回验证
         try{
-          var vr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+          var vr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
           var vd=await vr.json()
           if(vd.code===200&&vd.data){
             var verified=0,mismatch=0
@@ -2109,7 +2110,7 @@ setTimeout(function(){
   fetchMarketState() // 首次加载市场状态
   if(isTH()){
     // 交易时段 → 先读后端缓存直接展示，后台渐进式刷新
-    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(10000)})
+    fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.code===200&&d.data&&d.data.length){
