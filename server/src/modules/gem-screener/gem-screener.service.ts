@@ -4812,47 +4812,38 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
-    // ─── 买卖信号：MACD红峰/绿峰本身就是信号 ───
-    // 红峰峰顶=卖点（涨不动了），绿峰谷底=买点（跌不动了）
-    // 不等主力通达信确认（等确认信号就过去了，来不及）
-    // 主力/金叉信号仅做质量标注，不做通过门禁
-    // 每天最多2个买点+2个卖点，按峰谷大小取质量最好的
-    const _signalList: any[] = [];
+	    // ─── 买卖信号：MACD红峰/绿峰本身就是信号 ───
+	    // 红峰峰顶=卖点（涨不动了），绿峰谷底=买点（跌不动了）
+	    // 不等主力通达信确认（峰顶/谷底本身就是信号）
+	    // 每天最多2个买点+2个卖点
+	    // 策略：按MACD柱值排序(大峰优先)，但保证2个信号间隔>30分钟
+	    const _signalList: any[] = [];
 
-    // ─── 买入点（最多2个）：按大绿峰优先排序 ───
-    const _sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-    for (const gv of _sortedValleys) {
-      if (_signalList.filter(s => s.type === '买入点').length >= 2) break;
-      const confirmed = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5) ||
-                         macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
-      _signalList.push({
-        time: gv.time.slice(11, 16), price: gv.price,
-        type: '买入点' as const,
-        source: confirmed ? '最佳买入(主力确认)' : '最佳买入',
-      });
-    }
-    if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
-      const lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
-      _signalList.push({ time: lowest.time.slice(11, 16), price: lowest.price, type: '买入点' as const, source: '最佳买入(主力信号)' });
-    }
+	    // ─── 买入点（最多2个） ───
+	    const _sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+	    for (const gv of _sortedValleys) {
+	      if (_signalList.filter(s => s.type === '买入点').length >= 2) break;
+	      const _tooClose = _signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30);
+	      if (_tooClose) continue;
+	      _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点' as const, source: '最佳买入' });
+	    }
+	    if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
+	      const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
+	      _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点' as const, source: '最佳买入(主力信号)' });
+	    }
 
-    // ─── 卖出点（最多2个）：按大红峰优先排序 ───
-    const _sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
-    for (const rp of _sortedPeaks) {
-      if (_signalList.filter(s => s.type === '卖出点').length >= 2) break;
-      const confirmed = zhuliSellPoints.some(p => Math.abs(p.idx - rp.idx) <= 5) ||
-                         macdSignals.some(s => s.type === '死叉' && Math.abs(s.idx - rp.idx) <= 5);
-      _signalList.push({
-        time: rp.time.slice(11, 16), price: rp.price,
-        type: '卖出点' as const,
-        source: confirmed ? '最佳卖出(主力确认)' : '最佳卖出',
-      });
-    }
-    if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
-      const highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
-      _signalList.push({ time: highest.time.slice(11, 16), price: highest.price, type: '卖出点' as const, source: '最佳卖出(主力信号)' });
-    }
-
+	    // ─── 卖出点（最多2个） ───
+	    const _sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
+	    for (const rp of _sortedPeaks) {
+	      if (_signalList.filter(s => s.type === '卖出点').length >= 2) break;
+	      const _tooClose = _signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30);
+	      if (_tooClose) continue;
+	      _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点' as const, source: '最佳卖出' });
+	    }
+	    if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
+	      const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
+	      _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点' as const, source: '最佳卖出(主力信号)' });
+	    }
     // 按时间排序加载到suggestions
     suggestions.length = 0;
     _signalList.sort((a, b) => a.time.localeCompare(b.time));
