@@ -921,7 +921,7 @@ function showDetail(i){
   renderList()
   // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
   if(!isTH()&&s.suggestion){
-    startIntradayRefresh(s.code,rt.high,rt.low,rt.price)
+    startIntradayRefresh(s.code,rt.high||s.intradayHigh,rt.low||s.intradayLow,rt.price||s.currentPrice)
     return
   }
   // ★ 异步拉取完整分析（统一7级买卖系统）
@@ -1948,6 +1948,9 @@ async function refreshDetailPrice(code,low,high,lastPrice){
       h+='</div></div></div>'
       var e=$('intradayMacd')
       if(e)e.innerHTML=h
+    }else{
+      var e=$('intradayMacd')
+      if(e)e.innerHTML='<div style="padding:8px;text-align:center;font-size:11px;color:#9ca3af">暂无日内参考数据（非交易时段）</div>'
     }
     return
   }
