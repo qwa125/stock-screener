@@ -64,6 +64,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private intradaySignalCache;
     private readonly SELL_STATE_FILE;
     private upgradedSnapshot;
+    cloudSnapshotUrl: string;
+    private storage;
     private readonly BUNDLED_GEM_CACHE;
     private readonly BATCH_SIZE;
     private readonly POSITION_THRESHOLD;
@@ -98,6 +100,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private saveCacheToPg;
     private loadCacheFromPg;
     constructor(dataFetcher: DataFetcherService, stockService: StockService);
+    private initStorage;
     private isFrozenSchedule;
     private updateMarketHoursBeganAt;
     private loadCacheFromDisk;
@@ -113,6 +116,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         suggestion: string;
     }[]): void;
     loadSnapshotFromDisk(): void;
+    uploadSnapshotToCloud(): Promise<void>;
     private saveSnapshotToDisk;
     getOpportunities(): Promise<{
         opportunities: OpportunityStock[];

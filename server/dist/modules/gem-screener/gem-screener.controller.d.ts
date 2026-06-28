@@ -226,11 +226,13 @@ export declare class GemScreenerController {
         msg: string;
         data: any[];
         updatedAt: number;
+        cloudSnapshotUrl: string;
     } | {
         code: number;
         msg: any;
         data: never[];
         updatedAt?: undefined;
+        cloudSnapshotUrl?: undefined;
     }>;
     updateUpgraded(body: {
         list?: any[];
@@ -248,6 +250,15 @@ export declare class GemScreenerController {
         msg: string;
         data: any[];
         updatedAt: number;
+    }>;
+    getCloudSnapshotUrl(): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            url: string;
+            timestamp: number;
+            count: number;
+        };
     }>;
     refreshAll(body: {
         stocks: any[];

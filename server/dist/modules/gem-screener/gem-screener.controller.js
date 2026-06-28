@@ -430,7 +430,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     return sb - sa;
                 return (b.changePercent || 0) - (a.changePercent || 0);
             });
-            return { code: 200, msg: 'ok', data, updatedAt };
+            return {
+                code: 200, msg: 'ok', data, updatedAt,
+                cloudSnapshotUrl: this.gemScreener.cloudSnapshotUrl || '',
+            };
         }
         catch (e) {
             this.logger.error(`读取缓存失败: ${e.message}`);
@@ -469,6 +472,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async getUpgradedSnapshot() {
         const data = this.gemScreener.getUpgradedSnapshot();
         return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
+    }
+    async getCloudSnapshotUrl() {
+        const url = this.gemScreener.cloudSnapshotUrl || '';
+        const snap = this.gemScreener.getUpgradedSnapshot();
+        return { code: 200, msg: 'ok', data: { url, timestamp: snap?.timestamp || 0, count: snap?.list?.length || 0 } };
     }
     async refreshAll(body) {
         const opportunities = await this.gemScreener.scanAllWithFrontendData(body.stocks);
@@ -947,6 +955,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "getUpgradedSnapshot", null);
+__decorate([
+    (0, common_1.Get)('cloud-snapshot-url'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getCloudSnapshotUrl", null);
 __decorate([
     (0, common_1.Post)('refresh-all'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

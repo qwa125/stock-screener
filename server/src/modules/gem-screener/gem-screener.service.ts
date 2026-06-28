@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { S3Storage } from 'coze-coding-dev-sdk';
 import { calcBaiXing } from '../stock/bai-xing';
 import { FormulaEngine } from '../stock/formula-engine';
 import { calcBaiSanJiao } from '../stock/bai-san-jiao';
@@ -124,6 +125,9 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly SELL_STATE_FILE = '/tmp/sell-state-cache.json';
   /** Step③ 升级后的精确快照，供其他设备直接读取 */
   private upgradedSnapshot: { list: any[]; timestamp: number } = { list: [], timestamp: 0 };
+  /** TOS 云快照 URL（Render 休眠时也能访问） */
+  cloudSnapshotUrl: string = '';
+  private storage: S3Storage;
   private readonly BUNDLED_GEM_CACHE = join(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
   private readonly BATCH_SIZE = 20;
   private readonly POSITION_THRESHOLD = 92;
@@ -248,6 +252,21 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.loadSectorCacheFromDisk();
     this.loadSellStateCache();
     this.loadSnapshotFromDisk();
+    this.initStorage();
+  }
+
+  private initStorage() {
+    try {
+      this.storage = new S3Storage({
+        endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
+        accessKey: '',
+        secretKey: '',
+        bucketName: process.env.COZE_BUCKET_NAME,
+        region: 'cn-beijing',
+      });
+    } catch (e) {
+      this.logger.warn(`⚠️ TOS存储初始化失败: ${e.message}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -462,7 +481,27 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
-  /** 每次 Step③ 保存快照到磁盘 */
+  /** 上传快照到 TOS 对象存储（Render 休眠时前端也能直接读取） */
+  async uploadSnapshotToCloud(): Promise<void> {
+    if (!this.upgradedSnapshot?.list?.length || !this.storage) return;
+    try {
+      const json = JSON.stringify(this.upgradedSnapshot);
+      const fileName = 'gem-snapshot.json';
+      const key = await this.storage.uploadFile({
+        fileContent: Buffer.from(json, 'utf-8'),
+        fileName,
+        contentType: 'application/json',
+      });
+      // 生成7天有效期的签名URL
+      this.cloudSnapshotUrl = await this.storage.generatePresignedUrl({
+        key,
+        expireTime: 604800,
+      });
+      this.logger.log(`☁️ 云快照已上传: ${this.upgradedSnapshot.list.length}只, URL有效期7天`);
+    } catch (e) {
+      this.logger.warn(`⚠️ 云快照上传失败: ${e.message}`);
+    }
+  }
   private saveSnapshotToDisk() {
     try {
       writeFileSync(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
@@ -662,6 +701,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   setUpgradedSnapshot(list: any[]): void {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
     this.saveSnapshotToDisk();
+    this.uploadSnapshotToCloud(); // 异步上传到 TOS
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 

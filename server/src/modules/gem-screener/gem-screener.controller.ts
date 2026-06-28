@@ -503,7 +503,10 @@ export class GemScreenerController {
         return (b.changePercent || 0) - (a.changePercent || 0);
       });
 
-      return { code: 200, msg: 'ok', data, updatedAt };
+      return {
+        code: 200, msg: 'ok', data, updatedAt,
+        cloudSnapshotUrl: this.gemScreener.cloudSnapshotUrl || '',
+      };
     } catch (e) {
       this.logger.error(`读取缓存失败: ${e.message}`);
       return { code: 500, msg: e.message, data: [] };
@@ -544,6 +547,15 @@ export class GemScreenerController {
   async getUpgradedSnapshot() {
     const data = this.gemScreener.getUpgradedSnapshot();
     return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
+  }
+
+  /** 获取 TOS 云快照 URL（Render 休眠时前端也能直接读取） */
+  @Get('cloud-snapshot-url')
+  @SkipAccessLimit()
+  async getCloudSnapshotUrl() {
+    const url = this.gemScreener.cloudSnapshotUrl || '';
+    const snap = this.gemScreener.getUpgradedSnapshot();
+    return { code: 200, msg: 'ok', data: { url, timestamp: snap?.timestamp || 0, count: snap?.list?.length || 0 } };
   }
 
   @Post('refresh-all')

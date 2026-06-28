@@ -12,6 +12,7 @@ var GemScreenerService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerService = void 0;
 const common_1 = require("@nestjs/common");
+const coze_coding_dev_sdk_1 = require("coze-coding-dev-sdk");
 const bai_xing_1 = require("../stock/bai-xing");
 const formula_engine_1 = require("../stock/formula-engine");
 const bai_san_jiao_1 = require("../stock/bai-san-jiao");
@@ -126,6 +127,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.upgradedSnapshot = { list: [], timestamp: 0 };
+        this.cloudSnapshotUrl = '';
         this.BUNDLED_GEM_CACHE = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'gem-cache.json');
         this.BATCH_SIZE = 20;
         this.POSITION_THRESHOLD = 92;
@@ -162,6 +164,21 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.loadSectorCacheFromDisk();
         this.loadSellStateCache();
         this.loadSnapshotFromDisk();
+        this.initStorage();
+    }
+    initStorage() {
+        try {
+            this.storage = new coze_coding_dev_sdk_1.S3Storage({
+                endpointUrl: process.env.COZE_BUCKET_ENDPOINT_URL,
+                accessKey: '',
+                secretKey: '',
+                bucketName: process.env.COZE_BUCKET_NAME,
+                region: 'cn-beijing',
+            });
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ TOS存储初始化失败: ${e.message}`);
+        }
     }
     isFrozenSchedule() {
         const now = new Date();
@@ -359,6 +376,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📸 无磁盘快照（首次部署或未扫描）');
         }
     }
+    async uploadSnapshotToCloud() {
+        if (!this.upgradedSnapshot?.list?.length || !this.storage)
+            return;
+        try {
+            const json = JSON.stringify(this.upgradedSnapshot);
+            const fileName = 'gem-snapshot.json';
+            const key = await this.storage.uploadFile({
+                fileContent: Buffer.from(json, 'utf-8'),
+                fileName,
+                contentType: 'application/json',
+            });
+            this.cloudSnapshotUrl = await this.storage.generatePresignedUrl({
+                key,
+                expireTime: 604800,
+            });
+            this.logger.log(`☁️ 云快照已上传: ${this.upgradedSnapshot.list.length}只, URL有效期7天`);
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 云快照上传失败: ${e.message}`);
+        }
+    }
     saveSnapshotToDisk() {
         try {
             (0, fs_1.writeFileSync)(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
@@ -525,6 +563,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     setUpgradedSnapshot(list) {
         this.upgradedSnapshot = { list, timestamp: Date.now() };
         this.saveSnapshotToDisk();
+        this.uploadSnapshotToCloud();
         this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
     }
     getUpgradedSnapshot() {
