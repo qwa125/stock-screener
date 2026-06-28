@@ -1920,6 +1920,33 @@ function onSearchInput(){
             html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
             html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
             html+='</div>'
+  // ====== 集合竞价研判：验证做T信号 ======
+  var auc=window._auctionDataCache?window._auctionDataCache[String(code)]:null
+  if(auc&&auc.judge&&auc.judge.direction){
+    var j=auc.judge,ac=j.color||'#6b7280'
+    var buySig=sugs.filter(function(s){return s.type==='买入点'||s.type==='买入'})
+    var sellSig=sugs.filter(function(s){return s.type==='卖出点'||s.type==='卖出'})
+    var buyMatch=(j.direction.indexOf('高开')>=0||j.direction.indexOf('买盘')>=0||j.direction.indexOf('洗盘')>=0||j.direction.indexOf('上攻')>=0)&&buySig.length>0
+    var sellMatch=(j.direction.indexOf('诱多')>=0||j.direction.indexOf('卖盘')>=0||j.direction.indexOf('弱势')>=0||j.direction.indexOf('出货')>=0)&&sellSig.length>0
+    html+='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;border:1px solid '+ac+';background:'+ac+'08">'
+    html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">'
+    html+='<span style="background:'+ac+';color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">🔔 竞价研判</span>'
+    html+='<span style="font-weight:600;font-size:12px;color:'+ac+'">'+j.direction+'</span>'
+    if(buyMatch)html+='<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证买入信号</span>'
+    if(sellMatch)html+='<span style="background:#dc2626;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证卖出信号</span>'
+    if(buySig.length>0&&!buyMatch)html+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
+    if(sellSig.length>0&&!sellMatch)html+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
+    html+='</div>'
+    html+='<div style="font-size:10px;color:#6b7280;line-height:1.5">'+j.reason+'</div>'
+    if(auc.gap!=null){
+      html+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">'
+      html+='<span style="font-size:9px;color:#9ca3af">跳空 '+(auc.gap>0?'+':'')+auc.gap.toFixed(1)+'%</span>'
+      if(auc.volumeRatio!=null)html+='<span style="font-size:9px;color:#9ca3af">量比 '+auc.volumeRatio.toFixed(1)+'x</span>'
+      if(auc.auctionVolume>0)html+='<span style="font-size:9px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
+      html+='</div>'
+    }
+    html+='</div>'
+  }
           }
           dd.innerHTML=html
           dd.style.display='block'
