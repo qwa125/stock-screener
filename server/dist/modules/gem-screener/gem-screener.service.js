@@ -4153,28 +4153,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
         const suggestions = [];
-        const allPoints = [
-            ...zhuliBuyPoints.map(p => ({ ...p, type: '买入点', source: '主力低吸' })),
-            ...zhuliSellPoints.map(p => ({ ...p, type: '卖出点', source: '主力高抛' })),
-            ..._greenValleys.filter(v => v.macdVal < -0.05).map(v => ({ time: v.time, idx: v.idx, price: v.price, type: '买入点', source: 'MACD绿峰' })),
-            ..._redPeaks.filter(p => p.macdVal > 0.05).map(p => ({ time: p.time, idx: p.idx, price: p.price, type: '卖出点', source: 'MACD红峰' })),
-        ];
-        for (let i = 2; i < len - 2; i++) {
-            if (low[i] < low[i - 1] && low[i] < low[i - 2] && low[i] < low[i + 1] && low[i] < low[i + 2]) {
-                const lastBuy = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '买入点') : null;
-                if (!lastBuy || i - lastBuy.idx >= 3) {
-                    allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '买入点', source: '价格低点' });
-                }
-            }
-            if (high[i] > high[i - 1] && high[i] > high[i - 2] && high[i] > high[i + 1] && high[i] > high[i + 2]) {
-                const lastSell = allPoints.length > 0 ? [...allPoints].reverse().find(p => p.type === '卖出点') : null;
-                if (!lastSell || i - lastSell.idx >= 3) {
-                    allPoints.push({ time: minData[i].time, idx: i, price: Math.round(close[i] * 100) / 100, type: '卖出点', source: '价格高点' });
-                }
-            }
-        }
-        allPoints.sort((a, b) => a.idx - b.idx);
-        suggestions.push(...allPoints);
         const lastIdx = len - 1;
         const lastMain = mainLine[lastIdx];
         const lastRetail = retailLine[lastIdx];
@@ -4194,6 +4172,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         else {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
+        console.log(`[debug] 300307: _greenValleys=${_greenValleys.length}, _redPeaks=${_redPeaks.length}`);
+        if (_greenValleys.length > 0)
+            console.log(`[debug] 绿峰样例:`, JSON.stringify(_greenValleys.slice(0, 3)));
+        if (_redPeaks.length > 0)
+            console.log(`[debug] 红峰样例:`, JSON.stringify(_redPeaks.slice(0, 3)));
         let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
         if (_greenValleys.length > 0) {
             const sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
@@ -4232,56 +4215,36 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const _td = minData[len - 1]?.time?.slice(0, 10) || '';
         let todaySugs = [];
         if (_td) {
-            const _f = suggestions.filter(s => s.time?.startsWith(_td));
-            if (_f.length > 0) {
-                todaySugs = _f.map(s => ({ ...s, time: s.time.slice(11, 16) }));
-                const _tG = _greenValleys.filter(v => v.time?.startsWith(_td));
-                const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
-                if (bestBuyPrice > 0 && _tG.length > 0) {
-                    const _matched = _tG.find(v => Math.abs(v.price - bestBuyPrice) < 0.005);
-                    if (_matched)
-                        bestBuyTime = _matched.time.slice(11, 16);
-                }
-                if (bestSellPrice > 0 && _tR.length > 0) {
-                    const _matched = _tR.find(p => Math.abs(p.price - bestSellPrice) < 0.005);
-                    if (_matched)
-                        bestSellTime = _matched.time.slice(11, 16);
-                }
-                if (!bestBuyPrice && _tG.length > 0) {
-                    const _g = _tG[_tG.length - 1];
-                    bestBuyPrice = _g.price;
-                    bestBuyTime = _g.time.slice(11, 16);
-                }
-                if (!bestSellPrice && _tR.length > 0) {
-                    const _r = _tR[_tR.length - 1];
-                    bestSellPrice = _r.price;
-                    bestSellTime = _r.time.slice(11, 16);
-                }
-                if (!bestBuyTime || bestBuyTime.includes('-')) {
-                    const _tB = _f.filter(s => s.type === '买入点');
-                    if (_tB.length > 0) {
-                        const _b = _tB.reduce((a, b) => a.price < b.price ? a : b);
-                        bestBuyPrice = _b.price;
-                        bestBuyTime = _b.time.slice(11, 16);
-                    }
-                    else {
-                        bestBuyPrice = 0;
-                        bestBuyTime = '';
-                    }
-                }
-                if (!bestSellTime || bestSellTime.includes('-')) {
-                    const _tS = _f.filter(s => s.type === '卖出点');
-                    if (_tS.length > 0) {
-                        const _s = _tS.reduce((a, b) => a.price > b.price ? a : b);
-                        bestSellPrice = _s.price;
-                        bestSellTime = _s.time.slice(11, 16);
-                    }
-                    else {
-                        bestSellPrice = 0;
-                        bestSellTime = '';
-                    }
-                }
+            const _zhuliBuyToday = zhuliBuyPoints.filter(s => s.time?.startsWith(_td)).sort((a, b) => a.price - b.price);
+            const _zhuliSellToday = zhuliSellPoints.filter(s => s.time?.startsWith(_td)).sort((a, b) => b.price - a.price);
+            const _tG = _greenValleys.filter(v => v.time?.startsWith(_td));
+            const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
+            if (_zhuliBuyToday.length > 0) {
+                bestBuyPrice = _zhuliBuyToday[0].price;
+                bestBuyTime = _zhuliBuyToday[0].time.slice(11, 16);
             }
+            else if (_tG.length > 0) {
+                const _lowest = _tG.reduce((a, b) => a.price < b.price ? a : b);
+                bestBuyPrice = _lowest.price;
+                bestBuyTime = _lowest.time.slice(11, 16);
+            }
+            if (_zhuliSellToday.length > 0) {
+                bestSellPrice = _zhuliSellToday[0].price;
+                bestSellTime = _zhuliSellToday[0].time.slice(11, 16);
+            }
+            else if (_tR.length > 0) {
+                const _highest = _tR.reduce((a, b) => a.price > b.price ? a : b);
+                bestSellPrice = _highest.price;
+                bestSellTime = _highest.time.slice(11, 16);
+            }
+            suggestions.length = 0;
+            if (bestBuyPrice > 0 && bestBuyTime) {
+                suggestions.push({ time: bestBuyTime, idx: 0, price: bestBuyPrice, type: '买入点', source: '最佳买入' });
+            }
+            if (bestSellPrice > 0 && bestSellTime) {
+                suggestions.push({ time: bestSellTime, idx: 0, price: bestSellPrice, type: '卖出点', source: '最佳卖出' });
+            }
+            todaySugs = [...suggestions];
         }
         if (todaySugs.length === 0) {
             todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
