@@ -702,6 +702,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
     this.saveSnapshotToDisk();
     this.uploadSnapshotToCloud(); // 异步上传到 TOS
+    this.saveCacheToPg('snapshot', this.upgradedSnapshot); // 同时存PG，重启不丢
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 
@@ -1010,6 +1011,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
         this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只 (ts=${pgMain.timestamp})`);
       }
       try { await fs.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8'); } catch {}
+    }
+    // ─── 恢复快照缓存 ───
+    const pgSnapshot = await this.loadCacheFromPg<{ list: any[]; timestamp: number }>('snapshot');
+    if (pgSnapshot && pgSnapshot.list && pgSnapshot.list.length > 0) {
+      if (pgSnapshot.timestamp > (this.upgradedSnapshot?.timestamp || 0)) {
+        this.upgradedSnapshot = pgSnapshot;
+        this.logger.log(`✅ PostgreSQL 快照恢复: ${pgSnapshot.list.length} 只 (ts=${pgSnapshot.timestamp})`);
+      }
+      try { await fs.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8'); } catch {}
     }
     this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length??0} 只, 主板 ${this.mainBoardCache?.data?.length??0} 只`);
 

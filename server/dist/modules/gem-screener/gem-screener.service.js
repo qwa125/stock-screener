@@ -564,6 +564,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.upgradedSnapshot = { list, timestamp: Date.now() };
         this.saveSnapshotToDisk();
         this.uploadSnapshotToCloud();
+        this.saveCacheToPg('snapshot', this.upgradedSnapshot);
         this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
     }
     getUpgradedSnapshot() {
@@ -889,6 +890,17 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
             try {
                 await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8');
+            }
+            catch { }
+        }
+        const pgSnapshot = await this.loadCacheFromPg('snapshot');
+        if (pgSnapshot && pgSnapshot.list && pgSnapshot.list.length > 0) {
+            if (pgSnapshot.timestamp > (this.upgradedSnapshot?.timestamp || 0)) {
+                this.upgradedSnapshot = pgSnapshot;
+                this.logger.log(`✅ PostgreSQL 快照恢复: ${pgSnapshot.list.length} 只 (ts=${pgSnapshot.timestamp})`);
+            }
+            try {
+                await fs_1.promises.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8');
             }
             catch { }
         }
