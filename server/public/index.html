@@ -2103,8 +2103,8 @@ setInterval(function(){
   fetchMarketState() // 每分钟刷新市场状态
 },60000)
 
-// 首次加载（延迟3秒等初始化完成）
-setTimeout(function(){
+// 首次加载（立即执行，无延迟）
+;(function initFirstLoad(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
   fetchMarketState() // 首次加载市场状态
@@ -2218,7 +2218,12 @@ setTimeout(function(){
         }
       })
   }
-},3000)
+})()
+
+// 防 Render 冷启动：每10分钟 ping 后端保持唤醒
+setInterval(function(){
+  fetch(API+'/gem/market-state',{signal:AbortSignal.timeout(5000)}).catch(function(){})
+}, 10*60*1000)
 
 // 个股股价每2秒刷新
 var priceTimer=null,marketTimer=null
