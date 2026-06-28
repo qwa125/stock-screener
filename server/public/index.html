@@ -267,6 +267,8 @@ function showBlocked(isLimited){
 }
 function hideBlocked(){
   $("pageBlur").classList.add("hidden")
+  // 恢复可能因 blur 遮挡而未渲染的数据
+  if(stocks&&stocks.length){renderList()}
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
