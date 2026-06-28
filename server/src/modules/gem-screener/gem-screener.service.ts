@@ -745,6 +745,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.forecast1_2Day !== undefined) item.forecast1_2Day = upgraded.forecast1_2Day;
           if (upgraded.ma5 !== undefined) item.ma5 = upgraded.ma5;
           if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
+          if (upgraded.intradayHigh !== undefined) item.intradayHigh = upgraded.intradayHigh;
+          if (upgraded.intradayLow !== undefined) item.intradayLow = upgraded.intradayLow;
         }
       }
       if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
@@ -778,7 +780,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.forecast1_2Day !== undefined) item.forecast1_2Day = upgraded.forecast1_2Day;
           if (upgraded.ma5 !== undefined) item.ma5 = upgraded.ma5;
           if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
-        }
+          if (upgraded.intradayHigh !== undefined) item.intradayHigh = upgraded.intradayHigh;
+          if (upgraded.intradayLow !== undefined) item.intradayLow = upgraded.intradayLow;
       }
     }
 
