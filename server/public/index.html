@@ -236,24 +236,21 @@ function getOrCreateDeviceId(){
   }catch(e){return 'unknown-'+Date.now()}
 }
 
-// 全局 fetch 拦截：检测 429 + 自动附加设备 ID，不自动隐藏毛玻璃
+// 全局 fetch 拦截：检测 429，显示名额不足提示
 var _origFetch=window.fetch
 window.fetch=function(u,o){
   o=o||{}
   o.headers=o.headers||{}
-  // 只给后端 API 请求加设备ID头（外部 API 如腾讯行情不加，避免 CORS 预检失败）
   if(typeof u==='string'&&u.indexOf('/api/')===0){
     if(!o.headers["X-Device-Id"]&&!o.headers["x-device-id"]){
       o.headers["X-Device-Id"]=getOrCreateDeviceId()
     }
-    // 管理员令牌：如果 localStorage 有 adminToken，自动附带（免名额限制）
     try{
       var adminTkn=localStorage.getItem('adminToken')
       if(adminTkn)o.headers["X-Admin-Token"]=adminTkn
     }catch(e){}
   }
   return _origFetch.call(this,u,o).then(function(r){
-    // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
     if(typeof u==='string'&&u.indexOf('/api/')===0&&r.status===429){
       showBlocked(true)
     }
@@ -276,36 +273,19 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 毛玻璃按钮：一键隐退，注册在后台静默执行
+// 毛玻璃按钮：点击注册+扫描
 async function handleBlurClick(){
-  console.log('📊 毛玻璃按钮被点击')
-  var btn=$("pageBlur").querySelector('.blur-btn')
-  if(btn.disabled)return
-  btn.disabled=true;btn.textContent='⏳ 服务器唤醒中...'
-  $("blurMsg").innerHTML="⏳ 正在连接服务器，请稍候..."
+  if(loading)return
+  var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
   try{
-    var regRes=await fetch("/api/access/register",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({deviceId:getOrCreateDeviceId()}),
-      signal:AbortSignal.timeout(35000)
-    })
-    var regData
-    try{regData=await regRes.json()}catch(e){regData={code:500}}
-    if(regRes.status===429||regData.code!==200){
-      var denyMsg=regData.msg||(regRes.status===429?'名额不足，请联系管理员增加设备访问名额':'访问被拒绝，请联系管理员')
-      $("blurMsg").innerHTML='⚠️ '+denyMsg
-      // 拒绝后保持按钮禁用，用户需刷新重试（防止二次点击进入）
-      return
-    }
-    console.log('✅ 设备注册成功')
-    localStorage.setItem('deviceRegistered','1')
+    var regRes=await fetch("/api/access/register",{method:"POST",headers:{"X-Device-Id":getOrCreateDeviceId()}})
+    if(regRes.status===429){showBlocked(true);return}
+    if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
+    doScan()
   }catch(e){
-    console.warn('设备注册失败:',e)
-    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-    var errMsg=e.name==='TimeoutError'?'⏳ 服务器响应超时，请检查网络后重试':"⚠️ 服务器连接失败，请检查网络后重试"
-    $("blurMsg").innerHTML=errMsg
+    hideBlocked()
+    if(stocks&&stocks.length){renderList()}
   }
 }
 // 主页面扫描按钮：立即触发扫描
@@ -329,15 +309,10 @@ async function handleRescanClick(){
   try{
     var regRes=await fetch("/api/access/register",{
       method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({deviceId:getOrCreateDeviceId()}),
-      signal:AbortSignal.timeout(35000)
+      headers:{"X-Device-Id":getOrCreateDeviceId()}
     })
-    if(regRes.status===429||(regRes.status!==200&&regRes.status!==201)){
-      showBlocked(true);return
-    }
-    var _regData=await regRes.json()
-    if(_regData.code!==200){showBlocked(true);return}
+    if(regRes.status===429){showBlocked(true);return}
+    if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
     // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
     setStatus('正在获取热门A股...')
@@ -2169,11 +2144,9 @@ async function doSearch(){
   var v=$('searchInput').value.trim();if(!v)return
   // 先检查设备权限：搜股票也要经过后端 guard 验证
   try{
-    var _reg=await fetch('/api/access/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:getOrCreateDeviceId()})})
+    var _reg=await fetch('/api/access/register',{method:'POST',headers:{'X-Device-Id':getOrCreateDeviceId()}})
     if(_reg.status===429){showBlocked(true);setTimeout(function(){$('searchInput').focus()},100);return}
-    var _regBody
-    try{_regBody=await _reg.json()}catch(e){_regBody={code:500}}
-    if(_regBody.code!==200){showBlocked(true);return}
+    if(_reg.status!==200){showBlocked(true);return}
   }catch(e){/* 网络异常，放行 */}
   var da=$('detailArea');da.style.display='none';isDetailView=false
 

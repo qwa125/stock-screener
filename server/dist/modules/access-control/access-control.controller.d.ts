@@ -4,10 +4,11 @@ export declare class AccessControlController {
     private readonly service;
     private readonly deviceRegistry;
     constructor(service: AccessControlService, deviceRegistry: DeviceRegistryService);
-    register(body: {
-        deviceId: string;
-        fingerprint: Record<string, any>;
-    }, adminToken?: string): Promise<{
+    register(deviceId: string, adminToken?: string): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
         code: number;
         msg: string;
         data: {

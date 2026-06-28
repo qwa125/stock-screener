@@ -1,30 +1,37 @@
-import { Controller, Post, Get, Body, Query, Headers, HttpCode } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Headers, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
 import { AccessControlService } from './access-control.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
-import { SkipAccessLimit } from '@/guards/access-limit.guard';
 
 @Controller('access')
-@SkipAccessLimit()
 export class AccessControlController {
   constructor(
     private readonly service: AccessControlService,
     private readonly deviceRegistry: DeviceRegistryService,
   ) {}
 
-  /** 设备注册/续签 */
+  /** 设备注册/续签 — 2dfdbc9 模式：HTTP 429 表示名额满 */
   @Post('register')
   @HttpCode(200)
   async register(
-    @Body() body: { deviceId: string; fingerprint: Record<string, any> },
+    @Headers('x-device-id') deviceId: string,
     @Headers('x-admin-token') adminToken?: string,
   ) {
+    if (!deviceId) {
+      return { code: 400, msg: '缺少 x-device-id 头' };
+    }
     const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
     const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
-    const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {}, isAdmin);
+    const result = await this.service.registerDevice(deviceId, {}, isAdmin);
+    if (!result.success) {
+      throw new HttpException(
+        { code: 429, msg: result.reason || '名额已满，请联系管理员增加设备访问名额', data: null },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     return {
-      code: result.success ? 200 : 403,
-      msg: result.success ? '注册成功' : (result.reason || '访问被拒绝'),
-      data: this.service.getStatus(body.deviceId),
+      code: 200,
+      msg: '注册成功',
+      data: this.service.getStatus(deviceId),
     };
   }
 

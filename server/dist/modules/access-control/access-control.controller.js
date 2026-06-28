@@ -16,20 +16,25 @@ exports.AccessControlController = void 0;
 const common_1 = require("@nestjs/common");
 const access_control_service_1 = require("./access-control.service");
 const device_registry_service_1 = require("../device/device-registry.service");
-const access_limit_guard_1 = require("../../guards/access-limit.guard");
 let AccessControlController = class AccessControlController {
     constructor(service, deviceRegistry) {
         this.service = service;
         this.deviceRegistry = deviceRegistry;
     }
-    async register(body, adminToken) {
+    async register(deviceId, adminToken) {
+        if (!deviceId) {
+            return { code: 400, msg: '缺少 x-device-id 头' };
+        }
         const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
         const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
-        const result = await this.service.registerDevice(body.deviceId, body.fingerprint || {}, isAdmin);
+        const result = await this.service.registerDevice(deviceId, {}, isAdmin);
+        if (!result.success) {
+            throw new common_1.HttpException({ code: 429, msg: result.reason || '名额已满，请联系管理员增加设备访问名额', data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+        }
         return {
-            code: result.success ? 200 : 403,
-            msg: result.success ? '注册成功' : (result.reason || '访问被拒绝'),
-            data: this.service.getStatus(body.deviceId),
+            code: 200,
+            msg: '注册成功',
+            data: this.service.getStatus(deviceId),
         };
     }
     async status(deviceId) {
@@ -97,10 +102,10 @@ exports.AccessControlController = AccessControlController;
 __decorate([
     (0, common_1.Post)('register'),
     (0, common_1.HttpCode)(200),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, common_1.Headers)('x-device-id')),
     __param(1, (0, common_1.Headers)('x-admin-token')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], AccessControlController.prototype, "register", null);
 __decorate([
@@ -144,7 +149,6 @@ __decorate([
 ], AccessControlController.prototype, "listDevices", null);
 exports.AccessControlController = AccessControlController = __decorate([
     (0, common_1.Controller)('access'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
     __metadata("design:paramtypes", [access_control_service_1.AccessControlService,
         device_registry_service_1.DeviceRegistryService])
 ], AccessControlController);
