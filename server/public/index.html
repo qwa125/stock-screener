@@ -267,7 +267,7 @@ function showBlocked(isLimited){
   if(isLimited){
     $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
   } else {
-    $.blurMsg.innerHTML="首次访问请点击上方扫描按钮以注册设备"
+    $("blurMsg").innerHTML="首次访问请点击上方扫描按钮以注册设备"
   }
 }
 function hideBlocked(){
@@ -294,6 +294,7 @@ async function handleBlurClick(){
       $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
       return  // 按钮保持禁用，用户需刷新页面重试
     }
+    console.log('✅ 设备注册成功, status='+regRes.status)
     localStorage.setItem('deviceRegistered','1')
     hideBlocked()
   }catch(e){
@@ -326,7 +327,7 @@ async function handleRescanClick(){
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({deviceId:getOrCreateDeviceId()})
     })
-    if(regRes.status===429||regRes.status!==200){
+    if(regRes.status===429||(regRes.status!==200&&regRes.status!==201)){
       showBlocked(true);return
     }
     hideBlocked()

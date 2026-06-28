@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, HttpCode } from '@nestjs/common';
 import { AccessControlService } from './access-control.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
@@ -13,6 +13,7 @@ export class AccessControlController {
 
   /** 设备注册/续签 */
   @Post('register')
+  @HttpCode(200)
   async register(
     @Body() body: { deviceId: string; fingerprint: Record<string, any> },
   ) {
