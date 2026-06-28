@@ -256,7 +256,9 @@ window.fetch=function(u,o){
     // 只处理后端 API 的响应（外部接口如腾讯行情不影响遮罩）
     if(typeof u==='string'&&u.indexOf('/api/')===0){
       if(r.status===429){
-        showBlocked(true)
+        // 已注册用户忽略 429（避免后台数据刷新时的误拦截）
+        var _isReg=false;try{_isReg=!!localStorage.getItem('deviceRegistered')}catch(e){}
+        if(!_isReg)showBlocked(true)
       }
     }
     return r
@@ -297,7 +299,7 @@ async function handleBlurClick(){
     if(regRes.status===429||regData.code!==200){
       var denyMsg=regData.msg||(regRes.status===429?'名额不足，请联系管理员增加设备访问名额':'访问被拒绝，请联系管理员')
       $("blurMsg").innerHTML='⚠️ '+denyMsg
-      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+      // 拒绝后保持按钮禁用，用户需刷新重试（防止二次点击进入）
       return
     }
     console.log('✅ 设备注册成功')
