@@ -801,6 +801,41 @@ export class GemScreenerController {
     }
   }
 
+  /**
+   * 代理个股详情（含集合竞价数据）
+   * 返回：成交量、量比、集合竞价成交量/未匹配量/方向等
+   */
+  @Get('proxy/stock-detail')
+  @SkipAccessLimit()
+  async proxyStockDetail(@Query('code') code: string) {
+    if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    const market = code.startsWith('6') ? '1.' : '0.';
+    const secId = market + code;
+    // 仅拉取集合竞价相关字段 + 量比(除100)
+    // f50:量比(千分比,除100得实际值) f257:集合竞价成交量 f258:集合竞价成交额
+    // f259:集合竞价未匹配量(正=买剩,负=卖剩) f260:集合竞价方向(1=买剩,2=卖剩)
+    const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secId}&fields=f50,f257,f258,f259,f260&ut=bd1d9ddb04089700cf9c27f6f7426281`;
+    try {
+      const resp = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
+        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' },
+      });
+      const json: any = await resp.json();
+      const d = json?.data || {};
+      const data: Record<string, any> = {
+        volumeRatio: d.f50 ? Math.round((d.f50/100)*10)/10 : 0, // 量比(千分比→实际值)
+        auctionVolume: d.f257,     // 集合竞价成交量
+        auctionAmount: d.f258,     // 集合竞价成交额
+        auctionUnmatched: d.f259,  // 集合竞价未匹配量(正=买剩,负=卖剩)
+        auctionDirection: d.f260,  // 方向(1=买剩,2=卖剩)
+      };
+      return { code: 200, msg: 'success', data };
+    } catch (e) {
+      this.logger.error(`代理个股详情失败 ${code}: ${(e as Error).message}`);
+      return { code: 500, msg: '个股详情请求失败', data: null };
+    }
+  }
+
   /** 只重算缓存信号，不调外部API */
   @Post('recalc')
   @SkipAccessLimit()

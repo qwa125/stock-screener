@@ -696,6 +696,126 @@ function futurePrediction(s){
   return'暂无明确信号，未来1-2日等待方向选择'
 }
 
+// ─── 集合竞价综合研判 ───
+// 从个股详情API获取集合竞价数据
+window._auctionDataCache={} // {code: {auctionVolume,auctionAmount,auctionUnmatched,auctionDirection,gap,volumeRatio}}
+
+/** 批量抓取集合竞价详情（限并发） */
+async function fetchAuctionData(codes,limit){
+  if(!codes||!codes.length)return
+  limit=limit||5
+  var results={}
+  // 分批并发 fetch，每批 limit 只
+  for(var i=0;i<codes.length;i+=limit){
+    var batch=codes.slice(i,i+limit)
+    var promises=batch.map(async function(code){
+      try{
+        var r=await fetch(API+'/gem/proxy/stock-detail?code='+code+'&_='+Date.now(),{signal:timeoutSignal(5000)})
+        var d=await r.json()
+        if(d.code===200&&d.data){
+          var a=d.data
+          // gap从已有的Sina缓存算，不用依赖详情API
+          var _em=window._cachedSinaEMData||[]
+          var _s=_em.find(function(x){return String(x.f12)===String(code)})
+          if(_s&&_s.f17){
+            var _price=parseFloat(_s.f2)||0,_chg=parseFloat(_s.f3)||0
+            if(_price&&_chg){
+              var _prev=_price/(1+_chg/100)
+              a.gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
+            }
+          }
+          results[String(code)]=a
+        }
+      }catch(e){/* silent */}
+    })
+    await Promise.all(promises)
+  }
+  window._auctionDataCache=results
+}
+
+/** 综合研判函数：把集合竞价数据+日K位置+板块热度综合成结论 */
+function auctionJudge(code,stock){
+  var a=(window._auctionDataCache||{})[String(code)]
+  if(!a){
+    // 没有详情数据则退回到简单gap判断
+    return _simpleGapJudge(code)
+  }
+  var gap=a.gap||0,gapAbs=Math.abs(gap)
+  var pos=(stock&&stock.pricePosition)||50
+  var isHot=stock&&(stock.capitalRank||0)<20
+  var judge={dir:'观望',sig:'neutral',color:'#6b7280',detail:[],short:''}
+  
+  // 集合竞价成交量活跃度
+  var hasAuctionVol=a.auctionVolume&&a.auctionVolume>0
+  var unmatched=a.auctionUnmatched // 正=买剩(多头强) 负=卖剩(空头强)
+  var dirCode=a.auctionDirection   // 1=买剩 2=卖剩
+  
+  if(gapAbs<0.5){
+    // ── 平开 ──
+    judge.dir='→ 平开'
+    judge.color='#6b7280'
+    if(pos<30) judge.detail.push('低位区,关注')
+    else if(pos>70) judge.detail.push('高位区,谨慎')
+    else judge.detail.push('观望')
+  }else if(gap>0){
+    // ── 高开 ──
+    if(dirCode===1&&unmatched>0){
+      // 真强：买盘剩
+      if(pos<50){judge.dir='↑ 强势高开';judge.sig='buy';judge.color='#dc2626';judge.detail.push('未匹配买盘充足')}
+      else{judge.dir='↑ 高开放量';judge.sig='watch';judge.color='#ef4444';judge.detail.push('买盘积极,但位置偏高')}
+      judge.detail.push('竞价活跃')
+    }else if(dirCode===2&&unmatched<0){
+      // 假强：卖盘剩
+      judge.dir='↑ 高开诱多';judge.sig='caution';judge.color='#ea580c'
+      judge.detail.push('卖压未消化,警惕回落')
+    }else{
+      judge.dir='↑ 高开';judge.sig='watch';judge.color='#ef4444'
+      judge.detail.push('注意冲高回落')
+    }
+    if(pos>70) judge.detail.push('高位区')
+    if(isHot) judge.detail.push('板块热')
+  }else{
+    // ── 低开 ──
+    if(dirCode===2&&unmatched<0){
+      // 真弱：卖盘剩
+      if(pos>50){judge.dir='↓ 弱势低开';judge.sig='sell';judge.color='#22c55e';judge.detail.push('资金出逃')}
+      else{judge.dir='↓ 低开';judge.sig='caution';judge.color='#22c55e';judge.detail.push('卖压沉重')}
+    }else if(dirCode===1&&unmatched>0){
+      // 假弱：买盘剩 => 洗盘吸筹
+      judge.dir='↓ 低开洗盘';judge.sig='buy_weak';judge.color='#059669'
+      judge.detail.push('未匹配买盘抄底')
+      judge.detail.push('可关注低吸')
+    }else{
+      judge.dir='↓ 低开';judge.sig='watch';judge.color='#22c55e'
+      judge.detail.push('注意探底回升')
+    }
+    if(pos<30) judge.detail.push('低位区')
+    if(isHot) judge.detail.push('板块热')
+  }
+  // 量比辅助
+  if(a.volumeRatio&&a.volumeRatio>2) judge.detail.push('放量×'+a.volumeRatio.toFixed(1))
+  else if(a.volumeRatio&&a.volumeRatio<0.5) judge.detail.push('缩量×'+a.volumeRatio.toFixed(1))
+  if(gapAbs>3) judge.detail.push('跳空>3%')
+  if(a.volumeRatio&&a.volumeRatio>2) judge.detail.push('放量×'+a.volumeRatio.toFixed(1))
+  else if(a.volumeRatio&&a.volumeRatio<0.5) judge.detail.push('缩量×'+a.volumeRatio.toFixed(1))
+  judge.short=judge.detail.slice(0,2).join('·')
+  return judge
+}
+
+/** 回退：简单gap方向判断 */
+function _simpleGapJudge(code){
+  var _em=window._cachedSinaEMData||[]
+  var _s=_em.find(function(x){return String(x.f12)===String(code)})
+  if(!_s||!_s.f17)return null
+  var _price=parseFloat(_s.f2)||0,_chg=parseFloat(_s.f3)||0
+  if(!_price||!_chg)return null
+  var _prev=_price/(1+_chg/100)
+  var _gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
+  if(Math.abs(_gap)<0.5)return{dir:'→ 平开',color:'#6b7280',short:'平开',sig:'neutral'}
+  return{dir:(_gap>0?'↑ 高开':'↓ 低开'),color:(_gap>0?'#ef4444':'#22c55e'),short:(_gap>0?'高开':'低开'),sig:(_gap>0?'watch':'watch')}
+}
+
+/** 扫描列表的gap显示：综合研判后的简洁指示器 */
 function _getGapHtml(code){
   var _em=window._cachedSinaEMData||[]
   var _s=_em.find(function(x){return String(x.f12)===String(code)})
@@ -706,6 +826,14 @@ function _getGapHtml(code){
   var _gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
   if(Math.abs(_gap)<0.5)return'<span class="gap-dot gap-flat">→</span>'
   return'<span class="gap-dot ' + (_gap>0?'gap-up":"gap-down")+'">'+(_gap>0?'↑':'↓')+'</span>'
+}
+
+/** 详情页用的详细集合竞价条（含综合研判） */
+function _getAuctionBar(code,stock){
+  var j=auctionJudge(code,stock)
+  if(!j) return''
+  var clr=j.color,dir=j.dir
+  return'<div class="gap-bar" style="background:'+clr+'">'+dir+' <span style="font-size:10px;opacity:.85">'+j.detail.join('·')+'</span></div>'
 }
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
@@ -903,24 +1031,6 @@ function buildDetail(s,rt,ta){
   var gc=s.isGoldenCross
   var bai=s.baiXiaoDays||0
   var sig=s.suggestion||'持有'
-  // 开盘方向分析
-  var _gapHtml=''
-  var _em=window._cachedSinaEMData||[]
-  var _gs=_em.find(function(x){return String(x.f12)===String(s.code)})
-  if(_gs&&_gs.f17){
-    var _gp=parseFloat(_gs.f2)||0,_gc=parseFloat(_gs.f3)||0
-    if(_gp&&_gc){
-      var _pv=_gp/(1+_gc/100)
-      var _gap=Math.round((parseFloat(_gs.f17)/_pv-1)*1000)/10
-      if(Math.abs(_gap)>=0.5){
-        var _dir=_gap>0?'高开↑ 注意冲高回落':'低开↓ 注意探底回升'
-        var _clr=_gap>0?'#ef4444':'#22c55e'
-        _gapHtml='<div class="gap-bar" style="background:'+_clr+'">集合竞价 '+_dir+' <span style="opacity:.7">('+(_gap>0?'+':'')+_gap+'%)</span></div>'
-      }else{
-        _gapHtml='<div class="gap-bar" style="background:#6b7280">集合竞价 平开 观望</div>'
-      }
-    }
-  }
   // 前端推导信号组合（后端旧缓存可能没有）
   var comb=s.signalCombination||''
   if(!comb){
@@ -933,17 +1043,11 @@ function buildDetail(s,rt,ta){
   var jiGou=s.jiGouActiveScore||0
   if(!jiGou) jiGou=Math.round((entry||0)/100*20*100)/100
 
-  // 开盘竞价分析
-  var gcGapHtml='',_em2=window._cachedSinaEMData||[]
-  var _gs2=_em2.find(function(x){return String(x.f12)===String(s.code)})
-  if(_gs2&&_gs2.f17){var _gp2=parseFloat(_gs2.f2)||0,_gc2=parseFloat(_gs2.f3)||0
-    if(_gp2&&_gc2){var _pv2=_gp2/(1+_gc2/100),_gap2=Math.round((parseFloat(_gs2.f17)/_pv2-1)*1000)/10
-      if(Math.abs(_gap2)>=0.5){var _d2=_gap2>0?'高开↑ 注意冲高回落':'低开↓ 注意探底回升',_c2=_gap2>0?'#ef4444':'#22c55e'
-        gcGapHtml='<div style="padding:0 12px 6px"><div class="gap-bar" style="background:'+_c2+'">集竞 '+_d2+' <span style="opacity:.7">('+(_gap2>0?'+':'')+_gap2+'%)</span></div></div>'
-      }else{gcGapHtml='<div style="padding:0 12px 6px"><div class="gap-bar" style="background:#6b7280">集竞 平开 观望</div></div>'}
-    }}
+  // 集合竞价综合研判（信号标签区）
+  var jd=auctionJudge(s.code,s)
+  var arHtml='<div style="padding:0 12px 6px">'+(jd?_getAuctionBar(s.code,s):'')+'</div>'
   // 信号标签
-  var tags=(gcGapHtml||'')+'<div class="signal-tags">'
+  var tags=arHtml+'<div class="signal-tags">'
     +'<span class="signal-tag" style="background:'+posTClr+'">'+posTag+' '+p.toFixed(0)+'%</span>'
     +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'金叉✓':'未金叉')+'</span>'
     +'<span class="signal-tag" style="background:#7c3aed">白消'+bai+'天</span>'
@@ -965,7 +1069,7 @@ function buildDetail(s,rt,ta){
   // 指标网格
   var mfClr=''
   var grid='<div style="padding:4px 12px 4px;font-size:12px;font-weight:600;color:#666">📊 技术指标</div><div class="indicator-grid">'
-    +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">¥'+price.toFixed(2)+'</div></div>'
+    +'<div class="indicator-item"><div class="label">实时价格</div><div class="value" style="color:'+chgClr+'">'+price.toFixed(2)+'</div></div>'
     +'<div class="indicator-item"><div class="label">涨跌幅</div><div class="value" style="color:'+chgClr+'">'+(chg>=0?'+':'')+chg.toFixed(2)+'%</div></div>'
     +'<div class="indicator-item"><div class="label">综合评分</div><div class="value '+(sc>=80?'green':sc>=50?'yellow':'')+'">'+sc+'/120</div></div>'
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
@@ -1075,7 +1179,7 @@ function renderList(){
     var chgT=(chg>=0?'+':'')+chg.toFixed(2)+'%'
     var card=document.createElement('div');card.className='stock-card'+(selectedIdx===i?' selected':'')
     card.onclick=function(){showDetail(i)}
-    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+_getGapHtml(s.code)+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
+    card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999;display:flex;align-items:center;gap:3px">'+s.code+_getGapHtml(s.code)+'<span id="auction-badge-'+i+'" style="font-size:9px;opacity:0.7"></span></div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
   })
 }
@@ -1140,6 +1244,18 @@ async function doScan(){
     startPriceRefresh(stocks)
     // 后台同步到缓存: 拉新浪实时行情+升级信号→覆写后端缓存
     backgroundSyncWithKline()
+    // 后台拉取集合竞价数据（top20综合研判）
+    fetchAuctionData(stocks.slice(0,20).map(function(s){return s.code}),5).then(function(){
+      // 更新扫描列表的竞价徽标
+      stocks.forEach(function(s,i){
+        var el=document.getElementById('auction-badge-'+i)
+        if(!el)return
+        var j=auctionJudge(s.code,s)
+        if(j){el.textContent=j.short
+          var m={neutral:'#6b7280',watch:'#eab308',buy:'#dc2626',buy_weak:'#059669',sell:'#22c55e',caution:'#ea580c'}
+          el.style.color=m[j.sig]||'#6b7280'}
+      })
+    })
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
