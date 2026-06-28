@@ -2,7 +2,6 @@ services:
   - type: web
     name: stock-screener
     env: node
-    buildCommand: cd server && npm install --include=dev && npm run build
     startCommand: cd server && node dist/main.js
     envVars:
       - key: DEFAULT_MAX_SLOTS
