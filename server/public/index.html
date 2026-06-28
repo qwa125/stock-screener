@@ -207,7 +207,7 @@ function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffse
 function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,deviceRegistered=false,clickedRegistration=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
+var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
 // 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
 var _lockedBuyPrice=null,_lockedBuyTime='',_lockedSellPrice=null,_lockedSellTime=''
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
@@ -274,21 +274,19 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 毛玻璃按钮：点击注册+扫描
+// 毛玻璃按钮：点击注册，后端决定放行还是拒绝
 async function handleBlurClick(){
-  if(deviceRegistered||clickedRegistration)return
-  clickedRegistration=true
+  if(deviceRegistered)return
   var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
   try{
     var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
     var regRes=await fetch("/api/access/register",{method:"POST",headers:regHeaders})
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
     if(regRes.status===429){showBlocked(true);return}
-    if(regRes.status!==200){clickedRegistration=false;showBlocked(false);return}
+    if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
-    // 不自动开始扫描，用户可手动点击扫描
   }catch(e){
-    clickedRegistration=false
-    var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
     $('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试'
   }
 }
