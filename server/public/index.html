@@ -295,11 +295,6 @@ async function handleBlurClick(){
       btn.disabled=false;btn.textContent='📊 点击扫描解锁'
       return
     }
-    if(regRes.status!==200){
-      $("blurMsg").innerHTML="⚠️ 服务器返回异常状态("+regRes.status+")，请刷新后重试"
-      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-      return
-    }
     console.log('✅ 设备注册成功, status='+regRes.status)
     localStorage.setItem('deviceRegistered','1')
     hideBlocked()
