@@ -4812,42 +4812,37 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
-    // debug: 检查绿峰红峰数据
-    console.log(`[debug] 300307: _greenValleys=${_greenValleys.length}, _redPeaks=${_redPeaks.length}`);
-    if (_greenValleys.length > 0) console.log(`[debug] 绿峰样例:`, JSON.stringify(_greenValleys.slice(0,3)));
-    if (_redPeaks.length > 0) console.log(`[debug] 红峰样例:`, JSON.stringify(_redPeaks.slice(0,3)));
-    // ─── 结合MACD红峰/绿峰+做T指标确定最佳买卖价格 ───
-    // 做T指标=通达信主力/散户低吸高抛信号
-    // 绿峰(到低点走平往上)+做T买入确认 → 最佳买入价（支撑区低吸）
-    // 红峰(到高点往下)+做T卖出确认 → 最佳卖出价（压力区高抛）
-    // ── 背离处理 ──
-    // 正常：大绿峰/大红峰+通达信确认 → 直接使用
-    // 背离：大绿峰/大红峰+通达信无确认 → 可能背离，检查第二大峰谷+通达信确认
+    // ─── 结合MACD红峰/绿峰确定最佳买卖价格 ───
+    // macd峰谷检测的是动量拐点：绿峰谷底=跌不动了，红峰峰顶=涨不动了
+    // 主力信号做质量确认（同向共振=信号更可靠），不作为主信号源
+    // 这样确保：买入后不继续深跌，卖出后不继续猛涨
     let bestBuyPrice = 0, bestBuyTime = '', bestSellPrice = 0, bestSellTime = '';
 
-    // 最佳买入: 按MACD柱值大小排序（大绿峰优先），找第一个有通达信确认的
+    // ─── 最佳买入: MACD绿峰谷底 + 主力确认 ───
     if (_greenValleys.length > 0) {
-      // 按|macdVal|从大到小排序（大绿峰优先）
+      // 按|macdVal|从大到小排序（大绿峰优先=质量更高）
       const sortedValleys = [..._greenValleys].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
       for (const gv of sortedValleys) {
-        // 做T确认: 附近(±5bar)有zhuliBuyPoints或MACD金叉
+        // 确认: 附近(±5bar)有主力低吸信号或MACD金叉
         const confirmedByZhuLi = zhuliBuyPoints.some(p => Math.abs(p.idx - gv.idx) <= 5);
         const confirmedByMacd = macdSignals.some(s => s.type === '金叉' && Math.abs(s.idx - gv.idx) <= 5);
         if (confirmedByZhuLi || confirmedByMacd) {
           bestBuyPrice = gv.price; bestBuyTime = gv.time;
-          break; // 找到有确认的（大绿峰有确认=正常，大绿峰无确认+小绿峰有确认=背离）
+          break;
         }
-        // 无确认则继续检查下一个峰谷（可能为背离情况）
       }
-      // 所有峰谷都无通达信确认 → 选最近的大绿峰（相对低点）
+      // 所有绿峰都无确认 → 选价格最低的绿峰（极端超卖=潜在底背离）
       if (!bestBuyPrice) {
-        // 取最近一个绿峰
-        const recent = _greenValleys[_greenValleys.length - 1];
-        bestBuyPrice = recent.price; bestBuyTime = recent.time;
+        const lowest = _greenValleys.reduce((a, b) => a.price < b.price ? a : b);
+        bestBuyPrice = lowest.price; bestBuyTime = lowest.time;
       }
+    } else if (zhuliBuyPoints.length > 0) {
+      // 无绿峰但有主力低吸 → 兜底（取价格最低的主力低吸点）
+      const lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
+      bestBuyPrice = lowest.price; bestBuyTime = lowest.time;
     }
 
-    // 最佳卖出: 按MACD柱值大小排序（大红峰优先），找第一个有通达信确认的
+    // ─── 最佳卖出: MACD红峰峰顶 + 主力确认 ───
     if (_redPeaks.length > 0) {
       const sortedPeaks = [..._redPeaks].sort((a, b) => Math.abs(b.macdVal) - Math.abs(a.macdVal));
       for (const rp of sortedPeaks) {
@@ -4859,45 +4854,32 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         }
       }
       if (!bestSellPrice) {
-        const recent = _redPeaks[_redPeaks.length - 1];
-        bestSellPrice = recent.price; bestSellTime = recent.time;
+        const highest = _redPeaks.reduce((a, b) => a.price > b.price ? a : b);
+        bestSellPrice = highest.price; bestSellTime = highest.time;
       }
+    } else if (zhuliSellPoints.length > 0) {
+      // 无红峰但有主力高抛 → 兜底（取价格最高的主力高抛点）
+      const highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
+      bestSellPrice = highest.price; bestSellTime = highest.time;
     }
 
-    // ─── 只保留当天数据（日内分析不跨日） ───
+    // ─── 格式化为"HH:MM"时间并构建建议 ───
     const _td = minData[len - 1]?.time?.slice(0, 10) || '';
     let todaySugs: any[] = [];
     if (_td) {
-      // 从当日主力低吸/高抛信号中找最佳买卖点（1次买入+1次卖出）
-      const _zhuliBuyToday = zhuliBuyPoints.filter(s => s.time?.startsWith(_td)).sort((a,b) => a.price-b.price);
-      const _zhuliSellToday = zhuliSellPoints.filter(s => s.time?.startsWith(_td)).sort((a,b) => b.price-a.price);
-      const _tG = _greenValleys.filter(v => v.time?.startsWith(_td));
-      const _tR = _redPeaks.filter(p => p.time?.startsWith(_td));
-      // 最佳买入: 主力低吸中价格最低的（大绿峰附近的最佳低吸点）
-      if (_zhuliBuyToday.length > 0) {
-        bestBuyPrice = _zhuliBuyToday[0].price; bestBuyTime = _zhuliBuyToday[0].time.slice(11,16);
-      } else if (_tG.length > 0) {
-        const _lowest = _tG.reduce((a,b) => a.price<b.price?a:b); bestBuyPrice = _lowest.price; bestBuyTime = _lowest.time.slice(11,16);
-      }
-      // 最佳卖出: 主力高抛中价格最高的（大红峰附近的最佳高抛点）
-      if (_zhuliSellToday.length > 0) {
-        bestSellPrice = _zhuliSellToday[0].price; bestSellTime = _zhuliSellToday[0].time.slice(11,16);
-      } else if (_tR.length > 0) {
-        const _highest = _tR.reduce((a,b) => a.price>b.price?a:b); bestSellPrice = _highest.price; bestSellTime = _highest.time.slice(11,16);
-      }
-      // 构建建议：只保留经背离修正后的最佳买卖点（每天最多1买+1卖）
       suggestions.length = 0;
       if (bestBuyPrice > 0 && bestBuyTime) {
-        suggestions.push({ time: bestBuyTime, idx: 0, price: bestBuyPrice, type: '买入点' as const, source: '最佳买入' });
+        const t = bestBuyTime.includes(':') ? bestBuyTime.slice(11, 16) : bestBuyTime;
+        suggestions.push({ time: t, idx: 0, price: bestBuyPrice, type: '买入点' as const, source: '最佳买入' });
       }
       if (bestSellPrice > 0 && bestSellTime) {
-        suggestions.push({ time: bestSellTime, idx: 0, price: bestSellPrice, type: '卖出点' as const, source: '最佳卖出' });
+        const t = bestSellTime.includes(':') ? bestSellTime.slice(11, 16) : bestSellTime;
+        suggestions.push({ time: t, idx: 0, price: bestSellPrice, type: '卖出点' as const, source: '最佳卖出' });
       }
       todaySugs = [...suggestions];
     }
     if (todaySugs.length === 0) {
       todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time.slice(11, 16) : s.time }));
-      // fallback: 无当天建议，清空最佳价（避免旧日期泄漏）
       if (!bestBuyTime || bestBuyTime.includes('-')) { bestBuyPrice = 0; bestBuyTime = ''; }
       if (!bestSellTime || bestSellTime.includes('-')) { bestSellPrice = 0; bestSellTime = ''; }
     }
