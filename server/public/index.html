@@ -410,50 +410,69 @@ async function autoLightScan(){
   _autoScanning=true
   try{
     setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
-    // ① 沪市按涨跌幅排序，取前10页(1000只) → 过滤60主板
-    var shStocks=[]
-    for(var p=1;p<=10;p++){
-      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a')
-        .then(function(r){return r.text()})
-      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-      try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){
-        var m=src.match(/\[[\s\S]*\]/)
-        if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}
-      }
-    }
-    // ② 深市按涨跌幅排序，取前10页(1000只) → 过滤00主板+30创业板
-    var szStocks=[]
-    for(var p=1;p<=10;p++){
-      var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a')
-        .then(function(r){return r.text()})
-      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-      try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){
-        var m=src.match(/\[[\s\S]*\]/)
-        if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}
-      }
-    }
-    // ③ 筛选主板前500 + 创业板前500
-    var mainBoard=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
-    var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
-    var gem=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
-    mainBoard=mainBoard.concat(sz00).slice(0,500)
-    gem=gem.slice(0,500)
-    var totalList=mainBoard.concat(gem)
-    if(!totalList.length)throw new Error('未获取到热门股票')
-    setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
-    // 保存Sina实时行情给doFullRescan复用（避免二次拉取失败导致机会区为空）
-    // 保存全部2000只（shStocks+szStocks），doFullRescan会自行isMainBoard/isGEM过滤
+    // ★ 首选：东方财富 clist API（单次调用，pz=5000 全量返回，按涨跌幅排序）
+    var emAll=[]
     try{
-      var _se=[]
-      var _allStocks=shStocks.concat(szStocks)
-      for(var _si=0;_si<_allStocks.length;_si++){
-        var _sc=_allStocks[_si],_c=String(_sc.code||'')
-        if(!_c)continue
-        _se.push({f12:_c,f14:_sc.name||'',f2:parseFloat(_sc.trade)||0,f3:parseFloat(_sc.changepercent)||0,f15:parseFloat(_sc.high)||0,f16:parseFloat(_sc.low)||0})
+      var emr=await fetchWithRetry('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3,f15,f16&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048',2)
+      var emd=await emr.json()
+      if(emd&&emd.data&&emd.data.diff){
+        emAll=emd.data.diff.map(function(s){return{code:String(s.f12||''),name:(s.f14||'').trim(),trade:s.f2,changepercent:s.f3,high:s.f15,low:s.f16}}).filter(function(s){return s.code&&s.name&&!s.name.startsWith('*')&&!s.name.startsWith('ST')&&!s.name.startsWith('N')&&!s.name.startsWith('C')&&!s.code.startsWith('688')&&!s.code.startsWith('689')&&!s.code.startsWith('4')&&!s.code.startsWith('8')&&!s.code.startsWith('920')})
       }
-      window._cachedSinaEMData=_se
-      console.log('💾 缓存Sina实时行情给doFullRescan复用:',_se.length,'只')
     }catch(e){}
+    if(emAll.length>=100){
+      var mainBoard=emAll.filter(function(s){return s.code.startsWith('60')||s.code.startsWith('00')}).slice(0,500)
+      var gem=emAll.filter(function(s){return s.code.startsWith('30')}).slice(0,500)
+      var totalList=mainBoard.concat(gem)
+      // 保存全量EM数据给doFullRescan复用
+      try{window._cachedSinaEMData=emAll.map(function(s){return{f12:s.code,f14:s.name,f2:s.trade,f3:s.changepercent,f15:s.high,f16:s.low}})}catch(e){}
+      console.log('📦 东财全量排行 '+emAll.length+' 只, 筛选主板 '+mainBoard.length+' + 创业板 '+gem.length)
+    }
+    // ★ 备用：Sina排行榜（沪市10页+深市10页，每页100只）
+    if(!totalList||!totalList.length){
+      setStatus('⏳ 轻量扫描: 备用Sina排行榜...')
+      // ① 沪市按涨跌幅排序，取前10页(1000只) → 过滤60主板
+      var shStocks=[]
+      for(var p=1;p<=10;p++){
+        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a')
+          .then(function(r){return r.text()})
+        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+        try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){
+          var m=src.match(/\[[\s\S]*\]/)
+          if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}
+        }
+      }
+      // ② 深市按涨跌幅排序，取前10页(1000只) → 过滤00主板+30创业板
+      var szStocks=[]
+      for(var p=1;p<=10;p++){
+        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a')
+          .then(function(r){return r.text()})
+        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+        try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){
+          var m=src.match(/\[[\s\S]*\]/)
+          if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}
+        }
+      }
+      var mainBoard=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
+      var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
+      var gem=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
+      mainBoard=mainBoard.concat(sz00).slice(0,500)
+      gem=gem.slice(0,500)
+      var totalList=mainBoard.concat(gem)
+      if(!totalList.length)throw new Error('未获取到热门股票')
+      // 保存Sina实时行情给doFullRescan复用
+      try{
+        var _se=[]
+        var _allStocks=shStocks.concat(szStocks)
+        for(var _si=0;_si<_allStocks.length;_si++){
+          var _sc=_allStocks[_si],_c=String(_sc.code||'')
+          if(!_c)continue
+          _se.push({f12:_c,f14:_sc.name||'',f2:parseFloat(_sc.trade)||0,f3:parseFloat(_sc.changepercent)||0,f15:parseFloat(_sc.high)||0,f16:parseFloat(_sc.low)||0})
+        }
+        window._cachedSinaEMData=_se
+        console.log('💾 缓存Sina实时行情给doFullRescan复用:',_se.length,'只')
+      }catch(e){}
+    }
+    setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
     // ④ 分批抓K线推送后端（每批20只，间隔200ms）
     var done=0,total=totalList.length
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
