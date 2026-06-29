@@ -301,6 +301,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     runForecastBacktest(): Promise<any>;
     technicalAnalysis(code: string): Promise<any>;
     intradayAnalysis(code: string): Promise<any>;
+    doIntradayAnalysis(code: string, minData: any[]): Promise<any>;
     private fetchMinuteKLine;
     fetchAuctionTrend(code: string): Promise<any[]>;
 }

@@ -4641,6 +4641,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
    */
   async intradayAnalysis(code: string): Promise<any> {
     const minData = await this.fetchMinuteKLine(code, 1); // 1分钟K线
+    return this.doIntradayAnalysis(code, minData);
+  }
+
+  /** 接受前端传入的分钟K线数据进行分析（前端直调East Money，回避后端跨境慢速） */
+  async doIntradayAnalysis(code: string, minData: any[]): Promise<any> {
     if (!minData || minData.length < 50) {
       return {
         code,

@@ -887,6 +887,22 @@ export class GemScreenerController {
     }
   }
 
+  @Post('intraday-analyze')
+  @SkipAccessLimit()
+  async intradayAnalyze(@Body() body: { code: string; kline: any[]; price?: number }) {
+    if (!body.code) return { code: 400, msg: '缺少股票代码' };
+    if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 50) {
+      return { code: 200, msg: '分钟K线数据不足', data: { status: '数据不足', suggestions: [] } };
+    }
+    try {
+      const result = await this.gemScreener.doIntradayAnalysis(body.code, body.kline);
+      return { code: 200, msg: 'success', data: result };
+    } catch (e) {
+      this.logger.error(`日内分析失败: ${(e as Error).message}`);
+      return { code: 500, msg: `日内分析失败: ${e.message}`, data: null };
+    }
+  }
+
   @Get('backtest')
   @SkipAccessLimit()
   async backtest() {

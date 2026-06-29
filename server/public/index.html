@@ -700,11 +700,20 @@ async function fetchAuctionData(codes,limit){
     var batch=codes.slice(i,i+limit)
     var promises=batch.map(async function(code){
       try{
-        var r=await fetch(API+'/gem/proxy/stock-detail?code='+code+'&_='+Date.now(),{signal:timeoutSignal(5000)})
+        var secId2=code>='600000'?'1.':'0.'
+        var emUrl='https://push2.eastmoney.com/api/qt/stock/get?secid='+secId2+code+'&fields=f50,f257,f258,f259,f260&ut=bd1d9ddb04089700cf9c27f6f7426281'
+        var r=await fetch(emUrl,{mode:'cors',signal:timeoutSignal(8000)})
         var d=await r.json()
-        if(d.code===200&&d.data){
-          var a=d.data
-          // gap从已有的Sina缓存算，不用依赖详情API
+        var dd=d&&d.data
+        if(dd){
+          var a={
+            volumeRatio:dd.f50?Math.round(dd.f50/100*10)/10:0,
+            auctionVolume:dd.f257,
+            auctionAmount:dd.f258,
+            auctionUnmatched:dd.f259,
+            auctionDirection:dd.f260
+          }
+          // gap从已有的Sina缓存算
           var _em=window._cachedSinaEMData||[]
           var _s=_em.find(function(x){return String(x.f12)===String(code)})
           if(_s&&_s.f17){
@@ -821,10 +830,33 @@ function _getGapHtml(code){
 /** 渲染集合竞价走势迷你图（SVG曲线） */
 async function renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice){
   try{
-    var r=await fetch('/api/gem/auction-trend?code='+code)
+    var secId=code>='600000'?'1.':'0.'
+    var emUrl='https://push2.eastmoney.com/api/qt/stock/trends2/get?secid='+secId+code+'&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&ut=bd1d9ddb04089700cf9c27f6f7426281&ndays=1&iscr=1'
+    var r=await fetch(emUrl,{mode:'cors',signal:AbortSignal.timeout(10000)})
     var d=await r.json()
-    var pts=d&&d.data||[]
-    if(!pts||pts.length<2){
+    var trends=d&&d.data&&d.data.trends||[]
+    var prePrice=d&&d.data&&d.data.prePrice||0
+    if(!trends||!Array.isArray(trends)||trends.length<2){
+      var el=$('aucTrend_'+code)
+      if(el)el.innerHTML='<span style="color:#9ca3af">暂无竞价走势数据</span>'
+      return
+    }
+    // 过滤9:15~9:25 + 解析
+    var pts=trends.filter(function(t){
+      var ts=t.split(',')[0]
+      var tm=ts.indexOf(' ')>0?ts.split(' ')[1].replace(/:/g,''):ts
+      return tm>='0915'&&tm<='0925'
+    }).map(function(t){
+      var p=t.split(',')
+      return{
+        time:p[0],
+        price:parseFloat(p[1])||0,
+        avgPrice:parseFloat(p[2])||0,
+        volume:parseFloat(p[3])||0,
+        amount:parseFloat(p[4])||0,
+        change:prePrice>0?((parseFloat(p[1])||0)-prePrice)/prePrice*100:0
+      }
+    })
       var el=$('aucTrend_'+code)
       if(el)el.innerHTML='<span style="color:#9ca3af">暂无竞价走势数据</span>'
       return
@@ -2040,10 +2072,26 @@ async function fetchIntraday(code){
   if(_intradayFetching[code])return null
   _intradayFetching[code]=true
   try{
-    var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},15000)
-    var r=await fetch('/api/gem/intraday-analysis?code='+code,{headers:{'X-Device-Id':getOrCreateDeviceId()},signal:ac.signal});clearTimeout(tmr)
-    var d=await r.json()
-    return d&&d.data||null
+    // 前端直调East Money拉取分钟K线（绕过后端跨境代理）
+    var secId=code>='600000'?'1.':'0.'
+    var mkUrl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+secId+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=1&fqt=1&end=20500101&lmt=240'
+    var mkRes=await fetch(mkUrl,{mode:'cors',signal:AbortSignal.timeout(12000)})
+    var mkJson=await mkRes.json()
+    var rawKlines=mkJson&&mkJson.data&&mkJson.data.klines||[]
+    if(!rawKlines||rawKlines.length<50)return null
+    // 解析K线数据
+    var klineData=rawKlines.map(function(k){
+      var p=k.split(',')
+      return{time:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
+    })
+    // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
+    var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},10000)
+    var r2=await fetch('/api/gem/intraday-analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},body:JSON.stringify({code,kline:klineData}),signal:ac2.signal})
+    clearTimeout(tmr2)
+    var d2=await r2.json()
+    window._intradayKlineCache=window._intradayKlineCache||{}
+    window._intradayKlineCache[code]=klineData
+    return d2&&d2.data||null
   }catch(e){return null}finally{_intradayFetching[code]=false}
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）

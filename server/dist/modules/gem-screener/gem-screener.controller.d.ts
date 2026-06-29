@@ -402,6 +402,19 @@ export declare class GemScreenerController {
         msg: string;
         data: null;
     }>;
+    intradayAnalyze(body: {
+        code: string;
+        kline: any[];
+        price?: number;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: any;
+    }>;
     backtest(): Promise<{
         code: number;
         msg: string;

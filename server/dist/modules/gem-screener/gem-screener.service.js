@@ -4032,6 +4032,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async intradayAnalysis(code) {
         const minData = await this.fetchMinuteKLine(code, 1);
+        return this.doIntradayAnalysis(code, minData);
+    }
+    async doIntradayAnalysis(code, minData) {
         if (!minData || minData.length < 50) {
             return {
                 code,

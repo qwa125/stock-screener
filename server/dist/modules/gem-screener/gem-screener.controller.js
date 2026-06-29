@@ -761,6 +761,21 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
         }
     }
+    async intradayAnalyze(body) {
+        if (!body.code)
+            return { code: 400, msg: '缺少股票代码' };
+        if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 50) {
+            return { code: 200, msg: '分钟K线数据不足', data: { status: '数据不足', suggestions: [] } };
+        }
+        try {
+            const result = await this.gemScreener.doIntradayAnalysis(body.code, body.kline);
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            this.logger.error(`日内分析失败: ${e.message}`);
+            return { code: 500, msg: `日内分析失败: ${e.message}`, data: null };
+        }
+    }
     async backtest() {
         try {
             const result = await this.gemScreener.runBacktest();
@@ -1118,6 +1133,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
+__decorate([
+    (0, common_1.Post)('intraday-analyze'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "intradayAnalyze", null);
 __decorate([
     (0, common_1.Get)('backtest'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
