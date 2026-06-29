@@ -1154,9 +1154,11 @@ function showDetail(i){
 // ★ 根据实时涨跌幅动态更新详情页操作建议（每2秒轮询）
 function _refreshDetailSig(code){
   try{
+    // must wait for _baseSig_ init (raw backend signal) before updating
+    var _baseSig=window['_baseSig_'+code]
+    if(!_baseSig)return
     var _rp=realtimePrices[code]||{}
     var _chgP=_rp.chgP||0
-    var _baseSig=window['_baseSig_'+code]||'持有'
     var _SELL=["减仓","卖出","不要介入"]
     var _PRI=["重仓买入","买入","轻仓买入","持有","减仓","卖出","不要介入"]
     var _newSig=null
