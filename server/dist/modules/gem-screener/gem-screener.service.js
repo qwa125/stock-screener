@@ -623,6 +623,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         item.intradayHigh = upgraded.intradayHigh;
                     if (upgraded.intradayLow !== undefined)
                         item.intradayLow = upgraded.intradayLow;
+                    if (upgraded.auction !== undefined)
+                        item.auction = upgraded.auction;
                 }
             }
             if (mainBoardChanged)

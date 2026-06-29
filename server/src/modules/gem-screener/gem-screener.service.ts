@@ -82,6 +82,8 @@ export interface OpportunityStock {
   chipPeakPosition?: 'low' | 'mid' | 'high';
   /** 筹码形态: single_peak=单峰集中, double_peak=双峰, dispersed=分散 */
   chipPattern?: 'single_peak' | 'double_peak' | 'dispersed';
+  /** 集合竞价数据 */
+  auction?: any;
   /** 独立趋势预测 */
   trendPrediction?: {
     direction: string;
@@ -752,6 +754,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
           if (upgraded.ma10 !== undefined) item.ma10 = upgraded.ma10;
           if (upgraded.intradayHigh !== undefined) item.intradayHigh = upgraded.intradayHigh;
           if (upgraded.intradayLow !== undefined) item.intradayLow = upgraded.intradayLow;
+          if (upgraded.auction !== undefined) item.auction = upgraded.auction;
         }
       }
       if (mainBoardChanged) this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));

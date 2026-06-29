@@ -38,6 +38,7 @@ export interface OpportunityStock {
     chipConcentration90?: number;
     chipPeakPosition?: 'low' | 'mid' | 'high';
     chipPattern?: 'single_peak' | 'double_peak' | 'dispersed';
+    auction?: any;
     trendPrediction?: {
         direction: string;
         score: number;
