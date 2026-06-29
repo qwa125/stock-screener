@@ -1,4 +1,4 @@
-<!-- Core v20250628-inline6 -->
+<!-- Core v20250628-inline7 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -127,7 +127,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v6</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v7</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v6</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v7</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -1059,7 +1059,7 @@ function showDetail(i){
     fetchRealtime([s.code]).then(function(fr){
       var nr=fr&&fr[s.code]
       if(nr&&nr.high&&nr.low){
-        da.style.minHeight='';da.innerHTML=buildDetail(s,nr)
+        da.style.minHeight='';da.innerHTML=buildDetail(s,nr,s);refreshDetailPrice(s.code,nr.low,nr.high,nr.price)
       }
     }).catch(function(){})
   }
@@ -1110,12 +1110,16 @@ function showDetail(i){
         if(ek3.ok){var ed3=await ek3.json();if(ed3&&ed3.data&&ed3.data.klines&&ed3.data.klines.length>=5){kdata=ed3.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[detail] eastmoney3 kline got '+kdata.length+' bars')}}
       }catch(e){}
       // 再分析
-      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
+      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,name:s.name,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
       var aj=await ar.json()
       var ad=aj.data||aj
       // ad 可能是数组 {code:200,data:[opp]} → 取第一个元素
       var stockData=ad&&ad.suggestion?ad:(Array.isArray(ad)&&ad.length>0?ad[0]:null)
       if(stockData&&stockData.suggestion){
+        // ★ 从原始缓存数据补齐stockData缺失的字段（非交易时段rt可能为空）
+        if(s.intradayHigh)stockData.intradayHigh=s.intradayHigh
+        if(s.intradayLow)stockData.intradayLow=s.intradayLow
+        if(s.name&&!stockData.name)stockData.name=s.name
         // ★ 等待竞价数据就绪后再渲染（避免竞价模块缺失）
         if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
         da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
@@ -1222,15 +1226,15 @@ function buildDetail(s,rt,ta){
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
     +gridChipLine(s,entry)
-    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):'-')+'</div></div>'
-    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):s.intradayHigh>0?s.intradayHigh.toFixed(2):'-')+'</div></div>'
+    +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):s.intradayLow>0?s.intradayLow.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
   // 🕐 日内介入参考（合并技术分析与日内MACD做T信号）
   var entryHtml=''
   var scTag='', bbHtml='', bestEntryHtml=''
-  if(ta&&ta.entryScore!=null){
-    var sc=ta.entryScore
+  if(ta&&(ta.entryScore!=null||ta.entryTiming!=null)){
+    var sc=ta.entryScore!=null?ta.entryScore:ta.entryTiming
     var scClr=sc>=75?'#16a34a':sc>=55?'#ca8a04':sc>=35?'#6b7280':'#dc2626'
     var scLbl=sc>=75?'极佳介入点 ⭐':sc>=55?'良好介入点 ✓':sc>=35?'观望区 −':'不建议介入 ✗'
     var bb=ta.bollinger
