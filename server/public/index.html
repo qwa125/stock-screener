@@ -813,7 +813,7 @@ function _getGapHtml(code){
 }
 
 /** 渲染集合竞价走势迷你图（SVG曲线） */
-async function renderAuctionTrend(code,dayLow,dayHigh,lastPrice){
+async function renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice){
   try{
     var r=await fetch('/api/gem/auction-trend?code='+code)
     var d=await r.json()
@@ -2048,13 +2048,13 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
           h+='</div>'
         }
         // 竞价走势占位
-        h+='<div id="aucTrendF_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+        h+='<div id="aucTrend_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
         h+='</div>'
         // 异步加载走势曲线
-        renderAuctionTrend(code,dayLow,dayHigh,lastPriceH)
+        renderAuctionTrend(code,dayLow2,dayHigh2,lastPriceH)
       }
       h+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
-      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围'+(isCallAuction()?'（实时报价）':'（基于缓存数据）')+'</div>'
+      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围'+(isTH()?'（实时报价）':'（基于缓存数据）')+'</div>'
       h+='<div style="display:flex;justify-content:space-between">'
       h+='<span style="color:#16a34a;font-weight:600">📝 买入参考: '+(buyLow>0?buyLow.toFixed(2):'-')+'~'+(buyHigh>0?buyHigh.toFixed(2):'-')+'</span>'
       h+='<span style="color:#ef4444;font-weight:600">📝 卖出参考: '+(sellLow>0?sellLow.toFixed(2):'-')+'~'+(sellHigh>0?sellHigh.toFixed(2):'-')+'</span>'
@@ -2172,7 +2172,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
     html+='<div id="aucTrend_'+code+'" style="margin-top:4px;min-height:50px;font-size:10px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
     html+='</div>'
     // 异步拉取竞价走势曲线（不阻塞渲染）
-    renderAuctionTrend(code,dayLow,dayHigh,lastPrice)
+    renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice)
   }
   // 📊 日内价格位置条形图(最高价-最低价+三角形箭头标记当前价)
   var pricePosPercent=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPrice-dayLow)/(dayHigh-dayLow)*100)):50
