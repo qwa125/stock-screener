@@ -1,4 +1,4 @@
-<!-- Core v20250628-inline10 -->
+<!-- Core v20250628-inline11 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -127,7 +127,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v12</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v13</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v12</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v13</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -465,7 +465,14 @@ async function autoLightScan(){
     }
     if(!totalList||!totalList.length)throw new Error('未获取到热门股票')
     setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
-    // ④ 分批抓K线推送后端（每批20只，间隔200ms）
+    // ④ 扫描前拉取后端缓存清单，跳过已有分析结果的股（只更新价格）
+    window._cachedStockSet=new Set()
+    try{
+      var _cr=await fetch(API+'/gem/cache-all',{signal:8000}).then(function(r){return r.json()})
+      if(_cr&&_cr.data&&_cr.data.stocks&&_cr.data.stocks.length) _cr.data.stocks.forEach(function(s){if(s.code)window._cachedStockSet.add(s.code)})
+      console.log('[scan] cached stocks:',window._cachedStockSet.size)
+    }catch(e){}
+    // ⑤ 分批抓K线+分析（每批20只，间隔200ms）
     var done=0,total=totalList.length
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
     if(prog)prog.style.display='block'
@@ -481,8 +488,8 @@ async function autoLightScan(){
     }
     if(txt)txt.textContent='轻量扫描完成!'
     if(bar)bar.style.width='100%'
-    // ⑤ 前端读取缓存→按实时涨跌幅升级→写回后端（缓存即前端计算后的最终信号）
-    // ⑥ 刷新机会区（从后端读取已升级的最终缓存）
+    // ⑥ 前端读取缓存→按实时涨跌幅升级→写回后端（缓存即前端计算后的最终信号）
+    // ⑦ 刷新机会区（从后端读取已升级的最终缓存）
     await doFullRescan()
     setStatus('✅ 轻量扫描 '+total+' 只完成，缓存已更新 | '+new Date().toLocaleTimeString())
   }catch(e){
@@ -583,14 +590,18 @@ async function fetchKlineAndAnalyze(s){
       }catch(e){console.warn('东财重试也失败('+code+'):',e.message)}
     }
 
-    // 始终推送基础数据到后端（含或不含K线）
-    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
-    if(klines&&klines.length>=5)payload.kline=klines
-    await fetch(API+'/gem/analyze',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload)
-    }).then(function(r){return r.json()})
+    // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
+    if(window._cachedStockSet&&window._cachedStockSet.has(code)){
+      console.log('[scan] skip backend',code,'(cached)')
+    }else{
+      var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
+      if(klines&&klines.length>=5)payload.kline=klines
+      await fetch(API+'/gem/analyze',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      }).then(function(r){return r.json()})
+    }
   }catch(e){/* 静默跳过 */}
 }
 function setStatus(s){$('status').textContent=s}
