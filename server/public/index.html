@@ -913,9 +913,22 @@ function showDetail(i){
   // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
   if(!isTH()&&s.suggestion){
     var _hi=rt.high||s.intradayHigh||0,_lo=rt.low||s.intradayLow||0,_pr=rt.price||s.currentPrice||0
-    console.log('[showDetail] 非交易时段 startIntradayRefresh',s.code,_hi,_lo,_pr)
-    startIntradayRefresh(s.code,_hi,_lo,_pr)
-    console.log('[showDetail] 非交易时段 startIntradayRefresh 完成，intradayMacd exists:',!!$('intradayMacd'))
+    // 同步渲染日内参考（不走 refreshDetailPrice，避免异步丢失）
+    if(_pr>0&&_lo>0&&_hi>0&&_lo<_hi){
+      var _dl=_lo,_dh=_hi,_gap=_dh-_dl,_pct=_dh>_dl?Math.max(0,Math.min(100,(Math.max(0,Math.min(_pr,_dh))-_dl)/_gap*100)):50
+      var _buyLow=_dl,_buyHigh=_dl+_gap*0.15,_sellLow=_dh-_gap*0.15,_sellHigh=_dh
+      var _h='<div style="font-size:13px;text-align:left">'
+      _h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:4px;font-size:11px;color:#92400e;margin-bottom:6px">\u{1F550} 非交易时段 · 基于缓存数据</div>'
+      _h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:2px"><span>最低 '+_dl.toFixed(2)+'</span><span>当前 '+_pr.toFixed(2)+'</span><span>最高 '+_dh.toFixed(2)+'</span></div>'
+      _h+='<div style="position:relative;height:16px;background:linear-gradient(to right,#22c55e,#eab308,#ef4444);border-radius:8px;margin:4px 0"><div style="position:absolute;left:'+_pct.toFixed(0)+'%;top:-2px;width:4px;height:20px;background:#1f2937;border-radius:2px"></div></div>'
+      _h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:6px"><span>\u2B06 价格位置 '+_pct.toFixed(0)+'%</span><span>支撑区</span><span>压力区</span></div>'
+      _h+='<div style="padding:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-size:11px"><div style="font-weight:500;color:#16a34a;margin-bottom:4px">\u{1F4CB} 挂单参考范围（基于缓存数据）</div>'
+      _h+='<div style="color:#374151">\u{1F4DD} 买入参考: '+_buyLow.toFixed(2)+'~'+_buyHigh.toFixed(2)+'</div>'
+      _h+='<div style="color:#374151;margin-top:2px">\u{1F4DD} 卖出参考: '+_sellLow.toFixed(2)+'~'+_sellHigh.toFixed(2)+'</div></div></div>'
+      var _el=$('intradayMacd');if(_el)_el.innerHTML=_h
+    }else{
+      var _el=$('intradayMacd');if(_el)_el.innerHTML='<div style="padding:8px;text-align:center;font-size:11px;color:#9ca3af">暂无日内参考数据（非交易时段）</div>'
+    }
     return
   }
   // 交易时段：若实时数据缺少高低价，异步补拉一份
