@@ -1,4 +1,4 @@
-<!-- Core v20250628-inline4 -->
+<!-- Core v20250628-inline6 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -127,7 +127,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v2</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v6</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v5</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v6</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -1050,7 +1050,7 @@ function showDetail(i){
   if(!window._auctionDataCache||!window._auctionDataCache[s.code])fetchAuctionData([s.code],5)
   var da=$('detailArea')
   da.style.display='block'
-  da.style.minHeight='';da.innerHTML=buildDetail(s,rt)
+  da.style.minHeight='';da.innerHTML=buildDetail(s,rt,s)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
   // 立即启动日内参考刷新（实时价格+买卖信号），同时异步拉K线分析
@@ -2099,13 +2099,26 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   // ★ 取数据：交易时段实时拉取，非交易时段使用冻结缓存（无缓存则拉取一次后冻结）
   var ia=analysisData
   if(!ia){
-    // 非交易时段：优先使用冻结缓存，无缓存则拉取一次后冻结
+    async function _fetchIA(code){
+      // 若已有其他 fetch 正在拉取，等待它填充缓存（最多等20秒）
+      if(_intradayFetching[code]){
+        for(var w=0;w<40;w++){
+          await new Promise(function(r){setTimeout(r,500)})
+          var cached=window._frozenIA[code]
+          if(cached&&cached.currentPrice&&cached.suggestions&&cached.suggestions.length>0)
+            return cached
+        }
+      }
+      // 缓存等待超时或无并发任务 → 亲自拉取
+      var res=await fetchIntraday(code)
+      if(res&&res.currentPrice)window._frozenIA[code]=res
+      return res||null
+    }
     if(!isTH()){
+      // 非交易时段：优先使用冻结缓存，无缓存则拉取一次（含等待并发）后冻结
       ia=window._frozenIA[code]||null
       if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
-        // 非交易时段无缓存 → 拉取一次并冻结
-        ia=await fetchIntraday(code)
-        if(ia&&ia.currentPrice)window._frozenIA[code]=ia
+        ia=await _fetchIA(code)
       }
     }else{
       ia=await fetchIntraday(code)
@@ -2364,6 +2377,7 @@ async function doSearch(){
       suggestion: localStock?localStock.suggestion:'查找中…',
       score: localStock?localStock.score:0,
       entryTiming: localStock?localStock.entryTiming:0,
+      entryScore: localStock?localStock.entryScore:0,
       pricePosition: localStock?localStock.pricePosition:0,
       safetyScore: localStock?localStock.safetyScore:0,
       isGoldenCross: localStock?localStock.isGoldenCross:false,
@@ -2372,7 +2386,8 @@ async function doSearch(){
       jiGouActiveScore: localStock?localStock.jiGouActiveScore:0,
       chipAnalysis: localStock?localStock.chipAnalysis:null,
       forecast1_2Day: localStock?localStock.forecast1_2Day:null,
-      mainForceInflow: localStock?localStock.mainForceInflow:0
+      mainForceInflow: localStock?localStock.mainForceInflow:0,
+      reasoning: localStock?localStock.reasoning:null
     }
     da.style.minHeight='auto';da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">🔍 搜索 '+stockName+' ('+stockCode+') — ⏳ 正在分析该股票……</div>'
     scrollTo(0,da.offsetTop-80)
