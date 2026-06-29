@@ -807,6 +807,18 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: null };
         }
     }
+    async auctionTrend(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const data = await this.gemScreener.fetchAuctionTrend(code);
+            return { code: 200, msg: 'success', data };
+        }
+        catch (e) {
+            this.logger.warn(`获取竞价走势失败 ${code}: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -1143,6 +1155,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "intradayAnalysis", null);
+__decorate([
+    (0, common_1.Get)('auction-trend'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "auctionTrend", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

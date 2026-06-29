@@ -949,4 +949,21 @@ export class GemScreenerController {
       return { code: 500, msg: e.message, data: null };
     }
   }
+
+  /**
+   * 集合竞价走势数据（9:15-9:25 tick级价位曲线）
+   * GET /api/gem/auction-trend?code=603200
+   */
+  @Get('auction-trend')
+  @SkipAccessLimit()
+  async auctionTrend(@Query('code') code: string) {
+    if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    try {
+      const data = await this.gemScreener.fetchAuctionTrend(code);
+      return { code: 200, msg: 'success', data };
+    } catch (e) {
+      this.logger.warn(`获取竞价走势失败 ${code}: ${(e as Error).message}`);
+      return { code: 500, msg: e.message, data: null };
+    }
+  }
 }

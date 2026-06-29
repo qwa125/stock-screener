@@ -4319,6 +4319,42 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return [];
         }
     }
+    async fetchAuctionTrend(code) {
+        try {
+            const secId = (code.startsWith('6') || code.startsWith('68')) ? '1.' : '0.';
+            const url = `https://push2.eastmoney.com/api/qt/stock/trends2/get?secid=${secId}${code}&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&ut=bd1d9ddb04089700cf9c27f6f7426281&ndays=1&iscr=1`;
+            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!resp.ok)
+                return [];
+            const json = await resp.json();
+            const trends = json?.data?.trends;
+            if (!trends || !Array.isArray(trends))
+                return [];
+            const prePrice = json.data.prePrice || 0;
+            const auction = trends.filter(t => {
+                const time = t.split(',')[0];
+                return time >= '0915' && time <= '0925';
+            });
+            return auction.map(t => {
+                const p = t.split(',');
+                const price = parseFloat(p[1]) || 0;
+                const volume = parseFloat(p[3]) || 0;
+                const amount = parseFloat(p[4]) || 0;
+                return {
+                    time: p[0],
+                    price,
+                    avgPrice: parseFloat(p[2]) || 0,
+                    volume,
+                    amount,
+                    change: prePrice > 0 ? ((price - prePrice) / prePrice * 100) : 0,
+                };
+            });
+        }
+        catch (e) {
+            this.logger.warn(`获取竞价走势失败 ${code}: ${e.message}`);
+            return [];
+        }
+    }
 };
 exports.GemScreenerService = GemScreenerService;
 exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decorate([

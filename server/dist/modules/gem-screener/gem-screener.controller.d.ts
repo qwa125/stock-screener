@@ -442,4 +442,13 @@ export declare class GemScreenerController {
         msg: any;
         data: null;
     }>;
+    auctionTrend(code: string): Promise<{
+        code: number;
+        msg: string;
+        data: any[];
+    } | {
+        code: number;
+        msg: any;
+        data: null;
+    }>;
 }

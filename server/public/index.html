@@ -810,6 +810,64 @@ function _getGapHtml(code){
   return'<span class="gap-dot ' + (_gap>0?' gap-up':' gap-down')+'">'+(_gap>0?'↑':'↓')+'</span>'
 }
 
+/** 渲染集合竞价走势迷你图（SVG曲线） */
+async function renderAuctionTrend(code,dayLow,dayHigh,lastPrice){
+  try{
+    var r=await fetch('/api/gem/auction-trend?code='+code)
+    var d=await r.json()
+    var pts=d&&d.data||[]
+    if(!pts||pts.length<2){
+      var el=$('aucTrend_'+code)
+      if(el)el.innerHTML='<span style="color:#9ca3af">暂无竞价走势数据</span>'
+      return
+    }
+    var svgW=280,svgH=50,padL=0,padR=0,padT=0,padB=0
+    var drawW=svgW-padL-padR,drawH=svgH-padT-padB
+    var prices=pts.map(function(p){return p.price})
+    var minP=Math.min.apply(null,prices),maxP=Math.max.apply(null,prices)
+    var range=maxP-minP
+    if(range<0.001)range=0.001
+    // 趋势颜色：末尾比开头高→红(涨)，低→绿(跌)
+    var trendColor=prices[prices.length-1]>=prices[0]?'#dc2626':'#22c55e'
+    var linePoints=pts.map(function(p,i){
+      var x=padL+((i)/(pts.length-1))*drawW
+      var y=padT+((maxP-p.price)/range)*drawH
+      return x.toFixed(1)+','+y.toFixed(1)
+    }).join(' ')
+    // 首尾价格标签
+    var startLabel=pts[0].price.toFixed(2)
+    var endLabel=pts[pts.length-1].price.toFixed(2)
+    var startY=padT+((maxP-pts[0].price)/range)*drawH
+    var endY=padT+((maxP-pts[pts.length-1].price)/range)*drawH
+    var svg='<svg width="'+svgW+'" height="'+svgH+'" style="display:block;margin:4px auto" viewBox="0 0 '+svgW+' '+svgH+'">'
+    // 背景网格虚线
+    svg+='<line x1="0" y1="'+(drawH*0.25+padT)+'" x2="'+svgW+'" y2="'+(drawH*0.25+padT)+'" stroke="#f0f0f0" stroke-width="0.5" stroke-dasharray="2,2"/>'
+    svg+='<line x1="0" y1="'+(drawH*0.5+padT)+'" x2="'+svgW+'" y2="'+(drawH*0.5+padT)+'" stroke="#f0f0f0" stroke-width="0.5" stroke-dasharray="2,2"/>'
+    svg+='<line x1="0" y1="'+(drawH*0.75+padT)+'" x2="'+svgW+'" y2="'+(drawH*0.75+padT)+'" stroke="#f0f0f0" stroke-width="0.5" stroke-dasharray="2,2"/>'
+    // 价格曲线
+    svg+='<polyline fill="none" stroke="'+trendColor+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="'+linePoints+'"/>'
+    // 起点圆点
+    svg+='<circle cx="'+(padL+0)+'" cy="'+startY.toFixed(1)+'" r="2.5" fill="'+trendColor+'" stroke="#fff" stroke-width="0.5"/>'
+    // 终点圆点
+    svg+='<circle cx="'+(padL+drawW)+'" cy="'+endY.toFixed(1)+'" r="2.5" fill="'+trendColor+'" stroke="#fff" stroke-width="0.5"/>'
+    // 起止价格标签
+    svg+='<text x="0" y="'+(startY-4)+'" fill="#6b7280" font-size="8" text-anchor="start">'+startLabel+'</text>'
+    svg+='<text x="'+svgW+'" y="'+(endY-4)+'" fill="#6b7280" font-size="8" text-anchor="end">'+endLabel+'</text>'
+    // 时间轴标签
+    var firstTime=pts[0].time,lastTime=pts[pts.length-1].time
+    var time0=firstTime.length===4?firstTime.slice(0,2)+':'+firstTime.slice(2):firstTime
+    var time1=lastTime.length===4?lastTime.slice(0,2)+':'+lastTime.slice(2):lastTime
+    svg+='<text x="0" y="'+(svgH-2)+'" fill="#9ca3af" font-size="7" text-anchor="start">'+time0+'</text>'
+    svg+='<text x="'+svgW+'" y="'+(svgH-2)+'" fill="#9ca3af" font-size="7" text-anchor="end">'+time1+'</text>'
+    svg+='</svg>'
+    var el=$('aucTrend_'+code)
+    if(el)el.innerHTML=svg
+  }catch(e){
+    var el=$('aucTrend_'+code)
+    if(el)el.innerHTML='<span style="color:#9ca3af">竞价走势加载失败</span>'
+  }
+}
+
 /** 详情页用的详细集合竞价条（含综合研判） */
 function _getAuctionBar(code,stock){
   var j=auctionJudge(code,stock)
@@ -2072,33 +2130,9 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
 	      sellPrice=_lockedSellPrice;sellPoint=_lockedSellTime
 	    }
 	  }
-  // ====== 集合竞价研判：验证做T信号 ======
+  // ====== 集合竞价研判 + 走势曲线（在主力/散户之后、价格条之前插入）======
   var auc=window._auctionDataCache?window._auctionDataCache[String(code)]:null
-  if(auc&&auc.judge&&auc.judge.direction){
-    var j=auc.judge,ac=j.color||'#6b7280'
-    var buySig=sugs.filter(function(s){return s.type==='买入点'||s.type==='买入'})
-    var sellSig=sugs.filter(function(s){return s.type==='卖出点'||s.type==='卖出'})
-    var buyMatch=(j.direction.indexOf('高开')>=0||j.direction.indexOf('买盘')>=0||j.direction.indexOf('洗盘')>=0||j.direction.indexOf('上攻')>=0||j.direction.indexOf('低开')>=0)&&buySig.length>0
-    var sellMatch=(j.direction.indexOf('诱多')>=0||j.direction.indexOf('卖盘')>=0||j.direction.indexOf('弱势')>=0||j.direction.indexOf('出货')>=0)&&sellSig.length>0
-    h+='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;border:1px solid '+ac+';background:'+ac+'08">'
-    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">'
-    h+='<span style="background:'+ac+';color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">🔔 竞价研判</span>'
-    h+='<span style="font-weight:600;font-size:12px;color:'+ac+'">'+j.direction+'</span>'
-    if(buyMatch)h+='<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证买入信号</span>'
-    if(sellMatch)h+='<span style="background:#dc2626;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证卖出信号</span>'
-    if(buySig.length>0&&!buyMatch)h+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
-    if(sellSig.length>0&&!sellMatch)h+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
-    h+='</div>'
-    h+='<div style="font-size:10px;color:#6b7280;line-height:1.5">'+j.reason+'</div>'
-    if(auc.gap!=null){
-      h+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">'
-      h+='<span style="font-size:9px;color:#9ca3af">跳空 '+(auc.gap>0?'+':'')+auc.gap.toFixed(1)+'%</span>'
-      if(auc.volumeRatio!=null)h+='<span style="font-size:9px;color:#9ca3af">量比 '+auc.volumeRatio.toFixed(1)+'x</span>'
-      if(auc.auctionVolume>0)h+='<span style="font-size:9px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
-      h+='</div>'
-    }
-    h+='</div>'
-  }
+  
   var gap=dayHigh-dayLow
   var buyLow=dayLow  // 买入下限 = 最低价
   var buyHigh=dayLow+gap*0.15  // 买入上限 = 最低价+15%振幅(支撑区上沿)
@@ -2124,6 +2158,36 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   html+='<div><div style="font-size:9px;opacity:.8">🌟 主力</div><div style="font-size:15px;font-weight:700">'+(zs.main!==undefined?zs.main.toFixed(1):'-')+'</div></div>'
   html+='<div><div style="font-size:9px;opacity:.8">💡 散户</div><div style="font-size:15px;font-weight:700">'+(zs.retail!==undefined?zs.retail.toFixed(1):'-')+'</div></div>'
   html+='</div>'
+  // 集合竞价研判（插在主力/散户之后、价格条之前）
+  if(auc&&auc.judge&&auc.judge.direction){
+    var j=auc.judge,ac=j.color||'#6b7280'
+    var buySig=sugs.filter(function(s){return s.type==='买入点'||s.type==='买入'})
+    var sellSig=sugs.filter(function(s){return s.type==='卖出点'||s.type==='卖出'})
+    var buyMatch=(j.direction.indexOf('高开')>=0||j.direction.indexOf('买盘')>=0||j.direction.indexOf('洗盘')>=0||j.direction.indexOf('上攻')>=0||j.direction.indexOf('低开')>=0)&&buySig.length>0
+    var sellMatch=(j.direction.indexOf('诱多')>=0||j.direction.indexOf('卖盘')>=0||j.direction.indexOf('弱势')>=0||j.direction.indexOf('出货')>=0)&&sellSig.length>0
+    html+='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;border:1px solid '+ac+';background:'+ac+'08">'
+    html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">'
+    html+='<span style="background:'+ac+';color:#fff;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">🔔 竞价研判</span>'
+    html+='<span style="font-weight:600;font-size:12px;color:'+ac+'">'+j.direction+'</span>'
+    if(buyMatch)html+='<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证买入信号</span>'
+    if(sellMatch)html+='<span style="background:#dc2626;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">✅ 验证卖出信号</span>'
+    if(buySig.length>0&&!buyMatch)html+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
+    if(sellSig.length>0&&!sellMatch)html+='<span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:6px;font-size:8px;font-weight:600">⚠️ 竞价方向相反</span>'
+    html+='</div>'
+    html+='<div style="font-size:10px;color:#6b7280;line-height:1.5">'+j.reason+'</div>'
+    if(auc.gap!=null){
+      html+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">'
+      html+='<span style="font-size:9px;color:#9ca3af">跳空 '+(auc.gap>0?'+':'')+auc.gap.toFixed(1)+'%</span>'
+      if(auc.volumeRatio!=null)html+='<span style="font-size:9px;color:#9ca3af">量比 '+auc.volumeRatio.toFixed(1)+'x</span>'
+      if(auc.auctionVolume>0)html+='<span style="font-size:9px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
+      html+='</div>'
+    }
+    // 集合竞价走势迷你图占位
+    html+='<div id="aucTrend_'+code+'" style="margin-top:4px;min-height:50px;font-size:10px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+    html+='</div>'
+    // 异步拉取竞价走势曲线（不阻塞渲染）
+    renderAuctionTrend(code,dayLow,dayHigh,lastPrice)
+  }
   // 📊 日内价格位置条形图(最高价-最低价+三角形箭头标记当前价)
   var pricePosPercent=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPrice-dayLow)/(dayHigh-dayLow)*100)):50
   html+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
