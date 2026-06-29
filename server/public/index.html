@@ -204,8 +204,9 @@ var COLORS={'重仓买入':'#dc2626','买入':'#16a34a','轻仓买入':'#ca8a04'
 var TAG_COLORS={'低位区':'#16a34a','中低位':'#65a30d','中位区':'#ca8a04','中高位':'#f97316','高位区':'#dc2626'}
 
 function getBJ(){var n=new Date();return new Date(n.getTime()+n.getTimezoneOffset()*60000+28800000)}
-function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=565&&m<690)||(m>=780&&m<900)}
-function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m<565)return'盘前已冻结，9:25 恢复';return''}
+function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return(m>=555&&m<690)||(m>=780&&m<900)}
+function isCallAuction(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=555&&m<565}
+function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m>=555&&m<565)return'';if(m<555)return'盘前已冻结，9:25 恢复';return''}
 
 var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
 // 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
@@ -976,7 +977,8 @@ function showDetail(i){
       var _dl=_lo,_dh=_hi,_gap=_dh-_dl,_pct=_dh>_dl?Math.max(0,Math.min(100,(Math.max(0,Math.min(_pr,_dh))-_dl)/_gap*100)):50
       var _buyLow=_dl,_buyHigh=_dl+_gap*0.15,_sellLow=_dh-_gap*0.15,_sellHigh=_dh
       var _h='<div style="font-size:13px;text-align:left">'
-      _h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:4px;font-size:11px;color:#92400e;margin-bottom:6px">\u{1F550} 非交易时段 · 基于缓存数据</div>'
+      var _isCA=isCallAuction()
+      _h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:4px;font-size:11px;color:#92400e;margin-bottom:6px">'+(_isCA?'\u{1F550} 集合竞价中 · 实时报价':'\u{1F550} 非交易时段 · 基于缓存数据')+'</div>'
       _h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:2px"><span>最低 '+_dl.toFixed(2)+'</span><span>当前 '+_pr.toFixed(2)+'</span><span>最高 '+_dh.toFixed(2)+'</span></div>'
       _h+='<div style="position:relative;height:16px;background:linear-gradient(to right,#22c55e,#eab308,#ef4444);border-radius:8px;margin:4px 0"><div style="position:absolute;left:'+_pct.toFixed(0)+'%;top:-2px;width:4px;height:20px;background:#1f2937;border-radius:2px"></div></div>'
       _h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:6px"><span>\u2B06 价格位置 '+_pct.toFixed(0)+'%</span><span>支撑区</span><span>压力区</span></div>'
@@ -2029,7 +2031,8 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       var sellLow=dayHigh-gap*0.15,sellHigh=dayHigh
       var pct=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPriceH-dayLow)/(dayHigh-dayLow)*100)):50
       var h='<div style="font-size:13px;text-align:left">'
-      h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;margin-bottom:8px;font-size:11px;color:#92400e;text-align:center">🕐 非交易时段 · 基于缓存数据</div>'
+      var _badgeTxt=isCallAuction()?'🕐 集合竞价中 · 实时报价':'🕐 非交易时段 · 基于缓存数据'
+      h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;margin-bottom:8px;font-size:11px;color:#92400e;text-align:center">'+_badgeTxt+'</div>'
       h+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
       h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:2px">'
       h+='<span>最低 '+dayLow.toFixed(2)+'</span><span style="font-weight:600;color:#1f2937">当前 '+lastPriceH.toFixed(2)+'</span><span>最高 '+dayHigh.toFixed(2)+'</span></div>'
@@ -2038,7 +2041,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:#9ca3af">'
       h+='<span>支撑区</span><span style="font-weight:500;color:#374151">⬆ 价格位置 '+pct.toFixed(0)+'%</span><span>压力区</span></div></div>'
       h+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
-      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围（基于缓存数据）</div>'
+      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围'+(isCallAuction()?'（实时报价）':'（基于缓存数据）')+'</div>'
       h+='<div style="display:flex;justify-content:space-between">'
       h+='<span style="color:#16a34a;font-weight:600">📝 买入参考: '+(buyLow>0?buyLow.toFixed(2):'-')+'~'+(buyHigh>0?buyHigh.toFixed(2):'-')+'</span>'
       h+='<span style="color:#ef4444;font-weight:600">📝 卖出参考: '+(sellLow>0?sellLow.toFixed(2):'-')+'~'+(sellHigh>0?sellHigh.toFixed(2):'-')+'</span>'
