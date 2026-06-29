@@ -857,6 +857,7 @@ async function renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice){
         change:prePrice>0?((parseFloat(p[1])||0)-prePrice)/prePrice*100:0
       }
     })
+    if(!pts||pts.length<2){
       var el=$('aucTrend_'+code)
       if(el)el.innerHTML='<span style="color:#9ca3af">暂无竞价走势数据</span>'
       return
