@@ -28,7 +28,7 @@ let AccessLimitGuard = AccessLimitGuard_1 = class AccessLimitGuard {
     async canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const url = request.url || request.path || '';
-        const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health'];
+        const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health', '/api/gem'];
         if (adminPaths.some((p) => url.startsWith(p)))
             return true;
         const skip = this.reflector.getAllAndOverride(exports.SKIP_ACCESS_LIMIT, [

@@ -925,7 +925,7 @@ function showDetail(i){
     }).catch(function(){})
   }
   // 交易时段：立即启动日内参考刷新（实时价格+买卖信号），同时异步拉K线分析
-  startIntradayRefresh(s.code,rt.high||0,rt.low||0,rt.price||0)
+  startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
   // ★ 异步拉取完整分析（统一7级买卖系统）
   ;(async function(){
     try{
@@ -969,7 +969,7 @@ function showDetail(i){
       if(ad&&ad.suggestion){
         da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
         // 交易时段才启动2秒刷新，非交易时段仅静态展示分析结果
-        startIntradayRefresh(code,rt.high,rt.low,rt.price)
+        startIntradayRefresh(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
       }
     }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
   })()
@@ -1983,6 +1983,9 @@ async function refreshDetailPrice(code,low,high,lastPrice){
       h+='</div></div></div>'
       var e=$('intradayMacd')
       if(e)e.innerHTML=h
+    }else{
+      var e=$('intradayMacd')
+      if(e)e.innerHTML='<div style="padding:8px;text-align:center;font-size:11px;color:#6b7280">⏳ 等待实时数据刷新中...</div>'
     }
     return
   }
