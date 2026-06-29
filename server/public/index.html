@@ -984,8 +984,13 @@ function showDetail(i){
       var ad=aj.data||aj
       if(ad&&ad.suggestion){
         da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
-        // 交易时段才启动2秒刷新，非交易时段仅静态展示分析结果
-        startIntradayRefresh(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
+        // ★ 用已有分析数据立即渲染日内参考，避免出现"⏳ 日内数据加载中..."
+        refreshDetailPrice(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0,ad)
+        // 交易时段启动2秒刷新
+        if(isTH()){
+          stopIntradayRefresh()
+          intradayTimer=setInterval(function(){refreshDetailPrice(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)},2000)
+        }
       }
     }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
   })()
@@ -1940,7 +1945,8 @@ async function fetchIntraday(code){
   }catch(e){return null}
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
-async function refreshDetailPrice(code,low,high,lastPrice){
+// 可选参数 analysisData：传入预取的分析数据则跳过 fetchIntraday
+async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   // 非交易时段：不走后端，直接用缓存数据渲染价格条+挂单参考
   if(!isTH()){
@@ -1973,7 +1979,7 @@ async function refreshDetailPrice(code,low,high,lastPrice){
     }
     return
   }
-  var ia=await fetchIntraday(code)
+  var ia=analysisData||await fetchIntraday(code)
   // 检查数据是否有效：有实时价格且有建议才算有效，否则用缓存数据渲染
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
     // 非交易时段/无数据：用缓存的 low/high/price 渲染价格条+挂单参考
