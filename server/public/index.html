@@ -915,36 +915,48 @@ function _getAuctionBar(code,stock){
   var clr=j.color,dir=j.dir
   return'<div class="gap-bar" style="background:'+clr+'">'+dir+' <span style="font-size:10px;opacity:.85">'+j.detail.join('·')+'</span></div>'
 }
-/** 独立的竞价模块渲染（只调用一次，不被2s刷新覆盖） */
+/** 独立的竞价模块渲染（只调用一次，不受2s刷新覆盖，竞价时段每2s刷新） */
 async function renderAuctionSection(code,low,high,price){
   var extEl=$('aucExt_'+code)
   if(!extEl)return
-  // 确保竞价数据就绪
   if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
   if(!window._auctionDataCache||!window._auctionDataCache[code])return
-  var auc=window._auctionDataCache[code]
-  var gap=high-low||1
-  var pct=gap>0?Math.max(0,Math.min(100,(price-low)/gap*100)):50
-  var j=auctionJudge(code,{pricePosition:pct})
-  if(!j||!j.dir||j.dir==='观望')return
-  var ac=j.color||'#6b7280',_r=j.detail&&j.detail.length>0?j.detail.join(' · '):''
-  var h='<div style="margin:4px 0;padding:5px 7px;border-radius:6px;border:1px solid '+ac+';background:#fff">'
-  h+='<div style="display:flex;align-items:center;gap:5px;margin-bottom:1px;flex-wrap:wrap">'
-  h+='<span style="background:'+ac+';color:#fff;padding:1px 7px;border-radius:7px;font-size:9px;font-weight:600">🔔 竞价研判</span>'
-  h+='<span style="font-weight:600;font-size:11px;color:'+ac+'">'+j.dir+'</span>'
-  h+='</div>'
-  h+='<div style="font-size:9px;color:#6b7280;line-height:1.5">'+_r+'</div>'
-  if(auc.gap!=null){
-    h+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">'
-    h+='<span style="font-size:8px;color:#9ca3af">跳空 '+(auc.gap>0?'+':'')+auc.gap.toFixed(1)+'%</span>'
-    if(auc.volumeRatio!=null)h+='<span style="font-size:8px;color:#9ca3af">量比 '+auc.volumeRatio.toFixed(1)+'x</span>'
-    if(auc.auctionVolume>0)h+='<span style="font-size:8px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
+  var _renderInner=async function(){
+    var auc=window._auctionDataCache[code]
+    var gap=high-low||1
+    var pct=gap>0?Math.max(0,Math.min(100,(price-low)/gap*100)):50
+    var j=auctionJudge(code,{pricePosition:pct})
+    if(!j||!j.dir||j.dir==='观望')return
+    var ac=j.color||'#6b7280',_r=j.detail&&j.detail.length>0?j.detail.join(' · '):''
+    var h='<div style="margin:4px 0;padding:5px 7px;border-radius:6px;border:1px solid '+ac+';background:#fff">'
+    h+='<div style="display:flex;align-items:center;gap:5px;margin-bottom:1px;flex-wrap:wrap">'
+    h+='<span style="background:'+ac+';color:#fff;padding:1px 7px;border-radius:7px;font-size:9px;font-weight:600">🔔 竞价研判</span>'
+    h+='<span style="font-weight:600;font-size:11px;color:'+ac+'">'+j.dir+'</span>'
     h+='</div>'
+    h+='<div style="font-size:9px;color:#6b7280;line-height:1.5">'+_r+'</div>'
+    if(auc.gap!=null){
+      h+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">'
+      h+='<span style="font-size:8px;color:#9ca3af">跳空 '+(auc.gap>0?'+':'')+auc.gap.toFixed(1)+'%</span>'
+      if(auc.volumeRatio!=null)h+='<span style="font-size:8px;color:#9ca3af">量比 '+auc.volumeRatio.toFixed(1)+'x</span>'
+      if(auc.auctionVolume>0)h+='<span style="font-size:8px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
+      h+='</div>'
+    }
+    h+='<div id="aucTrend_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+    h+='</div>'
+    extEl.innerHTML=h
+    renderAuctionTrend(code,low,high,price)
   }
-  h+='<div id="aucTrend_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
-  h+='</div>'
-  extEl.innerHTML=h
-  renderAuctionTrend(code,low,high,price)
+  await _renderInner()
+  // 竞价时段(9:15-9:25)每2s刷新走势+趋势数据，25分后冻结
+  var _atKey='_aucTimer_'+code
+  if(window[_atKey]){clearInterval(window[_atKey]);window[_atKey]=null}
+  var _d=new Date(),_h=_d.getHours(),_m=_d.getMinutes()
+  if(_h===9&&_m>=15&&_m<25){
+    window[_atKey]=setInterval(async function(){
+      await fetchAuctionData([code],5)
+      _renderInner()
+    },2000)
+  }
 }
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
