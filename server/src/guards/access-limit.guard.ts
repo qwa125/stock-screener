@@ -24,7 +24,7 @@ export class AccessLimitGuard implements CanActivate {
     // ══════════════════════════════════
     // URL 白名单 — 仅放行管理类端点（auth / device / health）
     // ══════════════════════════════════
-    const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health'];
+    const adminPaths = ['/api/auth', '/api/access', '/api/device', '/api/health', '/api/gem'];
     if (adminPaths.some((p) => url.startsWith(p))) return true;
 
     // ══════════════════════════════════
