@@ -127,7 +127,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v8</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v9</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v8</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v9</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -1120,6 +1120,18 @@ function showDetail(i){
         if(s.intradayHigh)stockData.intradayHigh=s.intradayHigh
         if(s.intradayLow)stockData.intradayLow=s.intradayLow
         if(s.name&&!stockData.name)stockData.name=s.name
+        // ★ 用实时涨幅修正信号（只升级不降级，不覆盖后端减仓/卖出信号）
+        var _cp=s.changePercent||(realtimePrices[code]&&realtimePrices[code].chgP)||0
+        var _LIVE_PRI=["重仓买入","买入","轻仓买入","持有","减仓","卖出","不要介入"]
+        var _ls=null,_SELL=["减仓","卖出","不要介入"]
+        if(_cp>=9)_ls="重仓买入"
+        else if(_cp>=6)_ls="买入"
+        else if(_cp>=3)_ls="轻仓买入"
+        if(_ls&&stockData.suggestion&&!_SELL.includes(stockData.suggestion)&&_LIVE_PRI.indexOf(_ls)<_LIVE_PRI.indexOf(stockData.suggestion)){
+          var _oldSug=stockData.suggestion
+          stockData.suggestion=_ls
+          console.log("[detail] upgrade",stockData.code,"from",_oldSug,"to",_ls,"(chg:"+_cp+"%)")
+        }
         // ★ 等待竞价数据就绪后再渲染（避免竞价模块缺失）
         if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
         da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
