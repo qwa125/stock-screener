@@ -986,9 +986,12 @@ function showDetail(i){
       var stockData=ad&&ad.suggestion?ad:(Array.isArray(ad)&&ad.length>0?ad[0]:null)
       if(stockData&&stockData.suggestion){
         da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
-        // 交易时段启动2秒刷新，每2s用实时价格更新三角形位置
+        // 交易时段启动或重启2秒刷新
         if(isTH()){
           stopIntradayRefresh()
+          // 立即用最新实时数据渲染一次，避免"⏳ 日内数据加载中..."
+          var _r2=realtimePrices[code]
+          refreshDetailPrice(code,_r2&&_r2.low||s.intradayLow||0,_r2&&_r2.high||s.intradayHigh||0,_r2&&_r2.price||s.currentPrice||0)
           intradayTimer=setInterval(function(){
             var _rp=realtimePrices[code]
             refreshDetailPrice(code,_rp&&_rp.low||s.intradayLow||0,_rp&&_rp.high||s.intradayHigh||0,_rp&&_rp.price||s.currentPrice||0)
