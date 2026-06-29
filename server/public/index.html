@@ -2024,9 +2024,10 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   // 非交易时段：不走后端，直接用缓存数据渲染价格条+挂单参考
   if(!isTH()){
-    var lastPriceH=lastPrice||0
-    if(lastPriceH>0&&low>0&&high>0&&low<high){
-      var dayLow=low,dayHigh=high,gap=dayHigh-dayLow
+    var lastPriceH=_rt4.price||lastPrice||0
+    var _low4=_rt4.low||low||0,_high4=_rt4.high||high||0
+    if(lastPriceH>0&&_low4>0&&_high4>0&&_low4<_high4){
+      var dayLow=_low4,dayHigh=_high4,gap=dayHigh-dayLow
       var buyLow=dayLow,buyHigh=dayLow+gap*0.15
       var sellLow=dayHigh-gap*0.15,sellHigh=dayHigh
       var pct=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPriceH-dayLow)/(dayHigh-dayLow)*100)):50
@@ -2057,15 +2058,17 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   var ia=analysisData||await fetchIntraday(code)
   // 检查数据是否有效：有实时价格且有建议才算有效，否则用缓存数据渲染
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
-    // 非交易时段/无数据：用缓存的 low/high/price 渲染价格条+挂单参考
-    var lastPriceH=lastPrice||0
-    if(lastPriceH>0&&low>0&&high>0&&low<high){
-      var dayLow=low,dayHigh=high,gap=dayHigh-dayLow
+    // 非交易时段/无数据：用实时推送或缓存的 low/high/price 渲染价格条+挂单参考
+    var _rttmp=realtimePrices[code],lastPriceH=_rttmp&&_rttmp.price||lastPrice||0
+    var lowTmp=_rttmp&&_rttmp.low||low||0,highTmp=_rttmp&&_rttmp.high||high||0
+    if(lastPriceH>0&&lowTmp>0&&highTmp>0&&lowTmp<highTmp){
+      var dayLow=lowTmp,dayHigh=highTmp,gap=dayHigh-dayLow
       var buyLow=dayLow,buyHigh=dayLow+gap*0.15
       var sellLow=dayHigh-gap*0.15,sellHigh=dayHigh
       var pct=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPriceH-dayLow)/(dayHigh-dayLow)*100)):50
       var h='<div style="font-size:13px;text-align:left">'
-      h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;margin-bottom:8px;font-size:11px;color:#92400e;text-align:center">🕐 非交易时段 · 基于缓存数据</div>'
+      var _badgeTxtTmp=isCallAuction()?'🕐 集合竞价中 · 实时报价':(isTH()?'🕐 交易时段 · 盘中数据加载中…':'🕐 非交易时段 · 基于缓存数据')
+      h+='<div style="padding:6px;background:#fefce8;border:1px solid #fde68a;border-radius:6px;margin-bottom:8px;font-size:11px;color:#92400e;text-align:center">'+_badgeTxtTmp+'</div>'
       h+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
       h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:2px">'
       h+='<span>最低 '+dayLow.toFixed(2)+'</span><span style="font-weight:600;color:#1f2937">当前 '+lastPriceH.toFixed(2)+'</span><span>最高 '+dayHigh.toFixed(2)+'</span></div>'
