@@ -181,6 +181,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
 
   // ─── PostgreSQL 持久化（Render 上重启不丢缓存） ───
   private _pgSql: ReturnType<typeof postgres> | null = null;
+  private _pgReady = false;
   private get pgSql(): ReturnType<typeof postgres> | null {
     if (this._pgSql) return this._pgSql;
     const url = process.env.PGDATABASE_URL || process.env.DATABASE_URL;
@@ -190,7 +191,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       return null;
     }
     try {
-      this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
+      this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
       this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
     } catch (e) {
       this.logger.warn(`⚠️ PostgreSQL 连接失败，缓存仅在内存/磁盘: ${(e as Error).message}`);
@@ -406,7 +407,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     // 同时持久化到 PostgreSQL，以便 Render 重启后恢复
     if (this.cache?.data?.length) {
-      await this.saveCacheToPg('gem', this.cache);
+      this.saveCacheToPg('gem', this.cache).catch(() => {});
     }
   }
 
@@ -418,7 +419,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     // 同时持久化到 PostgreSQL
     if (this.mainBoardCache?.data?.length) {
-      await this.saveCacheToPg('main_board', this.mainBoardCache);
+      this.saveCacheToPg('main_board', this.mainBoardCache).catch(() => {});
     }
   }
 
@@ -706,7 +707,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
     this.saveSnapshotToDisk();
     this.uploadSnapshotToCloud(); // 异步上传到 TOS
-    this.saveCacheToPg('snapshot', this.upgradedSnapshot); // 同时存PG，重启不丢
+    this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch(() => {}); // 同时存PG，重启不丢
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 
@@ -4944,32 +4945,41 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
    * 获取分钟K线数据（5分钟）
    */
   private async fetchMinuteKLine(code: string, minute: number = 5): Promise<any[]> {
-    try {
-      const kltMap: Record<number, number> = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
-      const klt = kltMap[minute] || 102;
-      const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
-      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (!resp.ok) return [];
-      const json: any = await resp.json();
-      const klines = json?.data?.klines;
-      if (!klines || !Array.isArray(klines) || klines.length === 0) return [];
-      return klines.map((l: string) => {
-        const p = l.split(',');
-        return {
-          time: p[0],
-          open: parseFloat(p[1]),
-          close: parseFloat(p[2]),
-          high: parseFloat(p[3]),
-          low: parseFloat(p[4]),
-          volume: parseFloat(p[5]),
-          amount: parseFloat(p[6]) || 0,
-        };
-      });
-    } catch (e) {
-      this.logger.warn(`获取分钟K线失败 ${code}: ${(e as Error).message}`);
-      return [];
+    // 最多尝试2次，兼容 Render 冷启动时网络不稳
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const kltMap: Record<number, number> = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
+        const klt = kltMap[minute] || 102;
+        const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
+        const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        if (!resp.ok) return [];
+        const json: any = await resp.json();
+        const klines = json?.data?.klines;
+        if (!klines || !Array.isArray(klines) || klines.length === 0) return [];
+        return klines.map((l: string) => {
+          const p = l.split(',');
+          return {
+            time: p[0],
+            open: parseFloat(p[1]),
+            close: parseFloat(p[2]),
+            high: parseFloat(p[3]),
+            low: parseFloat(p[4]),
+            volume: parseFloat(p[5]),
+            amount: parseFloat(p[6]) || 0,
+          };
+        });
+      } catch (e) {
+        if (attempt === 0) {
+          this.logger.warn(`获取分钟K线失败 ${code}（尝试重试）: ${(e as Error).message}`);
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        this.logger.warn(`获取分钟K线失败 ${code}: ${(e as Error).message}`);
+        return [];
+      }
     }
+    return [];
   }
 
   /** 获取集合竞价走势数据（9:15-9:25 tick级价位曲线） */

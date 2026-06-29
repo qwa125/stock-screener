@@ -55,7 +55,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         }
         try {
-            this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 5 });
+            this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
             this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
         }
         catch (e) {
@@ -158,6 +158,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.SCAN_INTERVAL = 5 * 60 * 1000;
         this.marketHoursBeganAt = 0;
         this._pgSql = null;
+        this._pgReady = false;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -306,7 +307,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ GEM缓存写入失败: ${err.message}`);
         }
         if (this.cache?.data?.length) {
-            await this.saveCacheToPg('gem', this.cache);
+            this.saveCacheToPg('gem', this.cache).catch(() => { });
         }
     }
     async saveMainBoardCacheToDisk() {
@@ -317,7 +318,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ 主板缓存写入失败: ${err.message}`);
         }
         if (this.mainBoardCache?.data?.length) {
-            await this.saveCacheToPg('main_board', this.mainBoardCache);
+            this.saveCacheToPg('main_board', this.mainBoardCache).catch(() => { });
         }
     }
     loadSellStateCache() {
@@ -564,7 +565,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.upgradedSnapshot = { list, timestamp: Date.now() };
         this.saveSnapshotToDisk();
         this.uploadSnapshotToCloud();
-        this.saveCacheToPg('snapshot', this.upgradedSnapshot);
+        this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch(() => { });
         this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
     }
     getUpgradedSnapshot() {
@@ -4289,35 +4290,43 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         };
     }
     async fetchMinuteKLine(code, minute = 5) {
-        try {
-            const kltMap = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
-            const klt = kltMap[minute] || 102;
-            const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
-            const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
-            const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-            if (!resp.ok)
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const kltMap = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
+                const klt = kltMap[minute] || 102;
+                const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
+                const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
+                const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+                if (!resp.ok)
+                    return [];
+                const json = await resp.json();
+                const klines = json?.data?.klines;
+                if (!klines || !Array.isArray(klines) || klines.length === 0)
+                    return [];
+                return klines.map((l) => {
+                    const p = l.split(',');
+                    return {
+                        time: p[0],
+                        open: parseFloat(p[1]),
+                        close: parseFloat(p[2]),
+                        high: parseFloat(p[3]),
+                        low: parseFloat(p[4]),
+                        volume: parseFloat(p[5]),
+                        amount: parseFloat(p[6]) || 0,
+                    };
+                });
+            }
+            catch (e) {
+                if (attempt === 0) {
+                    this.logger.warn(`获取分钟K线失败 ${code}（尝试重试）: ${e.message}`);
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+                this.logger.warn(`获取分钟K线失败 ${code}: ${e.message}`);
                 return [];
-            const json = await resp.json();
-            const klines = json?.data?.klines;
-            if (!klines || !Array.isArray(klines) || klines.length === 0)
-                return [];
-            return klines.map((l) => {
-                const p = l.split(',');
-                return {
-                    time: p[0],
-                    open: parseFloat(p[1]),
-                    close: parseFloat(p[2]),
-                    high: parseFloat(p[3]),
-                    low: parseFloat(p[4]),
-                    volume: parseFloat(p[5]),
-                    amount: parseFloat(p[6]) || 0,
-                };
-            });
+            }
         }
-        catch (e) {
-            this.logger.warn(`获取分钟K线失败 ${code}: ${e.message}`);
-            return [];
-        }
+        return [];
     }
     async fetchAuctionTrend(code) {
         try {

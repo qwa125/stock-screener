@@ -97,6 +97,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly SCAN_INTERVAL;
     private marketHoursBeganAt;
     private _pgSql;
+    private _pgReady;
     private get pgSql();
     private ensurePgTable;
     private saveCacheToPg;
