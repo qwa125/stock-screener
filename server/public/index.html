@@ -1,4 +1,4 @@
-<!-- Core v20250628-inline13 -->
+<!-- Core v20250628-inline14 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -103,7 +103,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 	/* 全页毛玻璃遮罩 - 保留扫描按钮 */
 	.page-blur{position:fixed;top:0;left:0;right:0;bottom:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.87);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 	.page-blur.hidden{display:none}
-	.page-blur .blur-btn{font-size:18px;padding:16px 40px;border-radius:14px;border:none;background:#1890ff;color:#fff;font-weight:600;box-shadow:0 4px 20px rgba(24,144,255,0.4);cursor:pointer}
+	.page-blur .blur-btn{font-size:18px;padding:16px 40px;border-radius:14px;border:none;background:#1890ff;color:#fff;font-weight:600;box-shadow:0 4px 20px rgba(24,144,255,0.4);cursor:pointer;transition:transform 0.15s,box-shadow 0.15s}
+.page-blur .blur-btn:active{transform:scale(0.96);box-shadow:0 2px 10px rgba(24,144,255,0.3)}
 	.page-blur .blur-msg{margin-top:16px;font-size:13px;color:#555;text-align:center;line-height:1.6;padding:0 20px}
 .admin-device-item .dev-name{font-weight:500;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-device-item .dev-time{font-size:10px;color:#9ca3af;margin-top:1px}
@@ -127,7 +128,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v15</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v16</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +175,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v15</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v16</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -3169,7 +3170,7 @@ function changeAdminPwd(){
 </script>
 <div class="page-blur" id="pageBlur">
   <div class="blur-btn-wrap">
-    <button class="blur-btn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
+    <button class="blur-btn" id="blurBtn" onclick="handleBlurClick()">📊 点击扫描解锁</button>
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
