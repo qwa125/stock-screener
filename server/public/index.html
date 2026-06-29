@@ -1122,12 +1122,11 @@ function showDetail(i){
         // ★ 独立竞价模块（只渲染一次，不受2s刷新影响）
         var _rr=realtimePrices[code]||{}
         renderAuctionSection(code,_rr.low||s.intradayLow||0,_rr.high||s.intradayHigh||0,_rr.price||s.currentPrice||0)
-        // 交易时段启动或重启2秒刷新
+        // 启动或重启日内参考刷新（交易时段+休盘均需更新）
+        stopIntradayRefresh()
+        var _r2=realtimePrices[code]
+        refreshDetailPrice(code,_r2&&_r2.low||s.intradayLow||0,_r2&&_r2.high||s.intradayHigh||0,_r2&&_r2.price||s.currentPrice||0)
         if(isTH()){
-          stopIntradayRefresh()
-          // 立即用最新实时数据渲染一次，避免"⏳ 日内数据加载中..."
-          var _r2=realtimePrices[code]
-          refreshDetailPrice(code,_r2&&_r2.low||s.intradayLow||0,_r2&&_r2.high||s.intradayHigh||0,_r2&&_r2.price||s.currentPrice||0)
           intradayTimer=setInterval(function(){
             var _rp=realtimePrices[code]
             refreshDetailPrice(code,_rp&&_rp.low||s.intradayLow||0,_rp&&_rp.high||s.intradayHigh||0,_rp&&_rp.price||s.currentPrice||0)
