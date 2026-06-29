@@ -1332,6 +1332,7 @@ function buildDetail(s,rt,ta){
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
+ +'<div class="indicator-item"><div class="label">主力散户</div><div class="value" style="color:'+(s.mainForceInflow>0?'#ef4444':s.mainForceInflow<0?'#22c55e':'#999')+'">'+(s.mainForceInflow!=null?(s.mainForceInflow>0?'+':'')+s.mainForceInflow.toFixed(0)+'万':'暂无')+'</div></div>'
     +gridChipLine(s,entry)
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):s.intradayHigh>0?s.intradayHigh.toFixed(2):'-')+'</div></div>'
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):s.intradayLow>0?s.intradayLow.toFixed(2):'-')+'</div></div>'
@@ -2521,6 +2522,8 @@ async function doSearch(){
     // 非交易时段且已有缓存数据 → 直接展示，不拉K线+后端分析
 	    if(!isTH()&&localStock){
 	      da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+tmpStock.name+' ('+tmpStock.code+')</div>'+buildDetail(tmpStock,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow},tmpStock)
+	      if(!window._auctionDataCache||!window._auctionDataCache[stockCode])await fetchAuctionData([stockCode],5)
+	      renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
 	      startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)
 	      return
 	    }
@@ -2644,7 +2647,10 @@ async function doSearch(){
         if(liveSug && o.suggestion && !BACKEND_SELL.includes(o.suggestion) && LIVE_PRI.indexOf(liveSug)<LIVE_PRI.indexOf(o.suggestion)){
           o.suggestion=liveSug
         }
-        isDetailView=true;da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        isDetailView=true;da.style.minHeight='';
+        if(!window._auctionDataCache||!window._auctionDataCache[stockCode]){fetchAuctionData([stockCode],5).then(function(){renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)})}
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o.name+' ('+o.code+')</div>'+buildDetail(o,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
         setTimeout(function(){startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)},0)
       }else{
         throw new Error('分析无结果')
@@ -2669,7 +2675,10 @@ async function doSearch(){
           if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
             o2.suggestion=liveSug2
           }
-          da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+          da.style.minHeight='';
+        if(!window._auctionDataCache||!window._auctionDataCache[stockCode]){fetchAuctionData([stockCode],5).then(function(){renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)})}
+        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
+        renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
         setTimeout(function(){startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)},0)
         }else{
           da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
