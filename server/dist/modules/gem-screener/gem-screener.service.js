@@ -4341,8 +4341,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return [];
             const prePrice = json.data.prePrice || 0;
             const auction = trends.filter(t => {
-                const time = t.split(',')[0];
-                return time >= '0915' && time <= '0925';
+                const timeStr = t.split(',')[0];
+                const time = timeStr.split(" ")[1] ? timeStr.split(" ")[1].replace(/:/g, "") : timeStr;
+                return time >= "0915" && time <= "0925";
             });
             return auction.map(t => {
                 const p = t.split(',');

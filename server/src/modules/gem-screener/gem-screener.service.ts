@@ -4996,8 +4996,9 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       const prePrice = json.data.prePrice || 0;
       // 只保留9:15~9:25之间的竞价数据
       const auction = trends.filter(t => {
-        const time = t.split(',')[0];
-        return time >= '0915' && time <= '0925';
+        const timeStr = t.split(',')[0];
+				const time = timeStr.split(" ")[1] ? timeStr.split(" ")[1].replace(/:/g,"") : timeStr;
+				return time >= "0915" && time <= "0925";
       });
       return auction.map(t => {
         const p = t.split(',');
