@@ -714,7 +714,7 @@ async function fetchAuctionData(codes,limit){
     })
     await Promise.all(promises)
   }
-  window._auctionDataCache=results
+  window._auctionDataCache={...window._auctionDataCache,...results}
 }
 
 /** 综合研判函数：把集合竞价数据+日K位置+板块热度综合成结论 */
@@ -1034,6 +1034,8 @@ function showDetail(i){
       // ad 可能是数组 {code:200,data:[opp]} → 取第一个元素
       var stockData=ad&&ad.suggestion?ad:(Array.isArray(ad)&&ad.length>0?ad[0]:null)
       if(stockData&&stockData.suggestion){
+        // ★ 等待竞价数据就绪后再渲染（避免竞价模块缺失）
+        if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
         da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
         // 交易时段启动或重启2秒刷新
         if(isTH()){
@@ -2004,7 +2006,8 @@ async function fetchIntraday(code){
 async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   var _rttmp=realtimePrices[code]||{}
-  if(!window._auctionDataCache||!window._auctionDataCache[code])fetchAuctionData([code],5)
+  // ★ 确保竞价数据就绪
+  if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
   // ★ 取数据：交易时段实时拉取，交易时段外使用冻结缓存
   var ia=analysisData
   if(!ia){
