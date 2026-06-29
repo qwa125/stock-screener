@@ -1059,11 +1059,11 @@ function gridChipLine(s,entry){
     +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value '+peakClr+'">'+peakLabel+'</div></div>'
 }
 
-function showDetail(i){
+async function showDetail(i){
   isDetailView=true
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
-  if(!window._auctionDataCache||!window._auctionDataCache[s.code])fetchAuctionData([s.code],5)
+  if(!window._auctionDataCache||!window._auctionDataCache[s.code])await fetchAuctionData([s.code],5)
   var da=$('detailArea')
   da.style.display='block'
   da.style.minHeight='';da.innerHTML=buildDetail(s,rt,s)
@@ -1079,8 +1079,6 @@ function showDetail(i){
       }
     }).catch(function(){})
   }
-  // 交易时段：立即启动日内参考刷新（实时价格+买卖信号），同时异步拉K线分析
-  startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
   // ★ 异步拉取完整分析（统一7级买卖系统）
   ;(async function(){
     try{
@@ -2350,6 +2348,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   var sellLow=dayHigh-gap*0.15  // 卖出下限 = 最高价-15%振幅(压力区下沿)
   var sellHigh=dayHigh  // 卖出的上限 = 最高价
   // 📊 日内价格位置条形图(最高价-最低价+三角形箭头标记当前价)
+  var html=''
   var pricePosPercent=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPrice-dayLow)/(dayHigh-dayLow)*100)):50
   html+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
   html+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:2px">'
