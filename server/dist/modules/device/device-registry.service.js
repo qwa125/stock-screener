@@ -25,19 +25,48 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
     }
     async onModuleInit() {
         this.logger.log('⚙️ DeviceRegistryService 启动中...');
-        await this.initPostgres();
-        if (this.pgSql) {
-            await this.createPGTables();
-        }
-        await this.loadSettingsFromDB();
-        if (this.pgSql) {
-            await this.loadRegistryFromPG();
-        }
-        else {
-            this.loadFromFile();
-        }
+        this.loadSettingsFromFile();
+        this.loadFromFile();
         this.registryLoaded = true;
-        this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}${this.pgSql ? ' (PostgreSQL)' : ' (文件)'}`);
+        this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length} (文件)`);
+        this.initPostgres().then(pg => {
+            if (pg) {
+                this.pgSql = pg;
+                this.createPGTables()
+                    .then(() => this.loadSettingsFromDB())
+                    .then(() => this.loadRegistryFromPG())
+                    .then(() => this.logger.log('✅ 已同步 PostgreSQL 数据'))
+                    .catch(e => this.logger.warn(`PG同步失败: ${e.message}`));
+            }
+        });
+    }
+    loadSettingsFromFile() {
+        const checkPaths = [
+            '/tmp/device_registry_settings.json',
+            path.resolve(process.cwd(), '.device_registry.settings.json'),
+            this.settingsPath
+        ];
+        for (const p of checkPaths) {
+            try {
+                if (fs.existsSync(p)) {
+                    const raw = fs.readFileSync(p, 'utf-8');
+                    const data = JSON.parse(raw);
+                    const val = data.maxSlots || data.max_slots;
+                    if (val > 0) {
+                        this.maxSlots = val;
+                        return;
+                    }
+                }
+            }
+            catch { }
+        }
+        const envVal = process.env.DEFAULT_MAX_SLOTS || process.env.MAX_SLOTS;
+        if (envVal) {
+            const parsed = parseInt(envVal, 10);
+            if (parsed > 0) {
+                this.maxSlots = parsed;
+            }
+        }
     }
     async initPostgres() {
         try {

@@ -21,20 +21,51 @@ export class DeviceRegistryService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('⚙️ DeviceRegistryService 启动中...')
-    // 尝试连接 PostgreSQL
-    await this.initPostgres()
-    if (this.pgSql) {
-      await this.createPGTables()
-    }
-    // 读取已持久化的设置和列表
-    await this.loadSettingsFromDB()
-    if (this.pgSql) {
-      await this.loadRegistryFromPG()
-    } else {
-      this.loadFromFile()
-    }
+    // 先加载文件配置（快），确保快速响应，不阻塞启动
+    this.loadSettingsFromFile()
+    this.loadFromFile()
     this.registryLoaded = true
-    this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length}${this.pgSql ? ' (PostgreSQL)' : ' (文件)'}`)
+    this.logger.log(`⚙️ 设备限额: ${this.maxSlots}, 已注册设备: ${this.registry.length} (文件)`)
+    // 后台尝试 PostgreSQL（不阻塞启动），有则覆盖文件数据
+    this.initPostgres().then(pg => {
+      if (pg) {
+        this.pgSql = pg
+        this.createPGTables()
+          .then(() => this.loadSettingsFromDB())
+          .then(() => this.loadRegistryFromPG())
+          .then(() => this.logger.log('✅ 已同步 PostgreSQL 数据'))
+          .catch(e => this.logger.warn(`PG同步失败: ${e.message}`))
+      }
+    })
+  }
+
+  /** 从文件快速加载设置（同步，不阻塞启动） */
+  private loadSettingsFromFile(): void {
+    const checkPaths = [
+      '/tmp/device_registry_settings.json',
+      path.resolve(process.cwd(), '.device_registry.settings.json'),
+      this.settingsPath
+    ]
+    for (const p of checkPaths) {
+      try {
+        if (fs.existsSync(p)) {
+          const raw = fs.readFileSync(p, 'utf-8')
+          const data = JSON.parse(raw)
+          const val = data.maxSlots || data.max_slots
+          if (val > 0) {
+            this.maxSlots = val
+            return
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    const envVal = process.env.DEFAULT_MAX_SLOTS || process.env.MAX_SLOTS
+    if (envVal) {
+      const parsed = parseInt(envVal, 10)
+      if (parsed > 0) {
+        this.maxSlots = parsed
+      }
+    }
   }
 
   private async initPostgres() {

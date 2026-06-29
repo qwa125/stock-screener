@@ -9,6 +9,7 @@ export declare class DeviceRegistryService implements OnModuleInit {
     private readonly filePath;
     private readonly settingsPath;
     onModuleInit(): Promise<void>;
+    private loadSettingsFromFile;
     private initPostgres;
     private createPGTables;
     private saveToFile;
