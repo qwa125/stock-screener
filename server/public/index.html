@@ -1090,12 +1090,12 @@ function showDetail(i){
         var srr=await fetch(sinaUrl,{signal:8000})
         if(srr.ok){try{var srd=await srr.json()}catch(ee){srd=null};if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:0}});console.log('[detail] sina kline got '+kdata.length+' bars')}}
       }catch(e){}
-      // ★ 备选3：后端代理→东方财富（兜底）
-      if(!kdata){
-        var kr=await fetch('/api/gem/proxy/kline?code='+code+'&_='+Date.now())
-        var kj=await kr.json()
-        kdata=kj.data||kj
-      }
+      // ★ 备选3：前端直调东财（分钟K线 view=min）
+      if(!kdata) try{
+        var _em3=(code.startsWith('6')||code.startsWith('68'))?'1.':'0.'
+        var ek3=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+_em3+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(10000),mode:'cors'})
+        if(ek3.ok){var ed3=await ek3.json();if(ed3&&ed3.data&&ed3.data.klines&&ed3.data.klines.length>=5){kdata=ed3.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[detail] eastmoney3 kline got '+kdata.length+' bars')}}
+      }catch(e){}
       // 再分析
       var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
       var aj=await ar.json()
@@ -1322,61 +1322,47 @@ function renderList(){
   })
 }
 
-// ---------- 扫描 ----------
+// ---------- 扫描（全部数据前端直调，后端仅分析） ----------
 async function doScan(){
-  if(!deviceRegistered)return  // 未注册不扫描
+  if(!deviceRegistered)return
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
   stopPriceRefresh()
-  setStatus('🔄 获取分析数据...')
+  setStatus('🔄 前端拉取全市场行情数据...')
   try{
-    var r=await fetch(API+'/gem/top/combined?force=true&_='+Date.now())
-    var d=await r.json()
-    if(d.code!==200||!d.data||!d.data.opportunities){
-      if(d.code===429){loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
-      // 后端无数据→自动切全市场重扫（先拉Sina行情再doFullRescan）
-      setStatus('⚠️ 后端无数据，自动切全市场重扫...');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';
-      backgroundSyncWithKline();return
+    // 1. 前端直调Sina获取全市场股票+实时价格
+    await fetchAndCacheSina()
+    var emData=window._cachedSinaEMData||[]
+    if(!emData.length){setStatus('❌ 无法获取行情数据');loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描';return}
+    window._cachedSinaEMData=null
+
+    // 2. 过滤候选：主板+创业板，价格>=3，剔除ST/*/N/C
+    var candidates=[]
+    for(var si=0;si<emData.length;si++){
+      var item=emData[si],code=String(item.f12||''),name=(item.f14||'').trim()
+      if(!code||!name||/^[\*STNC]/.test(name))continue
+      if(!/^(60|00|30)/.test(code))continue
+      var price=parseFloat(item.f2)||0
+      if(price<3)continue
+      candidates.push({code,name,price,chg:parseFloat(item.f3)||0})
     }
-    stocks=d.data.opportunities
-	    console.log("📊 机会区收到"+stocks.length+"只,有forecast1_2Day:"+stocks.filter(function(s){return s.forecast1_2Day}).length+"只,首只:",stocks[0]?.code,stocks[0]?.forecast1_2Day||"无")
-    // 后端已排好序（信号→entryTiming→intradayScore→score→change%），直接展示
-    // 后端数据不足时(＜5只)，自动切换到全市场重扫（通过聚合端点抓实时Sina数据）
-    if(stocks&&stocks.length<5){
-      console.log('⚠️ 后端数据不足('+stocks.length+'只)，切换全市场重扫...')
-      setStatus('⚠️ 后端数据不足，自动切到全市场重扫...')
-      // 不存2只到缓存（避免页面加载时显示过时数据）
-      loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
-      fetchAndCacheSina().then(function(){doFullRescan()})
-      return
+    setStatus('🔄 行情 '+candidates.length+' 只，前端拉取K线并推后端分析...')
+
+    // 3. 分批拉取K线(前端直调东财)+推送后端纯分析(后端无外部调用)
+    var bar=$('rescanBar'),txt=$('rescanText')
+    for(var i=0;i<candidates.length;i+=20){
+      var batch=candidates.slice(i,i+20)
+      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
+      var done=Math.min(i+20,candidates.length)
+      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length
+      if(bar)bar.style.width=Math.round(done/candidates.length*100)+'%'
+      if(i+20<candidates.length)await new Promise(function(r){setTimeout(r,100)})
     }
-    // 不再缓存到localStorage，每次展示以最新数据计算为准
-    setStatus('🔄 获取实时行情...')
-    realtimePrices=await fetchRealtime(stocks.map(function(s){return s.code}))
-    selectedIdx=-1;isDetailView=false;$('detailArea').style.display='none'
-    renderList() // 先显示结果，筹码集中度后台计算
-    setStatus('🔄 计算筹码集中度...')
-    try{
-      stocks.forEach(function(s,idx){
-        var c=s.code,em=(c.startsWith('6')?'1.':'0.')+c
-        fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+em+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(5000)})
-          .then(function(r){return r.json()})
-          .then(function(d){
-            if(d&&d.data&&d.data.klines&&d.data.klines.length>=1){
-              var kd=d.data.klines.map(function(l){var p=l.split(',');return{close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5])}})
-              var chip=calcChipAnalysis(kd)
-              s._chipAnalyzed=true;s._chipConc=chip.conc;s._chipPeak=chip.peak;s._chipPattern=chip.pattern
-              renderList() // 每完成一只更新显示
-            }
-          }).catch(function(){})
-      })
-    }catch(e){}
-    setStatus('✅ 实时数据已更新')
-    saveFrozenSnapshot(stocks) // 保存冻结快照（休盘后展示）
-    startPriceRefresh(stocks)
-    // 后台同步到缓存: 拉新浪实时行情+升级信号→覆写后端缓存
-    backgroundSyncWithKline()
-    // 后台拉取集合竞价数据（top20综合研判，供详情页使用）
-    fetchAuctionData(stocks.slice(0,20).map(function(s){return s.code}),5)
+
+    // 4. 读后端缓存(纯内存，无外部调用)
+    setStatus('🔄 读取分析结果...')
+    window._cachedSinaEMData=emData
+    await doFullRescan(true)
+    window._cachedSinaEMData=null
   }catch(e){setStatus('❌ '+e.message)}
   loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
@@ -2005,9 +1991,8 @@ async function fetchTencentDetail(code,market){
 }
 async function fetchSinaUS(code){
   try{
-    var res=await fetch('/api/gem/proxy/sina-us?code='+code)
-    var body=await res.json()
-    var txt=body.data
+    var res=await fetch('https://hq.sinajs.cn/list=gb_'+encodeURIComponent(code.trim().toLowerCase()))
+    var txt=await res.text()
     if(!txt)return null
     var data=txt.split('"')[1]
     if(!data)return null
@@ -2322,19 +2307,17 @@ async function doSearch(){
       $('searchError').style.display='block';$('detailArea').style.display='none';return
     }
   }else{
-    // 名称搜索：从东方财富搜索代理查全A股
+    // 名称搜索：前端直调东方财富搜索API
     try{
-      var r=await fetch('/api/gem/proxy/search?q='+encodeURIComponent(v))
-      var d=await r.json()
-      var items=d&&d.data
+      var sr=await fetch('https://searchadapter.eastmoney.com/api/suggest/get?input='+encodeURIComponent(v)+'&type=14&count=10&token=D43BF722C8E14A9C61B0D6E303FC9C19',{signal:timeoutSignal(8000),mode:'cors'})
+      var sd=await sr.json()
+      var items=sd&&sd.QuotationCodeTable&&sd.QuotationCodeTable.Data
       if(items&&items.length){
-        // 取第一个A股结果（排除ETF/指数）
-        var hit=items.find(function(x){return x.SecurityTypeName==='A股'||x.Code.startsWith('3')||x.Code.startsWith('6')||x.Code.startsWith('0')||x.Code.startsWith('1')})
+        var hit=items.find(function(x){return x.SecurityTypeName==='A股'||x.Code.startsWith('3')||x.Code.startsWith('6')||x.Code.startsWith('0')})
         if(!hit)hit=items[0]
         var rawCode=hit.Code.replace(/\.(SZ|SH)$/i,'')
         stockCode=rawCode
         stockName=hit.Name||hit.Code
-        // 查Tencent行情拿实时价
         var t=await fetchTencentDetail(stockCode)
         if(t){stockPrice=t.price;stockChgP=t.chgP;stockName=t.name;stockHigh=t.high;stockLow=t.low;stockMarket=t.market}
         $('searchInput').value=stockName
@@ -2450,18 +2433,12 @@ async function doSearch(){
         }
       }catch(e){console.warn('[search] sina kline failed:',e.message||e)}
       
-      // ★ 备选3：后端代理→东方财富（CORS不通时走服务端）
+      // ★ 备选3：前端直调东财（日K线）
       if(stockMarket!=='hk'&&stockMarket!=='us')try{
-        var proxyUrl=API+'/gem/proxy/kline?code='+stockCode+'&market='+(stockCode.startsWith('6')?'1':'0')
-        var prr=await fetch(proxyUrl,{signal:timeoutSignal(15000)})
-        if(prr.ok){
-          try{var prd=await prr.json()}catch(ee){prd=null}
-          if(prd&&prd.code===200&&prd.data&&prd.data.length>=5){
-            kdata=prd.data
-            console.log('[search] proxy eastmoney got '+kdata.length+' bars')
-          }
-        }
-      }catch(e){console.warn('[search] proxy eastmoney failed:',e.message||e)}
+        var _em4=(stockCode.startsWith('6')||stockCode.startsWith('68'))?'1.':'0.'
+        var er4=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+_em4+stockCode+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(10000),mode:'cors'})
+        if(er4.ok){var ed4=await er4.json();if(ed4&&ed4.data&&ed4.data.klines&&ed4.data.klines.length>=5){kdata=ed4.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[search] eastmoney kline got '+kdata.length+' bars')}}
+      }catch(e){console.warn('[search] eastmoney kline failed:',e.message||e)}
       
       
       if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
