@@ -2656,40 +2656,11 @@ async function doSearch(){
         throw new Error('分析无结果')
       }
     }catch(e){
-      // K线拉取失败（跨域/超时），兜底查缓存
-      try{
-        var r2=await fetch('/api/gem/search?q='+encodeURIComponent(stockCode),{signal:timeoutSignal(15000)})
-        var j2=await r2.json()
-        if(j2.code===200&&j2.data&&j2.data.length>0){
-          var o2=j2.data[0];o2.name=stockName
-          if(jiGouFromKdata)o2.jiGouActiveScore=jiGouFromKdata
-          o2.currentPrice=o2.currentPrice||stockPrice
-          o2.changePercent=o2.changePercent||stockChgP
-          // 用实时涨幅修正信号（只升级不降级，不覆盖后端减仓/卖出信号）
-          var liveSug2=null
-          var BACKEND_SELL2=['减仓','卖出','不要介入']
-          if(stockChgP>=9)liveSug2='重仓买入'
-          else if(stockChgP>=6)liveSug2='买入'
-          else if(stockChgP>=3)liveSug2='轻仓买入'
-          var LP=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入']
-          if(liveSug2 && !BACKEND_SELL2.includes(o2.suggestion||'') && LP.indexOf(liveSug2)<LP.indexOf(o2.suggestion||'持有')){
-            o2.suggestion=liveSug2
-          }
-          da.style.minHeight='';
-        if(!window._auctionDataCache||!window._auctionDataCache[stockCode]){fetchAuctionData([stockCode],5).then(function(){renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)})}
-        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+o2.name+' ('+o2.code+')</div>'+buildDetail(o2,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow})
-        renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
-        setTimeout(function(){startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)},0)
-        }else{
-          da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-            +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
-            +'<span style="font-size:28px;display:block;margin-bottom:8px">📊</span>'
-            +'股票已找到，但服务器分析超时<br>请稍后点击「立即扫描」查看最新分析结果</div>'
-        }
-      }catch(e2){
-        da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
-          +'<div style="padding:16px;text-align:center;color:#ff6b35;font-size:13px">分析请求失败，请重试</div>'
-      }
+      da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
+        +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
+        +'<span style="font-size:28px;display:block;margin-bottom:8px">⚠️</span>'
+        +'网络错误，请稍后重试</div>'
+    }
     }
   }else{
     da.style.display='block'
