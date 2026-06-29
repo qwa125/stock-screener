@@ -912,7 +912,10 @@ function showDetail(i){
   renderList()
   // 非交易时段且已有缓存数据 → 直接展示（含日内介入参考），不再拉K线
   if(!isTH()&&s.suggestion){
-    startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
+    var _hi=rt.high||s.intradayHigh||0,_lo=rt.low||s.intradayLow||0,_pr=rt.price||s.currentPrice||0
+    console.log('[showDetail] 非交易时段 startIntradayRefresh',s.code,_hi,_lo,_pr)
+    startIntradayRefresh(s.code,_hi,_lo,_pr)
+    console.log('[showDetail] 非交易时段 startIntradayRefresh 完成，intradayMacd exists:',!!$('intradayMacd'))
     return
   }
   // 交易时段：若实时数据缺少高低价，异步补拉一份
@@ -1925,6 +1928,7 @@ async function fetchIntraday(code){
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 async function refreshDetailPrice(code,low,high,lastPrice){
+  console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   // 非交易时段：不走后端，直接用缓存数据渲染价格条+挂单参考
   if(!isTH()){
     var lastPriceH=lastPrice||0
