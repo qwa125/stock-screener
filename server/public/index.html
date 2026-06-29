@@ -979,7 +979,7 @@ function showDetail(i){
         kdata=kj.data||kj
       }
       // 再分析
-      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kd)?kd:kd.list||kd.kline||[]})})
+      var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
       var aj=await ar.json()
       var ad=aj.data||aj
       // ad 可能是数组 {code:200,data:[opp]} → 取第一个元素
