@@ -2096,10 +2096,18 @@ async function fetchIntraday(code){
 async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   var _rttmp=realtimePrices[code]||{}
-  // ★ 取数据：交易时段实时拉取，交易时段外使用冻结缓存
+  // ★ 取数据：交易时段实时拉取，非交易时段使用冻结缓存（无缓存则拉取一次后冻结）
   var ia=analysisData
   if(!ia){
-    if(isTH()){
+    // 非交易时段：优先使用冻结缓存，无缓存则拉取一次后冻结
+    if(!isTH()){
+      ia=window._frozenIA[code]||null
+      if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
+        // 非交易时段无缓存 → 拉取一次并冻结
+        ia=await fetchIntraday(code)
+        if(ia&&ia.currentPrice)window._frozenIA[code]=ia
+      }
+    }else{
       ia=await fetchIntraday(code)
       if(ia&&ia.currentPrice)window._frozenIA[code]=ia
     }
