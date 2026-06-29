@@ -982,14 +982,17 @@ function showDetail(i){
       var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:Array.isArray(kd)?kd:kd.list||kd.kline||[]})})
       var aj=await ar.json()
       var ad=aj.data||aj
-      if(ad&&ad.suggestion){
-        da.style.minHeight='';da.innerHTML=buildDetail(ad,rt,ad)
-        // ★ 用已有分析数据立即渲染日内参考，避免出现"⏳ 日内数据加载中..."
-        refreshDetailPrice(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0,ad)
-        // 交易时段启动2秒刷新
+      // ad 可能是数组 {code:200,data:[opp]} → 取第一个元素
+      var stockData=ad&&ad.suggestion?ad:(Array.isArray(ad)&&ad.length>0?ad[0]:null)
+      if(stockData&&stockData.suggestion){
+        da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
+        // 交易时段启动2秒刷新，每2s用实时价格更新三角形位置
         if(isTH()){
           stopIntradayRefresh()
-          intradayTimer=setInterval(function(){refreshDetailPrice(code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)},2000)
+          intradayTimer=setInterval(function(){
+            var _rp=realtimePrices[code]
+            refreshDetailPrice(code,_rp&&_rp.low||s.intradayLow||0,_rp&&_rp.high||s.intradayHigh||0,_rp&&_rp.price||s.currentPrice||0)
+          },2000)
         }
       }
     }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
@@ -2184,7 +2187,10 @@ function startIntradayRefresh(code,high,low,price){
     return
   }
   refreshDetailPrice(code,low,high,price) // 立即执行一次
-  intradayTimer=setInterval(function(){refreshDetailPrice(code,low,high,price)},2000)
+  intradayTimer=setInterval(function(){
+    var _rp=realtimePrices[code]
+    refreshDetailPrice(code,_rp&&_rp.low||low,_rp&&_rp.high||high,_rp&&_rp.price||price)
+  },2000)
 }
 function stopIntradayRefresh(){
   if(intradayTimer){clearInterval(intradayTimer);intradayTimer=null}
