@@ -965,6 +965,7 @@ function showDetail(i){
   isDetailView=true
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
+  if(!window._auctionDataCache||!window._auctionDataCache[s.code])fetchAuctionData([s.code],5)
   var da=$('detailArea')
   da.style.display='block'
   da.style.minHeight='';da.innerHTML=buildDetail(s,rt)
@@ -2003,6 +2004,7 @@ async function fetchIntraday(code){
 async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   var _rttmp=realtimePrices[code]||{}
+  if(!window._auctionDataCache||!window._auctionDataCache[code])fetchAuctionData([code],5)
   // ★ 取数据：交易时段实时拉取，交易时段外使用冻结缓存
   var ia=analysisData
   if(!ia){
