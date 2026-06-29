@@ -290,6 +290,16 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             existing.lastSeen = Date.now();
             if (existing.isAdmin)
                 return { allowed: true };
+            if (isAdmin) {
+                existing.isAdmin = true;
+                existing.displayName = '👑 管理员';
+                this.logger.log(`👑 已有设备升级为管理员: ${deviceId.slice(0, 20)}`);
+                if (this.pgSql) {
+                    await this.pgSql `UPDATE public.device_access_devices SET is_admin = true, display_name = '👑 管理员' WHERE id = ${deviceId}`.catch(() => { });
+                }
+                this.saveToFile();
+                return { allowed: true };
+            }
             const nonAdminDevices = this.registry.filter(d => !d.isAdmin).sort((a, b) => a.firstSeen - b.firstSeen);
             const rank = nonAdminDevices.findIndex(e => e.fingerprint === deviceId);
             if (rank >= limit) {
@@ -307,9 +317,9 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
             this.logger.log(`👑 管理员设备注册: ${deviceId.slice(0, 20)} (不计入名额)`);
             if (this.pgSql) {
                 await this.pgSql `
-          INSERT INTO public.device_access_devices (id, ua, display_name, first_seen, last_seen) 
-          VALUES (${deviceId}, ${ua}, ${displayName + '(管理员)'}, ${now}, ${now})
-          ON CONFLICT (id) DO UPDATE SET last_seen = EXCLUDED.last_seen
+          INSERT INTO public.device_access_devices (id, ua, display_name, first_seen, last_seen, is_admin) 
+          VALUES (${deviceId}, ${ua}, ${displayName + '(管理员)'}, ${now}, ${now}, true)
+          ON CONFLICT (id) DO UPDATE SET last_seen = EXCLUDED.last_seen, is_admin = true
         `.catch(() => { });
             }
             this.saveToFile();
