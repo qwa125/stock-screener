@@ -2052,11 +2052,13 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
           if(_aucF.auctionVolume>0)h+='<span style="font-size:8px;color:#9ca3af">竞价量 '+_aucF.auctionVolume+'手</span>'
           h+='</div>'
         }
-        // 竞价走势占位
-        h+='<div id="aucTrend_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+        // 竞价走势占位（已有SVG则保留，避免每2s覆盖为"加载中"）
+        var _atEl=$('aucTrend_'+code)
+        if(!_atEl||!_atEl.innerHTML||_atEl.innerHTML.indexOf('<svg')<0){
+          h+='<div id="aucTrend_'+code+'" style="margin-top:3px;min-height:40px;font-size:9px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+          renderAuctionTrend(code,dayLow2,dayHigh2,lastPriceH)
+        }
         h+='</div>'
-        // 异步加载走势曲线
-        renderAuctionTrend(code,dayLow2,dayHigh2,lastPriceH)
       }
       h+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
       h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围'+(isTH()?'（实时报价）':'（基于缓存数据）')+'</div>'
@@ -2173,11 +2175,16 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       if(auc.auctionVolume>0)html+='<span style="font-size:9px;color:#9ca3af">竞价量 '+auc.auctionVolume+'手</span>'
       html+='</div>'
     }
-    // 集合竞价走势迷你图占位
-    html+='<div id="aucTrend_'+code+'" style="margin-top:4px;min-height:50px;font-size:10px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
-    html+='</div>'
-    // 异步拉取竞价走势曲线（不阻塞渲染）
-    renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice)
+    // 集合竞价走势迷你图占位（已有SVG则保留）
+    var _atEl2=$('aucTrend_'+code)
+    if(!_atEl2||!_atEl2.innerHTML||_atEl2.innerHTML.indexOf('<svg')<0){
+      html+='<div id="aucTrend_'+code+'" style="margin-top:4px;min-height:50px;font-size:10px;color:#9ca3af;text-align:center">⏳ 竞价走势加载中...</div>'
+      html+='</div>'
+      // 异步拉取竞价走势曲线（不阻塞渲染）
+      renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice)
+    }else{
+      html+='</div>'
+    }
   }
   // 📊 日内价格位置条形图(最高价-最低价+三角形箭头标记当前价)
   var pricePosPercent=dayHigh>dayLow?Math.max(0,Math.min(100,(lastPrice-dayLow)/(dayHigh-dayLow)*100)):50
