@@ -1,4 +1,4 @@
-<!-- Core v20250628-inline8 -->
+<!-- Core v20250628-inline9 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -127,7 +127,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <body>
 <div class="header">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v10</span></h1>
+    <h1>A股优选 <span id="verBadge" style="font-size:10px;background:#6366f1;color:#fff;padding:1px 5px;border-radius:3px;vertical-align:middle">v11</span></h1>
     <div style="display:flex;align-items:center;gap:12px">
       <small id="lastScanDisplay" style="color:#999;font-size:12px"></small>
       <span style="display:inline-block;background:#e8f4fd;color:#0284c7;font-size:11px;padding:2px 6px;border-radius:4px;font-weight:600" id="scanCountBadge">—</span>
@@ -174,7 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 <div class="stock-list" id="stockList">
   <div class="empty" id="emptyMsg">点击上方按钮开始扫描</div>
 </div>
-<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v10</span>
+<div class="footer" id="footer">⏸️ 等待扫描 <span id="marketStateFooter" style="margin-left:8px;font-weight:500"></span></div><span id="verBadge" style="position:fixed;bottom:2px;right:8px;font-size:9px;color:#ccc;z-index:999">v11</span>
 <!-- Admin overlay + panel -->
 <div class="admin-overlay" id="adminOverlay" onclick="if(event.target===this)closeAdmin()">
 <div class="admin-panel" id="adminPanel">
@@ -1119,11 +1119,21 @@ function showDetail(i){
         // ★ 从原始缓存数据补齐stockData缺失的字段（非交易时段rt可能为空）
         if(s.intradayHigh)stockData.intradayHigh=s.intradayHigh
         if(s.intradayLow)stockData.intradayLow=s.intradayLow
-        if(s.name&&!stockData.name)stockData.name=s.name
-        // ★ 保存后端原始信号，用于实时动态计算
+        if(s.name&&!stockData.name)stockData.name=s.name;window['_lastDetailName_'+code]=stockData.name||s.name||''
+        // ★ 保存后端原始信号（不做任何前端加工），供10分钟重分析+2秒动态更新使用
         window['_baseSig_'+code]=stockData.suggestion
-        // ★ 根据实时涨跌幅动态计算信号（每2秒轮询重评估）
-        _refreshDetailSig(code)
+        // ★ 前端根据实时涨跌幅动态升级（不覆盖后端减仓/卖出信号）
+        var _cp=s.changePercent||(realtimePrices[code]&&realtimePrices[code].chgP)||0
+        var _LIVE_PRI=["重仓买入","买入","轻仓买入","持有","减仓","卖出","不要介入"]
+        var _ls=null,_SELL=["减仓","卖出","不要介入"]
+        if(_cp>=9)_ls="重仓买入"
+        else if(_cp>=6)_ls="买入"
+        else if(_cp>=3)_ls="轻仓买入"
+        if(_ls&&stockData.suggestion&&!_SELL.includes(stockData.suggestion)&&_LIVE_PRI.indexOf(_ls)<_LIVE_PRI.indexOf(stockData.suggestion)){
+          var _oldSug=stockData.suggestion
+          stockData.suggestion=_ls
+          console.log("[detail] init upgrade",stockData.code,"from",_oldSug,"to",_ls,"(chg:"+_cp+"%)")
+        }
         // ★ 等待竞价数据就绪后再渲染（避免竞价模块缺失）
         if(!window._auctionDataCache||!window._auctionDataCache[code])await fetchAuctionData([code],5)
         da.style.minHeight='';da.innerHTML=buildDetail(stockData,rt,stockData)
@@ -1134,20 +1144,61 @@ function showDetail(i){
         stopIntradayRefresh()
         var _r2=realtimePrices[code]
         refreshDetailPrice(code,_r2&&_r2.low||s.intradayLow||0,_r2&&_r2.high||s.intradayHigh||0,_r2&&_r2.price||s.currentPrice||0)
+        // ★ 启动价格刷新（每2秒）+ 建议动态更新 + 10分钟重分析
         if(isTH()){
           intradayTimer=setInterval(function(){
             var _rp=realtimePrices[code]
             refreshDetailPrice(code,_rp&&_rp.low||s.intradayLow||0,_rp&&_rp.high||s.intradayHigh||0,_rp&&_rp.price||s.currentPrice||0)
-            // 实时更新操作建议（非交易时段不用轮询）
+            // 每2秒根据实时涨跌幅动态更新操作建议（基于_cache的_baseSig_）
             _refreshDetailSig(code)
           },2000)
         }else{
-          // 非交易时段也执行一次初始动态信号
+          // 非交易时段执行一次初始动态信号
           _refreshDetailSig(code)
+        }
+        // ★ 每10分钟重新拉取后端分析数据，刷新_baseSig_
+        if(!window['_reAnalysisTimer_'+code]){
+          window['_reAnalysisTimer_'+code]=setInterval(function(){
+            _reAnalyzeDetail(code)
+          },10*60*1000)
         }
       }
     }catch(e){console.warn('[analyze] 统一分析失败:',e.message)}
 
+  })()
+}
+
+// ★ 每10分钟重新拉取后端分析，刷新_baseSig_（不重新渲染DOM，由2秒定时器接管DOM更新）
+function _reAnalyzeDetail(code){
+  if(document.getElementById('detailArea').style.display==='none'){clearInterval(window['_reAnalysisTimer_'+code]);delete window['_reAnalysisTimer_'+code];return}
+  // 检查是否仍是当前打开的股
+  if(lastIntradayCode!==code)return
+  // 拉取K线 + 后端分析
+  ;(async function(){
+    try{
+      var kdata=null
+      try{
+        var emSec=(code.startsWith('6')?'1.':'0.')+code
+        var ekr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSec+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=5',{signal:8000,mode:'cors'})
+        if(ekr.ok){
+          var ej=await ekr.json()
+          kdata=ej&&ej.data&&ej.data.klines
+        }
+      }catch(e){}
+      if(!kdata||!kdata.length)return
+      var _kr=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:kdata,name:window['_lastDetailName_'+code]||''})}).then(function(r){return r.json()})
+      var _sd=_kr&&_kr.data||_kr
+      if(!_sd||!_sd.suggestion)return
+      // 更新_baseSig_
+      window['_baseSig_'+code]=_sd.suggestion
+      // 同步更新缓存中的日内数据
+      if(_sd.intradayHigh)realtimePrices[code].intradayHigh=_sd.intradayHigh
+      if(_sd.intradayLow)realtimePrices[code].intradayLow=_sd.intradayLow
+      // 2秒定时器会自动根据新_baseSig_ + 实时涨跌幅重新计算并更新DOM
+      // 立即刷新一次（不等2秒）
+      _refreshDetailSig(code)
+      console.log('[reAnalyze]',code,'baseSig updated to',_sd.suggestion,'next in 10min')
+    }catch(e){console.warn('[reAnalyze]',code,e.message)}
   })()
 }
 
