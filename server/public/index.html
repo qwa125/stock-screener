@@ -270,8 +270,7 @@ function showBlocked(isLimited){
 function hideBlocked(){
   $("pageBlur").style.display='none'
   deviceRegistered=true
-  // 注册成功后渲染股票（如有缓存数据）
-  if(stocks&&stocks.length){renderList()}
+  renderList()
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
