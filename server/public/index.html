@@ -279,16 +279,22 @@ console.log('页面初始化完成')
 async function handleBlurClick(){
   if(deviceRegistered)return
   var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
+  $('blurMsg').innerHTML='⏳ 首次加载较慢（服务器冷启动约30-60秒），请耐心等待...'
   try{
     var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
-    var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders})
+    var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},65000)
+    var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders,signal:ac.signal});clearTimeout(tmr)
     btn.disabled=false;btn.textContent='📊 点击扫描解锁'
     if(regRes.status===429){showBlocked(true);return}
     if(regRes.status!==200){showBlocked(false);return}
     hideBlocked()
   }catch(e){
     btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-    $('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试'
+    if(e.name==='AbortError'){
+      $('blurMsg').innerHTML='⏳ 服务器正在启动（冷启动需要30-60秒），请再点击一次重试'
+    }else{
+      $('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试'
+    }
   }
 }
 // 主页面扫描按钮：立即触发扫描
@@ -2029,12 +2035,16 @@ function selectPinyinStock(code,name){
 }
 
 // ---------- 日内分析：MACD(40/120/40) + 主力/散户 + 实时价格 ----------
+var _intradayFetching={}
 async function fetchIntraday(code){
+  if(_intradayFetching[code])return null
+  _intradayFetching[code]=true
   try{
-    var r=await fetch('/api/gem/intraday-analysis?code='+code,{headers:{'X-Device-Id':getOrCreateDeviceId()}})
+    var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},15000)
+    var r=await fetch('/api/gem/intraday-analysis?code='+code,{headers:{'X-Device-Id':getOrCreateDeviceId()},signal:ac.signal});clearTimeout(tmr)
     var d=await r.json()
     return d&&d.data||null
-  }catch(e){return null}
+  }catch(e){return null}finally{_intradayFetching[code]=false}
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 // 可选参数 analysisData：传入预取的分析数据则跳过 fetchIntraday
