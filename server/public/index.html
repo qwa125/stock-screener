@@ -3135,11 +3135,6 @@ setInterval(function(){
   }
 })()
 
-// 防 Render 冷启动：每10分钟 ping 后端保持唤醒
-setInterval(function(){
-  fetch(API+'/gem/market-state',{signal:AbortSignal.timeout(5000)}).catch(function(){})
-}, 10*60*1000)
-
 // 个股股价每2秒刷新
 var priceTimer=null,marketTimer=null
 
