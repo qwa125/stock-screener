@@ -1967,15 +1967,45 @@ async function doFullRescan(saveToBackend){
         stocks.push(ns);inList[ns.code]=1
       }
     }
-    // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按信号→入场时机→评分→涨幅重整）
+    // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按后端一致的6层排序）
+    // ① 板块热度 ② 上涨空间 ③ 入场时机 ④ 买入信号 ⑤ 机构活跃 ⑥ 主力资金
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+    var TIMING={'最佳':5,'可以':4,'可关注':3,'谨慎':2,'观望':1}
+    // 计算板块热度
+    var sectorHeat={},sectorCount={}
+    stocks.forEach(function(s){
+      if(!s.sectorName)return
+      sectorHeat[s.sectorName]=(sectorHeat[s.sectorName]||0)+(s.changePercent||0)
+      sectorCount[s.sectorName]=(sectorCount[s.sectorName]||0)+1
+    })
+    for(var k in sectorHeat){sectorHeat[k]=sectorHeat[k]/sectorCount[k]}
+    function calcUpside(s){
+      var conc=s.chipConcentration90
+      if(conc===null||conc===undefined||conc===-1) return 40
+      var cs;if(conc<=3)cs=100;else if(conc<=5)cs=95;else if(conc<=10)cs=85;else if(conc<=15)cs=70;else if(conc<=25)cs=50;else if(conc<=40)cs=30;else cs=10
+      var pk=s.chipPeakPosition
+      if(pk==='low')cs=cs*1.15
+      else if(pk==='high'){if(conc<=10)cs=cs*1.3;else if(conc<=20)cs=cs*0.9;else cs=cs*0.5}
+      return Math.min(100,cs)
+    }
     stocks.sort(function(a,b){
+      // ① 板块热度（板块平均涨幅降序）
+      var sa=sectorHeat[a.sectorName]||0,sb=sectorHeat[b.sectorName]||0
+      if(sb!==sa) return sb-sa
+      // ② 上涨空间（筹码集中度综合评分降序）
+      var ua=calcUpside(a),ub=calcUpside(b)
+      if(ub!==ua) return ub-ua
+      // ③ 入场时机降序
+      var ta=TIMING[a.entryTiming]||0,tb=TIMING[b.entryTiming]||0
+      if(tb!==ta) return tb-ta
+      // ④ 买入信号升序
       var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
       if(pa!==pb) return pa-pb
-      var ea=a.entryTiming||0, eb=b.entryTiming||0
-      if(eb!==ea) return eb-ea
-      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      return (b.changePercent||0)-(a.changePercent||0)
+      // ⑤ 机构活跃度降序
+      var ia=a.jiGouActiveScore||0,ib=b.jiGouActiveScore||0
+      if(ib!==ia) return ib-ia
+      // ⑥ 主力资金净流入降序
+      return (b.mainForceInflow||0)-(a.mainForceInflow||0)
     })
     // ====== DEBUG: 排序后 ======
     try{
