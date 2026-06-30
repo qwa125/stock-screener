@@ -1921,68 +1921,22 @@ async function doFullRescan(saveToBackend){
   }
 
   if(newStocks.length){
-    setStatus('🔄 共 '+newStocks.length+' 只（缓存'+Object.keys(seen).length+'只+新增'+(newStocks.length-Object.keys(seen).length)+'只），排序中...')
+    setStatus('🔄 共 '+newStocks.length+' 只，执行6层排序...')
     stocks=newStocks
-    // 排序：信号优先级 → 入场时机 → 日内位置(低位优先) → 综合评分 → 今日涨幅(降序)
-    var PRI={ '重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6 }
-    function calcIntradayScore(s){
-      var hi=s.intradayHigh||0, lo=s.intradayLow||0, p=s.currentPrice||0
-      if(!hi||!lo||hi<=lo) return 1
-      var pos=(p-lo)/(hi-lo)*100
-      return pos<25?3:pos<50?2:pos<75?1:0
-    }
-    // 保存缓存股最新数据（排序会打乱位置）
-    var cacheLatest=[]
-    for(var ci=0;ci<newStocks.length;ci++){cacheLatest.push(newStocks[ci])}
-    stocks.sort(function(a,b){
-      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
-      if(pa!==pb) return pa-pb
-      // 第二排序：入场时机(高→低)
-      var ea=a.entryTiming||0, eb=b.entryTiming||0
-      if(eb!==ea) return eb-ea
-      // 第三排序：日内位置(低位优先，现价可介入排最前)
-      var ia=calcIntradayScore(a), ib=calcIntradayScore(b)
-      if(ia!==ib) return ib-ia
-      // 第四排序：综合评分(高→低)
-      if((b.score||0)!==(a.score||0)) return (b.score||0)-(a.score||0)
-      // 第五排序：今日涨幅(高→低)，让强势股浮上来
-      return (b.changePercent||0)-(a.changePercent||0)
-    })
-    // 只保留重仓买入/买入的股票
-    var ALLOWED={'重仓买入':1,'买入':1}
-    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
-    // 追加缓存股（后端分析过的股票，即使当前涨幅低也保留）
-    if(newStocks.length>0){
-      var inList={};stocks.forEach(function(s){inList[s.code]=1})
-      for(var ci=0;ci<newStocks.length;ci++){
-        // 使用更新后的数据('cacheLatest')而非原始newStocks
-        var cl=cacheLatest[ci]
-        if(ALLOWED[cl.suggestion]&&!inList[cl.code])
-          {stocks.push(cl);inList[cl.code]=1}
-      }
-    }
-    // 确保已知优质股出现在结果中（即使不在缓存里、即使当前涨幅低）
-    var SPECIAL_CODES=['300005']  // 探路者
-    var SOFT_ALLOWED={'重仓买入':1,'买入':1,'持有':1}
-    for(var si=0;si<newStocks.length;si++){
-      var ns=newStocks[si]
-      if(SPECIAL_CODES.indexOf(ns.code)>=0&&SOFT_ALLOWED[ns.suggestion]&&!inList[ns.code]){
-        stocks.push(ns);inList[ns.code]=1
-      }
-    }
-    // 重新排序（追加的缓存股和SPECIAL_CODES打乱了顺序，按后端一致的6层排序）
-    // ① 板块热度 ② 上涨空间 ③ 入场时机 ④ 买入信号 ⑤ 机构活跃 ⑥ 主力资金
+
+    // === 只有6层排序：板块热度→上涨空间→入场时机→买入信号→机构活跃→主力资金 ===
     var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
     var TIMING={'最佳':5,'可以':4,'可关注':3,'谨慎':2,'观望':1}
     // 计算板块热度
     var sectorHeat={},sectorCount={}
-    stocks.forEach(function(s){
-      if(!s.sectorName)return
-      sectorHeat[s.sectorName]=(sectorHeat[s.sectorName]||0)+(s.changePercent||0)
-      sectorCount[s.sectorName]=(sectorCount[s.sectorName]||0)+1
-    })
-    for(var k in sectorHeat){sectorHeat[k]=sectorHeat[k]/sectorCount[k]}
-    function calcUpside(s){
+    for(var _si6=0;_si6<stocks.length;_si6++){
+      var _s6=stocks[_si6]
+      if(!_s6.sectorName)continue
+      sectorHeat[_s6.sectorName]=(sectorHeat[_s6.sectorName]||0)+(_s6.changePercent||0)
+      sectorCount[_s6.sectorName]=(sectorCount[_s6.sectorName]||0)+1
+    }
+    for(var k6 in sectorHeat){sectorHeat[k6]=sectorHeat[k6]/sectorCount[k6]}
+    function calcUpside6(s){
       var conc=s.chipConcentration90
       if(conc===null||conc===undefined||conc===-1) return 40
       var cs;if(conc<=3)cs=100;else if(conc<=5)cs=95;else if(conc<=10)cs=85;else if(conc<=15)cs=70;else if(conc<=25)cs=50;else if(conc<=40)cs=30;else cs=10
@@ -1992,29 +1946,29 @@ async function doFullRescan(saveToBackend){
       return Math.min(100,cs)
     }
     stocks.sort(function(a,b){
-      // ① 板块热度（板块平均涨幅降序）
+      // ① 板块热度
       var sa=sectorHeat[a.sectorName]||0,sb=sectorHeat[b.sectorName]||0
       if(sb!==sa) return sb-sa
-      // ② 上涨空间（筹码集中度综合评分降序）
-      var ua=calcUpside(a),ub=calcUpside(b)
+      // ② 上涨空间
+      var ua=calcUpside6(a),ub=calcUpside6(b)
       if(ub!==ua) return ub-ua
-      // ③ 入场时机降序
+      // ③ 入场时机
       var ta=TIMING[a.entryTiming]||0,tb=TIMING[b.entryTiming]||0
       if(tb!==ta) return tb-ta
-      // ④ 买入信号升序
+      // ④ 买入信号
       var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
       if(pa!==pb) return pa-pb
-      // ⑤ 机构活跃度降序
+      // ⑤ 机构活跃度
       var ia=a.jiGouActiveScore||0,ib=b.jiGouActiveScore||0
       if(ib!==ia) return ib-ia
-      // ⑥ 主力资金净流入降序
+      // ⑥ 主力资金
       return (b.mainForceInflow||0)-(a.mainForceInflow||0)
     })
     // ====== DEBUG: 排序后 ======
     try{
       var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
       var _spD=[];if(_sigD['重仓买入']){_spD.push('🔥重仓买入'+_sigD['重仓买入']+'只')}if(_sigD['买入']){_spD.push('✅买入'+_sigD['买入']+'只')}if(_sigD['轻仓买入']){_spD.push('⚪轻仓买入'+_sigD['轻仓买入']+'只')}
-      console.log('🔍 DEBUG: 最终排序后共有 '+stocks.length+' 只: '+_spD.join(' | '))
+      console.log('🔍 6层排序完成: 共'+stocks.length+'只: '+_spD.join(' | '))
       stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
     }catch(e){}
     // 过滤：只保留重仓买入/买入
