@@ -209,7 +209,7 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function isCallAuction(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=555&&m<565}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m>=555&&m<565)return'';if(m<555)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false
+var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false,_lastBuySignals=[]
 // 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
 var _lockedBuyPrice=null,_lockedBuyTime='',_lockedSellPrice=null,_lockedSellTime=''
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
@@ -1996,9 +1996,18 @@ async function doFullRescan(saveToBackend){
     }catch(e){}
     // 过滤：只保留重仓买入/买入
     var ALLOWED={'重仓买入':1,'买入':1}
+    // ★ 备份本轮完整排序结果，无信号时保留前10分钟数据
+    if(stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0}).length>0){
+      _lastBuySignals=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0}).slice()
+    }
     stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     if(stocks.length===0){
-      setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
+      if(_lastBuySignals.length){
+        stocks=_lastBuySignals.slice()
+        setStatus('⚠️ 当前无符合条件的个股，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
+      }else{
+        setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
+      }
     }
     // 持久化到浏览器本地，服务器重启后可恢复
     try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:newStocks,ts:Date.now()}))}catch(e){}
@@ -2871,6 +2880,7 @@ setInterval(function(){
       var cs=JSON.parse(cached)
       if(cs&&cs.list&&cs.list.length&&Date.now()-cs.ts<6*3600000){ // 6小时内有效
         stocks=cs.list
+        _lastBuySignals=stocks.slice()
         renderList()
         setStatus('📋 缓存 '+stocks.length+' 只（本地快照）')
         console.log('📋 本地缓存加载成功')
@@ -2886,6 +2896,8 @@ setInterval(function(){
         if(d.code===200&&d.data&&d.data.length){
           stocks=d.data.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
           if(stocks.length){
+            // ★ 更新备份
+            _lastBuySignals=stocks.slice()
             // 持久化到浏览器本地，下次后端无缓存时可直接展示
             try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             // 同时保存 filtered stocks 到 lastStocks，供 init 秒级展示
@@ -2894,7 +2906,14 @@ setInterval(function(){
             setStatus('📋 缓存已加载 '+stocks.length+' 只（缓存已加载）')
             return // ← 关键修复：后端有数据直接返回，避免被下方localStorage旧快照覆盖
           }else{
-            setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+            // ★ 当前无买入信号时，尝试保持前10分钟的结果
+            if(_lastBuySignals.length){
+              stocks=_lastBuySignals.slice()
+              renderList()
+              setStatus('⏳ 当前无买入信号，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
+            }else{
+              setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+            }
             return
           }
         }
@@ -2907,6 +2926,7 @@ setInterval(function(){
               var ALLOWED={'重仓买入':1,'买入':1}
               stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
               if(stocks.length){
+                _lastBuySignals=stocks.slice()
                 renderList()
                 setStatus('📋 本地快照恢复 '+stocks.length+' 只（服务器已重启，后台重建缓存中...）')
                 return // 跳过下面的setStatus
@@ -2927,6 +2947,7 @@ setInterval(function(){
               var ALLOWED={'重仓买入':1,'买入':1}
               stocks=s.stocks.filter(function(s2){return ALLOWED[s2.suggestion]?1:0})
               if(stocks.length){
+                _lastBuySignals=stocks.slice()
                 renderList()
                 setStatus('📋 本地快照恢复（网络异常，后台重试中...）')
               }else{
