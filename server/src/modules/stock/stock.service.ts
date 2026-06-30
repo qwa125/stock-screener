@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { promises as fs, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { getTradingSuggestion } from '../../utils/trading-suggestion';
 import { FormulaEngine } from './formula-engine';
 import { calcBaiSanJiao } from './bai-san-jiao';
 import { calcBaiLingXing } from './bai-ling-xing';
@@ -7,10 +10,6 @@ import { calcXingXing } from './xing-xing';
 import { DataFetcherService } from './data-fetcher.service';
 import { generateSignals } from './rule-engine';
 import { StockInfo, BacktestStats, SignalEntry } from './types';
-import { promises as fs, existsSync, readFileSync } from 'fs';
-import { join } from 'node:path';
-
-import { getTradingSuggestion } from '../../utils/trading-suggestion';
 
 /** 简便MA计算 */
 function calculateMA(data: number[], period: number): number[] {

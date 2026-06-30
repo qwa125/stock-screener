@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Query, Headers, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
-import { AccessControlService } from './access-control.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
+import { AccessControlService } from './access-control.service';
 
 @Controller('access')
 export class AccessControlController {

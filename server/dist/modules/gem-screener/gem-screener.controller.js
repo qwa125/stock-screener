@@ -15,12 +15,12 @@ var GemScreenerController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerController = void 0;
 const common_1 = require("@nestjs/common");
+const node_fs_1 = require("node:fs");
+const node_path_1 = require("node:path");
 const access_limit_guard_1 = require("../../guards/access-limit.guard");
 const gem_screener_service_1 = require("./gem-screener.service");
 const gem_screener_scheduler_1 = require("./gem-screener.scheduler");
 const stock_service_1 = require("../stock/stock.service");
-const fs_1 = require("fs");
-const path_1 = require("path");
 const data_1 = require("../../industry-sectors/data");
 let GemScreenerController = GemScreenerController_1 = class GemScreenerController {
     constructor(gemScreener, scheduler, stockService) {
@@ -203,12 +203,12 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         try {
             const paths = [
-                (0, path_1.join)(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
-                (0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
+                (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets', 'heavy-buy-cache.json'),
+                (0, node_path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json'),
             ];
             for (const p of paths) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
+                if ((0, node_fs_1.existsSync)(p)) {
+                    const raw = (0, node_fs_1.readFileSync)(p, 'utf-8');
                     const parsed = JSON.parse(raw);
                     const seedData = parsed.data || parsed.opportunities || parsed;
                     if (Array.isArray(seedData) && seedData.length > 0) {
@@ -262,10 +262,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     readHeavyBuyCache() {
         try {
-            const paths = [(0, path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json')];
+            const paths = [(0, node_path_1.join)(process.cwd(), 'assets', 'heavy-buy-cache.json')];
             for (const p of paths) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = (0, fs_1.readFileSync)(p, 'utf-8');
+                if ((0, node_fs_1.existsSync)(p)) {
+                    const raw = (0, node_fs_1.readFileSync)(p, 'utf-8');
                     const data = JSON.parse(raw);
                     if (data && data.data && data.data.length > 0) {
                         return data.data.map(s => ({ ...s, suggestion: '重仓买入', suggestText: '🔥 重仓买入' }));

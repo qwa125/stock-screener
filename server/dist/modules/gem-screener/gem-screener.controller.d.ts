@@ -1,7 +1,7 @@
+import { Response } from 'express';
 import { GemScreenerService } from './gem-screener.service';
 import { GemScreenerScheduler } from './gem-screener.scheduler';
 import { StockService } from '../stock/stock.service';
-import { Response } from 'express';
 export declare class GemScreenerController {
     private readonly gemScreener;
     private readonly scheduler;

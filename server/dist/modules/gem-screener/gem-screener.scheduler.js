@@ -13,9 +13,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerScheduler = void 0;
 const common_1 = require("@nestjs/common");
 const schedule_1 = require("@nestjs/schedule");
+const fs = require("node:fs");
+const path = require("node:path");
 const gem_screener_service_1 = require("./gem-screener.service");
-const fs = require("fs");
-const path = require("path");
 let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
     constructor(gemService) {
         this.gemService = gemService;
@@ -143,7 +143,6 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
     _updateNextScanTime() {
         const min = this._bjMinutes();
         const now = this._bjNow();
-        const base = now.getTime();
         if (!this._isTradingDay()) {
             this.state.nextScanTime = this._nextTradingDayOpen().getTime();
             return;

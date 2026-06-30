@@ -1,6 +1,6 @@
-import { Controller, Post, Get, Body, Query, Logger, Headers, HttpException, HttpStatus } from '@nestjs/common'
-import { DeviceRegistryService } from './device-registry.service'
+import { Controller, Post, Get, Body, Logger, Headers, HttpException, HttpStatus } from '@nestjs/common'
 import { SkipAccessLimit } from '@/guards/access-limit.guard'
+import { DeviceRegistryService } from './device-registry.service'
 
 @Controller('device')
 export class DeviceController {

@@ -14,8 +14,8 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AccessControlController = void 0;
 const common_1 = require("@nestjs/common");
-const access_control_service_1 = require("./access-control.service");
 const device_registry_service_1 = require("../device/device-registry.service");
+const access_control_service_1 = require("./access-control.service");
 let AccessControlController = class AccessControlController {
     constructor(service, deviceRegistry) {
         this.service = service;

@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { GemScreenerService } from './gem-screener.service';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export interface MarketState {
   status: 'premarket' | 'trading' | 'lunch' | 'closed';
@@ -171,7 +171,6 @@ export class GemScreenerScheduler implements OnModuleInit {
   private _updateNextScanTime() {
     const min = this._bjMinutes();
     const now = this._bjNow();
-    const base = now.getTime();
 
     if (!this._isTradingDay()) {
       this.state.nextScanTime = this._nextTradingDayOpen().getTime();

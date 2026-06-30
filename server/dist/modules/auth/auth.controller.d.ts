@@ -1,5 +1,5 @@
-import { AuthService } from './auth.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
+import { AuthService } from './auth.service';
 export declare class AuthController {
     private readonly auth;
     private readonly deviceRegistry;

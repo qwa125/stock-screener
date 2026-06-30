@@ -13,27 +13,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GemScreenerService = void 0;
 const common_1 = require("@nestjs/common");
 const coze_coding_dev_sdk_1 = require("coze-coding-dev-sdk");
+const pinyin_pro_1 = require("pinyin-pro");
+const postgres_1 = require("postgres");
+const node_fs_1 = require("node:fs");
+const node_path_1 = require("node:path");
+const trading_suggestion_1 = require("../../utils/trading-suggestion");
+const market_time_1 = require("../../utils/market-time");
+const data_1 = require("../../industry-sectors/data");
+const data_fetcher_service_1 = require("../stock/data-fetcher.service");
+const stock_service_1 = require("../stock/stock.service");
+const technical_analysis_1 = require("./technical-analysis");
 const bai_xing_1 = require("../stock/bai-xing");
 const formula_engine_1 = require("../stock/formula-engine");
 const bai_san_jiao_1 = require("../stock/bai-san-jiao");
 const bai_ling_xing_1 = require("../stock/bai-ling-xing");
 const xing_xing_1 = require("../stock/xing-xing");
-const fs_1 = require("fs");
-const node_path_1 = require("node:path");
-const data_fetcher_service_1 = require("../stock/data-fetcher.service");
-const stock_service_1 = require("../stock/stock.service");
-const market_time_1 = require("../../utils/market-time");
-const trading_suggestion_1 = require("../../utils/trading-suggestion");
-const technical_analysis_1 = require("./technical-analysis");
-const pinyin_pro_1 = require("pinyin-pro");
-const data_1 = require("../../industry-sectors/data");
-const postgres = require('postgres');
 const ALL_SECTORS = [...data_1.default, ...data_1.CONCEPT_SECTORS];
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
-function getOpportunityTTL() {
-    return (0, market_time_1.isMarketOpen)() ? MARKET_OPEN_TTL : FROZEN_TTL;
-}
 let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     updateCache(type, data) {
         if (type === 'scan') {
@@ -54,7 +51,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         }
         try {
-            this._pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
+            this._pgSql = (0, postgres_1.default)(url, { max: 2, idle_timeout: 10, connect_timeout: 10 });
             this.logger.log('🗄️  PostgreSQL 连接已建立（缓存可跨重启持久化）');
         }
         catch (e) {
@@ -200,7 +197,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     loadCacheFromDisk() {
         try {
-            const raw = (0, fs_1.readFileSync)(this.CACHE_FILE, 'utf-8');
+            const raw = (0, node_fs_1.readFileSync)(this.CACHE_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data;
@@ -213,8 +210,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 无创业板本地缓存');
         }
         try {
-            if ((0, fs_1.existsSync)(this.BUNDLED_GEM_CACHE)) {
-                const raw = (0, fs_1.readFileSync)(this.BUNDLED_GEM_CACHE, 'utf-8');
+            if ((0, node_fs_1.existsSync)(this.BUNDLED_GEM_CACHE)) {
+                const raw = (0, node_fs_1.readFileSync)(this.BUNDLED_GEM_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
                     const limitedData = parsed.data;
@@ -229,7 +226,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     loadMainBoardCacheFromDisk() {
         try {
-            const raw = (0, fs_1.readFileSync)(this.MAIN_BOARD_CACHE, 'utf-8');
+            const raw = (0, node_fs_1.readFileSync)(this.MAIN_BOARD_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data;
@@ -242,8 +239,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 无主板本地缓存');
         }
         try {
-            if ((0, fs_1.existsSync)(this.BUNDLED_MAIN_BOARD_CACHE)) {
-                const raw = (0, fs_1.readFileSync)(this.BUNDLED_MAIN_BOARD_CACHE, 'utf-8');
+            if ((0, node_fs_1.existsSync)(this.BUNDLED_MAIN_BOARD_CACHE)) {
+                const raw = (0, node_fs_1.readFileSync)(this.BUNDLED_MAIN_BOARD_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
                     const limitedData = parsed.data;
@@ -258,7 +255,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     loadSectorCacheFromDisk() {
         try {
-            const raw = (0, fs_1.readFileSync)(this.SECTOR_CACHE, 'utf-8');
+            const raw = (0, node_fs_1.readFileSync)(this.SECTOR_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.data && Array.isArray(parsed.data)) {
                 const limitedData = parsed.data;
@@ -271,8 +268,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log('📦 无板块本地缓存');
         }
         try {
-            if ((0, fs_1.existsSync)(this.BUNDLED_SECTOR_CACHE)) {
-                const raw = (0, fs_1.readFileSync)(this.BUNDLED_SECTOR_CACHE, 'utf-8');
+            if ((0, node_fs_1.existsSync)(this.BUNDLED_SECTOR_CACHE)) {
+                const raw = (0, node_fs_1.readFileSync)(this.BUNDLED_SECTOR_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.data && Array.isArray(parsed.data)) {
                     const limitedData = parsed.data;
@@ -291,8 +288,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const files = [this.CACHE_FILE, this.MAIN_BOARD_CACHE];
         for (const p of files) {
             try {
-                if ((0, fs_1.existsSync)(p))
-                    (0, fs_1.unlinkSync)(p);
+                if ((0, node_fs_1.existsSync)(p))
+                    (0, node_fs_1.unlinkSync)(p);
             }
             catch { }
         }
@@ -300,7 +297,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async saveCacheToDisk() {
         try {
-            await fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
+            await node_fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(this.cache), 'utf-8');
         }
         catch (err) {
             this.logger.warn(`⚠️ GEM缓存写入失败: ${err.message}`);
@@ -311,7 +308,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     async saveMainBoardCacheToDisk() {
         try {
-            await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
+            await node_fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(this.mainBoardCache), 'utf-8');
         }
         catch (err) {
             this.logger.warn(`⚠️ 主板缓存写入失败: ${err.message}`);
@@ -322,8 +319,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     loadSellStateCache() {
         try {
-            if ((0, fs_1.existsSync)(this.SELL_STATE_FILE)) {
-                const raw = (0, fs_1.readFileSync)(this.SELL_STATE_FILE, 'utf-8');
+            if ((0, node_fs_1.existsSync)(this.SELL_STATE_FILE)) {
+                const raw = (0, node_fs_1.readFileSync)(this.SELL_STATE_FILE, 'utf-8');
                 const arr = JSON.parse(raw);
                 if (Array.isArray(arr)) {
                     for (const item of arr) {
@@ -347,7 +344,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const arr = Array.from(this.sellStateCache.entries()).map(([code, val]) => ({
                 code, suggestion: val.suggestion, timestamp: val.timestamp
             }));
-            await fs_1.promises.writeFile(this.SELL_STATE_FILE, JSON.stringify(arr), 'utf-8');
+            await node_fs_1.promises.writeFile(this.SELL_STATE_FILE, JSON.stringify(arr), 'utf-8');
         }
         catch (err) {
             this.logger.warn(`⚠️ 卖出锁定写入失败: ${err.message}`);
@@ -365,7 +362,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     loadSnapshotFromDisk() {
         try {
-            const raw = (0, fs_1.readFileSync)(this.SNAPSHOT_FILE, 'utf-8');
+            const raw = (0, node_fs_1.readFileSync)(this.SNAPSHOT_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && parsed.list && Array.isArray(parsed.list)) {
                 this.upgradedSnapshot = parsed;
@@ -399,7 +396,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     }
     saveSnapshotToDisk() {
         try {
-            (0, fs_1.writeFileSync)(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
+            (0, node_fs_1.writeFileSync)(this.SNAPSHOT_FILE, JSON.stringify(this.upgradedSnapshot), 'utf-8');
         }
         catch (e) {
             this.logger.error('📸 保存快照到磁盘失败', e);
@@ -428,7 +425,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.upgradeCacheFields(allData);
             this.addForecastToCache(allData);
             this.recalculateSuggestions(allData);
-            const now = Date.now();
             for (const s of allData) {
                 const sellEntry = this.sellStateCache.get(s.code);
                 if (sellEntry) {
@@ -478,8 +474,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (const s of data) {
             const sig = s.suggestion || '';
             const pos = s.pricePosition || 0;
-            const gc = s.isGoldenCross;
-            const ok = s.entryTiming && s.entryTiming >= 60 ? '强' : '弱';
             if (sig === '重仓买入') {
                 s.signalCombination = pos < 25 ? '白消信号+低位' : '白消信号+强势';
             }
@@ -897,7 +891,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async onApplicationBootstrap() {
         this.logger.log('📦 创业板: 启动跳过自动扫描, 等待前端推送数据触发引擎分析');
         try {
-            const raw = await fs_1.promises.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
+            const raw = await node_fs_1.promises.readFile(this.MAIN_BOARD_CACHE, 'utf-8');
             const parsed = JSON.parse(raw);
             this.mainBoardCache = { data: parsed.data, timestamp: parsed.timestamp };
             this.logger.log(`📦 主板机会区: 从磁盘恢复缓存, ${this.mainBoardCache.data.length} 只`);
@@ -915,7 +909,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`✅ PostgreSQL 创业板缓存恢复: ${pgGem.data.length} 只 (ts=${pgGem.timestamp})`);
             }
             try {
-                await fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(pgGem), 'utf-8');
+                await node_fs_1.promises.writeFile(this.CACHE_FILE, JSON.stringify(pgGem), 'utf-8');
             }
             catch { }
         }
@@ -926,7 +920,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`✅ PostgreSQL 主板缓存恢复: ${pgMain.data.length} 只 (ts=${pgMain.timestamp})`);
             }
             try {
-                await fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8');
+                await node_fs_1.promises.writeFile(this.MAIN_BOARD_CACHE, JSON.stringify(pgMain), 'utf-8');
             }
             catch { }
         }
@@ -937,7 +931,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 this.logger.log(`✅ PostgreSQL 快照恢复: ${pgSnapshot.list.length} 只 (ts=${pgSnapshot.timestamp})`);
             }
             try {
-                await fs_1.promises.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8');
+                await node_fs_1.promises.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8');
             }
             catch { }
         }
@@ -1125,7 +1119,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const last3Highs = highs.slice(-3);
             const l1 = last3Closes[last3Closes.length - 1], l2 = last3Closes[last3Closes.length - 2], l3 = last3Closes[last3Closes.length - 3];
             const h1 = last3Highs[last3Highs.length - 1], h3 = last3Highs[last3Highs.length - 3];
-            const lo1 = last3Lows[last3Lows.length - 1], lo3 = last3Lows[last3Lows.length - 3];
+            const lo1 = last3Lows[last3Lows.length - 1];
             const hammer = lo1 < l1 * 0.97 && h1 < l1 * 1.03;
             const morningStar = l3 < l2 * 0.95 && Math.abs(l2 - l1) < 0.3 && l1 > l2 * 1.02;
             const bullishEngulf = l1 > l2 && l1 > h3 && l3 > l2;
@@ -1536,7 +1530,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const finalResults = dedupedSector.slice(0, 30);
         this.sectorCache = { data: finalResults, timestamp: Date.now() };
         try {
-            await fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
+            await node_fs_1.promises.writeFile(this.SECTOR_CACHE, JSON.stringify(this.sectorCache));
         }
         catch { }
         this.logger.log(`✅ 前端板块数据推送完成, 累加合并后 ${finalResults.length} 只`);
@@ -1567,7 +1561,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const assetDir = (0, node_path_1.join)(__dirname, '..', '..', '..', 'assets');
         this.logger.log(`📦 开始生成种子缓存到 ${assetDir}`);
         try {
-            await fs_1.promises.mkdir(assetDir, { recursive: true });
+            await node_fs_1.promises.mkdir(assetDir, { recursive: true });
             this.logger.log('  ⏳ 正在全量扫描创业板(300xxx)...');
             try {
                 await Promise.race([
@@ -1593,7 +1587,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
             if (this.cache && this.cache.data?.length > 0) {
                 const gemPath = (0, node_path_1.join)(assetDir, 'gem-cache.json');
-                await fs_1.promises.writeFile(gemPath, JSON.stringify(this.cache, null, 2));
+                await node_fs_1.promises.writeFile(gemPath, JSON.stringify(this.cache, null, 2));
                 this.logger.log(`  ✅ GEM缓存: ${this.cache.data.length} 只`);
             }
             for (const [cacheFile, tmpFile] of [
@@ -1603,10 +1597,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             ]) {
                 const tmpPath = (0, node_path_1.join)('/tmp', tmpFile);
                 try {
-                    const content = await fs_1.promises.readFile(tmpPath, 'utf-8');
+                    const content = await node_fs_1.promises.readFile(tmpPath, 'utf-8');
                     const parsed = JSON.parse(content);
                     parsed.timestamp = Date.now();
-                    await fs_1.promises.writeFile((0, node_path_1.join)(assetDir, cacheFile), JSON.stringify(parsed, null, 2));
+                    await node_fs_1.promises.writeFile((0, node_path_1.join)(assetDir, cacheFile), JSON.stringify(parsed, null, 2));
                     this.logger.log(`  ✅ ${cacheFile}: ${parsed.data?.length || 0} 只`);
                 }
                 catch {
@@ -1648,9 +1642,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const ma20 = len >= 20 ? closeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : ma10;
         const ma60 = len >= 60 ? closeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 : ma20;
         const bollMid = ma20;
-        const bollStd = len >= 20 ? Math.sqrt(closeArr.slice(-20).reduce((s, c) => s + (c - bollMid) ** 2, 0) / 20) : 0;
-        const bollUpper = bollMid + 2 * bollStd;
-        const bollLower = bollMid - 2 * bollStd;
+        const bollStd = len >= 20 ? Math.sqrt(closeArr.slice(-20).reduce((sum, c) => sum + (c - bollMid) ** 2, 0) / 20) : 0;
         let trendState = 1;
         if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01)
             trendState = 3;
@@ -1676,7 +1668,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             returns20.push((closeArr[i] - closeArr[i - 1]) / closeArr[i - 1]);
         }
         const meanR = returns20.length > 0 ? returns20.reduce((a, b) => a + b, 0) / returns20.length : 0;
-        const variance20 = returns20.length > 0 ? returns20.reduce((s, r) => s + (r - meanR) ** 2, 0) / returns20.length : 0;
+        const variance20 = returns20.length > 0 ? returns20.reduce((sum2, r) => sum2 + (r - meanR) ** 2, 0) / returns20.length : 0;
         const volatility20d = Math.sqrt(variance20) * 100 * Math.sqrt(252);
         const engine = new formula_engine_1.FormulaEngine({ open: openArr, close: closeArr, high: highArr, low: lowArr, volume: volArr, amount: amtArr });
         const bx = (0, bai_xing_1.calcBaiXing)(engine);
@@ -1684,7 +1676,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
         const xingXing = (0, xing_xing_1.calcXingXing)(engine);
         const bxDays = bx.baiXiaoDays || 0;
-        const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
         const hasBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai || bx.diBuBuy || bx.zhuLiShiPan || bx.jiaCang);
         const chip = this.calcChipAnalysis(closeArr, highArr, lowArr, volArr, currentClose);
         const chipConcentration90 = chip.concentration90;
@@ -1718,7 +1709,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         factors.push({ name: '量比>0.8', met: f13, points: f13 ? 1 : 0 });
         const f14 = ma5 > ma10 && ma10 > ma20;
         factors.push({ name: '均线多头', met: f14, points: f14 ? 2 : 0 });
-        let totalScore = factors.reduce((s, f) => s + f.points, 0);
+        let totalScore = factors.reduce((sum, f) => sum + f.points, 0);
         const maxScore = 3 + 1 * 11 + 2;
         if (macd.isGoldenCross && priceIncrease > 25)
             totalScore = Math.min(totalScore, 3);
@@ -3511,8 +3502,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const allCodes = [];
         try {
             for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                if ((0, node_fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, node_fs_1.readFileSync)(p, 'utf-8'));
                     const stocks = raw?.data || raw?.stocks || raw;
                     if (Array.isArray(stocks))
                         stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
@@ -3604,8 +3595,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const allCodes = [];
         try {
             for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
-                if ((0, fs_1.existsSync)(p)) {
-                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                if ((0, node_fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, node_fs_1.readFileSync)(p, 'utf-8'));
                     const stocks = raw?.data || raw?.stocks || raw;
                     if (Array.isArray(stocks))
                         stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))

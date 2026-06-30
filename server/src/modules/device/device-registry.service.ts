@@ -1,13 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import postgres from 'postgres'
 import type { DeviceRegistryEntry } from './device-registry.types'
-
-/** 内置管理员令牌（优先取环境变量） */
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin2025'
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const postgres = require('postgres')
 
 @Injectable()
 export class DeviceRegistryService implements OnModuleInit {

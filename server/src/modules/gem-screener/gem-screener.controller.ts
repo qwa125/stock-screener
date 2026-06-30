@@ -1,12 +1,11 @@
 import { Controller, Get, Post, Body, Query, HttpCode, Logger, Res } from '@nestjs/common';
+import { Response } from 'express';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { GemScreenerService } from './gem-screener.service';
 import { GemScreenerScheduler } from './gem-screener.scheduler';
 import { StockService } from '../stock/stock.service';
-import * as iconv from 'iconv-lite';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import { Response } from 'express';
 import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 
 @Controller('gem')

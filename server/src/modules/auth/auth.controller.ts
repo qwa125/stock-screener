@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Put, Delete, Body, Query, Headers, HttpCode, UnauthorizedException, Param } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Controller, Post, Get, Put, Delete, Body, Headers, HttpCode, Param } from '@nestjs/common';
 import { SkipAccessLimit } from '@/guards/access-limit.guard';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
+import { AuthService } from './auth.service';
 
 @Controller('auth')
 @SkipAccessLimit()

@@ -12,6 +12,9 @@ var StockService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StockService = void 0;
 const common_1 = require("@nestjs/common");
+const node_fs_1 = require("node:fs");
+const node_path_1 = require("node:path");
+const trading_suggestion_1 = require("../../utils/trading-suggestion");
 const formula_engine_1 = require("./formula-engine");
 const bai_san_jiao_1 = require("./bai-san-jiao");
 const bai_ling_xing_1 = require("./bai-ling-xing");
@@ -19,9 +22,6 @@ const bai_xing_1 = require("./bai-xing");
 const xing_xing_1 = require("./xing-xing");
 const data_fetcher_service_1 = require("./data-fetcher.service");
 const rule_engine_1 = require("./rule-engine");
-const fs_1 = require("fs");
-const node_path_1 = require("node:path");
-const trading_suggestion_1 = require("../../utils/trading-suggestion");
 function calculateMA(data, period) {
     const result = [];
     for (let i = 0; i < data.length; i++) {
@@ -48,7 +48,7 @@ let StockService = StockService_1 = class StockService {
     }
     loadAnalysisCache() {
         try {
-            const raw = (0, fs_1.readFileSync)(this.ANALYSIS_CACHE_FILE, 'utf-8');
+            const raw = (0, node_fs_1.readFileSync)(this.ANALYSIS_CACHE_FILE, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
                 for (const [code, result] of Object.entries(parsed)) {
@@ -60,8 +60,8 @@ let StockService = StockService_1 = class StockService {
         }
         catch { }
         try {
-            if ((0, fs_1.existsSync)(this.BUNDLED_ANALYSIS_CACHE)) {
-                const raw = (0, fs_1.readFileSync)(this.BUNDLED_ANALYSIS_CACHE, 'utf-8');
+            if ((0, node_fs_1.existsSync)(this.BUNDLED_ANALYSIS_CACHE)) {
+                const raw = (0, node_fs_1.readFileSync)(this.BUNDLED_ANALYSIS_CACHE, 'utf-8');
                 const parsed = JSON.parse(raw);
                 if (parsed && typeof parsed === 'object') {
                     for (const [code, result] of Object.entries(parsed)) {
@@ -79,7 +79,7 @@ let StockService = StockService_1 = class StockService {
         try {
             const obj = {};
             this.analysisCache.forEach((v, k) => { obj[k] = v; });
-            fs_1.promises.writeFile(this.ANALYSIS_CACHE_FILE, JSON.stringify(obj), 'utf-8').catch(() => { });
+            node_fs_1.promises.writeFile(this.ANALYSIS_CACHE_FILE, JSON.stringify(obj), 'utf-8').catch(() => { });
         }
         catch { }
     }

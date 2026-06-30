@@ -1,5 +1,5 @@
-import { AccessControlService } from './access-control.service';
 import { DeviceRegistryService } from '@/modules/device/device-registry.service';
+import { AccessControlService } from './access-control.service';
 export declare class AccessControlController {
     private readonly service;
     private readonly deviceRegistry;

@@ -1,22 +1,21 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { S3Storage } from 'coze-coding-dev-sdk';
+import { pinyin } from 'pinyin-pro';
+import postgres from 'postgres';
+import { promises as fs, existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { getTradingSuggestion } from '../../utils/trading-suggestion';
+import { isMarketOpen } from '../../utils/market-time';
+import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
+import { DataFetcherService } from '../stock/data-fetcher.service';
+import { StockService } from '../stock/stock.service';
+import { KLine } from '../stock/types';
+import { analyzeTechnical, KLine as TAKLine } from './technical-analysis';
 import { calcBaiXing } from '../stock/bai-xing';
 import { FormulaEngine } from '../stock/formula-engine';
 import { calcBaiSanJiao } from '../stock/bai-san-jiao';
 import { calcBaiLingXing } from '../stock/bai-ling-xing';
 import { calcXingXing } from '../stock/xing-xing';
-import { promises as fs, existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'node:path';
-import * as iconv from 'iconv-lite';
-import { DataFetcherService } from '../stock/data-fetcher.service';
-import { StockService } from '../stock/stock.service';
-import { KLine } from '../stock/types';
-import { isMarketOpen, isTradingDay } from '../../utils/market-time';
-import { getTradingSuggestion } from '../../utils/trading-suggestion';
-import { analyzeTechnical, KLine as TAKLine } from './technical-analysis';
-import { pinyin } from 'pinyin-pro';
-import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
-const postgres = require('postgres');
 
 // 合并申万行业 + 热点概念板块
 const ALL_SECTORS = [...INDUSTRY_SECTORS, ...CONCEPT_SECTORS];
@@ -30,11 +29,6 @@ interface CacheEntry {
 const MARKET_OPEN_TTL = 5 * 60 * 1000;
 /** 盘后/休息缓存TTL：冻结（365天） */
 const FROZEN_TTL = 365 * 24 * 60 * 60 * 1000;
-
-/** 根据当前时间获取合适的缓存TTL */
-function getOpportunityTTL(): number {
-  return isMarketOpen() ? MARKET_OPEN_TTL : FROZEN_TTL;
-}
 
 export interface StockCandidate {
   code: string;
@@ -550,7 +544,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
       this.recalculateSuggestions(allData);
 
       // ─── 卖出锁定 + 趋势预测 ───
-      const now = Date.now();
       for (const s of allData) {
         // 卖出锁定：检查 sellStateCache
         const sellEntry = this.sellStateCache.get(s.code);
@@ -615,8 +608,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 根据 suggestion 推导 signalCombination
       const sig = s.suggestion || '';
       const pos = s.pricePosition || 0;
-      const gc = s.isGoldenCross;
-      const ok = s.entryTiming && s.entryTiming >= 60 ? '强' : '弱';
       if (sig === '重仓买入') {
         s.signalCombination = pos < 25 ? '白消信号+低位' : '白消信号+强势';
       } else if (sig === '买入') {
@@ -1263,7 +1254,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const last3Highs = highs.slice(-3);
       const l1 = last3Closes[last3Closes.length - 1], l2 = last3Closes[last3Closes.length - 2], l3 = last3Closes[last3Closes.length - 3];
       const h1 = last3Highs[last3Highs.length - 1], h3 = last3Highs[last3Highs.length - 3];
-      const lo1 = last3Lows[last3Lows.length - 1], lo3 = last3Lows[last3Lows.length - 3];
+      const lo1 = last3Lows[last3Lows.length - 1];
       // 锤子线：下影线长，实体小
       const hammer = lo1 < l1 * 0.97 && h1 < l1 * 1.03;
       // 启明星：大阴→小实体→大阳
@@ -1813,9 +1804,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const ma60 = len >= 60 ? closeArr.slice(-60).reduce((a, b) => a + b, 0) / 60 : ma20;
     // 4. BOLL
     const bollMid = ma20;
-    const bollStd = len >= 20 ? Math.sqrt(closeArr.slice(-20).reduce((s, c) => s + (c - bollMid) ** 2, 0) / 20) : 0;
-    const bollUpper = bollMid + 2 * bollStd;
-    const bollLower = bollMid - 2 * bollStd;
+    const bollStd = len >= 20 ? Math.sqrt(closeArr.slice(-20).reduce((sum, c) => sum + (c - bollMid) ** 2, 0) / 20) : 0;
     // 5. 趋势状态
     let trendState = 1;
     if (ma5 > ma10 * 1.02 && ma10 > ma20 * 1.01) trendState = 3;
@@ -1844,7 +1833,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       returns20.push((closeArr[i] - closeArr[i - 1]) / closeArr[i - 1]);
     }
     const meanR = returns20.length > 0 ? returns20.reduce((a, b) => a + b, 0) / returns20.length : 0;
-    const variance20 = returns20.length > 0 ? returns20.reduce((s, r) => s + (r - meanR) ** 2, 0) / returns20.length : 0;
+    const variance20 = returns20.length > 0 ? returns20.reduce((sum2, r) => sum2 + (r - meanR) ** 2, 0) / returns20.length : 0;
     const volatility20d = Math.sqrt(variance20) * 100 * Math.sqrt(252); // 年化波动率%
     // 11. 白消 + 白三角 + 白菱形
     const engine = new FormulaEngine({ open: openArr, close: closeArr, high: highArr, low: lowArr, volume: volArr, amount: amtArr });
@@ -1853,7 +1842,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
     const lingXing = calcBaiLingXing(engine);
     const xingXing = calcXingXing(engine);
     const bxDays = bx.baiXiaoDays || 0;
-    const isBaiXiaoBuy = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai);
     const hasBaiXiaoSignal = !!(bx.baiXiaoBuy1 || bx.baiXiaoBuy2 || bx.qiangShiHuiCai || bx.diBuBuy || bx.zhuLiShiPan || bx.jiaCang);
     // 12. 筹码分析
     const chip = this.calcChipAnalysis(closeArr, highArr, lowArr, volArr, currentClose);
@@ -1920,7 +1908,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     factors.push({ name: '均线多头', met: f14, points: f14 ? 2 : 0 });
 
     // 统计总分
-    let totalScore = factors.reduce((s, f) => s + f.points, 0);
+    let totalScore = factors.reduce((sum, f) => sum + f.points, 0);
     const maxScore = 3 + 1*11 + 2; // 16
 
     // 限制涨幅过快的金叉股

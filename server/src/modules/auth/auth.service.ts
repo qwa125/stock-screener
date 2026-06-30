@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException, ConflictException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { getSupabaseClient } from '@/storage/database/supabase-client';

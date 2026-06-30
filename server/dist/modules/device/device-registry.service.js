@@ -9,10 +9,9 @@ var DeviceRegistryService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeviceRegistryService = void 0;
 const common_1 = require("@nestjs/common");
-const fs = require("fs");
-const path = require("path");
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin2025';
-const postgres = require('postgres');
+const fs = require("node:fs");
+const path = require("node:path");
+const postgres_1 = require("postgres");
 let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryService {
     constructor() {
         this.logger = new common_1.Logger(DeviceRegistryService_1.name);
@@ -79,7 +78,7 @@ let DeviceRegistryService = DeviceRegistryService_1 = class DeviceRegistryServic
                 this.logger.warn(`DATABASE_URL 格式无效，跳过 PostgreSQL: ${url.slice(0, 20)}...`);
                 return null;
             }
-            this.pgSql = postgres(url, { max: 2, idle_timeout: 10, connect_timeout: 10, ssl: { rejectUnauthorized: false } });
+            this.pgSql = (0, postgres_1.default)(url, { max: 2, idle_timeout: 10, connect_timeout: 10, ssl: { rejectUnauthorized: false } });
             await this.pgSql `SELECT 1`;
             this.logger.log('✅ DeviceRegistry 连接 PostgreSQL 成功');
             return this.pgSql;
