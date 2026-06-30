@@ -2835,30 +2835,32 @@ async function doSearch(){
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
       
-      // ★ 优先：浏览器直调东方财富（直连东财，无需代理）
+      // ★ 优先：东财K线（JSONP直连，绕过CORS）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var _skc2=window._klineCache&&window._klineCache[stockCode]
         var _skh2=_skc2&&_skc2.length>=10
-        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+(_skh2?2:120)
-        var ekr2=await fetch(ekurl2,{signal:timeoutSignal(8000),mode:'cors'})
-        if(ekr2.ok){
-          try{var ekd2=await ekr2.json()}catch(ee){ekd2=null}
-          if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=5){
-            kdata=ekd2.data.klines.map(function(l){
-              var p=l.split(',')
-              return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
-            })
-                        if(_skh2&&window._klineCache[stockCode]){
-              var _mg2={};window._klineCache[stockCode].forEach(function(k){_mg2[k.day]=k})
-              kdata.forEach(function(k){_mg2[k.day]=k})
-              kdata=Object.values(_mg2).sort(function(a,b){return a.day.localeCompare(b.day)})
-            }
-            window._klineCache[stockCode]=kdata
-            console.log('[search] direct eastmoney got '+kdata.length+' bars')
+        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+(_skh2?2:120)+'&callback=jQuery'
+        var ekd2=await new Promise(function(rv){
+          var to=setTimeout(function(){delete window.jQuery;if(sc&&sc.parentNode)sc.parentNode.removeChild(sc);rv(null)},8000)
+          window.jQuery=function(d){clearTimeout(to);if(sc&&sc.parentNode)sc.parentNode.removeChild(sc);rv(d)}
+          var sc=document.createElement('script');sc.src=ekurl2;sc.onerror=function(){clearTimeout(to);delete window.jQuery;if(sc.parentNode)sc.parentNode.removeChild(sc);rv(null)}
+          document.body.appendChild(sc)
+        })
+        if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=5){
+          kdata=ekd2.data.klines.map(function(l){
+            var p=l.split(',')
+            return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
+          })
+          if(_skh2&&window._klineCache[stockCode]){
+            var _mg2={};window._klineCache[stockCode].forEach(function(k){_mg2[k.day]=k})
+            kdata.forEach(function(k){_mg2[k.day]=k})
+            kdata=Object.values(_mg2).sort(function(a,b){return a.day.localeCompare(b.day)})
           }
+          window._klineCache[stockCode]=kdata
+          console.log('[search] eastmoney jsonp got '+kdata.length+' bars')
         }
-      }catch(e){console.warn('[search] direct eastmoney failed:',e.message||e)}
+      }catch(e){console.warn('[search] eastmoney jsonp failed:',e.message||e)}
       
       // ★ 备选1：腾讯行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
