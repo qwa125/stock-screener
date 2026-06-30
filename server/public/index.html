@@ -534,7 +534,7 @@ async function fetchKlineAndAnalyze(s){
         if(tj&&tj.data){
           var tk=tj.data[gtCode]
           if(tk&&tk.qfqday&&tk.qfqday.length>=10){
-            var _newLines=tk.qfqday.map(function(l){var p=l.split(' ');var _v=parseFloat(p[5])||0;var _a=(parseFloat(p[1])+parseFloat(p[2]))/2||0;return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:_v,amount:_v*_a*100}})
+            var _newLines=tk.qfqday.map(function(l){var _v=parseFloat(l[5])||0;var _a=(parseFloat(l[1])+parseFloat(l[2]))/2||0;return{day:l[0],open:parseFloat(l[1])||0,close:parseFloat(l[2])||0,high:parseFloat(l[3])||0,low:parseFloat(l[4])||0,volume:_v,amount:_v*_a*100}})
             if(_hasCache){
               var _merged={};window._klineCache[code].forEach(function(k){_merged[k.day]=k});_newLines.forEach(function(k){_merged[k.day]=k})
               klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
@@ -1115,7 +1115,7 @@ async function showDetail(i){
           if(tqd&&tqd.data){
             var tk=tqd.data[tqPrefix+code]
             if(tk&&tk.qfqday&&tk.qfqday.length>=10){
-              var _nk=tk.qfqday.map(function(l){var p=l.split(' ');var _v=parseFloat(p[5])||0;var _a=(parseFloat(p[1])+parseFloat(p[2]))/2||0;return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:_v,amount:_v*_a*100}})
+              var _nk=tk.qfqday.map(function(l){var _v=parseFloat(l[5])||0;var _a=(parseFloat(l[1])+parseFloat(l[2]))/2||0;return{day:l[0],open:parseFloat(l[1])||0,close:parseFloat(l[2])||0,high:parseFloat(l[3])||0,low:parseFloat(l[4])||0,volume:_v,amount:_v*_a*100}})
               if(_hasKC){ // 增量合并缓存
                 var _mg={};_kcache.forEach(function(k){_mg[k.day]=k});_nk.forEach(function(k){_mg[k.day]=k})
                 kdata=Object.values(_mg).sort(function(a,b){return a.day.localeCompare(b.day)})
@@ -2632,7 +2632,7 @@ async function doSearch(){
             var tk=tqd.data[tqPrefix+stockCode]
             if(tk&&tk.qfqday&&tk.qfqday.length>=10){
               kdata=tk.qfqday.map(function(l){
-                var p=l.split(' ');var vol=parseFloat(p[5])||0;var avg=(parseFloat(p[1])+parseFloat(p[2]))/2||0
+                var vol=parseFloat(l[5])||0;var avg=(parseFloat(l[1])+parseFloat(l[2]))/2||0
                 return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:vol,amount:vol*avg*100}
               })
               console.log('[search] tencent kline got '+kdata.length+' bars')
