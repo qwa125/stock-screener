@@ -1069,6 +1069,8 @@ async function showDetail(i){
   da.style.minHeight='';da.innerHTML=buildDetail(s,rt,s)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
+  // 渲染集合竞价数据
+  renderAuctionSection(s.code,rt.low||s.intradayLow||0,rt.high||s.intradayHigh||0,rt.price||s.currentPrice||0)
   // 立即启动日内参考刷新（实时价格+买卖信号），同时异步拉K线分析
   startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
   if(!rt.high&&!rt.low&&s.code){
@@ -1332,7 +1334,6 @@ function buildDetail(s,rt,ta){
     +'<div class="indicator-item"><div class="label">入场时机</div><div class="value '+(entry>=65?'green':entry>=35?'yellow':'red')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</div></div>'
     +'<div class="indicator-item"><div class="label">安全评分</div><div class="value '+(safe>=70?'green':safe>=40?'yellow':'')+'">'+(safe||0)+'分</div></div>'
     +'<div class="indicator-item"><div class="label">机构活跃</div><div class="value '+(jiGou>=12?'green':jiGou>=8?'yellow':'')+'">'+(jiGou==0?'暂无':(jiGou||0).toFixed(1)+'分')+'</div></div>'
- +'<div class="indicator-item"><div class="label">主力散户</div><div class="value" style="color:'+(s.mainForceInflow>0?'#ef4444':s.mainForceInflow<0?'#22c55e':'#999')+'">'+(s.mainForceInflow!=null?(s.mainForceInflow>0?'+':'')+s.mainForceInflow.toFixed(0)+'万':'暂无')+'</div></div>'
     +gridChipLine(s,entry)
     +'<div class="indicator-item"><div class="label">最高价</div><div class="value" style="color:#ef4444">'+(rt.high!=null?rt.high.toFixed(2):s.intradayHigh>0?s.intradayHigh.toFixed(2):'-')+'</div></div>'
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):s.intradayLow>0?s.intradayLow.toFixed(2):'-')+'</div></div>'
@@ -2397,17 +2398,6 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
     html+='<div style="margin-top:4px;margin-bottom:2px"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点</span> <span style="color:#9ca3af;font-size:11px">暂无信号</span></div>'
   }
   html+='</div></div>'
-  // 主力散户
-  if(zs&&(zs.main!=null||zs.sg||zs.signal)){
-    var zsVal=zs.main||0, zsRetail=zs.retail||0, zsStatus=zs.status||(zsVal>zsRetail?'主力强势':'主力弱势')
-    html+='<div style="margin-top:4px;padding:5px 0;border-top:1px dashed #e5e7eb;font-size:12px">'
-    html+='<span style="color:#6b7280;font-size:10px">📊 主力散户动向</span>'
-    html+='<div style="display:flex;justify-content:space-between;margin-top:2px">'
-    html+='<span style="color:#1f2937">主力 <span style="font-weight:600;color:'+(zsVal>0?'#ef4444':'#22c55e')+'">'+(zsVal>0?'+':'')+zsVal.toFixed(1)+'</span></span>'
-    html+='<span style="color:#1f2937">散户 <span style="font-weight:600;color:'+(zsRetail>0?'#22c55e':'#ef4444')+'">'+(zsRetail>0?'+':'')+zsRetail.toFixed(1)+'</span></span>'
-    html+='<span style="font-weight:600;color:'+(zsVal>zsRetail?'#ef4444':'#22c55e')+'">'+zsStatus+'</span>'
-    html+='</div></div>'
-  }
   // 挂单参考
   html+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
   html+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围（支撑区→压力区）</div>'
