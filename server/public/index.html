@@ -2423,6 +2423,23 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       var e=$('intradayMacd')
       if(e)e.innerHTML='<div style="padding:8px;text-align:center;font-size:11px;color:#9ca3af">暂无日内参考数据（非交易时段）</div>'
     }
+    // 占位：主力/散户/买卖点（等待实时报价累积分析）
+    var _ph='<div style="margin-top:6px;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb;font-size:12px;text-align:left">'
+    _ph+='<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between">'
+    _ph+='<span style="color:#1f2937">主力 <span style="font-weight:600;color:#9ca3af">等待实时数据...</span></span>'
+    _ph+='<span style="color:#1f2937">散户 <span style="font-weight:600;color:#9ca3af">等待实时数据...</span></span>'
+    _ph+='</div>'
+    _ph+='<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;margin-top:4px">'
+    _ph+='<span style="color:#2563eb;font-weight:600">📌 买卖点</span>'
+    _ph+='<span style="color:#16a34a">买入 <span style="font-weight:600;color:#9ca3af">--</span></span>'
+    _ph+='<span style="color:#ef4444">卖出 <span style="font-weight:600;color:#9ca3af">--</span></span>'
+    _ph+='<span style="color:#8b5cf6;font-weight:600">🎯 最佳介入点 <span style="font-weight:600;color:#9ca3af">--</span></span>'
+    _ph+='</div></div>'
+    var _buf=window._priceBuffer&&window._priceBuffer[code]||[]
+    _ph+='<div style="margin-top:4px;font-size:10px;color:#9ca3af;text-align:center">⏳ 实时报价累积中 ('+_buf.length+'/48笔)，约30秒后出现完整分析</div>'
+    var _pe=$('intradayMacd')
+    if(_pe)_pe.innerHTML+=_ph
+
     return
   }
   var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||0
