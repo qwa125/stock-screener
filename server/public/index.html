@@ -594,7 +594,7 @@ async function fetchKlineAndAnalyze(s){
           try{
             var ac3=new AbortController()
             var tid3=setTimeout(function(){ac3.abort()},8000)
-            var tr=await fetch('https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
+            var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
             clearTimeout(tid3)
             tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
             var tj=JSON.parse(tr)
@@ -629,7 +629,7 @@ async function fetchKlineAndAnalyze(s){
           try{
             var ac3=new AbortController()
             var tid3=setTimeout(function(){ac3.abort()},8000)
-            var tr=await fetch('https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
+            var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
             clearTimeout(tid3)
             tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
             var tj=JSON.parse(tr)
@@ -1246,7 +1246,7 @@ async function showDetail(i){
       // ★ 备选1：腾讯行情K线（直连）
       if(!kdata) try{
         var tqPrefix=code.startsWith('6')?'sh':'sz'
-        var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq'
+        var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq'
         var tqr=await fetch(tqUrl,{signal:8000})
         if(tqr.ok){try{var tqd=await tqr.json()}catch(ee){tqd=null};if(tqd&&tqd.data){var tk=tqd.data[tqPrefix+code];if(tk&&tk.qfq&&tk.qfq.day&&tk.qfq.day.length>=5){kdata=tk.qfq.day.map(function(l){var p=l.split(' ');return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}});console.log('[detail] tencent kline got '+kdata.length+' bars')}}}
       }catch(e){}
@@ -2408,7 +2408,7 @@ async function fetchIntraday(code){
     var gtCode2=code.startsWith('6')?'sh'+code:'sz'+code
     var mkUrl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+secId+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=1&fqt=1&end=20500101&lmt=240'
     var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode2+'&datalen=240&scale=1'
-    var tUrl='https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240'
+    var tUrl='https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240'
     // 并行请求，统一6秒超时
     var _abortAll=new AbortController()
     var _tmrAll=setTimeout(function(){_abortAll.abort()},6000)
@@ -2857,7 +2857,7 @@ async function doSearch(){
       // ★ 备选1：腾讯行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
-        var tqUrl='https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
+        var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
         var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)})
         if(tqr.ok||tqr.status===0){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
