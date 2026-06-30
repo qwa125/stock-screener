@@ -271,7 +271,28 @@ function hideBlocked(){
   $("pageBlur").style.display='none'
   deviceRegistered=true
   renderList()
-  }
+  // 注册成功后尝试加载后端缓存的机会区股票列表
+  setTimeout(async function(){
+    try{
+      var cr=await fetch('/api/gem/scan-result',{signal:15000})
+      if(cr.ok){
+        var cj=await cr.json()
+        var cd=cj.data||cj
+        // 先尝试解析后端封装 {code,msg,data:{opportunities:[...],timestamp:"..."}}
+        if(cd&&cd.opportunities&&Array.isArray(cd.opportunities)&&cd.opportunities.length>0){
+          stocks=cd.opportunities
+          scanTime=cd.timestamp||('已缓存 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))
+          renderList()
+          startPriceRefresh(stocks)
+        }else if(Array.isArray(cd)&&cd.length>0){
+          stocks=cd
+          renderList()
+          startPriceRefresh(stocks)
+        }
+      }
+    }catch(e){}
+  },100)
+}
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
@@ -2347,7 +2368,10 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       ia=await fetchIntraday(code)
       if(ia&&ia.currentPrice)window._frozenIA[code]=ia
     }
-    if(!ia||!ia.currentPrice)ia=window._frozenIA[code]||null
+    if(!ia||!ia.currentPrice||!ia.suggestions||ia.suggestions.length===0){
+	var _frozen=window._frozenIA[code]||null
+	if(_frozen&&_frozen.suggestions&&_frozen.suggestions.length>0)ia=_frozen
+  }
   }
   // ★ 无完整分析数据 → 简易价格条（统一风格，无"非交易时段"标签）
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
