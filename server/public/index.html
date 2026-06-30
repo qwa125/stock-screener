@@ -2353,7 +2353,6 @@ async function fetchSinaUS(code){
 
 // ---------- 搜索下拉（支持代码/中文/拼音首字母实时搜索） ----------
 var searchTimer=null
-var searchAbort=null
 function onSearchInput(){
   $('searchError').style.display='none'
   var v=$('searchInput').value.trim()
@@ -2362,32 +2361,25 @@ function onSearchInput(){
   if(!v){dd.style.display='none';return}
   // 防抖300ms
   searchTimer=setTimeout(function(){
-    if(searchAbort)searchAbort.abort()
-    searchAbort=new AbortController()
-    fetch('https://searchadapter.eastmoney.com/api/suggest/get?input='+encodeURIComponent(v)+'&type=14&count=8&token=D43BF722C8E14A9C61B0D6E303FC9C19',{signal:searchAbort.signal,mode:'cors'})
+    fetch('/api/gem/search?q='+encodeURIComponent(v))
       .then(function(r){return r.json()})
       .then(function(d){
-        var items=d&&d.QuotationCodeTable&&d.QuotationCodeTable.Data
-        if(items&&items.length){
-          // 只保留A股
-          var aStocks=items.filter(function(x){return ['沪A','深A','创业板','科创板','京市A','北交所'].indexOf(x.SecurityTypeName)>=0})
-          if(aStocks.length>8)aStocks=aStocks.slice(0,8)
-          if(aStocks.length){
-            var html=''
-            for(var i=0;i<aStocks.length;i++){
-              var s=aStocks[i]
-              html+='<div onclick="selectPinyinStock(\''+s.Code+'\',\''+s.Name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
-              html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.Code+'</span>'
-              html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+s.Name+'</span>'
-              html+='<span style="font-size:11px;color:#999;white-space:nowrap">'+s.SecurityTypeName+'</span>'
-              html+='</div>'
-            }
-            dd.innerHTML=html
-            dd.style.display='block'
-          }else{dd.style.display='none'}
-        }else{dd.style.display='none'}
+        if(d.code===200&&d.data&&d.data.length>0){
+          var html=''
+          for(var i=0;i<d.data.length;i++){
+            var s=d.data[i]
+            html+='<div onclick="selectPinyinStock(\''+s.code+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
+            html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.code+'</span>'
+            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+s.name+'</span>'
+            html+='</div>'
+          }
+          dd.innerHTML=html
+          dd.style.display='block'
+        }else{
+          dd.style.display='none'
+        }
       })
-      .catch(function(e){if(e.name!=='AbortError')dd.style.display='none'})
+      .catch(function(){dd.style.display='none'})
   },300)
 }
 function selectPinyinStock(code,name){
