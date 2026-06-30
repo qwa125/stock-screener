@@ -518,13 +518,14 @@ async function fetchKlineAndAnalyze(s){
     // 纯腾讯K线（CORS *必通，成交额用量×均价×100估算）
     var klines=null
     if(!window._klineCache)window._klineCache={}
+    var _ck=Object.keys(window._klineCache);if(_ck.length>2000){_ck.sort(function(a,b){return(window._klineCache[a]._t||0)-(window._klineCache[b]._t||0)});for(var _i=0;_i<_ck.length-1500;_i++)delete window._klineCache[_ck[_i]]}
     var _hasCache=window._klineCache[code]&&window._klineCache[code].length>=10
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
     // 腾讯日K线直连（CORS *必通，成交额用量×均价×100估算）
     try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
-      var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,500,qfq',{signal:ac.signal})
+      var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+(_hasCache?'10':'120')+',qfq',{signal:ac.signal})
       clearTimeout(tid)
       if(tr.ok||tr.status===0){
         try{var tj=await tr.json()}catch(ee){tj=null}
@@ -535,8 +536,9 @@ async function fetchKlineAndAnalyze(s){
             if(_hasCache){
               var _merged={};window._klineCache[code].forEach(function(k){_merged[k.day]=k});_newLines.forEach(function(k){_merged[k.day]=k})
               klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
+              if(klines.length>120)klines=klines.slice(klines.length-120)
             }else{klines=_newLines}
-            window._klineCache[code]=klines
+            window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()
             console.log('[scan] 腾讯K线成功',code,klines.length+'bars')
           }
         }
@@ -548,7 +550,7 @@ async function fetchKlineAndAnalyze(s){
       var pkr=await fetch(API+'/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
       if(pkr.ok){var pkj=await pkr.json()
         if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>5){
-          klines=pkj.data;window._klineCache[code]=klines
+          klines=pkj.data;window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()
           console.log('[scan] proxy kline got',code,klines.length+'bars')
         }
       }
@@ -1133,7 +1135,7 @@ async function showDetail(i){
       var _hasKC=_kcache&&_kcache.length>=10
       try{
         var tqPrefix=code.startsWith('6')?'sh':'sz'
-        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq',{signal:timeoutSignal(10000)})
+        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,'+(_hasKC?'10':'120')+',qfq',{signal:timeoutSignal(10000)})
         if(tqr.ok||tqr.status===0){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
           if(tqd&&tqd.data){
@@ -1143,6 +1145,7 @@ async function showDetail(i){
               if(_hasKC){ // 增量合并缓存
                 var _mg={};_kcache.forEach(function(k){_mg[k.day]=k});_nk.forEach(function(k){_mg[k.day]=k})
                 kdata=Object.values(_mg).sort(function(a,b){return a.day.localeCompare(b.day)})
+                if(kdata.length>120)kdata=kdata.slice(kdata.length-120)
               }else{kdata=_nk}
               window._klineCache[code]=kdata
               console.log('[detail] tencent kline got '+kdata.length+' bars')
@@ -2705,7 +2708,7 @@ async function doSearch(){
       var kdata=null
       if(stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
-        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq',{signal:timeoutSignal(10000)})
+        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,120,qfq',{signal:timeoutSignal(10000)})
         if(tqr.ok||tqr.status===0){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
           if(tqd&&tqd.data){

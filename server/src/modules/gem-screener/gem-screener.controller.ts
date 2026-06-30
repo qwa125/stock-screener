@@ -726,6 +726,10 @@ export class GemScreenerController {
       // 缓存原始K线（备选代理用，仅腾讯挂了才走）
       if (body.code && klineData.length >= 5) {
         this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
+        if (this.klineProxyCache.size > 2000) {
+          const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+          entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
+        }
       }
       let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
       if (!opp) {
