@@ -2841,7 +2841,7 @@ async function doSearch(){
         var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
         var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)})
         var tk=await tqr.json()
-        if(tk&&tk.qfqday&&tk.qfqday.length>=5)kdata=tk.qfqday.map(function(l){return{d:l[0],o:+l[1],c:+l[2],h:+l[3],l:+l[4],v:+l[5],a:+l[6]}})
+        if(tk&&tk.qfqday&&tk.qfqday.length>=5)kdata=tk.qfqday.map(function(l){var vol=+l[5];var avg=(+l[1]+l[2])/2;return{d:l[0],o:+l[1],c:+l[2],h:+l[3],l:+l[4],v:vol,a:l[6]?+l[6]:vol*avg*100}})
       }catch(ee){}
       // ★ 备选：东财K线JSONP（Cloudflare不开Rocket Loader时可用）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
