@@ -654,6 +654,24 @@ function futurePrediction(s){
 window._auctionDataCache={} // {code: {auctionVolume,auctionAmount,auctionUnmatched,auctionDirection,gap,volumeRatio}}
 window._frozenIA={} // {code: {lastIA}} — 最近一次 fetchIntraday 成功的完整分析结果，休盘/收盘后冻结使用
 
+/** JSONP公共工具 — 东财API支持cb=参数（绕过CORS） */
+function jsonpFetch(url,timeout){
+  return new Promise(function(resolve){
+    var cb='_jp'+(Date.now())+(Math.random()*1e6|0)
+    window[cb]=function(d){resolve(d);cleanup()}
+    var timer=setTimeout(function(){resolve(null);cleanup()},timeout||8000)
+    function cleanup(){
+      clearTimeout(timer);delete window[cb]
+      var s=document.querySelector('script[data-jp="'+cb+'"]')
+      if(s&&s.parentNode)s.parentNode.removeChild(s)
+    }
+    var s=document.createElement('script')
+    s.src=url+'&cb='+cb
+    s.setAttribute('data-jp',cb)
+    document.head.appendChild(s)
+  })
+}
+
 /** 批量抓取集合竞价详情（限并发） */
 async function fetchAuctionData(codes,limit){
   if(!codes||!codes.length)return
@@ -668,8 +686,7 @@ async function fetchAuctionData(codes,limit){
       try{
         var secId2=code>='600000'?'1.':'0.'
         var emUrl='https://push2.eastmoney.com/api/qt/stock/get?secid='+secId2+code+'&fields=f50,f257,f258,f259,f260&ut=bd1d9ddb04089700cf9c27f6f7426281'
-        var r=await fetch(emUrl,{mode:'cors',signal:timeoutSignal(8000)})
-        var d=await r.json()
+        var d=await jsonpFetch(emUrl,8000)
         var dd=d&&d.data
         if(dd){
           auctionData={
@@ -852,8 +869,7 @@ async function renderAuctionTrend(code,dayLow2,dayHigh2,lastPrice){
   try{
     var secId=code>='600000'?'1.':'0.'
     var emUrl='https://push2.eastmoney.com/api/qt/stock/trends2/get?secid='+secId+code+'&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&ut=bd1d9ddb04089700cf9c27f6f7426281&ndays=1&iscr=1'
-    var r=await fetch(emUrl,{mode:'cors',signal:AbortSignal.timeout(10000)})
-    var d=await r.json()
+    var d=await jsonpFetch(emUrl,10000)
     var trends=d&&d.data&&d.data.trends||[]
     var prePrice=d&&d.data&&d.data.prePrice||0
     if(!trends||!Array.isArray(trends)||trends.length<2){
