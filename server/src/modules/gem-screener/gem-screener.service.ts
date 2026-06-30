@@ -734,10 +734,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
           mainBoardChanged = true;
           if (upgraded.name !== undefined) item.name = upgraded.name;
           if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
-            if (item.code === '300260' || item.code === '300749') {
-              this.logger.log(`📦 updateUpgraded: ${item.code} ${upgraded.suggestion} !== ${item.suggestion} → 更新为${upgraded.suggestion}`);
+            // 只升不降：新信号优先级更高(数值更小)才更新
+            const oldP = this.SUGGESTION_PRIORITY[item.suggestion ?? ''] ?? 99;
+            const newP = this.SUGGESTION_PRIORITY[upgraded.suggestion] ?? 99;
+            if (newP < oldP) {
+              if (item.code === '300260' || item.code === '300749') {
+                this.logger.log(`📦 updateUpgraded: ${item.code} ${item.suggestion}→${upgraded.suggestion} (只升不降)`);
+              }
+              item.suggestion = upgraded.suggestion;
             }
-            item.suggestion = upgraded.suggestion;
           }
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
@@ -770,10 +775,15 @@ export class GemScreenerService implements OnApplicationBootstrap {
           gemChanged = true;
           if (upgraded.name !== undefined) item.name = upgraded.name;
           if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
-            if (item.code === '300260' || item.code === '300749') {
-              this.logger.log(`📦 updateUpgraded(GEM): ${item.code} ${upgraded.suggestion} !== ${item.suggestion} → 更新为${upgraded.suggestion}`);
+            // 只升不降：新信号优先级更高(数值更小)才更新
+            const oldP = this.SUGGESTION_PRIORITY[item.suggestion ?? ''] ?? 99;
+            const newP = this.SUGGESTION_PRIORITY[upgraded.suggestion] ?? 99;
+            if (newP < oldP) {
+              if (item.code === '300260' || item.code === '300749') {
+                this.logger.log(`📦 updateUpgraded(GEM): ${item.code} ${item.suggestion}→${upgraded.suggestion} (只升不降)`);
+              }
+              item.suggestion = upgraded.suggestion;
             }
-            item.suggestion = upgraded.suggestion;
           }
           if (upgraded.score !== undefined) item.score = upgraded.score;
           if (upgraded.entryTiming !== undefined) item.entryTiming = upgraded.entryTiming;
