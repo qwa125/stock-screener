@@ -1831,24 +1831,8 @@ async function doFullRescan(saveToBackend){
                 newStocks[si3].suggestion=upgSug
               }
             }
-            // ─── 实时三重卖点检测（仅后端未判定卖出时生效）───
-            if(BACKEND_SELL.indexOf(backendSug)===-1){
-              // ① 暴跌检测（chg ≤ -5%）→ 覆盖所有买入
-              if(chg <= -5){
-                newStocks[si3].suggestion='卖出'
-              }
-              // ② 均线死叉检测：MA5<MA10 死叉 + 反弹无力(chg<2%) → 不要介入
-              if(newStocks[si3].isGoldenCross===false && chg < 2 && chg >= 0){
-                newStocks[si3].suggestion='不要介入'
-              }
-              // ③ 破5日线检测：价 < MA5×0.98 或 价 < MA10 → 卖出
-              var ma5=newStocks[si3].ma5, ma10=newStocks[si3].ma10
-              if(ma5 && ma10){
-                if(price < ma5*0.98 || price < ma10){
-                  newStocks[si3].suggestion='卖出'
-                }
-              }
-            }
+            // 只升不降：后端判定后三种（减仓/卖出/不要介入）的不动
+            // 前四种（持有/轻仓买入/买入/重仓买入）的前端只做实时涨幅升级
           }
           break
         }
@@ -1857,54 +1841,14 @@ async function doFullRescan(saveToBackend){
       continue
     }
     
-    // ─── 新股二次安全校验：查后端缓存是否已有该股（可能seen匹配失败但缓存中确有数据）───
-    var _cacheInNewStk=null;
-    for(var _bb=0;_bb<newStocks.length;_bb++){
-      if(newStocks[_bb].code===code){_cacheInNewStk=newStocks[_bb];break}
-    }
-    if(_cacheInNewStk){
-      // 缓存已有该股且建议是持有/减仓/卖出/不要介入/观望 → 禁止用涨幅升级
-      if(['持有','减仓','卖出','不要介入'].indexOf(_cacheInNewStk.suggestion)>=0){
-        _cacheInNewStk.currentPrice=price;
-        _cacheInNewStk.changePercent=chg;
-        _cacheInNewStk.intradayHigh=item.f15;
-        _cacheInNewStk.intradayLow=item.f16;
-        seenInSina[code]=1;
-        continue;  // 跳过新股路径，保持缓存原有建议
-      }
-      // 缓存是买入信号但没匹配到seen → 走升级逻辑
-      // 更新实时数据后继续往下走（不添加为新股）
-      _cacheInNewStk.currentPrice=price;
-      _cacheInNewStk.changePercent=chg;
-      _cacheInNewStk.intradayHigh=item.f15;
-      _cacheInNewStk.intradayLow=item.f16;
-      _cacheInNewStk.score=liveScore;
-      _cacheInNewStk.entryTiming=liveEntryTiming;
-      var _bks=_cacheInNewStk.suggestion;
-      var _LIVE_PRI=['重仓买入','买入','轻仓买入','持有','减仓','卖出','不要介入'];
-      if(_LIVE_PRI.indexOf(liveSuggestion) < _LIVE_PRI.indexOf(_bks)){
-        _cacheInNewStk.suggestion=liveSuggestion;
-        console.log('🔍 降级修复：缓存股 '+code+' 未匹配seen，但允许从 '+_bks+' 升级到 '+liveSuggestion);
-      }
-      seenInSina[code]=1;
-      continue;
-    }
     // 新增个股数量控制（非缓存的分析新面孔）
     if(isMainBoard(code)){if(mainBoardCount>=200)continue;mainBoardCount++}
     else if(isGEM(code)){if(gemCount>=200)continue;gemCount++}
     seen[code]=1
     seenInSina[code]=1  // 标记新股也在Sina中找到，避免被降级
     
-    newStocks.push({code:code,name:name,currentPrice:price,
-      intradayHigh:item.f15,intradayLow:item.f16,
-      pricePosition:50,
-      // 新股按搜索显示的自然信号给标签，_newStock标记让展示层过滤掉
-      suggestion:hasLiveData?liveSuggestion:'持有',_newStock:true,
-      score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
-      entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
-      changePercent:chg,
-      chipConcentration90:-1,chipPeakPosition:'mid',chipPattern:'dispersed',
-      isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
+    // 该股不在后端分析结果中 → 没有经过K线分析验证，直接跳过，不入选机会区
+    continue
   }
   
   // ====== DEBUG: 记录Tencent处理后所有重仓买入股 ======
