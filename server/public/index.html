@@ -2373,10 +2373,31 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
 	if(_frozen&&_frozen.suggestions&&_frozen.suggestions.length>0)ia=_frozen
   }
   }
-  // ★ 无完整分析数据 → 简易价格条（统一风格，无"非交易时段"标签）
+  // ★ 无完整分析数据 → 尝试从实时报价累加（东财CORS失败时的备选）
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
     var lastPriceH=_rttmp.price||lastPrice||0
     var dayLow2=_rttmp.low||low||0,dayHigh2=_rttmp.high||high||0
+    // 向后端推送实时报价，累积够后自动分析
+    if(lastPriceH>0&&isTH()){
+      window._priceBuffer=window._priceBuffer||{}
+      var buf=window._priceBuffer[code]||[]
+      buf.push({time:new Date().toISOString().slice(11,19),price:lastPriceH,volume:0})
+      if(buf.length>500)buf.splice(0,buf.length-500) // 最多保留500条
+      window._priceBuffer[code]=buf
+      // 每15次推送一次到后端（约30秒）
+      if(buf.length%15===0){
+        (async function(){
+          try{
+            var pr=await Network.request({url:'/api/gem/intraday-push',method:'POST',data:{code:code,price:lastPriceH,time:new Date().toISOString().slice(11,19)}})
+            var pd=pr.data&&pr.data.data||null
+            if(pd&&pd.suggestions&&pd.suggestions.length>0&&pd.currentPrice){
+              window._frozenIA[code]=pd
+              ia=pd
+            }
+          }catch(e){}
+        })()
+      }
+    }
     if(lastPriceH>0&&dayLow2>0&&dayHigh2>0&&dayLow2<dayHigh2){
       var _gap=dayHigh2-dayLow2
       var buyLow=dayLow2,buyHigh=dayLow2+_gap*0.15

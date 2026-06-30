@@ -421,6 +421,22 @@ export declare class GemScreenerController {
         msg: string;
         data: any;
     }>;
+    private readonly intradayBuffer;
+    intradayPush(body: {
+        code: string;
+        price: number;
+        volume?: number;
+        time?: string;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: any;
+    }>;
+    private buildMinuteKlineFromPrices;
     backtest(): Promise<{
         code: number;
         msg: string;
