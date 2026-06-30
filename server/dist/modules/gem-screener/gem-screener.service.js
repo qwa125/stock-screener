@@ -3984,34 +3984,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
             _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
         }
-        _buyCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
-        const _finalBuys = [];
-        let _lastBuyP = Infinity;
-        for (const bc of _buyCands) {
-            if (_finalBuys.some(f => Math.abs(f.idx - bc.idx) < 30))
-                continue;
-            if (bc.price < _lastBuyP) {
-                _finalBuys.push(bc);
-                _lastBuyP = bc.price;
-            }
-        }
-        _sellCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
-        const _finalSells = [];
-        let _lastSellP = 0;
-        for (const sc of _sellCands) {
-            if (_finalSells.some(f => Math.abs(f.idx - sc.idx) < 30))
-                continue;
-            if (sc.price > _lastSellP) {
-                _finalSells.push(sc);
-                _lastSellP = sc.price;
-            }
-        }
         _signalList.length = 0;
-        for (const fb of _finalBuys.sort((a, b) => a.idx - b.idx)) {
-            _signalList.push({ idx: fb.idx, time: fb.time, price: fb.price, type: '买入点', source: fb.source });
-        }
-        for (const fs of _finalSells.sort((a, b) => a.idx - b.idx)) {
-            _signalList.push({ idx: fs.idx, time: fs.time, price: fs.price, type: '卖出点', source: fs.source });
+        const _allSorted = [..._buyCands, ..._sellCands].sort((a, b) => a.idx - b.idx);
+        for (const sig of _allSorted) {
+            _signalList.push({ idx: sig.idx, time: sig.time, price: sig.price, type: (sig.source.includes('卖出') || sig.source.includes('高抛') || sig.source.includes('顶背离')) ? '卖出点' : '买入点', source: sig.source });
         }
         suggestions.length = 0;
         _signalList.sort((a, b) => a.time.localeCompare(b.time));
