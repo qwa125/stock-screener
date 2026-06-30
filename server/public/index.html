@@ -2438,7 +2438,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
     _ph+='<span style="color:#8b5cf6;font-weight:600">🎯 最佳介入点 <span style="font-weight:600;color:#9ca3af">--</span></span>'
     _ph+='</div></div>'
     var _buf=window._priceBuffer&&window._priceBuffer[code]||[]
-    _ph+='<div style="margin-top:4px;font-size:10px;color:#9ca3af;text-align:center">⏳ 实时报价累积中 ('+_buf.length+'/48笔)，约30秒后出现完整分析</div>'
+    if(isTH())_ph+='<div style="margin-top:4px;font-size:10px;color:#9ca3af;text-align:center">⏳ 实时报价累积中 ('+_buf.length+'/48笔)</div>'
     var _pe=$('intradayMacd')
     if(_pe)_pe.innerHTML+=_ph
 
