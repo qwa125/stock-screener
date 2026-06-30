@@ -4417,34 +4417,37 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
-    // ─── MACD红峰/绿峰检测（拐点检测：到高点往下=红峰，到低点走平往上=绿峰） ───
-    // 绿峰: MACD柱<0, 连续下降≥2根后开始回升 → 到低点走平往上的时候=最低点
-    // 红峰: MACD柱>0, 连续上升≥2根后开始下降 → 到高点往下的时候=最高点
+    // ─── MACD红峰/绿峰检测（波段高低点：连续运动≥5根+拐头确认，避免中途杂波） ───
+    // 绿峰: MACD柱<0, 连续下降≥5根后拐头向上 → 波段低点
+    // 红峰: MACD柱>0, 连续上升≥5根后拐头向下 → 波段高点
     const _greenValleys: { idx: number; price: number; time: string; macdVal: number }[] = [];
     const _redPeaks: { idx: number; price: number; time: string; macdVal: number }[] = [];
-    for (let i = 3; i < len - 1; i++) {
-      // 绿峰: 绿柱(hist<0), 之前连续下降, 当前拐头向上
-      if (macdHist[i] < 0 && macdHist[i-1] < 0) {
-        const wasDropping = macdHist[i-1] <= macdHist[i-2] && macdHist[i-2] <= macdHist[i-3];
-        const turningUp = macdHist[i] > macdHist[i-1]; // 当前比前一根高=拐头
-        if (wasDropping && turningUp) {
-          const valleyIdx = macdHist[i-1] <= macdHist[i-2] ? i-1 : i-2;
+    const MIN_RUN = 5; // 最少连续运动根数 → 去除中途杂波，只抓真实波段
+    for (let i = MIN_RUN + 1; i < len - 1; i++) {
+      // 绿峰检测：连续下降≥MIN_RUN根后拐头向上
+      if (macdHist[i] < 0) {
+        let dropping = true;
+        for (let j = i - MIN_RUN; j < i; j++) {
+          if (macdHist[j] >= macdHist[j - 1]) { dropping = false; break; }
+        }
+        if (dropping && macdHist[i] > macdHist[i - 1]) {
+          const valleyIdx = i - 1;
           const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
-          // 去重：与上一个绿峰间隔≥3根K线才记录
           const last = _greenValleys[_greenValleys.length - 1];
           if (!last || valleyIdx - last.idx >= 3) {
             _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
           }
         }
       }
-      // 红峰: 红柱(hist>0), 之前连续上升, 当前拐头向下
-      if (macdHist[i] > 0 && macdHist[i-1] > 0) {
-        const wasRising = macdHist[i-1] >= macdHist[i-2] && macdHist[i-2] >= macdHist[i-3];
-        const turningDown = macdHist[i] < macdHist[i-1]; // 当前比前一根低=拐头
-        if (wasRising && turningDown) {
-          const peakIdx = macdHist[i-1] >= macdHist[i-2] ? i-1 : i-2;
+      // 红峰检测：连续上升≥MIN_RUN根后拐头向下
+      if (macdHist[i] > 0) {
+        let rising = true;
+        for (let j = i - MIN_RUN; j < i; j++) {
+          if (macdHist[j] <= macdHist[j - 1]) { rising = false; break; }
+        }
+        if (rising && macdHist[i] < macdHist[i - 1]) {
+          const peakIdx = i - 1;
           const thisPrice = Math.round(close[peakIdx] * 100) / 100;
-          // 去重
           const last = _redPeaks[_redPeaks.length - 1];
           if (!last || peakIdx - last.idx >= 3) {
             _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });

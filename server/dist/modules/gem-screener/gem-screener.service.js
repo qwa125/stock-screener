@@ -3816,12 +3816,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         const _greenValleys = [];
         const _redPeaks = [];
-        for (let i = 3; i < len - 1; i++) {
-            if (macdHist[i] < 0 && macdHist[i - 1] < 0) {
-                const wasDropping = macdHist[i - 1] <= macdHist[i - 2] && macdHist[i - 2] <= macdHist[i - 3];
-                const turningUp = macdHist[i] > macdHist[i - 1];
-                if (wasDropping && turningUp) {
-                    const valleyIdx = macdHist[i - 1] <= macdHist[i - 2] ? i - 1 : i - 2;
+        const MIN_RUN = 5;
+        for (let i = MIN_RUN + 1; i < len - 1; i++) {
+            if (macdHist[i] < 0) {
+                let dropping = true;
+                for (let j = i - MIN_RUN; j < i; j++) {
+                    if (macdHist[j] >= macdHist[j - 1]) {
+                        dropping = false;
+                        break;
+                    }
+                }
+                if (dropping && macdHist[i] > macdHist[i - 1]) {
+                    const valleyIdx = i - 1;
                     const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
                     const last = _greenValleys[_greenValleys.length - 1];
                     if (!last || valleyIdx - last.idx >= 3) {
@@ -3829,11 +3835,16 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     }
                 }
             }
-            if (macdHist[i] > 0 && macdHist[i - 1] > 0) {
-                const wasRising = macdHist[i - 1] >= macdHist[i - 2] && macdHist[i - 2] >= macdHist[i - 3];
-                const turningDown = macdHist[i] < macdHist[i - 1];
-                if (wasRising && turningDown) {
-                    const peakIdx = macdHist[i - 1] >= macdHist[i - 2] ? i - 1 : i - 2;
+            if (macdHist[i] > 0) {
+                let rising = true;
+                for (let j = i - MIN_RUN; j < i; j++) {
+                    if (macdHist[j] <= macdHist[j - 1]) {
+                        rising = false;
+                        break;
+                    }
+                }
+                if (rising && macdHist[i] < macdHist[i - 1]) {
+                    const peakIdx = i - 1;
                     const thisPrice = Math.round(close[peakIdx] * 100) / 100;
                     const last = _redPeaks[_redPeaks.length - 1];
                     if (!last || peakIdx - last.idx >= 3) {
