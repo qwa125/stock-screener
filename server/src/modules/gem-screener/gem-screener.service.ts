@@ -2580,7 +2580,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const len = closeArr.length;
     if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
 
-    // 取最近120天数据（腾讯最多返回120条，更长周期筹码分布更准）
+    // 取最近120天数据
     const N = Math.min(120, len);
     const c = closeArr.slice(-N);
     const h = highArr.slice(-N);
@@ -2593,13 +2593,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const range = maxPrice - minPrice;
     if (range < 0.01) return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
 
-    // 分20个价格区间
-    const BINS = 20;
+    // 分50个价格区间（更精细的粒度，集中度更准）
+    const BINS = 50;
     const binSize = range / BINS;
     const bins = new Array(BINS).fill(0);
 
-    // 将每日成交量分配到价格区间（收盘价权重分配法）
-    // 真实交易中 60% 成交量集中在收盘价附近，剩余40%线性铺开
+    // 将每日成交量分配到价格区间（三角加权分配法，模拟真实筹码分布）
+    // 75% 成交量集中在收盘价附近，25% 按距离加权散布（越近权重越高）
     for (let i = 0; i < N; i++) {
       const dayLow = l[i];
       const dayHigh = h[i];
@@ -2613,36 +2613,47 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
 
       if (startBin === endBin) {
-        // 一日区间只跨1个bin，全量给该bin
         bins[startBin] += dayVol;
       } else {
-        // 60% 成交量集中到收盘价所在bin
-        bins[closeBin] += dayVol * 0.6;
-        // 40% 成交量线性分配
-        const spreadSteps = endBin - startBin + 1;
-        const spreadVol = dayVol * 0.4;
-        const volPerBin = spreadVol / spreadSteps;
+        // 75% 成交量集中到收盘价所在bin
+        bins[closeBin] += dayVol * 0.75;
+        // 25% 按距离加权分配（越靠近收盘价权重越高）
+        const spreadVol = dayVol * 0.25;
+        let totalWeight = 0;
+        const weights: number[] = [];
         for (let b = startBin; b <= endBin; b++) {
-          bins[b] += volPerBin;
+          if (b === closeBin) { weights.push(0); continue; }
+          const w = 1 / (Math.abs(b - closeBin) + 1);
+          weights.push(w);
+          totalWeight += w;
+        }
+        if (totalWeight > 0) {
+          let wi = 0;
+          for (let b = startBin; b <= endBin; b++) {
+            if (b === closeBin) continue;
+            bins[b] += spreadVol * weights[wi] / totalWeight;
+            wi++;
+          }
         }
       }
     }
 
-    // 找出峰值（局部最大值）
+    // 找出峰值（局部最大值，阈值>3%总成交量）
     const totalVol = bins.reduce((a, b) => a + b, 0);
     const peaks: number[] = [];
-    for (let i = 1; i < BINS - 1; i++) {
-      if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
+    for (let i = 2; i < BINS - 2; i++) {
+      if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
+          && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
+          && bins[i] > totalVol * 0.03) {
         peaks.push(i);
       }
     }
-    // 如果没找到峰值，取最高bin
     if (peaks.length === 0) {
       const maxIdx = bins.indexOf(Math.max(...bins));
       peaks.push(maxIdx);
     }
 
-    // 集中度90: 找到包含90%成交量的最小区间
+    // 集中度90: 从最高bin向下累加，需要多少个bin达到90%总量
     const sortedBins = [...bins].sort((a, b) => b - a);
     let cumVol = 0;
     let binsNeeded = 0;
@@ -2651,18 +2662,28 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       binsNeeded++;
       if (cumVol >= totalVol * 0.9) break;
     }
-    const concentration90 = Math.round((binsNeeded / BINS) * 100);
+    // 用线性插值提高精度（避免四舍五入跳变）
+    let concentration90;
+    if (binsNeeded <= 1) {
+      concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+    } else {
+      const prevVol = cumVol - sortedBins[binsNeeded - 1];
+      const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
+      const fractionalBins = (binsNeeded - 1) + needMore;
+      concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+    }
 
     // 峰位: 主峰对应的价格相对于当前价格的位置
     const mainPeakIdx = peaks[0];
     const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
     let peakPosition: 'low' | 'mid' | 'high';
-    if (peakPrice < currentPrice * 0.85) {
-      peakPosition = 'low';  // 峰在下方（支撑位）
-    } else if (peakPrice > currentPrice * 1.15) {
-      peakPosition = 'high'; // 峰在上方（压力位）
+    const pctOff = (peakPrice - currentPrice) / currentPrice;
+    if (pctOff < -0.10) {
+      peakPosition = 'low';
+    } else if (pctOff > 0.10) {
+      peakPosition = 'high';
     } else {
-      peakPosition = 'mid';  // 峰在当前价附近
+      peakPosition = 'mid';
     }
 
     // 形态: 单峰/双峰/分散
@@ -2670,9 +2691,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     if (peaks.length >= 3) {
       pattern = 'dispersed';
     } else if (peaks.length >= 2) {
-      // 双峰：检查两峰是否足够分离
       const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-      pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
+      pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
     } else {
       pattern = 'single_peak';
     }
@@ -3148,7 +3168,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
   // ===========================================================================
   // 筹码分布分析（静态版本，用于 quickAnalyze）
   // ===========================================================================
-  private static calcChipAnalysis(
+    private static calcChipAnalysis(
     closeArr: number[],
     highArr: number[],
     lowArr: number[],
@@ -3158,7 +3178,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const len = closeArr.length;
     if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
 
-    const N = Math.min(60, len);
+    const N = Math.min(120, len);
     const c = closeArr.slice(-N);
     const h = highArr.slice(-N);
     const l = lowArr.slice(-N);
@@ -3169,28 +3189,145 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const range = maxPrice - minPrice;
     if (range < 0.01) return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
 
-    const BINS = 20;
+    const BINS = 50;
     const binSize = range / BINS;
     const bins = new Array(BINS).fill(0);
 
     for (let i = 0; i < N; i++) {
       const dayLow = l[i];
       const dayHigh = h[i];
+      const dayClose = c[i];
       const dayVol = v[i];
       const dayRange = dayHigh - dayLow;
       if (dayRange < 0.01) continue;
 
+      const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
       const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
       const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
 
       if (startBin === endBin) {
         bins[startBin] += dayVol;
       } else {
-        const totalSteps = endBin - startBin + 1;
-        const volPerBin = dayVol / totalSteps;
+        bins[closeBin] += dayVol * 0.75;
+        const spreadVol = dayVol * 0.25;
+        let totalWeight = 0;
+        const weights: number[] = [];
         for (let b = startBin; b <= endBin; b++) {
-          bins[b] += volPerBin;
+          if (b === closeBin) { weights.push(0); continue; }
+          const w = 1 / (Math.abs(b - closeBin) + 1);
+          weights.push(w); totalWeight += w;
         }
+        if (totalWeight > 0) {
+          let wi = 0;
+          for (let b = startBin; b <= endBin; b++) {
+            if (b === closeBin) continue;
+            bins[b] += spreadVol * weights[wi] / totalWeight;
+            wi++;
+          }
+        }
+      }
+    }
+
+    const totalVol = bins.reduce((a, b) => a + b, 0);
+    const peaks: number[] = [];
+    for (let i = 2; i < BINS - 2; i++) {
+      if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
+          && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
+          && bins[i] > totalVol * 0.03) {
+        peaks.push(i);
+      }
+    }
+    if (peaks.length === 0) {
+      const maxIdx = bins.indexOf(Math.max(...bins));
+      peaks.push(maxIdx);
+    }
+
+    const sortedBins = [...bins].sort((a, b) => b - a);
+    let cumVol = 0;
+    let binsNeeded = 0;
+    for (const vol of sortedBins) {
+      cumVol += vol;
+      binsNeeded++;
+      if (cumVol >= totalVol * 0.9) break;
+    }
+    let concentration90;
+    if (binsNeeded <= 1) {
+      concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+    } else {
+      const prevVol = cumVol - sortedBins[binsNeeded - 1];
+      const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
+      const fractionalBins = (binsNeeded - 1) + needMore;
+      concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+    }
+
+    const mainPeakIdx = peaks[0];
+    const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+    let peakPosition: 'low' | 'mid' | 'high';
+    const pctOff = (peakPrice - currentPrice) / currentPrice;
+    if (pctOff < -0.10) peakPosition = 'low';
+    else if (pctOff > 0.10) peakPosition = 'high';
+    else peakPosition = 'mid';
+
+    let pattern: 'single_peak' | 'double_peak' | 'dispersed';
+    if (peaks.length >= 3) pattern = 'dispersed';
+    else if (peaks.length >= 2) {
+      const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+      pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
+    } else pattern = 'single_peak';
+
+    return { concentration90, peakPosition, pattern };
+  }
+
+
+    const totalVol = bins.reduce((a, b) => a + b, 0);
+    const peaks: number[] = [];
+    for (let i = 2; i < BINS - 2; i++) {
+      if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
+          && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
+          && bins[i] > totalVol * 0.03) {
+        peaks.push(i);
+      }
+    }
+    if (peaks.length === 0) {
+      const maxIdx = bins.indexOf(Math.max(...bins));
+      peaks.push(maxIdx);
+    }
+
+    const sortedBins = [...bins].sort((a, b) => b - a);
+    let cumVol = 0;
+    let binsNeeded = 0;
+    for (const vol of sortedBins) {
+      cumVol += vol;
+      binsNeeded++;
+      if (cumVol >= totalVol * 0.9) break;
+    }
+    let concentration90;
+    if (binsNeeded <= 1) {
+      concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+    } else {
+      const prevVol = cumVol - sortedBins[binsNeeded - 1];
+      const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
+      const fractionalBins = (binsNeeded - 1) + needMore;
+      concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+    }
+
+    const mainPeakIdx = peaks[0];
+    const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+    let peakPosition: 'low' | 'mid' | 'high';
+    const pctOff = (peakPrice - currentPrice) / currentPrice;
+    if (pctOff < -0.10) peakPosition = 'low';
+    else if (pctOff > 0.10) peakPosition = 'high';
+    else peakPosition = 'mid';
+
+    let pattern: 'single_peak' | 'double_peak' | 'dispersed';
+    if (peaks.length >= 3) pattern = 'dispersed';
+    else if (peaks.length >= 2) {
+      const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+      pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
+    } else pattern = 'single_peak';
+
+    return { concentration90, peakPosition, pattern };
+  }
       }
     }
 

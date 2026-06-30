@@ -267,41 +267,7 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private static calcEntryTiming;
     private static calcSafetyScore;
     private static calcChipAnalysis;
-    quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[], frontendMainForce?: number): Promise<OpportunityStock | null>;
-    searchStocks(keyword: string): Promise<OpportunityStock[]>;
-    rescanMarket(): Promise<OpportunityStock[]>;
-    triggerAnalysisPreCacheFromCache(): void;
-    private triggerAnalysisPreCache;
-    scanGlobalHeavyBuy(): Promise<OpportunityStock[]>;
-    getIndustrySectorTop10(): Promise<{
-        sectors: Array<{
-            rank: number;
-            name: string;
-            avgChangePercent: number;
-            totalStocks: number;
-            upStocks: number;
-            stocks: Array<{
-                code: string;
-                name: string;
-                price: number;
-                changePercent: number;
-            }>;
-        }>;
-        timestamp: number;
-    }>;
-    scanAllWithFrontendData(stocks: {
-        code: string;
-        name: string;
-        price: number;
-        changePercent: number;
-        inflow: number;
-        klines: any[];
-    }[]): Promise<any[]>;
-    runBacktest(): Promise<any>;
-    runForecastBacktest(): Promise<any>;
-    technicalAnalysis(code: string): Promise<any>;
-    intradayAnalysis(code: string): Promise<any>;
-    doIntradayAnalysis(code: string, minData: any[]): Promise<any>;
-    private fetchMinuteKLine;
-    fetchAuctionTrend(_code: string): Promise<any[]>;
+    const totalVol: any;
+    const peaks: number[];
+    for(let: any, i: number | undefined, i: any, : any, BINS: any): any;
 }

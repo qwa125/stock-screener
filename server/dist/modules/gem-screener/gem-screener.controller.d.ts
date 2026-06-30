@@ -157,22 +157,7 @@ export declare class GemScreenerController {
     getIndustrySectorsTop10(): Promise<{
         code: number;
         msg: string;
-        data: {
-            sectors: Array<{
-                rank: number;
-                name: string;
-                avgChangePercent: number;
-                totalStocks: number;
-                upStocks: number;
-                stocks: Array<{
-                    code: string;
-                    name: string;
-                    price: number;
-                    changePercent: number;
-                }>;
-            }>;
-            timestamp: number;
-        };
+        data: any;
     }>;
     seedCache(): Promise<{
         code: number;
@@ -192,7 +177,7 @@ export declare class GemScreenerController {
     searchStock(keyword: string): Promise<{
         code: number;
         msg: string;
-        data: import("./gem-screener.service").OpportunityStock[];
+        data: any;
     } | {
         code: number;
         msg: any;
@@ -272,7 +257,7 @@ export declare class GemScreenerController {
         code: number;
         msg: string;
         data: {
-            opportunities: any[];
+            opportunities: any;
             timestamp: number;
         };
     }>;
@@ -390,39 +375,7 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: {
-            code: string;
-            name: string;
-            suggestion: string;
-            score: number;
-            entryTiming: number;
-            currentPrice: number;
-            changePercent: number;
-            pricePosition: number;
-            priceIncrease: number;
-            mainForceInflow: number;
-            baiXiaoDays: number;
-            capitalRank: number;
-            safetyScore: number;
-            trade: number;
-            price: number;
-            changepercent: number;
-            inflow: number;
-            timestamp: number;
-        }[];
-    } | {
-        code: number;
-        msg: string;
-        data: import("./gem-screener.service").OpportunityStock[];
-    } | {
-        code: number;
-        msg: string;
-        data: {
-            code: string;
-            name: string;
-            suggestion: string;
-            score: number;
-        }[];
+        data: any[];
     } | {
         code: number;
         msg: string;
@@ -484,7 +437,7 @@ export declare class GemScreenerController {
     auctionTrend(code: string): Promise<{
         code: number;
         msg: string;
-        data: any[];
+        data: any;
     } | {
         code: number;
         msg: any;
