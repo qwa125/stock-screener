@@ -2898,8 +2898,8 @@ async function doSearch(){
       }catch(e){console.warn('[search] eastmoney kline failed:',e.message||e)}
       
       
-      if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
-      // ★ K线数据有效 → 前端直接从原始K线计算机构活跃度（不依赖后端）
+      if(!kdata&&stockMarket!=='us'){console.warn('[search] K线源均不可用，走无K线降级模式')}
+      // ★ 前端直接从原始K线计算机活跃度（不依赖后端，无K线则跳过）
       var jiGouFromKdata=0
       if(kdata&&kdata.length>=20){
         var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
