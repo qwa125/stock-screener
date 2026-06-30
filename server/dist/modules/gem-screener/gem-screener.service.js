@@ -594,7 +594,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.upgradedSnapshot = { list, timestamp: Date.now() };
         this.saveSnapshotToDisk();
         this.uploadSnapshotToCloud();
-        this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch((e) => this.logger.warn(`⚠️ PG快照写入失败: ${e.message}`));
+        const hasBuySignals = list.some(s => s.suggestion === '重仓买入' || s.suggestion === '买入');
+        if (hasBuySignals) {
+            this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch((e) => this.logger.warn(`⚠️ PG快照写入失败: ${e.message}`));
+        }
+        else {
+            this.logger.log('⏭️ 无买入信号，跳过PG覆写（保留上次好快照）');
+        }
         this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
     }
     getUpgradedSnapshot() {

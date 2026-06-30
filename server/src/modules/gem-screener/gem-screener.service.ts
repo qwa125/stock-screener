@@ -702,7 +702,13 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
     this.saveSnapshotToDisk();
     this.uploadSnapshotToCloud(); // 异步上传到 TOS
-    this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch((e) => this.logger.warn(`⚠️ PG快照写入失败: ${(e as Error).message}`));
+    // 只有存在重仓买入/买入信号时才覆写 PG，避免空快照冲掉好数据
+    const hasBuySignals = list.some(s => s.suggestion === '重仓买入' || s.suggestion === '买入');
+    if (hasBuySignals) {
+      this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch((e) => this.logger.warn(`⚠️ PG快照写入失败: ${(e as Error).message}`));
+    } else {
+      this.logger.log('⏭️ 无买入信号，跳过PG覆写（保留上次好快照）');
+    }
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 
