@@ -884,6 +884,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 创业板新股 → 加入GEM缓存
       if (isGEMStock) {
         this.cache.data.push(opp);
+        if (this.cache.data.length > 3000) this.cache.data = this.cache.data.slice(-2000);
         await this.saveCacheToDisk();
         this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
         return;
@@ -905,7 +906,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       // 主板新股 → 加入主板缓存
       if (isMainBoardStock) {
         this.mainBoardCache.data.push(opp);
-        await this.saveMainBoardCacheToDisk();
+        if (this.mainBoardCache.data.length > 3000) this.mainBoardCache.data = this.mainBoardCache.data.slice(-2000);
         this.logger.log(`🆕 新加入主板缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
         return;
       }

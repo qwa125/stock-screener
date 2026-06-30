@@ -607,6 +607,15 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             buf.prices.push({ time: ts, price: body.price, volume: body.volume || 0 });
         }
         buf.lastPush = now;
+        if (buf.prices.length > 100)
+            buf.prices = buf.prices.slice(-100);
+        if (this.intradayBuffer.size > 300) {
+            const entries = [...this.intradayBuffer.entries()].sort((a, b) => a[1].lastPush - b[1].lastPush);
+            while (this.intradayBuffer.size > 200) {
+                const [k] = entries.shift();
+                this.intradayBuffer.delete(k);
+            }
+        }
         if (buf.prices.length >= 50 || (buf.prices.length >= 20 && (now - buf.lastPush) > 300000)) {
             try {
                 const kline = this.buildMinuteKlineFromPrices(buf.prices);

@@ -764,6 +764,16 @@ export class GemScreenerController {
     }
     buf.lastPush = now;
 
+    // 内存保护：每只票最多保留100个点，总缓存超300只时清理最久未更新的
+    if (buf.prices.length > 100) buf.prices = buf.prices.slice(-100);
+    if (this.intradayBuffer.size > 300) {
+      const entries = [...this.intradayBuffer.entries()].sort((a, b) => a[1].lastPush - b[1].lastPush);
+      while (this.intradayBuffer.size > 200) {
+        const [k] = entries.shift()!;
+        this.intradayBuffer.delete(k);
+      }
+    }
+
     // 累积够50个点或超过5分钟有20个点，运行分析
     if (buf.prices.length >= 50 || (buf.prices.length >= 20 && (now - buf.lastPush) > 300000)) {
       try {
