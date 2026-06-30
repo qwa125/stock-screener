@@ -30,12 +30,43 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.STATE_FILE = '/tmp/market-state.json';
         this.isScanning = false;
         this.watchedCodes = [];
+        this._cacheLoaded = false;
+        this._allStocks = [];
+        this._gemCacheData = null;
+        this._mainCacheData = null;
     }
     async onModuleInit() {
         this.loadState();
         this.logger.log(`📅 市场调度器启动 | 状态:${this.state.status} | 锁止到:${this.state.lockUntil ? new Date(this.state.lockUntil).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '无'}`);
         this._updateNextScanTime();
         this.saveState();
+        this._preloadCache();
+    }
+    _preloadCache() {
+        try {
+            const gemPath = './assets/gem-cache.json';
+            const mainPath = './assets/main-board-cache.json';
+            let gemArr = [];
+            let mainArr = [];
+            if (fs.existsSync(gemPath)) {
+                const raw = JSON.parse(fs.readFileSync(gemPath, 'utf-8'));
+                gemArr = raw?.data || [];
+                this.logger.log(`✅ 加载gem-cache: ${gemArr.length} 只`);
+            }
+            if (fs.existsSync(mainPath)) {
+                const raw = JSON.parse(fs.readFileSync(mainPath, 'utf-8'));
+                mainArr = raw?.data || [];
+                this.logger.log(`✅ 加载main-board-cache: ${mainArr.length} 只`);
+            }
+            this._gemCacheData = gemArr;
+            this._mainCacheData = mainArr;
+            this._allStocks = [...gemArr, ...mainArr];
+            this._cacheLoaded = true;
+            this.logger.log(`📊 全市场缓存共 ${this._allStocks.length} 只股票`);
+        }
+        catch (e) {
+            this.logger.warn('⚠️ 预热加载缓存失败: ' + e.message);
+        }
     }
     _bjNow() {
         const now = new Date();
@@ -137,19 +168,12 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.state.lastScanTime = Date.now();
         this.logger.log(`🚀 [${label}] 开始扫描`);
         try {
-            const gemCache = JSON.parse(fs.readFileSync('./assets/gem-cache.json', 'utf-8'));
-            const mainCache = JSON.parse(fs.readFileSync('./assets/main-board-cache.json', 'utf-8'));
-            const allStocks = [...(gemCache.data || []), ...(mainCache.data || [])];
+            if (!this._cacheLoaded)
+                this._preloadCache();
+            const allStocks = this._allStocks || [];
             const buySignals = allStocks.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion));
             this.state.lastScanCount = allStocks.length;
             this.watchedCodes = buySignals.map(s => s.code);
-            const tmpDir = '/tmp';
-            fs.writeFileSync(path.join(tmpDir, 'gem-cache.json'), JSON.stringify(gemCache));
-            fs.writeFileSync(path.join(tmpDir, 'main-board-cache.json'), JSON.stringify(mainCache));
-            fs.writeFileSync(path.join(tmpDir, 'watched-codes.json'), JSON.stringify({
-                codes: this.watchedCodes,
-                timestamp: Date.now()
-            }));
             this.logger.log(`✅ [${label}] 完成: ${allStocks.length}只, 其中买入信号${buySignals.length}只`);
             this._updateNextScanTime();
             this.saveState();

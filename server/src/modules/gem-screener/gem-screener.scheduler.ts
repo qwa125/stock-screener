@@ -26,6 +26,11 @@ export class GemScreenerScheduler implements OnModuleInit {
   private isScanning = false;
   // 上次完整扫描的"买入"股票代码列表（用于实时价格推送）
   private watchedCodes: string[] = [];
+  // 缓存：assets全市场数据（只读一次，避免重复IO）
+  private _cacheLoaded = false;
+  private _allStocks: any[] = [];
+  private _gemCacheData: any = null;
+  private _mainCacheData: any = null;
 
   constructor(private readonly gemService: GemScreenerService) {}
 
@@ -35,6 +40,35 @@ export class GemScreenerScheduler implements OnModuleInit {
     // 初始化nextScanTime
     this._updateNextScanTime();
     this.saveState();
+    // 预热加载全市场缓存（只读一次，避免定时器重复IO导致OOM）
+    this._preloadCache();
+  }
+
+  /** 预热加载全市场股票缓存（启动时只读一次） */
+  private _preloadCache() {
+    try {
+      const gemPath = './assets/gem-cache.json';
+      const mainPath = './assets/main-board-cache.json';
+      let gemArr: any[] = [];
+      let mainArr: any[] = [];
+      if (fs.existsSync(gemPath)) {
+        const raw = JSON.parse(fs.readFileSync(gemPath, 'utf-8'));
+        gemArr = raw?.data || [];
+        this.logger.log(`✅ 加载gem-cache: ${gemArr.length} 只`);
+      }
+      if (fs.existsSync(mainPath)) {
+        const raw = JSON.parse(fs.readFileSync(mainPath, 'utf-8'));
+        mainArr = raw?.data || [];
+        this.logger.log(`✅ 加载main-board-cache: ${mainArr.length} 只`);
+      }
+      this._gemCacheData = gemArr;
+      this._mainCacheData = mainArr;
+      this._allStocks = [...gemArr, ...mainArr];
+      this._cacheLoaded = true;
+      this.logger.log(`📊 全市场缓存共 ${this._allStocks.length} 只股票`);
+    } catch (e) {
+      this.logger.warn('⚠️ 预热加载缓存失败: ' + e.message);
+    }
   }
 
   // ===================== 北京时间判断 =====================
@@ -172,11 +206,9 @@ export class GemScreenerScheduler implements OnModuleInit {
     this.logger.log(`🚀 [${label}] 开始扫描`);
 
     try {
-      // 尝试从缓存加载（服务器在 Render 海外可能无法访问中国API）
-      // 先尝试从 assets 加载全市场缓存
-      const gemCache = JSON.parse(fs.readFileSync('./assets/gem-cache.json', 'utf-8'));
-      const mainCache = JSON.parse(fs.readFileSync('./assets/main-board-cache.json', 'utf-8'));
-      const allStocks = [...(gemCache.data || []), ...(mainCache.data || [])];
+      // 使用启动时预加载的全市场缓存（不重复读盘，不写 /tmp 耗内存）
+      if (!this._cacheLoaded) this._preloadCache();
+      const allStocks = this._allStocks || [];
       
       // 过滤买入信号
       const buySignals = allStocks.filter(s => 
@@ -185,17 +217,6 @@ export class GemScreenerScheduler implements OnModuleInit {
       
       this.state.lastScanCount = allStocks.length;
       this.watchedCodes = buySignals.map(s => s.code);
-
-      // 保存到 /tmp/ 作为运行时缓存
-      const tmpDir = '/tmp';
-      fs.writeFileSync(path.join(tmpDir, 'gem-cache.json'), JSON.stringify(gemCache));
-      fs.writeFileSync(path.join(tmpDir, 'main-board-cache.json'), JSON.stringify(mainCache));
-      
-      // 也保存买入信号列表供实时价格用
-      fs.writeFileSync(path.join(tmpDir, 'watched-codes.json'), JSON.stringify({
-        codes: this.watchedCodes,
-        timestamp: Date.now()
-      }));
 
       this.logger.log(`✅ [${label}] 完成: ${allStocks.length}只, 其中买入信号${buySignals.length}只`);
       

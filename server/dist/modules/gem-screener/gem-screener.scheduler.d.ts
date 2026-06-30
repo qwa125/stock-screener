@@ -14,8 +14,13 @@ export declare class GemScreenerScheduler implements OnModuleInit {
     private STATE_FILE;
     private isScanning;
     private watchedCodes;
+    private _cacheLoaded;
+    private _allStocks;
+    private _gemCacheData;
+    private _mainCacheData;
     constructor(gemService: GemScreenerService);
     onModuleInit(): Promise<void>;
+    private _preloadCache;
     private _bjNow;
     private _bjDayOfWeek;
     private _bjMinutes;
