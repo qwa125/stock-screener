@@ -517,10 +517,13 @@ async function fetchKlineAndAnalyze(s){
     var klines=null
     if(!window._klineCache)window._klineCache={}
     if(!window._emFailCount)window._emFailCount={}
+    if(!window._klineSource)window._klineSource={}  // 'em' 或 'backup'
     var _hasCache=window._klineCache[code]&&window._klineCache[code].length>=10
+    var _isBackup=window._klineSource[code]==='backup'
+    var _failCnt=window._emFailCount[code]||0
     // 计算lmt：有东财主缓存→按缺口天数算；备选缓存→强制拉满等东财覆盖；无缓存→拉满
     var lmt=120
-    if(_hasCache){
+    if(_hasCache&&!_isBackup){
       var _lastDay=window._klineCache[code][window._klineCache[code].length-1].day
       var _gapDays=(Date.now()-new Date(_lastDay).getTime())/86400000
       lmt=Math.min(120,Math.max(Math.round(_gapDays)+5,2))
@@ -536,6 +539,7 @@ async function fetchKlineAndAnalyze(s){
       clearTimeout(tid)
       if(kr&&kr.data&&kr.data.klines){
         window._emFailCount[code]=0
+        window._klineSource[code]='em'
         var _newLines=kr.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
         if(_hasCache){
           var _merged={}
@@ -544,10 +548,84 @@ async function fetchKlineAndAnalyze(s){
           klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
         }else{klines=_newLines}
         window._klineCache[code]=klines
-        
+        console.log('[kline] 东财成功',code,'lmt='+lmt,_isBackup?'(备选缓存已覆盖)':'')
       }
     }catch(e){console.warn('东财K线失败('+code+'):',e.message);window._emFailCount[code]=(window._emFailCount[code]||0)+1}
-    // 东财失败，1.5秒后重试一次
+    // 备选源回退（东财失败时）：有缓存的只补最新2天标记backup；无缓存的新股拉满120
+    if(!klines||klines.length<5){
+      if(_hasCache){
+        // 有缓存：新浪只补最新几天，标记backup等东财恢复覆盖
+        try{
+          var ac2=new AbortController()
+          var tid2=setTimeout(function(){ac2.abort()},8000)
+          var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240',{signal:ac2.signal}).then(function(r){return r.json()})
+          clearTimeout(tid2)
+          if(sr&&sr.data&&sr.data.length){
+            window._klineSource[code]='backup'
+            var _sinaAll=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
+            var _sinaNew=_sinaAll.sort(function(a,b){return b.day.localeCompare(a.day)}).slice(0,2)  // 只取最新2天
+            var _mergedK={}
+            window._klineCache[code].forEach(function(k){_mergedK[k.day]=k})  // 保留东财历史
+            _sinaNew.forEach(function(k){_mergedK[k.day]=k})                  // 补最新2天
+            klines=Object.values(_mergedK).sort(function(a,b){return a.day.localeCompare(b.day)})
+            window._klineCache[code]=klines
+            console.log('[kline] 新浪补2天（标记backup）',code,_sinaNew[0]?.day,'~',_sinaNew[_sinaNew.length-1]?.day)
+          }
+        }catch(e){console.warn('新浪回退失败('+code+'):',e.message)}
+        // 腾讯回退（同样只补最新2天）
+        if(!klines||klines.length<5){
+          try{
+            var ac3=new AbortController()
+            var tid3=setTimeout(function(){ac3.abort()},8000)
+            var tr=await fetch('https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
+            clearTimeout(tid3)
+            tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
+            var tj=JSON.parse(tr)
+            if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
+              window._klineSource[code]='backup'
+              var _tenAll=tj.data[gtCode].m5.map(function(l){return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0}})
+              var _tenNew=_tenAll.sort(function(a,b){return b.day.localeCompare(a.day)}).slice(0,2)
+              var _mergedT={}
+              window._klineCache[code].forEach(function(k){_mergedT[k.day]=k})
+              _tenNew.forEach(function(k){_mergedT[k.day]=k})
+              klines=Object.values(_mergedT).sort(function(a,b){return a.day.localeCompare(b.day)})
+              window._klineCache[code]=klines
+              console.log('[kline] 腾讯补2天（标记backup）',code)
+            }
+          }catch(e){console.warn('腾讯回退失败('+code+'):',e.message)}
+        }
+      }else{
+        // 无缓存的新股：备选源拉满120天（唯一机会）
+        try{
+          var ac2=new AbortController()
+          var tid2=setTimeout(function(){ac2.abort()},8000)
+          var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240',{signal:ac2.signal}).then(function(r){return r.json()})
+          clearTimeout(tid2)
+          if(sr&&sr.data&&sr.data.length){
+            window._klineSource[code]='backup'
+            klines=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
+            window._klineCache[code]=klines
+            console.log('[kline] 新浪拉满120（新股无缓存）',code)
+          }
+        }catch(e){console.warn('新浪K线失败('+code+'):',e.message)}
+        if(!klines||klines.length<5){
+          try{
+            var ac3=new AbortController()
+            var tid3=setTimeout(function(){ac3.abort()},8000)
+            var tr=await fetch('https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
+            clearTimeout(tid3)
+            tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
+            var tj=JSON.parse(tr)
+            if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
+              window._klineSource[code]='backup'
+              klines=tj.data[gtCode].m5.map(function(l){return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0}})
+              window._klineCache[code]=klines
+            }
+          }catch(e){console.warn('腾讯K线失败('+code+'):',e.message)}
+        }
+      }
+    }
+    // 如果所有来源都失败，1.5秒后重试东财一次（覆盖backup标记）
     if(!klines||klines.length<5){
       try{
         await new Promise(function(r){setTimeout(r,1500)})
@@ -557,18 +635,20 @@ async function fetchKlineAndAnalyze(s){
         clearTimeout(tid4)
         if(kr2&&kr2.data&&kr2.data.klines){
           window._emFailCount[code]=0
-          if(_hasCache){
-            var _merged2={}
-            window._klineCache[code].forEach(function(k){_merged2[k.day]=k})
-            kr2.data.klines.forEach(function(l){var p=l.split(",");_merged2[p[0]]={day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
-            klines=Object.values(_merged2).sort(function(a,b){return a.day.localeCompare(b.day)})
-          }else{
-            klines=kr2.data.klines.map(function(l){var p=l.split(",");return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
-          }
+          window._klineSource[code]='em'
+          var _newL=kr2.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
+          if(_hasCache||_isBackup){
+            var _merged={}
+            window._klineCache[code].forEach(function(k){_merged[k.day]=k})
+            _newL.forEach(function(k){_merged[k.day]=k})
+            klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
+          }else{klines=_newL}
           window._klineCache[code]=klines
+          console.log('[kline] 东财重试成功（backup已覆盖）',code)
         }
-      }catch(e){console.warn("东财重试K线失败("+code+"):",e.message)}
+      }catch(e){console.warn('东财重试也失败('+code+'):',e.message)}
     }
+
     // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
     if(window._cachedStockSet&&window._cachedStockSet.has(code)){
       console.log('[scan] skip backend',code,'(cached)')
