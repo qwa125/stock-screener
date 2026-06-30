@@ -2358,7 +2358,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       // 交易时段：每60秒拉一次完整分析，中间用缓存不阻塞价格刷新
       var _now=Date.now()
       ia=window._frozenIA[code]||null
-      if(!window._lastIntradayTs||_now-window._lastIntradayTs>60000){
+      if(!window._lastIntradayTs||_now-window._lastIntradayTs>15000){
         window._lastIntradayTs=_now
         var fresh=await fetchIntraday(code)
         if(fresh&&fresh.currentPrice){window._frozenIA[code]=fresh;ia=fresh}
