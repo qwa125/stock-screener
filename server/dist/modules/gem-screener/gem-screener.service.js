@@ -4136,37 +4136,37 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const _signalList = [];
         const _buyCands = [];
         for (const gv of _greenValleys) {
-            const t = gv.time.slice(11, 16);
+            const t = gv.time.slice(8, 10) + ':' + gv.time.slice(10, 12);
             const nearbyMainBuy = zhuliBuyPoints.filter(z => Math.abs(z.idx - gv.idx) <= 5);
             _buyCands.push({ idx: gv.idx, time: t, price: gv.price, source: nearbyMainBuy.length > 0 ? '绿峰+主力(最佳买入)' : '绿峰谷底', score: nearbyMainBuy.length > 0 ? 90 : 60 });
         }
         for (const zb of zhuliBuyPoints) {
             if (!_greenValleys.some(g => Math.abs(g.idx - zb.idx) <= 5)) {
-                _buyCands.push({ idx: zb.idx, time: zb.time.slice(11, 16), price: zb.price, source: '主力低吸', score: 50 });
+                _buyCands.push({ idx: zb.idx, time: zb.time.slice(8, 10) + ':' + zb.time.slice(10, 12), price: zb.price, source: '主力低吸', score: 50 });
             }
         }
         for (const dv of _divergences.filter(d => d.type === '底背离')) {
             if (_buyCands.some(c => Math.abs(c.idx - dv.idx) < 30))
                 continue;
             const nearbyMain = zhuliBuyPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
-            _buyCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
+            _buyCands.push({ idx: dv.idx, time: dv.time.slice(8, 10) + ':' + dv.time.slice(10, 12), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
         }
         const _sellCands = [];
         for (const rp of _redPeaks) {
-            const t = rp.time.slice(11, 16);
+            const t = rp.time.slice(8, 10) + ':' + rp.time.slice(10, 12);
             const nearbyMainSell = zhuliSellPoints.filter(z => Math.abs(z.idx - rp.idx) <= 5);
             _sellCands.push({ idx: rp.idx, time: t, price: rp.price, source: nearbyMainSell.length > 0 ? '红峰+主力(最佳卖出)' : '红峰峰顶', score: nearbyMainSell.length > 0 ? 90 : 60 });
         }
         for (const zs of zhuliSellPoints) {
             if (!_redPeaks.some(r => Math.abs(r.idx - zs.idx) <= 5)) {
-                _sellCands.push({ idx: zs.idx, time: zs.time.slice(11, 16), price: zs.price, source: '主力高抛', score: 50 });
+                _sellCands.push({ idx: zs.idx, time: zs.time.slice(8, 10) + ':' + zs.time.slice(10, 12), price: zs.price, source: '主力高抛', score: 50 });
             }
         }
         for (const dv of _divergences.filter(d => d.type === '顶背离')) {
             if (_sellCands.some(c => Math.abs(c.idx - dv.idx) < 30))
                 continue;
             const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
-            _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
+            _sellCands.push({ idx: dv.idx, time: dv.time.slice(8, 10) + ':' + dv.time.slice(10, 12), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
         }
         _signalList.length = 0;
         const _allSorted = [..._buyCands, ..._sellCands].sort((a, b) => a.idx - b.idx);
