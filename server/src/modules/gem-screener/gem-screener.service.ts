@@ -4755,9 +4755,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
    *  排序规则：
    *    1. 板块热度：先按细分板块（sectorName）分组，计算各板块平均涨幅，
    *       同一板块的股票排在一起，板块平均涨幅越高越靠前
-   *    2. 上涨空间：计算剩余上涨动力评分(0-100)，
-   *       筹码峰在顶部(ready to launch)+价格低位+刚启动=高分→靠前
-   *       滞涨/高位/已大幅上涨=低分→靠后
+   *    2. 上涨空间：计算剩余上涨动力评分(0-100)
+   *       集中度越集中→驱动力越强
+   *       高度集中+峰在顶部=突破前高=上涨极强
+   *       峰在底部=主力低位吸筹完毕
+   *       涨幅越小=刚启动=空间大
    *    3. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
    *    4. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
    *    5. 机构活跃度(jiGouActiveScore): 高→低
@@ -4788,22 +4790,64 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
     }
 
-    /** 计算剩余上涨空间评分 (0-100)，越高=上涨动力越强=越靠前 */
+    /** 计算剩余上涨空间评分 (0-100)，越高=上涨动力越强=越靠前
+     *  核心逻辑：
+     *    ① 筹码集中度(首要)：越低越集中→驱动力越强
+     *    ② 筹码峰位置(修正)：高度集中时峰在顶部=突破前高形态=极强
+     *    ③ 当前涨幅(辅助)：越小=刚启动=剩余空间大
+     *    ④ 价格位置(辅助)：越低=底部=空间大
+     */
     const calcRemainingUpside = (s: any): number => {
-      // ① 筹码峰位置: 峰在底部=主力低位吸筹完成=上涨空间大，峰在顶部=已到高位=空间有限
-      const peakMap: Record<string, number> = { low: 100, mid: 60, high: 30 };
-      const peakScore = peakMap[s.chipPeakPosition] ?? 40;
+      const conc = s.chipConcentration90;
+      // 无筹码数据: fallback 到涨幅+价格位置
+      if (conc === undefined || conc === -1 || conc === null) {
+        const gain = Math.max(0, s.priceIncrease ?? 0);
+        const gainScore = Math.min(100, Math.max(0, (20 - gain) / 20) * 100);
+        const pos = s.pricePosition ?? 50;
+        const posScore = Math.max(0, 100 - pos);
+        return Math.round(gainScore * 0.6 + posScore * 0.4);
+      }
 
-      // ② 当前涨幅(priceIncrease): 越小=刚启动=剩余空间大
+      // ① 集中度评分: 越低越集中→驱动力越强 (权重50%)
+      let concScore: number;
+      if (conc <= 3) concScore = 100;       // 极限集中
+      else if (conc <= 5) concScore = 95;   // 极高度集中
+      else if (conc <= 10) concScore = 85;  // 非常集中
+      else if (conc <= 15) concScore = 70;  // 集中
+      else if (conc <= 25) concScore = 50;  // 较集中
+      else if (conc <= 40) concScore = 30;  // 一般
+      else concScore = 10;                  // 分散
+
+      // ② 峰位置修正 (叠加到集中度评分上)
+      const peak = s.chipPeakPosition;
+      let adjustedScore = concScore;
+
+      if (peak === 'low') {
+        // 底部集中=主力低位吸筹完毕
+        adjustedScore = concScore * 1.15;
+      } else if (peak === 'high') {
+        if (conc <= 10) {
+          // 高度集中+峰在顶部=突破前高形态=上涨驱动力最强
+          adjustedScore = concScore * 1.3;
+        } else if (conc <= 20) {
+          // 中度集中+峰在顶部=还需观察
+          adjustedScore = concScore * 0.9;
+        } else {
+          // 分散+峰在顶部=风险
+          adjustedScore = concScore * 0.5;
+        }
+      } // mid 不修正
+
+      // ③ 当前涨幅: 越小=刚启动=剩余空间大 (权重30%)
       const gain = Math.max(0, s.priceIncrease ?? 0);
-      const gainScore = Math.max(0, (20 - gain) / 20) * 100; // 假设目标涨幅20%
+      const gainScore = Math.min(100, Math.max(0, (20 - gain) / 20) * 100);
 
-      // ③ 价格位置(pricePosition): 越低=底部=上涨空间大
+      // ④ 价格位置: 越低=底部=空间大 (权重20%)
       const pos = s.pricePosition ?? 50;
       const posScore = Math.max(0, 100 - pos);
 
-      // 加权综合: 峰位置40% + 涨幅空间30% + 价格位置30%
-      return peakScore * 0.4 + gainScore * 0.3 + posScore * 0.3;
+      // 综合: 筹码驱动60% + 涨幅空间25% + 价格位置15%
+      return Math.round(Math.min(100, adjustedScore * 0.6 + gainScore * 0.25 + posScore * 0.15));
     };
 
     // 预计算上涨空间评分(避免重复计算)
