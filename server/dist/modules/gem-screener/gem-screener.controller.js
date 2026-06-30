@@ -403,45 +403,49 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                         item.score = full.score;
                     if (item.entryTiming === undefined)
                         item.entryTiming = full.entryTiming;
+                    if (item.sectorName === undefined)
+                        item.sectorName = full.sectorName;
+                    if (item.jiGouActiveScore === undefined)
+                        item.jiGouActiveScore = full.jiGouActiveScore;
                 }
             }
             const PRI_ORDER = {
                 '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
                 '减仓': 4, '卖出': 5, '不要介入': 6,
             };
-            const calcRemainingUpside = (s) => {
-                const pi = Math.abs(s.priceIncrease ?? 0);
-                const pp = s.pricePosition ?? 50;
-                const room = (100 - Math.min(pp, 100)) / 100;
-                let trendFactor = 0.4;
-                if (pi >= 5 && pi <= 20)
-                    trendFactor = 1.0;
-                else if (pi >= 3 && pi < 5)
-                    trendFactor = 0.7;
-                else if (pi > 20 && pi <= 30)
-                    trendFactor = 0.6;
-                else if (pi < 2)
-                    trendFactor = 0.2;
-                return room * trendFactor;
+            const TIMING_ORDER = {
+                '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
             };
+            const sectorMap = new Map();
+            for (const s of data) {
+                const sect = s.sectorName || '其他';
+                const entry = sectorMap.get(sect) || { total: 0, count: 0 };
+                entry.total += s.changePercent || 0;
+                entry.count++;
+                sectorMap.set(sect, entry);
+            }
+            const sectorHeat = new Map();
+            for (const [sect, entry] of sectorMap) {
+                sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
+            }
             data.sort((a, b) => {
-                const ea = a.entryTiming || 0;
-                const eb = b.entryTiming || 0;
-                if (eb !== ea)
-                    return eb - ea;
-                const ruA = calcRemainingUpside(a);
-                const ruB = calcRemainingUpside(b);
-                if (ruA !== ruB)
-                    return ruB - ruA;
-                const mfA = a.mainForceInflow || 0;
-                const mfB = b.mainForceInflow || 0;
-                if (mfA !== mfB)
-                    return mfB - mfA;
-                const sa = a.score || 0;
-                const sb = b.score || 0;
-                if (sb !== sa)
-                    return sb - sa;
-                return (b.changePercent || 0) - (a.changePercent || 0);
+                const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
+                const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
+                if (sectA !== sectB)
+                    return sectB - sectA;
+                const ta = TIMING_ORDER[a.entryTiming] ?? 0;
+                const tb = TIMING_ORDER[b.entryTiming] ?? 0;
+                if (ta !== tb)
+                    return tb - ta;
+                const sa = PRI_ORDER[a.suggestion] ?? 7;
+                const sb = PRI_ORDER[b.suggestion] ?? 7;
+                if (sa !== sb)
+                    return sa - sb;
+                const ja = a.jiGouActiveScore ?? 0;
+                const jb = b.jiGouActiveScore ?? 0;
+                if (ja !== jb)
+                    return jb - ja;
+                return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
             });
             const sigDist = {};
             for (const s of data) {

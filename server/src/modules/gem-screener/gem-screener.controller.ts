@@ -466,7 +466,7 @@ export class GemScreenerController {
         this.logger.log(`📤 rescan返回主缓存: ${data.length}只, timestamp=${updatedAt}`);
       }
 
-      // ─── 从主缓存合并完整分析字段（priceIncrease/mainForceInflow等） ───
+            // ─── 从主缓存合并完整分析字段 ───
       const opMap = new Map<string, any>((this.gemScreener as any).opportunityStocks?.map((s: any) => [s.code, s]) || []);
       for (const item of data) {
         const full = opMap.get(item.code);
@@ -478,53 +478,64 @@ export class GemScreenerController {
           if (item.pricePosition === undefined) item.pricePosition = full.pricePosition;
           if (item.score === undefined) item.score = full.score;
           if (item.entryTiming === undefined) item.entryTiming = full.entryTiming;
+          if (item.sectorName === undefined) item.sectorName = full.sectorName;
+          if (item.jiGouActiveScore === undefined) item.jiGouActiveScore = full.jiGouActiveScore;
         }
       }
 
-      // ─── 统一排序：确保所有设备读取顺序一致 ───
-      // 排序规则（与前端 doFullRescan / doScan 完全一致）：
-      //   1. 信号优先级: 重仓买入(0)→买入(1)→轻仓买入(2)→持有(3)→减仓(4)→卖出(5)→不要介入(6)
-      //   2. 入场时机(高→低)
-      //   3. 综合评分(高→低)
-      //   4. 今日涨幅(高→低)
+      // ─── 统一排序：细分板块 → 入场时机 → 买入信号 → 机构活跃度 → 主力资金 ───
+      // 排序规则：
+      //   1. 板块热度：先按细分板块（sectorName）分组，计算各板块平均涨幅，
+      //      同一板块的股票排在一起，板块平均涨幅越高越靠前
+      //   2. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
+      //   3. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
+      //   4. 机构活跃度(jiGouActiveScore): 高→低
+      //   5. 主力资金净流入(mainForceInflow): 高→低
       const PRI_ORDER: Record<string, number> = {
         '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
         '减仓': 4, '卖出': 5, '不要介入': 6,
       };
-      const calcRemainingUpside = (s: any): number => {
-        // 剩余上涨空间得分（越高越好）
-        // 思路：确认了上升趋势（priceIncrease适中），且还没到顶部（pricePosition较低）
-        const pi = Math.abs(s.priceIncrease ?? 0);
-        const pp = s.pricePosition ?? 50;
-        // 区间剩余空间(0~1)：位置越低空间越大
-        const room = (100 - Math.min(pp, 100)) / 100;
-        // 趋势确认因子：priceIncrease在5~20%之间=趋势已确认且未透支
-        let trendFactor = 0.4;
-        if (pi >= 5 && pi <= 20) trendFactor = 1.0;
-        else if (pi >= 3 && pi < 5) trendFactor = 0.7;
-        else if (pi > 20 && pi <= 30) trendFactor = 0.6;
-        else if (pi < 2) trendFactor = 0.2;
-        return room * trendFactor;
+      const TIMING_ORDER: Record<string, number> = {
+        '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
       };
+
+      // 计算板块热度（板块内股票的平均涨幅）
+      const sectorMap = new Map<string, { total: number; count: number }>();
+      for (const s of data) {
+        const sect = s.sectorName || '其他';
+        const entry = sectorMap.get(sect) || { total: 0, count: 0 };
+        entry.total += s.changePercent || 0;
+        entry.count++;
+        sectorMap.set(sect, entry);
+      }
+      const sectorHeat = new Map<string, number>();
+      for (const [sect, entry] of sectorMap) {
+        sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
+      }
+
       data.sort((a, b) => {
-        // 第一排序：入场时机（最佳>可以>others）
-        const ea = a.entryTiming || 0;
-        const eb = b.entryTiming || 0;
-        if (eb !== ea) return eb - ea;
-        // 第二排序：剩余上涨空间（越大越优先）
-        const ruA = calcRemainingUpside(a);
-        const ruB = calcRemainingUpside(b);
-        if (ruA !== ruB) return ruB - ruA;
-        // 第三排序：主力资金净流入（越高越好）
-        const mfA = a.mainForceInflow || 0;
-        const mfB = b.mainForceInflow || 0;
-        if (mfA !== mfB) return mfB - mfA;
-        // 第四排序：综合评分（越高越好）
-        const sa = a.score || 0;
-        const sb = b.score || 0;
-        if (sb !== sa) return sb - sa;
-        // 第五排序：今日涨幅（越高越好）
-        return (b.changePercent || 0) - (a.changePercent || 0);
+        // 1️⃣ 板块热度（板块平均涨幅，越高越靠前）
+        const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
+        const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
+        if (sectA !== sectB) return sectB - sectA;
+
+        // 2️⃣ 入场时机（最佳 > 可以 > 可关注 > 谨慎）
+        const ta = TIMING_ORDER[a.entryTiming] ?? 0;
+        const tb = TIMING_ORDER[b.entryTiming] ?? 0;
+        if (ta !== tb) return tb - ta;
+
+        // 3️⃣ 买入信号强度
+        const sa = PRI_ORDER[a.suggestion] ?? 7;
+        const sb = PRI_ORDER[b.suggestion] ?? 7;
+        if (sa !== sb) return sa - sb;
+
+        // 4️⃣ 机构活跃度（越高越靠前）
+        const ja = a.jiGouActiveScore ?? 0;
+        const jb = b.jiGouActiveScore ?? 0;
+        if (ja !== jb) return jb - ja;
+
+        // 5️⃣ 主力资金净流入（越高越靠前）
+        return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
       });
 
       // 日志：输出信号分布
