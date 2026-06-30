@@ -134,13 +134,13 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const result = await this.gemScreener.scanTopGem(force === 'true');
         const heavyBuyGEM = this.readHeavyBuyCache().filter(s => s.code && (s.code.startsWith('300') || s.code.startsWith('301')));
         const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyGEM);
-        return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
+        return { code: 200, msg: 'success', data: { opportunities: merged, timestamp: result.timestamp } };
     }
     async getTopMainBoard(force) {
         const result = await this.gemScreener.scanTopMainBoard(force === 'true');
         const heavyBuyMain = this.readHeavyBuyCache().filter(s => s.code && !s.code.startsWith('30'));
         const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
-        return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
+        return { code: 200, msg: 'success', data: { opportunities: merged, timestamp: result.timestamp } };
     }
     async getCacheAll() {
         const gem = this.gemScreener.getCacheAll();
@@ -159,7 +159,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const deduped = all.filter(s => { if (seen.has(s.code))
             return false; seen.add(s.code); return true; });
         gem_screener_service_1.GemScreenerService.sortStocks(deduped);
-        const sorted = deduped.slice(0, 30);
+        const sorted = deduped.filter(s => s.suggestion === '重仓买入' || s.suggestion === '买入');
         for (const s of sorted) {
             if (s.chipConcentration90 === undefined) {
                 s.chipConcentration90 = 50;

@@ -177,7 +177,7 @@ export class GemScreenerController {
       s.code && (s.code.startsWith('300') || s.code.startsWith('301'))
     );
     const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyGEM);
-    return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
+    return { code: 200, msg: 'success', data: { opportunities: merged, timestamp: result.timestamp } };
   }
 
   @Get('top/main-board')
@@ -187,7 +187,7 @@ export class GemScreenerController {
       s.code && !s.code.startsWith('30')
     );
     const merged = this.mergeWithHeavyBuy(result.opportunities, heavyBuyMain);
-    return { code: 200, msg: 'success', data: { opportunities: merged.slice(0, 10), timestamp: result.timestamp } };
+    return { code: 200, msg: 'success', data: { opportunities: merged, timestamp: result.timestamp } };
   }
 
   @Get('cache-all')
@@ -210,7 +210,8 @@ export class GemScreenerController {
     const seen = new Set<string>();
     const deduped = all.filter(s => { if (seen.has(s.code)) return false; seen.add(s.code); return true; });
     GemScreenerService.sortStocks(deduped);
-    const sorted = deduped.slice(0, 30);
+    // 机会区只展示"重仓买入"和"买入"
+    const sorted = deduped.filter(s => s.suggestion === '重仓买入' || s.suggestion === '买入');
     for (const s of sorted) {
       if (s.chipConcentration90 === undefined) {
         s.chipConcentration90 = 50;

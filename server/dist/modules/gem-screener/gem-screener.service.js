@@ -2537,7 +2537,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
                         : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
         });
-        return { opportunities: combined.slice(0, 10), timestamp: Math.max(gem.timestamp, main.timestamp) };
+        return { opportunities: combined, timestamp: Math.max(gem.timestamp, main.timestamp) };
     }
     async scanTopFromCandidates(fetchFn, topN) {
         const candidates = [];
