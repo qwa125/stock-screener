@@ -2897,22 +2897,9 @@ async function doSearch(){
         if(er4.ok){var ed4=await er4.json();if(ed4&&ed4.data&&ed4.data.klines&&ed4.data.klines.length>=5){kdata=ed4.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[search] eastmoney kline got '+kdata.length+' bars')}}
       }catch(e){console.warn('[search] eastmoney kline failed:',e.message||e)}
       
-      // ★ 备选4：通过后端代理拉K线（解决浏览器SW拦截问题）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        var bkUrl='/api/gem/proxy/kline?code='+stockCode+'&market='+prefix
-        var bkr=await fetch(bkUrl,{signal:timeoutSignal(12000)})
-        if(bkr.ok){
-          var bkd=await bkr.json()
-          if(bkd&&bkd.data&&bkd.data.length>=5){
-            kdata=bkd.data
-            console.log('[search] backend proxy kline got '+kdata.length+' bars (src:'+bkd.src+')')
-          }
-        }
-      }catch(e){console.warn('[search] backend proxy kline failed:',e.message||e)}
       
-      
-      if(!kdata&&stockMarket!=='us'){console.warn('[search] K线源均不可用，走无K线降级模式')}
-      // ★ 前端直接从原始K线计算机活跃度（不依赖后端，无K线则跳过）
+      if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
+      // ★ K线数据有效 → 前端直接从原始K线计算机构活跃度（不依赖后端）
       var jiGouFromKdata=0
       if(kdata&&kdata.length>=20){
         var closedVols=kdata.slice(-60).map(function(k){return k.volume||0})
