@@ -300,23 +300,24 @@ console.log('页面初始化完成')
 async function handleBlurClick(){
   if(deviceRegistered)return
   var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
-  $('blurMsg').innerHTML='⏳ 首次加载较慢（服务器冷启动约30-60秒），请耐心等待...'
-  try{
-    var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
-    var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},65000)
-    var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders,signal:ac.signal});clearTimeout(tmr)
-    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-    if(regRes.status===429){showBlocked(true);return}
-    if(regRes.status!==200){showBlocked(false);return}
-    hideBlocked()
-  }catch(e){
-    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-    if(e.name==='AbortError'){
-      $('blurMsg').innerHTML='⏳ 服务器正在启动（冷启动需要30-60秒），请再点击一次重试'
-    }else{
-      $('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试'
+  $('blurMsg').innerHTML='⏳ 服务器正在启动（冷启动约30-60秒），请耐心等待...'
+  var _retried=false
+  for(var _attempt=0;_attempt<3;_attempt++){
+    try{
+      var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
+      var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},65000)
+      var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders,signal:ac.signal});clearTimeout(tmr)
+      btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+      if(regRes.status===429){showBlocked(true);return}
+      if(regRes.status!==200){showBlocked(false);return}
+      hideBlocked();return
+    }catch(e){
+      if(e.name!=='AbortError'){btn.disabled=false;btn.textContent='📊 点击扫描解锁';$('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试';return}
+      $('blurMsg').innerHTML='⏳ 服务器仍在启动（第'+(1+_attempt)+'次尝试），请继续等待...'
     }
   }
+  btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+  $('blurMsg').innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试'
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
@@ -3403,6 +3404,12 @@ function changeAdminPwd(){
   </div>
   <div class="blur-msg" id="blurMsg">首次访问请点击扫描以注册设备</div>
 </div>
-<script>(function(){var e=document.getElementById('pageBlur');if(e)e.style.display='flex'})()</script>
+<script>(function(){
+  var e=document.getElementById('pageBlur');if(e)e.style.display='flex'
+  // 立即发出预热请求，让 Render 服务提前唤醒
+  fetch('/api/hello',{signal:AbortSignal.timeout(55000)}).catch(function(){})
+  var m=document.getElementById('blurMsg')
+  if(m)m.innerHTML='⏳ 服务器正在启动中（冷启动约30-60秒），请稍候...'
+})()</script>
 </body>
 </html>
