@@ -261,6 +261,8 @@ window.fetch=function(u,o){
 }
 function showBlocked(isLimited){
   $("pageBlur").style.display='flex'
+  // 确保按钮可点击
+  var sbBtn=$('blurBtn');if(sbBtn){sbBtn.disabled=false;sbBtn.textContent='📊 点击扫描解锁'}
   if(isLimited){
     $("blurMsg").innerHTML="⚠️ 名额不足，请联系管理员增加设备访问名额"
   } else {
@@ -305,28 +307,47 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
-// 毛玻璃按钮：点击注册，后端决定放行还是拒绝
+// 毛玻璃按钮：先唤醒服务器，再注册设备（分两步，避免冷启动时按钮卡死）
 async function handleBlurClick(){
   if(deviceRegistered)return
-  var btn=$("pageBlur").querySelector('.blur-btn');btn.disabled=true;btn.textContent='⏳ 正在注册设备...'
-  $('blurMsg').innerHTML='⏳ 服务器正在启动（冷启动约30-60秒），请耐心等待...'
-  var _retried=false
+  var btn=$('blurBtn');btn.disabled=true
+  var msgEl=$('blurMsg')
+  // Step 1: 先 ping 唤醒服务器（服务器可能在冷启动）
+  btn.textContent='⏳ 正在唤醒服务器...'
+  msgEl.innerHTML='⏳ 正在连接服务器（冷启动约15~45秒），请稍候...'
+  var _warmedUp=false
+  for(var _w=0;_w<5;_w++){
+    try{
+      var _ac=new AbortController();var _tm=setTimeout(function(){_ac.abort()},25000)
+      var _pr=await fetch('/api/gem/ping',{signal:_ac.signal});clearTimeout(_tm)
+      if(_pr.ok||_pr.status===200){_warmedUp=true;break}
+    }catch(_){}
+    if(_w<4)msgEl.innerHTML='⏳ 服务器仍在启动（第'+(1+_w)+'次尝试），请继续等待...'
+  }
+  if(!_warmedUp){
+    btn.disabled=false;btn.textContent='📊 点击扫描解锁'
+    msgEl.innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试或检查网络'
+    return
+  }
+  // Step 2: 服务器已就绪，快速完成注册
+  btn.textContent='⏳ 正在注册设备...'
+  msgEl.innerHTML='⏳ 服务器已就绪，正在注册设备...'
   for(var _attempt=0;_attempt<3;_attempt++){
     try{
       var regHeaders={"X-Device-Id":getOrCreateDeviceId()};var adminTkn=localStorage.getItem('adminToken');if(adminTkn)regHeaders["X-Admin-Token"]=adminTkn
-      var ac=new AbortController();var tmr=setTimeout(function(){ac.abort()},65000)
-      var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders,signal:ac.signal});clearTimeout(tmr)
+      var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},15000)
+      var regRes=await fetch("/api/device/register",{method:"POST",headers:regHeaders,signal:ac2.signal});clearTimeout(tmr2)
       btn.disabled=false;btn.textContent='📊 点击扫描解锁'
       if(regRes.status===429){showBlocked(true);return}
       if(regRes.status!==200){showBlocked(false);return}
       hideBlocked();return
     }catch(e){
-      if(e.name!=='AbortError'){btn.disabled=false;btn.textContent='📊 点击扫描解锁';$('blurMsg').innerHTML='⚠️ 服务器连接失败，请检查网络后重试';return}
-      $('blurMsg').innerHTML='⏳ 服务器仍在启动（第'+(1+_attempt)+'次尝试），请继续等待...'
+      if(e.name!=='AbortError'){btn.disabled=false;btn.textContent='📊 点击扫描解锁';msgEl.innerHTML='⚠️ 注册请求失败，请检查网络后重试';return}
+      msgEl.innerHTML='⏳ 注册请求超时（第'+(1+_attempt)+'次），正在重试...'
     }
   }
   btn.disabled=false;btn.textContent='📊 点击扫描解锁'
-  $('blurMsg').innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试'
+  msgEl.innerHTML='⏳ 注册服务暂不可用，请稍后刷新页面重试'
 }
 // 主页面扫描按钮：立即触发扫描
 function handleScanClick(){
@@ -3472,9 +3493,11 @@ function changeAdminPwd(){
 <script>(function(){
   var e=document.getElementById('pageBlur');if(e)e.style.display='flex'
   // 立即发出预热请求，让 Render 服务提前唤醒
-  fetch('/api/hello',{signal:AbortSignal.timeout(55000)}).catch(function(){})
   var m=document.getElementById('blurMsg')
-  if(m)m.innerHTML='⏳ 服务器正在启动中（冷启动约30-60秒），请稍候...'
+  if(m)m.innerHTML='⏳ 服务器正在启动中（冷启动约15~45秒），请稍候...'
+  fetch('/api/hello',{signal:AbortSignal.timeout(55000)}).then(function(){
+    if(m&&document.getElementById('pageBlur').style.display!=='none')m.innerHTML='✅ 服务器已就绪，点击下方按钮注册设备'
+  }).catch(function(){})
 })()</script>
 </body>
 </html>
