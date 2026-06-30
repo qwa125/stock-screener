@@ -353,6 +353,17 @@ export declare class GemScreenerController {
         cached: boolean;
         age?: undefined;
     }>;
+    proxyMinKLine(code: string): Promise<{
+        code: number;
+        msg: string;
+        data: null;
+        cached?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: any;
+        cached: boolean;
+    }>;
     proxyStockDetail(code: string): Promise<{
         code: number;
         msg: string;

@@ -571,6 +571,36 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
     }
+    async proxyMinKLine(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const prefix = code.startsWith('6') ? 'sh' : 'sz';
+            const url = `https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${prefix}${code},m1,,240`;
+            this.logger.log(`🌐 分钟K线代理拉取腾讯: ${url}`);
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (res.ok || res.status === 0) {
+                const text = await res.text();
+                const clean = text.replace(/^var\s+\S+\s*=\s*/, '').replace(/;$/, '');
+                const json = JSON.parse(clean);
+                const tk = json?.data?.[prefix + code];
+                if (tk?.m1 && tk.m1.length >= 48) {
+                    const data = tk.m1.map((l) => ({
+                        time: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
+                        high: parseFloat(l[3]) || 0, low: parseFloat(l[4]) || 0,
+                        volume: parseFloat(l[5]) || 0, amount: 0
+                    }));
+                    this.logger.log(`✅ 分钟K线代理拉取成功: ${code} (${data.length}条)`);
+                    return { code: 200, msg: '代理分钟K线成功', data, cached: false };
+                }
+            }
+            this.logger.warn(`⚠️ 分钟K线代理无数据: ${code}`);
+        }
+        catch (e) {
+            this.logger.error(`❌ 分钟K线代理失败: ${code} ${e.message || e}`);
+        }
+        return { code: 200, msg: '分钟K线无数据', data: null, cached: false };
+    }
     async proxyStockDetail(code) {
         if (!code)
             return { code: 400, msg: '缺少股票代码', data: null };
@@ -979,6 +1009,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxyKLine", null);
+__decorate([
+    (0, common_1.Get)('proxy/minkline'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxyMinKLine", null);
 __decorate([
     (0, common_1.Get)('proxy/stock-detail'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

@@ -2287,7 +2287,15 @@ async function fetchIntraday(code){
           klineData=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
         }
       }
-    }catch(e){}
+    }catch(e){console.warn('腾讯分钟K线直连失败，尝试代理',e)}
+    // 直连失败→走后端代理
+    if(!klineData||klineData.length<48){
+      try{
+        var _p=await fetch('/api/gem/proxy/minkline?code='+code,{signal:timeoutSignal(8000)})
+        var _pj=await _p.json()
+        if(_pj&&_pj.code===200&&_pj.data&&_pj.data.length>=48){klineData=_pj.data}
+      }catch(e2){console.warn('分钟K线代理也失败',e2)}
+    }
     // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
     var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},10000)
     var r2=await fetch('/api/gem/intraday-analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},body:JSON.stringify({code,kline:klineData}),signal:ac2.signal})
@@ -2599,7 +2607,9 @@ async function doSearch(){
       baiXiaoDays: localStock?localStock.baiXiaoDays:0,
       signalCombination: localStock?localStock.signalCombination:'',
       jiGouActiveScore: localStock?localStock.jiGouActiveScore:0,
-      chipAnalysis: localStock?localStock.chipAnalysis:null,
+      chipConcentration90: localStock?localStock.chipConcentration90:null,
+      chipPeakPosition: localStock?localStock.chipPeakPosition:null,
+      chipPattern: localStock?localStock.chipPattern:null,
       forecast1_2Day: localStock?localStock.forecast1_2Day:null,
       mainForceInflow: localStock?localStock.mainForceInflow:0,
       reasoning: localStock?localStock.reasoning:null
@@ -2607,12 +2617,41 @@ async function doSearch(){
     da.style.minHeight='auto';da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">🔍 搜索 '+stockName+' ('+stockCode+') — ⏳ 正在分析该股票……</div>'
     scrollTo(0,da.offsetTop-80)
     
-    // 非交易时段且已有缓存数据 → 直接展示，不拉K线+后端分析
+    // 非交易时段也有缓存→作为优先展示，同时异步拉取最新分析数据补全
 	    if(!isTH()&&localStock){
 	      da.style.minHeight='';da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+tmpStock.name+' ('+tmpStock.code+')</div>'+buildDetail(tmpStock,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow},tmpStock)
 	      if(!window._auctionDataCache||!window._auctionDataCache[stockCode])await fetchAuctionData([stockCode],5)
 	      renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
 	      startIntradayRefresh(stockCode,stockHigh,stockLow,stockPrice)
+	      // 异步拉取后端完整分析数据（补全筹码/预测等字段），不阻塞展示
+	      if(!tmpStock.chipConcentration90||!tmpStock.forecast1_2Day){
+	        (async function(){
+	          try{
+	            var pkr=await fetch('/api/gem/proxy/kline?code='+stockCode,{signal:timeoutSignal(10000)})
+	            var pkj=await pkr.json()
+	            if(pkj.code===200&&pkj.data&&pkj.data.length>=10){
+	              var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:stockCode,name:stockName,kline:pkj.data}),signal:timeoutSignal(15000)})
+	              var aj=await ar.json()
+	              if(aj.code===200&&aj.data&&aj.data.length>0){
+	                var fo=aj.data[0]
+	                Object.assign(tmpStock,{
+	                  chipConcentration90:fo.chipConcentration90,
+	                  chipPeakPosition:fo.chipPeakPosition,
+	                  chipPattern:fo.chipPattern,
+	                  forecast1_2Day:fo.forecast1_2Day,
+	                  score:fo.score,
+	                  entryTiming:fo.entryTiming,
+	                  safetyScore:fo.safetyScore,
+	                  suggestion:fo.suggestion,
+	                  reasoning:fo.reasoning
+	                })
+	                da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+tmpStock.name+' ('+tmpStock.code+')</div>'+buildDetail(tmpStock,{price:stockPrice,chgP:stockChgP,high:stockHigh,low:stockLow},tmpStock)
+	                renderAuctionSection(stockCode,stockLow,stockHigh,stockPrice)
+	              }
+	            }
+	          }catch(e){console.warn('异步补全分析失败',e)}
+	        })()
+	      }
 	      return
 	    }
 
