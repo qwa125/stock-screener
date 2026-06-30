@@ -304,4 +304,5 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     doIntradayAnalysis(code: string, minData: any[]): Promise<any>;
     private fetchMinuteKLine;
     fetchAuctionTrend(_code: string): Promise<any[]>;
+    static sortStocks(stocks: any[]): any[];
 }

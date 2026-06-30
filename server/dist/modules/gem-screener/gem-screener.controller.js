@@ -158,23 +158,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const seen = new Set();
         const deduped = all.filter(s => { if (seen.has(s.code))
             return false; seen.add(s.code); return true; });
-        const signalOrder = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
-        const sorted = deduped
-            .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '减仓', '卖出', '不要介入'].includes(s.suggestion))
-            .sort((a, b) => {
-            const ao = signalOrder[a.suggestion] ?? 9;
-            const bo = signalOrder[b.suggestion] ?? 9;
-            if (ao !== bo)
-                return ao - bo;
-            const entryA = a.entryTiming ?? 0;
-            const entryB = b.entryTiming ?? 0;
-            if (entryB !== entryA)
-                return entryB - entryA;
-            const mfA = a.mainForceInflow ?? 0;
-            const mfB = b.mainForceInflow ?? 0;
-            return mfB - mfA;
-        })
-            .slice(0, 30);
+        gem_screener_service_1.GemScreenerService.sortStocks(deduped);
+        const sorted = deduped.slice(0, 30);
         for (const s of sorted) {
             if (s.chipConcentration90 === undefined) {
                 s.chipConcentration90 = 50;
@@ -365,7 +350,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async getScanResult() {
         const snap = this.gemScreener.getUpgradedSnapshot();
         if (snap?.list?.length) {
-            return { code: 200, msg: 'success', data: { opportunities: snap.list, timestamp: snap.timestamp } };
+            const sortedOps = snap?.list?.length ? gem_screener_service_1.GemScreenerService.sortStocks([...snap.list]) : [];
+            return { code: 200, msg: 'success', data: { opportunities: sortedOps, timestamp: snap.timestamp } };
         }
         const cached = this.gemScreener.getCache('scan');
         return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
@@ -409,44 +395,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                         item.jiGouActiveScore = full.jiGouActiveScore;
                 }
             }
-            const PRI_ORDER = {
-                '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
-                '减仓': 4, '卖出': 5, '不要介入': 6,
-            };
-            const TIMING_ORDER = {
-                '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
-            };
-            const sectorMap = new Map();
-            for (const s of data) {
-                const sect = s.sectorName || '其他';
-                const entry = sectorMap.get(sect) || { total: 0, count: 0 };
-                entry.total += s.changePercent || 0;
-                entry.count++;
-                sectorMap.set(sect, entry);
-            }
-            const sectorHeat = new Map();
-            for (const [sect, entry] of sectorMap) {
-                sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
-            }
-            data.sort((a, b) => {
-                const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
-                const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
-                if (sectA !== sectB)
-                    return sectB - sectA;
-                const ta = TIMING_ORDER[a.entryTiming] ?? 0;
-                const tb = TIMING_ORDER[b.entryTiming] ?? 0;
-                if (ta !== tb)
-                    return tb - ta;
-                const sa = PRI_ORDER[a.suggestion] ?? 7;
-                const sb = PRI_ORDER[b.suggestion] ?? 7;
-                if (sa !== sb)
-                    return sa - sb;
-                const ja = a.jiGouActiveScore ?? 0;
-                const jb = b.jiGouActiveScore ?? 0;
-                if (ja !== jb)
-                    return jb - ja;
-                return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
-            });
+            gem_screener_service_1.GemScreenerService.sortStocks(data);
             const sigDist = {};
             for (const s of data) {
                 sigDist[s.suggestion] = (sigDist[s.suggestion] || 0) + 1;
@@ -474,7 +423,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
             this.logger.log(`📦 Step③收到升级信号: ${list.length}只, 分布=${JSON.stringify(sigCount)}, 前5=${list.slice(0, 5).map(s => s.code + '-' + s.suggestion).join(',')}`);
             this.gemScreener.updateUpgradedCache(list);
-            this.gemScreener.setUpgradedSnapshot(list);
+            const sortedList = gem_screener_service_1.GemScreenerService.sortStocks([...list]);
+            this.gemScreener.updateUpgradedCache(sortedList);
+            this.gemScreener.setUpgradedSnapshot(sortedList);
             const debugCodes = ['300260', '300749', '300088', '300321', '001335', '002456'];
             const allData = this.gemScreener.getCacheAll();
             if (allData?.length) {
@@ -493,7 +444,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
     async getUpgradedSnapshot() {
         const data = this.gemScreener.getUpgradedSnapshot();
-        return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
+        const sortedList = data?.list?.length ? gem_screener_service_1.GemScreenerService.sortStocks([...data.list]) : [];
+        return { code: 200, msg: 'ok', data: sortedList, updatedAt: data?.timestamp || 0 };
     }
     async getCloudSnapshotUrl() {
         const url = this.gemScreener.cloudSnapshotUrl || '';

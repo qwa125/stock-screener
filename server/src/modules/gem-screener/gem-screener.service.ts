@@ -4751,4 +4751,66 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     // 后端不再主动调用外部API（由前端推送数据到后端分析）
     return [];
   }
+  /** 统一排序：细分板块 → 入场时机 → 买入信号 → 机构活跃度 → 主力资金
+   *  排序规则：
+   *    1. 板块热度：先按细分板块（sectorName）分组，计算各板块平均涨幅，
+   *       同一板块的股票排在一起，板块平均涨幅越高越靠前
+   *    2. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
+   *    3. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
+   *    4. 机构活跃度(jiGouActiveScore): 高→低
+   *    5. 主力资金净流入(mainForceInflow): 高→低
+   */
+  static sortStocks(stocks: any[]): any[] {
+    if (!stocks || stocks.length === 0) return stocks || [];
+
+    const PRI_ORDER: Record<string, number> = {
+      '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
+      '减仓': 4, '卖出': 5, '不要介入': 6,
+    };
+    const TIMING_ORDER: Record<string, number> = {
+      '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
+    };
+
+    // 计算板块热度
+    const sectorMap = new Map<string, { total: number; count: number }>();
+    for (const s of stocks) {
+      const sect = s.sectorName || '其他';
+      const entry = sectorMap.get(sect) || { total: 0, count: 0 };
+      entry.total += s.changePercent || 0;
+      entry.count++;
+      sectorMap.set(sect, entry);
+    }
+    const sectorHeat = new Map<string, number>();
+    for (const [sect, entry] of sectorMap) {
+      sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
+    }
+
+    stocks.sort((a, b) => {
+      // 1️⃣ 板块热度
+      const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
+      const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
+      if (sectA !== sectB) return sectB - sectA;
+
+      // 2️⃣ 入场时机
+      const ta = TIMING_ORDER[a.entryTiming] ?? 0;
+      const tb = TIMING_ORDER[b.entryTiming] ?? 0;
+      if (ta !== tb) return tb - ta;
+
+      // 3️⃣ 买入信号强度
+      const sa = PRI_ORDER[a.suggestion] ?? 7;
+      const sb = PRI_ORDER[b.suggestion] ?? 7;
+      if (sa !== sb) return sa - sb;
+
+      // 4️⃣ 机构活跃度
+      const ja = a.jiGouActiveScore ?? 0;
+      const jb = b.jiGouActiveScore ?? 0;
+      if (ja !== jb) return jb - ja;
+
+      // 5️⃣ 主力资金净流入
+      return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
+    });
+
+    return stocks;
+  }
+
 }

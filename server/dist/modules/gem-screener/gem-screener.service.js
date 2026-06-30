@@ -4096,6 +4096,49 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     async fetchAuctionTrend(_code) {
         return [];
     }
+    static sortStocks(stocks) {
+        if (!stocks || stocks.length === 0)
+            return stocks || [];
+        const PRI_ORDER = {
+            '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
+            '减仓': 4, '卖出': 5, '不要介入': 6,
+        };
+        const TIMING_ORDER = {
+            '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
+        };
+        const sectorMap = new Map();
+        for (const s of stocks) {
+            const sect = s.sectorName || '其他';
+            const entry = sectorMap.get(sect) || { total: 0, count: 0 };
+            entry.total += s.changePercent || 0;
+            entry.count++;
+            sectorMap.set(sect, entry);
+        }
+        const sectorHeat = new Map();
+        for (const [sect, entry] of sectorMap) {
+            sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
+        }
+        stocks.sort((a, b) => {
+            const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
+            const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
+            if (sectA !== sectB)
+                return sectB - sectA;
+            const ta = TIMING_ORDER[a.entryTiming] ?? 0;
+            const tb = TIMING_ORDER[b.entryTiming] ?? 0;
+            if (ta !== tb)
+                return tb - ta;
+            const sa = PRI_ORDER[a.suggestion] ?? 7;
+            const sb = PRI_ORDER[b.suggestion] ?? 7;
+            if (sa !== sb)
+                return sa - sb;
+            const ja = a.jiGouActiveScore ?? 0;
+            const jb = b.jiGouActiveScore ?? 0;
+            if (ja !== jb)
+                return jb - ja;
+            return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
+        });
+        return stocks;
+    }
 };
 exports.GemScreenerService = GemScreenerService;
 exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decorate([

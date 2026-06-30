@@ -209,21 +209,8 @@ export class GemScreenerController {
     const all = [...gemMerged, ...mainMerged];
     const seen = new Set<string>();
     const deduped = all.filter(s => { if (seen.has(s.code)) return false; seen.add(s.code); return true; });
-    const signalOrder: Record<string, number> = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
-    const sorted = deduped
-      .filter(s => s.suggestion && ['重仓买入', '买入', '轻仓买入', '持有', '减仓', '卖出', '不要介入'].includes(s.suggestion))
-      .sort((a, b) => {
-        const ao = signalOrder[a.suggestion] ?? 9;
-        const bo = signalOrder[b.suggestion] ?? 9;
-        if (ao !== bo) return ao - bo;
-        const entryA = a.entryTiming ?? 0;
-        const entryB = b.entryTiming ?? 0;
-        if (entryB !== entryA) return entryB - entryA;
-        const mfA = a.mainForceInflow ?? 0;
-        const mfB = b.mainForceInflow ?? 0;
-        return mfB - mfA;
-      })
-      .slice(0, 30);
+    GemScreenerService.sortStocks(deduped);
+    const sorted = deduped.slice(0, 30);
     for (const s of sorted) {
       if (s.chipConcentration90 === undefined) {
         s.chipConcentration90 = 50;
@@ -441,7 +428,8 @@ export class GemScreenerController {
     // 优先返回升级快照（精确信号），其次返回旧版scanCache
     const snap = this.gemScreener.getUpgradedSnapshot();
     if (snap?.list?.length) {
-      return { code: 200, msg: 'success', data: { opportunities: snap.list, timestamp: snap.timestamp } };
+          const sortedOps = snap?.list?.length ? GemScreenerService.sortStocks([...snap.list]) : [];
+    return { code: 200, msg: 'success', data: { opportunities: sortedOps, timestamp: snap.timestamp } };
     }
     const cached = this.gemScreener.getCache('scan');
     return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
@@ -466,7 +454,7 @@ export class GemScreenerController {
         this.logger.log(`📤 rescan返回主缓存: ${data.length}只, timestamp=${updatedAt}`);
       }
 
-            // ─── 从主缓存合并完整分析字段 ───
+                  // ─── 从主缓存合并完整分析字段 ───
       const opMap = new Map<string, any>((this.gemScreener as any).opportunityStocks?.map((s: any) => [s.code, s]) || []);
       for (const item of data) {
         const full = opMap.get(item.code);
@@ -483,60 +471,8 @@ export class GemScreenerController {
         }
       }
 
-      // ─── 统一排序：细分板块 → 入场时机 → 买入信号 → 机构活跃度 → 主力资金 ───
-      // 排序规则：
-      //   1. 板块热度：先按细分板块（sectorName）分组，计算各板块平均涨幅，
-      //      同一板块的股票排在一起，板块平均涨幅越高越靠前
-      //   2. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
-      //   3. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
-      //   4. 机构活跃度(jiGouActiveScore): 高→低
-      //   5. 主力资金净流入(mainForceInflow): 高→低
-      const PRI_ORDER: Record<string, number> = {
-        '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
-        '减仓': 4, '卖出': 5, '不要介入': 6,
-      };
-      const TIMING_ORDER: Record<string, number> = {
-        '最佳': 5, '可以': 4, '可关注': 3, '谨慎': 2, '观望': 1,
-      };
-
-      // 计算板块热度（板块内股票的平均涨幅）
-      const sectorMap = new Map<string, { total: number; count: number }>();
-      for (const s of data) {
-        const sect = s.sectorName || '其他';
-        const entry = sectorMap.get(sect) || { total: 0, count: 0 };
-        entry.total += s.changePercent || 0;
-        entry.count++;
-        sectorMap.set(sect, entry);
-      }
-      const sectorHeat = new Map<string, number>();
-      for (const [sect, entry] of sectorMap) {
-        sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
-      }
-
-      data.sort((a, b) => {
-        // 1️⃣ 板块热度（板块平均涨幅，越高越靠前）
-        const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
-        const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
-        if (sectA !== sectB) return sectB - sectA;
-
-        // 2️⃣ 入场时机（最佳 > 可以 > 可关注 > 谨慎）
-        const ta = TIMING_ORDER[a.entryTiming] ?? 0;
-        const tb = TIMING_ORDER[b.entryTiming] ?? 0;
-        if (ta !== tb) return tb - ta;
-
-        // 3️⃣ 买入信号强度
-        const sa = PRI_ORDER[a.suggestion] ?? 7;
-        const sb = PRI_ORDER[b.suggestion] ?? 7;
-        if (sa !== sb) return sa - sb;
-
-        // 4️⃣ 机构活跃度（越高越靠前）
-        const ja = a.jiGouActiveScore ?? 0;
-        const jb = b.jiGouActiveScore ?? 0;
-        if (ja !== jb) return jb - ja;
-
-        // 5️⃣ 主力资金净流入（越高越靠前）
-        return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
-      });
+      // 统一排序
+      GemScreenerService.sortStocks(data);
 
       // 日志：输出信号分布
       const sigDist: Record<string, number> = {};
@@ -564,7 +500,9 @@ export class GemScreenerController {
       for (const s of list) { const sig = s.suggestion || '无'; sigCount[sig] = (sigCount[sig] || 0) + 1; }
       this.logger.log(`📦 Step③收到升级信号: ${list.length}只, 分布=${JSON.stringify(sigCount)}, 前5=${list.slice(0,5).map(s => s.code + '-' + s.suggestion).join(',')}`);
       this.gemScreener.updateUpgradedCache(list);
-      this.gemScreener.setUpgradedSnapshot(list);
+      const sortedList = GemScreenerService.sortStocks([...list]);
+      this.gemScreener.updateUpgradedCache(sortedList);
+      this.gemScreener.setUpgradedSnapshot(sortedList);
       // debug: 验证关键股票写入结果
       const debugCodes = ['300260', '300749', '300088', '300321', '001335', '002456'];
       const allData = this.gemScreener.getCacheAll();
@@ -586,7 +524,8 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async getUpgradedSnapshot() {
     const data = this.gemScreener.getUpgradedSnapshot();
-    return { code: 200, msg: 'ok', data: data?.list || [], updatedAt: data?.timestamp || 0 };
+        const sortedList = data?.list?.length ? GemScreenerService.sortStocks([...data.list]) : [];
+    return { code: 200, msg: 'ok', data: sortedList, updatedAt: data?.timestamp || 0 };
   }
 
   /** 获取 TOS 云快照 URL（Render 休眠时前端也能直接读取） */
