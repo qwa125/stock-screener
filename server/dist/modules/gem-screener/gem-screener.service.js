@@ -3884,25 +3884,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
         const _signalList = [];
+        let _lastBuyPrice = Infinity;
         for (const gv of _greenValleys) {
-            if (_signalList.filter(s => s.type === '买入点').length >= 2)
-                break;
-            const _tooClose = _signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30);
-            if (_tooClose)
+            if (_signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30))
                 continue;
-            _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点', source: '最佳买入' });
+            if (gv.price < _lastBuyPrice) {
+                _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点', source: '最佳买入' });
+                _lastBuyPrice = gv.price;
+            }
         }
         if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
             const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
             _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点', source: '最佳买入(主力信号)' });
         }
+        let _lastSellPrice = 0;
         for (const rp of _redPeaks) {
-            if (_signalList.filter(s => s.type === '卖出点').length >= 2)
-                break;
-            const _tooClose = _signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30);
-            if (_tooClose)
+            if (_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30))
                 continue;
-            _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点', source: '最佳卖出' });
+            if (rp.price > _lastSellPrice) {
+                _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点', source: '最佳卖出' });
+                _lastSellPrice = rp.price;
+            }
         }
         if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
             const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);

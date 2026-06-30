@@ -4508,34 +4508,41 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
-	    // ─── 买卖信号：MACD红峰/绿峰本身就是信号 ───
+	    // ─── 买卖信号：MACD红峰/绿峰 + 主力/散户（通达信做T） ───
 	    // 红峰峰顶=卖点（涨不动了），绿峰谷底=买点（跌不动了）
-	    // 核心原则：按时间顺序检测，先出现先标记，不用未来数据排序
-	    // 后面有更大的峰也不覆盖前面的，缓存合并确保历史信号不消失
-	    // 每天最多2个买点+2个卖点，同类型间隔>30分钟
+	    // 核心原则：卖出点必须价格创新高（真正波段峰顶），买入点必须价格创新低（真正波段谷底）
+	    // 同一波段中的小拐点不会产生重复信号，缓存合并确保历史信号不消失
 	    const _signalList: any[] = [];
 
-	    // ─── 买入点（最多2个，按时间顺序，绿峰间隔>30分钟） ───
+	    // ─── 买入点：MACD绿峰谷底，价格逐个创新低才算新波段 ───
+	    let _lastBuyPrice = Infinity;
 	    for (const gv of _greenValleys) {
-	      if (_signalList.filter(s => s.type === '买入点').length >= 2) break;
-	      const _tooClose = _signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30);
-	      if (_tooClose) continue;
-	      _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点' as const, source: '最佳买入' });
+	      // 同类型间隔>30分钟（避免同一波段的重复检测）
+	      if (_signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30)) continue;
+	      // 价格必须比上一个买入点更低（真正的波段谷底），或这是第一个买入点
+	      if (gv.price < _lastBuyPrice) {
+	        _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点' as const, source: '最佳买入' });
+	        _lastBuyPrice = gv.price;
+	      }
 	    }
-	    // 兜底：无绿峰但有主力低吸
+	    // 兜底：无绿峰但有主力低吸（通达信做T信号）
 	    if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
 	      const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
 	      _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点' as const, source: '最佳买入(主力信号)' });
 	    }
 
-	    // ─── 卖出点（最多2个，按时间顺序，红峰间隔>30分钟） ───
+	    // ─── 卖出点：MACD红峰峰顶，价格逐个创新高才算新波段 ───
+	    let _lastSellPrice = 0;
 	    for (const rp of _redPeaks) {
-	      if (_signalList.filter(s => s.type === '卖出点').length >= 2) break;
-	      const _tooClose = _signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30);
-	      if (_tooClose) continue;
-	      _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点' as const, source: '最佳卖出' });
+	      // 同类型间隔>30分钟
+	      if (_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30)) continue;
+	      // 价格必须比上一个卖出点更高（真正的波段顶峰），或这是第一个卖出点
+	      if (rp.price > _lastSellPrice) {
+	        _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点' as const, source: '最佳卖出' });
+	        _lastSellPrice = rp.price;
+	      }
 	    }
-	    // 兜底：无红峰但有主力高抛
+	    // 兜底：无红峰但有主力高抛（通达信做T信号）
 	    if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
 	      const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
 	      _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点' as const, source: '最佳卖出(主力信号)' });
