@@ -302,6 +302,8 @@ function hideBlocked(){
     }catch(e){}
   },100)
 }
+// 浏览器保活ping（页面打开时每5分钟ping一次，防止Render休眠）
+setInterval(function(){fetch('/api/gem/ping',{signal:AbortSignal.timeout(10000)}).catch(function(){})},300000)
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
