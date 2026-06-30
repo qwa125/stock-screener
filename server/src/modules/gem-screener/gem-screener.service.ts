@@ -4437,6 +4437,43 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
+    // ─── MACD红峰/绿峰背离检测（大红峰接小红峰 / 大绿峰接小绿峰）───
+    // 顶背离(大红峰接小红峰): 价格创新高但MACD红柱缩小 → 上涨乏力，卖出信号增强
+    // 底背离(大绿峰接小绿峰): 价格创新低但MACD绿柱缩小 → 下跌衰竭，买入信号增强
+    const _divergences: { type: '顶背离' | '底背离'; idx: number; time: string; price: number; macdVal: number; prevMacdVal: number; strength: number; prevPrice: number }[] = [];
+    if (_redPeaks.length >= 2) {
+      for (let i = 1; i < _redPeaks.length; i++) {
+        const prev = _redPeaks[i - 1];
+        const curr = _redPeaks[i];
+        // 大红峰接小红峰：价格新高 + MACD柱高度缩小≥30%
+        if (curr.price > prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+          _divergences.push({
+            type: '顶背离',
+            idx: curr.idx, time: curr.time,
+            price: curr.price, macdVal: curr.macdVal,
+            prevMacdVal: prev.macdVal, prevPrice: prev.price,
+            strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+          });
+        }
+      }
+    }
+    if (_greenValleys.length >= 2) {
+      for (let i = 1; i < _greenValleys.length; i++) {
+        const prev = _greenValleys[i - 1];
+        const curr = _greenValleys[i];
+        // 大绿峰接小绿峰：价格新低 + MACD柱缩小（负值收窄）≥30%
+        if (curr.price < prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+          _divergences.push({
+            type: '底背离',
+            idx: curr.idx, time: curr.time,
+            price: curr.price, macdVal: curr.macdVal,
+            prevMacdVal: prev.macdVal, prevPrice: prev.price,
+            strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+          });
+        }
+      }
+    }
+
     // ─── 主力/散户指标（通达信做T公式） ───
     // VAR3=(2*CLOSE+HIGH+LOW)/4
     // VAR4=LLV(LOW,21) VAR5=HHV(HIGH,21)
@@ -4514,7 +4551,14 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const currentZhuliStatus = lastMain > lastRetail ? '主力占优' : '散户占优';
 
     let summary = '';
-    if (zhuliBuyPoints.length > 0) {
+    // 背离信号优先：顶背离/底背离是最强信号
+    const _latestDivBuy = _divergences.filter(d => d.type === '底背离').pop();
+    const _latestDivSell = _divergences.filter(d => d.type === '顶背离').pop();
+    if (_latestDivSell) {
+      summary = `⚠️ 大红峰接小红峰顶背离（强度${_latestDivSell.strength}%）：价格${_latestDivSell.price.toFixed(2)}创新高但MACD红柱缩小，上涨乏力注意回调`;
+    } else if (_latestDivBuy) {
+      summary = `✅ 大绿峰接小绿峰底背离（强度${_latestDivBuy.strength}%）：价格${_latestDivBuy.price.toFixed(2)}创新低但MACD绿柱收窄，下跌衰竭关注低吸`;
+    } else if (zhuliBuyPoints.length > 0) {
       const latest = zhuliBuyPoints[zhuliBuyPoints.length - 1];
       summary = `近期出现主力低吸买入信号（${latest.time}，¥${latest.price.toFixed(2)}），可关注低吸机会`;
     } else if (zhuliSellPoints.length > 0) {
@@ -4562,6 +4606,30 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 	    if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
 	      const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
 	      _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点' as const, source: '最佳卖出(主力信号)' });
+	    }
+	    // ─── 背离信号：大红峰接小红峰(顶背离) / 大绿峰接小绿峰(底背离) ───
+	    // 顶背离 → 卖出点增强，底背离 → 买入点增强
+	    for (const dv of _divergences) {
+	      if (dv.type === '顶背离') {
+	        // 顶背离=大红峰接小红峰，价格创新高但MACD红柱缩小 → 卖出
+	        // 间隔>30分钟才添加
+	        if (!_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
+	          _signalList.push({
+	            idx: dv.idx, time: dv.time.slice(11, 16),
+	            price: dv.price, type: '卖出点' as const,
+	            source: `顶背离(大红峰接小红峰,强度${dv.strength}%)`,
+	          });
+	        }
+	      } else if (dv.type === '底背离') {
+	        // 底背离=大绿峰接小绿峰，价格创新低但MACD绿柱收窄 → 买入
+	        if (!_signalList.filter(s => s.type === '买入点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
+	          _signalList.push({
+	            idx: dv.idx, time: dv.time.slice(11, 16),
+	            price: dv.price, type: '买入点' as const,
+	            source: `底背离(大绿峰接小绿峰,强度${dv.strength}%)`,
+	          });
+	        }
+	      }
 	    }
     // 按时间排序加载到suggestions
     suggestions.length = 0;

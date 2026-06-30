@@ -3826,6 +3826,37 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 }
             }
         }
+        const _divergences = [];
+        if (_redPeaks.length >= 2) {
+            for (let i = 1; i < _redPeaks.length; i++) {
+                const prev = _redPeaks[i - 1];
+                const curr = _redPeaks[i];
+                if (curr.price > prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+                    _divergences.push({
+                        type: '顶背离',
+                        idx: curr.idx, time: curr.time,
+                        price: curr.price, macdVal: curr.macdVal,
+                        prevMacdVal: prev.macdVal, prevPrice: prev.price,
+                        strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+                    });
+                }
+            }
+        }
+        if (_greenValleys.length >= 2) {
+            for (let i = 1; i < _greenValleys.length; i++) {
+                const prev = _greenValleys[i - 1];
+                const curr = _greenValleys[i];
+                if (curr.price < prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+                    _divergences.push({
+                        type: '底背离',
+                        idx: curr.idx, time: curr.time,
+                        price: curr.price, macdVal: curr.macdVal,
+                        prevMacdVal: prev.macdVal, prevPrice: prev.price,
+                        strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+                    });
+                }
+            }
+        }
         const var3 = [];
         for (let i = 0; i < len; i++)
             var3.push((2 * close[i] + high[i] + low[i]) / 4);
@@ -3883,7 +3914,15 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const currentMacdStatus = lastDiff >= lastDea ? '金叉区' : '死叉区';
         const currentZhuliStatus = lastMain > lastRetail ? '主力占优' : '散户占优';
         let summary = '';
-        if (zhuliBuyPoints.length > 0) {
+        const _latestDivBuy = _divergences.filter(d => d.type === '底背离').pop();
+        const _latestDivSell = _divergences.filter(d => d.type === '顶背离').pop();
+        if (_latestDivSell) {
+            summary = `⚠️ 大红峰接小红峰顶背离（强度${_latestDivSell.strength}%）：价格${_latestDivSell.price.toFixed(2)}创新高但MACD红柱缩小，上涨乏力注意回调`;
+        }
+        else if (_latestDivBuy) {
+            summary = `✅ 大绿峰接小绿峰底背离（强度${_latestDivBuy.strength}%）：价格${_latestDivBuy.price.toFixed(2)}创新低但MACD绿柱收窄，下跌衰竭关注低吸`;
+        }
+        else if (zhuliBuyPoints.length > 0) {
             const latest = zhuliBuyPoints[zhuliBuyPoints.length - 1];
             summary = `近期出现主力低吸买入信号（${latest.time}，¥${latest.price.toFixed(2)}），可关注低吸机会`;
         }
@@ -3920,6 +3959,26 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
             const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
             _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点', source: '最佳卖出(主力信号)' });
+        }
+        for (const dv of _divergences) {
+            if (dv.type === '顶背离') {
+                if (!_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
+                    _signalList.push({
+                        idx: dv.idx, time: dv.time.slice(11, 16),
+                        price: dv.price, type: '卖出点',
+                        source: `顶背离(大红峰接小红峰,强度${dv.strength}%)`,
+                    });
+                }
+            }
+            else if (dv.type === '底背离') {
+                if (!_signalList.filter(s => s.type === '买入点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
+                    _signalList.push({
+                        idx: dv.idx, time: dv.time.slice(11, 16),
+                        price: dv.price, type: '买入点',
+                        source: `底背离(大绿峰接小绿峰,强度${dv.strength}%)`,
+                    });
+                }
+            }
         }
         suggestions.length = 0;
         _signalList.sort((a, b) => a.time.localeCompare(b.time));

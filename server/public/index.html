@@ -1361,7 +1361,7 @@ function buildDetail(s,rt,ta){
   // 信号标签
   var tags=arHtml+'<div class="signal-tags">'
     +'<span class="signal-tag" style="background:'+posTClr+'">'+posTag+' '+p.toFixed(0)+'%</span>'
-    +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'金叉✓':'未金叉')+'</span>'
+    +'<span class="signal-tag" style="background:'+(gc?'#16a34a':'#6b7280')+'">MACD'+(gc?'红柱↑':'绿柱↓')+'</span>'
     +'<span class="signal-tag" style="background:#7c3aed">白消'+bai+'天</span>'
     +'<span class="signal-tag" style="background:'+(entry>=65?'#16a34a':entry>=35?'#ca8a04':'#dc2626')+'">'+(entry>=65?'⭐最佳':entry>=35?'📌可以':'❌不能')+'</span>'
     +(comb?'<span class="signal-tag" style="background:#0891b2">⚡ '+comb+'</span>':'')
@@ -1392,7 +1392,7 @@ function buildDetail(s,rt,ta){
     +'<div class="indicator-item"><div class="label">最低价</div><div class="value" style="color:#22c55e">'+(rt.low!=null?rt.low.toFixed(2):s.intradayLow>0?s.intradayLow.toFixed(2):'-')+'</div></div>'
     +'</div>'
 
-  // 🕐 日内介入参考（合并技术分析与日内MACD做T信号）
+  // 🕐 日内介入参考（基于MACD红峰/绿峰+背离判断买卖点）
   var entryHtml=''
   var scTag='', bbHtml='', bestEntryHtml=''
   if(ta&&(ta.entryScore!=null||ta.entryTiming!=null)){
@@ -1462,7 +1462,13 @@ function buildDetail(s,rt,ta){
   else if(sig==='买入'){details.push('低位区出现买点信号');details.push('趋势企稳回升，均线走好');details.push('成交量配合较好')}
   else if(sig==='轻仓买入'){details.push('中位区，具有一定安全边际');details.push('趋势向好但信号不强烈');details.push('建议控制仓位，设好止损')}
   else if(sig==='持有'){details.push('趋势向上，均线多头排列');details.push('无明确买入信号但形态良好');details.push('不急于卖出，持股待涨为主')}
-  if(gc)details.push('MACD金叉信号，短期看多')
+  if(gc)details.push('MACD红柱向上，短期动能偏多')
+  else if(s.isGoldenCross===false)details.push('MACD绿柱向下，短期动能偏弱')
+  // 日内介入信号（来自红峰/绿峰+背离分析）
+  if(window._frozenIA&&window._frozenIA[s.code]){
+    var _iaData=window._frozenIA[s.code]
+    if(_iaData.summary)details.push(_iaData.summary)
+  }
   var detailList=details.length?'<div style="padding:4px 12px 2px;font-size:12px;font-weight:600;color:#666">📋 今日详细说明</div><div class="detail-list" style="padding:2px 12px 10px"><ul style="list-style:none;padding:0;margin:0">'+details.map(function(d){return'<li style="font-size:11px;color:#6b7280;line-height:1.8">'+d+'</li>'}).join('')+'</ul></div>':''
 
   var backBtn='<div style="position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 12px;display:flex;align-items:center;gap:8px"><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';isDetailView=false;renderList()" style="background:none;border:none;padding:4px 2px;font-size:18px;color:#374151;cursor:pointer">←</button><span style="font-size:15px;font-weight:600;color:#1f2937;flex:1">'+s.name+' <span style="font-weight:400;font-size:12px;color:#6b7280">'+(s.code||'')+'</span></span><button onclick="document.getElementById(\'detailArea\').style.display=\'none\';isDetailView=false;renderList()" style="background:#f3f4f6;border:none;border-radius:6px;padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer">关闭</button></div>'
@@ -2294,7 +2300,7 @@ function selectPinyinStock(code,name){
   doSearch()
 }
 
-// ---------- 日内分析：MACD(40/120/40) + 主力/散户 + 实时价格 ----------
+// 日内介入系统：基于MACD红峰/绿峰峰顶谷底 + 背离判断买卖点，非MACD金叉死叉
 var _intradayFetching={}
 async function fetchIntraday(code){
   if(_intradayFetching[code])return null
