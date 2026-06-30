@@ -1898,8 +1898,8 @@ async function doFullRescan(saveToBackend){
     newStocks.push({code:code,name:name,currentPrice:price,
       intradayHigh:item.f15,intradayLow:item.f16,
       pricePosition:50,
-      // 新股按涨跌幅给基础评分（即使非交易时段也有排序依据）
-      suggestion:hasLiveData?liveSuggestion:'持有',
+      // 新股按涨跌幅给基础评分，但最高只给轻仓买入（需后端K线分析确认买入/重仓买入）
+      suggestion:hasLiveData?(['重仓买入','买入'].indexOf(liveSuggestion)>=0?'轻仓买入':liveSuggestion):'持有',
       score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
@@ -1972,6 +1972,10 @@ async function doFullRescan(saveToBackend){
       return Math.min(100,cs)
     }
     stocks.sort(function(a,b){
+      // 0️⃣ 数据完整性：有后端分析数据(有sectorName+筹码)的优先，实时新股靠后
+      var ha=a.sectorName&&a.sectorName!==''&&a.chipConcentration90>=0?1:0
+      var hb=b.sectorName&&b.sectorName!==''&&b.chipConcentration90>=0?1:0
+      if(ha!==hb) return hb-ha
       // ① 板块热度
       var sa=sectorHeat[a.sectorName]||0,sb=sectorHeat[b.sectorName]||0
       if(sb!==sa) return sb-sa
