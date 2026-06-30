@@ -336,7 +336,13 @@ export declare class GemScreenerController {
     proxyKLine(code: string, market: string): Promise<{
         code: number;
         msg: string;
+        data: any;
+        src: string;
+    } | {
+        code: number;
+        msg: any;
         data: never[];
+        src?: undefined;
     }>;
     proxyStockDetail(code: string): Promise<{
         code: number;

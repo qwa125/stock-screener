@@ -670,8 +670,49 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async proxyKLine(@Query('code') code: string, @Query('market') market: string) {
     if (!code) return { code: 400, msg: '缺少股票代码', data: [] };
-    // 后端不主动调外部API，K线由前端拉取后推送到后端
-    return { code: 200, msg: 'success', data: [] };
+    const prefix = code.startsWith('6') ? 'sh' : 'sz';
+    try {
+      // ★ 优先：腾讯行情K线（海外可访问，稳定）
+      const tqUrl = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,500,qfq`;
+      const ctrl = new AbortController();
+      const tmr = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(tqUrl, { signal: ctrl.signal });
+      clearTimeout(tmr);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data?.[prefix + code]?.qfqday?.length >= 5) {
+          const klines = json.data[prefix + code].qfqday.map(l => {
+            const p = l.split(' ');
+            return { day: p[0], open: parseFloat(p[1]) || 0, close: parseFloat(p[2]) || 0, high: parseFloat(p[3]) || 0, low: parseFloat(p[4]) || 0, volume: parseFloat(p[5]) || 0, amount: 0 };
+          });
+          return { code: 200, msg: 'success', data: klines, src: 'tencent' };
+        }
+      }
+      // ★ 备选：新浪行情K线
+      const sinaUrl = `https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=${prefix}${code}&scale=240&ma=no&datalen=120`;
+      const ctrl2 = new AbortController();
+      const tmr2 = setTimeout(() => ctrl2.abort(), 8000);
+      const res2 = await fetch(sinaUrl, { signal: ctrl2.signal });
+      clearTimeout(tmr2);
+      if (res2.ok) {
+        const json2 = await res2.json();
+        if (Array.isArray(json2) && json2.length >= 5) {
+          const klines = json2.map(l => ({
+            day: (l.day || '').replace(/-/g, ''),
+            open: parseFloat(l.open) || 0,
+            close: parseFloat(l.close) || 0,
+            high: parseFloat(l.high) || 0,
+            low: parseFloat(l.low) || 0,
+            volume: parseFloat(l.volume) || 0,
+            amount: 0,
+          }));
+          return { code: 200, msg: 'success', data: klines, src: 'sina' };
+        }
+      }
+      return { code: 200, msg: 'K线数据不可用', data: [] };
+    } catch (e: any) {
+      return { code: 500, msg: e.message || 'proxy error', data: [] };
+    }
   }
 
   /**
