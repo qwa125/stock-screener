@@ -2388,7 +2388,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       if(buf.length%15===0){
         (async function(){
           try{
-            var pr=await Network.request({url:'/api/gem/intraday-push',method:'POST',data:{code:code,price:lastPriceH,time:new Date().toISOString().slice(11,19)}})
+            var pr=await fetch('/api/gem/intraday-push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,price:lastPriceH,time:new Date().toISOString().slice(11,19)})}).then(function(r){return r.json()})
             var pd=pr.data&&pr.data.data||null
             if(pd&&pd.suggestions&&pd.suggestions.length>0&&pd.currentPrice){
               window._frozenIA[code]=pd
