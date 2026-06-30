@@ -2255,18 +2255,40 @@ async function fetchIntraday(code){
   if(_intradayFetching[code])return null
   _intradayFetching[code]=true
   try{
-    // 前端直调East Money拉取分钟K线（绕过后端跨境代理）
+    // ====== 东财1分钟K线（首选） ======
+    var klineData=null
     var secId=code>='600000'?'1.':'0.'
     var mkUrl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+secId+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=1&fqt=1&end=20500101&lmt=240'
-    var mkRes=await fetch(mkUrl,{mode:'cors',signal:AbortSignal.timeout(12000)})
-    var mkJson=await mkRes.json()
-    var rawKlines=mkJson&&mkJson.data&&mkJson.data.klines||[]
-    if(!rawKlines||rawKlines.length<50)return null
-    // 解析K线数据
-    var klineData=rawKlines.map(function(k){
-      var p=k.split(',')
-      return{time:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
-    })
+    try{
+      var mkRes=await fetch(mkUrl,{mode:'cors',signal:AbortSignal.timeout(8000)})
+      var mkJson=await mkRes.json()
+      var rawKlines=mkJson&&mkJson.data&&mkJson.data.klines||[]
+      if(rawKlines&&rawKlines.length>=50){
+        klineData=rawKlines.map(function(k){
+          var p=k.split(',')
+          return{time:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
+        })
+        console.log('[fetchIntraday] 东财分钟K线成功',code,rawKlines.length)
+      }
+    }catch(e){console.warn('[fetchIntraday] 东财分钟K线失败:',e.message)}
+    // ====== 新浪5分钟K线备选（纯前端，不走后端代理） ======
+    if(!klineData){
+      try{
+        var sinCode=code.startsWith('6')?'sh'+code:'sz'+code
+        var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=240&scale=5'
+        var sRes=await fetch(sUrl,{mode:'cors',signal:AbortSignal.timeout(8000)})
+        var sText=await sRes.text()
+        var sJson=JSON.parse(sText.replace(/^\(|\)$/g,''))
+        if(sJson&&sJson.data&&sJson.data.length>=48){
+          klineData=sJson.data.map(function(d){
+            var p=d.day.split(' ')
+            return{time:d.day,open:parseFloat(d.open),close:parseFloat(d.close),high:parseFloat(d.high),low:parseFloat(d.low),volume:parseFloat(d.volume),amount:parseFloat(d.amount)||0}
+          })
+          console.log('[fetchIntraday] 新浪5分钟K线备选成功',code,klineData.length)
+        }
+      }catch(e2){console.warn('[fetchIntraday] 新浪备选也失败:',e2.message)}
+    }
+    if(!klineData||klineData.length<48)return null
     // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
     var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},10000)
     var r2=await fetch('/api/gem/intraday-analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},body:JSON.stringify({code,kline:klineData}),signal:ac2.signal})
