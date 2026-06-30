@@ -274,18 +274,27 @@ function hideBlocked(){
   // 注册成功后尝试加载后端缓存的机会区股票列表
   setTimeout(async function(){
     try{
-      var cr=await fetch('/api/gem/scan-result',{signal:15000})
+      var cr=await fetch('/api/gem/scan-result',{signal:AbortSignal.timeout(15000)})
       if(cr.ok){
         var cj=await cr.json()
         var cd=cj.data||cj
-        // 先尝试解析后端封装 {code,msg,data:{opportunities:[...],timestamp:"..."}}
         if(cd&&cd.opportunities&&Array.isArray(cd.opportunities)&&cd.opportunities.length>0){
-          stocks=cd.opportunities
-          scanTime=cd.timestamp||('已缓存 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))
-          renderList()
-          startPriceRefresh(stocks)
+          var _all=cd.opportunities
+          // 只取买入信号，与其他路径一致
+          stocks=_all.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
+          if(stocks.length){
+            _lastBuySignals=stocks.slice()
+            scanTime=cd.timestamp||('已缓存 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))
+            renderList()
+            startPriceRefresh(stocks)
+          }else if(_lastBuySignals.length){
+            stocks=_lastBuySignals.slice()
+            renderList()
+            startPriceRefresh(stocks)
+          }
         }else if(Array.isArray(cd)&&cd.length>0){
-          stocks=cd
+          stocks=cd.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
+          if(!stocks.length&&_lastBuySignals.length) stocks=_lastBuySignals.slice()
           renderList()
           startPriceRefresh(stocks)
         }
@@ -3079,28 +3088,38 @@ setInterval(function(){
         if(d.code===200&&d.data&&d.data.length){
           var ALLOWED={'重仓买入':1,'买入':1}
           stocks=d.data.filter(function(s){return ALLOWED[s.suggestion]?1:0})
-          try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
-          renderList()
-          setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享@'+d.updatedAt+'）')
-        }else{
-          // 后端无缓存 → 尝试本地快照
-          var snap2=loadFrozenSnapshot()
-          if(snap2&&snap2.length){
-            stocks=snap2.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
-            var PM2={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
-            stocks.sort(function(a,b){
-              var pa=PM2[a.suggestion]||99,pb=PM2[b.suggestion]||99
-              if(pa!==pb)return pa-pb
-              var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
-              if(ta!==tb)return tb-ta
-              return (b.score||0)-(a.score||0)
-            })
+          if(stocks.length){
+            // ★ 更新备份
+            _lastBuySignals=stocks.slice()
+            try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:d.data,ts:Date.now()}))}catch(e){}
             renderList()
-            setStatus('📋 冻数据 '+(snap2.length||0))
+            setStatus('📋 缓存已加载 '+stocks.length+' 只（盘后数据，跨设备共享@'+d.updatedAt+'）')
           }else{
-            setStatus('⏸️ 等待扫描')
+            // ★ 当前无买入信号时，尝试保持前10分钟的结果
+            if(_lastBuySignals.length){
+              stocks=_lastBuySignals.slice()
+              renderList()
+              setStatus('⏳ 当前无买入信号，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
+            }else{
+              // 后端有数据但无买入信号 → 尝试本地快照
+              var snap2=loadFrozenSnapshot()
+              if(snap2&&snap2.length){
+                stocks=snap2.filter(function(s){return s.suggestion==='重仓买入'||s.suggestion==='买入'})
+                var PM2={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+                stocks.sort(function(a,b){
+                  var pa=PM2[a.suggestion]||99,pb=PM2[b.suggestion]||99
+                  if(pa!==pb)return pa-pb
+                  var ta=a.entryTiming?1:0,tb=b.entryTiming?1:0
+                  if(ta!==tb)return tb-ta
+                  return (b.score||0)-(a.score||0)
+                })
+                renderList()
+                setStatus('📋 冻数据 '+(snap2.length||0)+' 只（后端无买入信号）')
+              }else{
+                setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+              }
+            }
           }
-        }
       })
       .catch(function(e){
         console.log('⚠️ Step③快照读取失败:',e.message)

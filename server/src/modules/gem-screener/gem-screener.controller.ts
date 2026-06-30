@@ -436,6 +436,11 @@ export class GemScreenerController {
   @Get('scan-result')
   @SkipAccessLimit()
   async getScanResult() {
+    // 优先返回升级快照（精确信号），其次返回旧版scanCache
+    const snap = this.gemScreener.getUpgradedSnapshot();
+    if (snap?.list?.length) {
+      return { code: 200, msg: 'success', data: { opportunities: snap.list, timestamp: snap.timestamp } };
+    }
     const cached = this.gemScreener.getCache('scan');
     return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
   }
@@ -490,6 +495,11 @@ export class GemScreenerController {
         if (sb !== sa) return sb - sa;
         return (b.changePercent || 0) - (a.changePercent || 0);
       });
+
+      // 日志：输出信号分布
+      const sigDist: Record<string, number> = {};
+      for (const s of data) { sigDist[s.suggestion] = (sigDist[s.suggestion] || 0) + 1; }
+      this.logger.log(`📤 rescan信号分布: ${JSON.stringify(sigDist)}`);
 
       return {
         code: 200, msg: 'ok', data, updatedAt,

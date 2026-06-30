@@ -363,6 +363,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
     }
     async getScanResult() {
+        const snap = this.gemScreener.getUpgradedSnapshot();
+        if (snap?.list?.length) {
+            return { code: 200, msg: 'success', data: { opportunities: snap.list, timestamp: snap.timestamp } };
+        }
         const cached = this.gemScreener.getCache('scan');
         return { code: 200, msg: 'success', data: { opportunities: cached, timestamp: Date.now() } };
     }
@@ -410,6 +414,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     return sb - sa;
                 return (b.changePercent || 0) - (a.changePercent || 0);
             });
+            const sigDist = {};
+            for (const s of data) {
+                sigDist[s.suggestion] = (sigDist[s.suggestion] || 0) + 1;
+            }
+            this.logger.log(`📤 rescan信号分布: ${JSON.stringify(sigDist)}`);
             return {
                 code: 200, msg: 'ok', data, updatedAt,
                 cloudSnapshotUrl: this.gemScreener.cloudSnapshotUrl || '',
