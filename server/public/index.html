@@ -2375,73 +2375,10 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
 	if(_frozen&&_frozen.suggestions&&_frozen.suggestions.length>0)ia=_frozen
   }
   }
-  // ★ 无完整分析数据 → 尝试从实时报价累加（东财CORS失败时的备选）
+  // ★ 无分析数据 → 显示非交易时段提示，实时买卖点由MACD/通达信做T驱动无需报价累积
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
-    var lastPriceH=_rttmp.price||lastPrice||0
-    var dayLow2=_rttmp.low||low||0,dayHigh2=_rttmp.high||high||0
-    // 向后端推送实时报价，累积够后自动分析
-    if(lastPriceH>0&&isTH()){
-      window._priceBuffer=window._priceBuffer||{}
-      var buf=window._priceBuffer[code]||[]
-      buf.push({time:new Date().toISOString().slice(11,19),price:lastPriceH,volume:0})
-      if(buf.length>500)buf.splice(0,buf.length-500) // 最多保留500条
-      window._priceBuffer[code]=buf
-      // 每15次推送一次到后端（约30秒）
-      if(buf.length%15===0){
-        (async function(){
-          try{
-            var pr=await fetch('/api/gem/intraday-push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,price:lastPriceH,time:new Date().toISOString().slice(11,19)})}).then(function(r){return r.json()})
-            var pd=pr.data&&pr.data.data||null
-            if(pd&&pd.suggestions&&pd.suggestions.length>0&&pd.currentPrice){
-              window._frozenIA[code]=pd
-              ia=pd
-            }
-          }catch(e){}
-        })()
-      }
-    }
-    if(lastPriceH>0&&dayLow2>0&&dayHigh2>0&&dayLow2<dayHigh2){
-      var _gap=dayHigh2-dayLow2
-      var buyLow=dayLow2,buyHigh=dayLow2+_gap*0.15
-      var sellLow=dayHigh2-_gap*0.15,sellHigh=dayHigh2
-      var pct=dayHigh2>dayLow2?Math.max(0,Math.min(100,(lastPriceH-dayLow2)/(dayHigh2-dayLow2)*100)):50
-      var h='<div style="font-size:13px;text-align:left">'
-      h+='<div style="margin:6px 0;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">'
-      h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;margin-bottom:2px">'
-      h+='<span>最低 '+dayLow2.toFixed(2)+'</span><span style="font-weight:600;color:#1f2937">当前 '+lastPriceH.toFixed(2)+'</span><span>最高 '+dayHigh2.toFixed(2)+'</span></div>'
-      h+='<div style="position:relative;height:6px;background:linear-gradient(to right,#22c55e,#eab308,#ef4444);border-radius:3px;margin:4px 0">'
-      h+='<div style="position:absolute;left:'+pct+'%;top:50%;transform:translate(-50%,-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:10px solid #1f2937"></div></div>'
-      h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:#9ca3af">'
-      h+='<span>支撑区</span><span style="font-weight:500;color:#374151">⬆ 价格位置 '+pct.toFixed(0)+'%</span><span>压力区</span></div></div>'
-      h+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
-      h+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围'+(isTH()?'（实时报价）':'（基于缓存数据）')+'</div>'
-      h+='<div style="display:flex;justify-content:space-between">'
-      h+='<span style="color:#16a34a;font-weight:600">📝 买入参考: '+(buyLow>0?buyLow.toFixed(2):'-')+'~'+(buyHigh>0?buyHigh.toFixed(2):'-')+'</span>'
-      h+='<span style="color:#ef4444;font-weight:600">📝 卖出参考: '+(sellLow>0?sellLow.toFixed(2):'-')+'~'+(sellHigh>0?sellHigh.toFixed(2):'-')+'</span>'
-      h+='</div></div></div>'
-      var e=$('intradayMacd')
-      if(e)e.innerHTML=h
-    }else{
-      var e=$('intradayMacd')
-      if(e)e.innerHTML='<div style="padding:8px;text-align:center;font-size:11px;color:#9ca3af">暂无日内参考数据（非交易时段）</div>'
-    }
-    // 占位：主力/散户/买卖点（等待实时报价累积分析）
-    var _ph='<div style="margin-top:6px;padding:6px 8px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb;font-size:12px;text-align:left">'
-    _ph+='<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between">'
-    _ph+='<span style="color:#1f2937">主力 <span style="font-weight:600;color:#9ca3af">等待实时数据...</span></span>'
-    _ph+='<span style="color:#1f2937">散户 <span style="font-weight:600;color:#9ca3af">等待实时数据...</span></span>'
-    _ph+='</div>'
-    _ph+='<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;margin-top:4px">'
-    _ph+='<span style="color:#2563eb;font-weight:600">📌 买卖点</span>'
-    _ph+='<span style="color:#16a34a">买入 <span style="font-weight:600;color:#9ca3af">--</span></span>'
-    _ph+='<span style="color:#ef4444">卖出 <span style="font-weight:600;color:#9ca3af">--</span></span>'
-    _ph+='<span style="color:#8b5cf6;font-weight:600">🎯 最佳介入点 <span style="font-weight:600;color:#9ca3af">--</span></span>'
-    _ph+='</div></div>'
-    var _buf=window._priceBuffer&&window._priceBuffer[code]||[]
-    if(isTH())_ph+='<div style="margin-top:4px;font-size:10px;color:#9ca3af;text-align:center">⏳ 实时报价累积中 ('+_buf.length+'/48笔)</div>'
-    var _pe=$('intradayMacd')
-    if(_pe)_pe.innerHTML+=_ph
-
+    var e=$('intradayMacd')
+    if(e)e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">暂无日内分析数据</div>'
     return
   }
   var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||0

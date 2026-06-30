@@ -29,7 +29,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.stockService = stockService;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
         this.klineProxyCache = new Map();
-        this.intradayBuffer = new Map();
     }
     async getMarketState() {
         const state = this.scheduler.getState();
@@ -615,78 +614,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: `日内分析失败: ${e.message}`, data: null };
         }
     }
-    async intradayPush(body) {
-        if (!body.code || !body.price)
-            return { code: 400, msg: '缺少参数' };
-        const now = Date.now();
-        let buf = this.intradayBuffer.get(body.code);
-        if (!buf) {
-            buf = { prices: [], lastPush: now };
-            this.intradayBuffer.set(body.code, buf);
-        }
-        const ts = body.time || new Date().toISOString().slice(11, 19);
-        const last = buf.prices[buf.prices.length - 1];
-        if (!last || last.time !== ts) {
-            buf.prices.push({ time: ts, price: body.price, volume: body.volume || 0 });
-        }
-        buf.lastPush = now;
-        if (buf.prices.length > 100)
-            buf.prices = buf.prices.slice(-100);
-        if (this.intradayBuffer.size > 300) {
-            const entries = [...this.intradayBuffer.entries()].sort((a, b) => a[1].lastPush - b[1].lastPush);
-            while (this.intradayBuffer.size > 200) {
-                const [k] = entries.shift();
-                this.intradayBuffer.delete(k);
-            }
-        }
-        if (buf.prices.length >= 50 || (buf.prices.length >= 20 && (now - buf.lastPush) > 300000)) {
-            try {
-                const kline = this.buildMinuteKlineFromPrices(buf.prices);
-                if (kline.length >= 48) {
-                    const result = await this.gemScreener.doIntradayAnalysis(body.code, kline);
-                    return { code: 200, msg: 'success', data: { ...result, _accumulated: buf.prices.length } };
-                }
-            }
-            catch (e) {
-                this.logger.warn(`[intraday-push] ${body.code} 分析失败: ${e.message}`);
-            }
-        }
-        return { code: 200, msg: '已累积', data: { status: '累积中', accumulated: buf.prices.length } };
-    }
-    buildMinuteKlineFromPrices(prices) {
-        if (!prices || prices.length < 2)
-            return [];
-        const minuteMap = new Map();
-        for (const p of prices) {
-            const minuteKey = p.time.slice(0, 5);
-            const existing = minuteMap.get(minuteKey);
-            if (existing) {
-                existing.high = Math.max(existing.high, p.price);
-                existing.low = Math.min(existing.low, p.price);
-                existing.close = p.price;
-                existing.volume += p.volume || 0;
-                existing.count++;
-            }
-            else {
-                minuteMap.set(minuteKey, {
-                    opens: p.price, high: p.price, low: p.price, close: p.price,
-                    volume: p.volume || 0, count: 1
-                });
-            }
-        }
-        const result = [];
-        for (const [minute, data] of minuteMap) {
-            result.push({
-                time: minute,
-                open: data.opens,
-                high: data.high,
-                low: data.low,
-                close: data.close,
-                volume: data.volume
-            });
-        }
-        return result.sort((a, b) => a.time.localeCompare(b.time));
-    }
     async backtest() {
         try {
             const result = await this.gemScreener.runBacktest();
@@ -1058,14 +985,6 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "intradayAnalyze", null);
-__decorate([
-    (0, common_1.Post)('intraday-push'),
-    (0, access_limit_guard_1.SkipAccessLimit)(),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], GemScreenerController.prototype, "intradayPush", null);
 __decorate([
     (0, common_1.Get)('backtest'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
