@@ -1250,7 +1250,7 @@ async function showDetail(i){
         var tqPrefix=code.startsWith('6')?'sh':'sz'
         var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq'
         var tqr=await fetch(tqUrl,{signal:8000})
-        if(tqr.ok){try{var tqd=await tqr.json()}catch(ee){tqd=null};if(tqd&&tqd.data){var tk=tqd.data[tqPrefix+code];if(tk&&tk.qfq&&tk.qfq.day&&tk.qfq.day.length>=5){kdata=tk.qfq.day.map(function(l){var p=l.split(' ');return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}});console.log('[detail] tencent kline got '+kdata.length+' bars')}}}
+        if(tqr.ok){try{var tqd=await tqr.json()}catch(ee){tqd=null};if(tqd&&tqd.data){var tk=tqd.data[tqPrefix+code];if(tk&&tk.qfqday&&tk.qfqday.length>=5){kdata=tk.qfqday.map(function(l){var p=l.split(' ');return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}});console.log('[detail] tencent kline got '+kdata.length+' bars')}}}
       }catch(e){}
       // ★ 备选2：新浪行情K线（直连）
       if(!kdata) try{
@@ -2869,8 +2869,8 @@ async function doSearch(){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
           if(tqd&&tqd.data){
             var tk=tqd.data[tqPrefix+stockCode]
-            if(tk&&tk.qfq&&tk.qfq.day&&tk.qfq.day.length>=5){
-              kdata=tk.qfq.day.map(function(l){
+            if(tk&&tk.qfqday&&tk.qfqday.length>=5){
+              kdata=tk.qfqday.map(function(l){
                 var p=l.split(' ')
                 return {day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:0}
               })
