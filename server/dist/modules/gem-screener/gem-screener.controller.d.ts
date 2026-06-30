@@ -23,6 +23,11 @@ export declare class GemScreenerController {
         };
     }>;
     priceStream(res: Response): Promise<void>;
+    ping(): Promise<{
+        code: number;
+        msg: string;
+        timestamp: number;
+    }>;
     getWatchedCodes(): Promise<{
         code: number;
         msg: string;

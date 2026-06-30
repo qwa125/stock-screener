@@ -87,6 +87,15 @@ export class GemScreenerController {
   }
 
   /**
+   * 保活ping（配合外部监控，防止Render休眠）
+   */
+  @Get('ping')
+  @SkipAccessLimit()
+  async ping() {
+    return { code: 200, msg: 'pong', timestamp: Date.now() };
+  }
+
+  /**
    * 获取当前关注的股票代码列表
    */
   @Get('watched-codes')

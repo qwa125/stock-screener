@@ -84,6 +84,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
         }, 2000);
     }
+    async ping() {
+        return { code: 200, msg: 'pong', timestamp: Date.now() };
+    }
     async getWatchedCodes() {
         return { code: 200, msg: 'success', data: { codes: this.scheduler.getWatchedCodes() } };
     }
@@ -725,6 +728,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "priceStream", null);
+__decorate([
+    (0, common_1.Get)('ping'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "ping", null);
 __decorate([
     (0, common_1.Get)('watched-codes'),
     __metadata("design:type", Function),
