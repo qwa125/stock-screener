@@ -466,6 +466,21 @@ export class GemScreenerController {
         this.logger.log(`📤 rescan返回主缓存: ${data.length}只, timestamp=${updatedAt}`);
       }
 
+      // ─── 从主缓存合并完整分析字段（priceIncrease/mainForceInflow等） ───
+      const opMap = new Map<string, any>((this.gemScreener as any).opportunityStocks?.map((s: any) => [s.code, s]) || []);
+      for (const item of data) {
+        const full = opMap.get(item.code);
+        if (full) {
+          if (item.priceIncrease === undefined) item.priceIncrease = full.priceIncrease;
+          if (item.mainForceInflow === undefined) item.mainForceInflow = full.mainForceInflow;
+          if (item.volumeRatio === undefined) item.volumeRatio = full.volumeRatio;
+          if (item.safetyScore === undefined) item.safetyScore = full.safetyScore;
+          if (item.pricePosition === undefined) item.pricePosition = full.pricePosition;
+          if (item.score === undefined) item.score = full.score;
+          if (item.entryTiming === undefined) item.entryTiming = full.entryTiming;
+        }
+      }
+
       // ─── 统一排序：确保所有设备读取顺序一致 ───
       // 排序规则（与前端 doFullRescan / doScan 完全一致）：
       //   1. 信号优先级: 重仓买入(0)→买入(1)→轻仓买入(2)→持有(3)→减仓(4)→卖出(5)→不要介入(6)
@@ -476,25 +491,39 @@ export class GemScreenerController {
         '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
         '减仓': 4, '卖出': 5, '不要介入': 6,
       };
+      const calcRemainingUpside = (s: any): number => {
+        // 剩余上涨空间得分（越高越好）
+        // 思路：确认了上升趋势（priceIncrease适中），且还没到顶部（pricePosition较低）
+        const pi = Math.abs(s.priceIncrease ?? 0);
+        const pp = s.pricePosition ?? 50;
+        // 区间剩余空间(0~1)：位置越低空间越大
+        const room = (100 - Math.min(pp, 100)) / 100;
+        // 趋势确认因子：priceIncrease在5~20%之间=趋势已确认且未透支
+        let trendFactor = 0.4;
+        if (pi >= 5 && pi <= 20) trendFactor = 1.0;
+        else if (pi >= 3 && pi < 5) trendFactor = 0.7;
+        else if (pi > 20 && pi <= 30) trendFactor = 0.6;
+        else if (pi < 2) trendFactor = 0.2;
+        return room * trendFactor;
+      };
       data.sort((a, b) => {
-        const pa = PRI_ORDER[a.suggestion] ?? 9;
-        const pb = PRI_ORDER[b.suggestion] ?? 9;
-        if (pa !== pb) return pa - pb;
+        // 第一排序：入场时机（最佳>可以>others）
         const ea = a.entryTiming || 0;
         const eb = b.entryTiming || 0;
         if (eb !== ea) return eb - ea;
-        // 第三排序：日内位置（低位优先，与前端 doFullRescan 一致）
-        const calcIntradayScore = (s: any) => {
-          const hi = s.intradayHigh || 0, lo = s.intradayLow || 0, p = s.currentPrice || 0;
-          if (!hi || !lo || hi <= lo) return 1;
-          const pos = ((p - lo) / (hi - lo)) * 100;
-          return pos < 25 ? 3 : pos < 50 ? 2 : pos < 75 ? 1 : 0;
-        };
-        const ia = calcIntradayScore(a), ib = calcIntradayScore(b);
-        if (ia !== ib) return ib - ia;
+        // 第二排序：剩余上涨空间（越大越优先）
+        const ruA = calcRemainingUpside(a);
+        const ruB = calcRemainingUpside(b);
+        if (ruA !== ruB) return ruB - ruA;
+        // 第三排序：主力资金净流入（越高越好）
+        const mfA = a.mainForceInflow || 0;
+        const mfB = b.mainForceInflow || 0;
+        if (mfA !== mfB) return mfB - mfA;
+        // 第四排序：综合评分（越高越好）
         const sa = a.score || 0;
         const sb = b.score || 0;
         if (sb !== sa) return sb - sa;
+        // 第五排序：今日涨幅（越高越好）
         return (b.changePercent || 0) - (a.changePercent || 0);
       });
 

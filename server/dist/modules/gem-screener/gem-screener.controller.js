@@ -385,29 +385,58 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 updatedAt = this.gemScreener.getCacheTimestamp();
                 this.logger.log(`📤 rescan返回主缓存: ${data.length}只, timestamp=${updatedAt}`);
             }
+            const opMap = new Map(this.gemScreener.opportunityStocks?.map((s) => [s.code, s]) || []);
+            for (const item of data) {
+                const full = opMap.get(item.code);
+                if (full) {
+                    if (item.priceIncrease === undefined)
+                        item.priceIncrease = full.priceIncrease;
+                    if (item.mainForceInflow === undefined)
+                        item.mainForceInflow = full.mainForceInflow;
+                    if (item.volumeRatio === undefined)
+                        item.volumeRatio = full.volumeRatio;
+                    if (item.safetyScore === undefined)
+                        item.safetyScore = full.safetyScore;
+                    if (item.pricePosition === undefined)
+                        item.pricePosition = full.pricePosition;
+                    if (item.score === undefined)
+                        item.score = full.score;
+                    if (item.entryTiming === undefined)
+                        item.entryTiming = full.entryTiming;
+                }
+            }
             const PRI_ORDER = {
                 '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3,
                 '减仓': 4, '卖出': 5, '不要介入': 6,
             };
+            const calcRemainingUpside = (s) => {
+                const pi = Math.abs(s.priceIncrease ?? 0);
+                const pp = s.pricePosition ?? 50;
+                const room = (100 - Math.min(pp, 100)) / 100;
+                let trendFactor = 0.4;
+                if (pi >= 5 && pi <= 20)
+                    trendFactor = 1.0;
+                else if (pi >= 3 && pi < 5)
+                    trendFactor = 0.7;
+                else if (pi > 20 && pi <= 30)
+                    trendFactor = 0.6;
+                else if (pi < 2)
+                    trendFactor = 0.2;
+                return room * trendFactor;
+            };
             data.sort((a, b) => {
-                const pa = PRI_ORDER[a.suggestion] ?? 9;
-                const pb = PRI_ORDER[b.suggestion] ?? 9;
-                if (pa !== pb)
-                    return pa - pb;
                 const ea = a.entryTiming || 0;
                 const eb = b.entryTiming || 0;
                 if (eb !== ea)
                     return eb - ea;
-                const calcIntradayScore = (s) => {
-                    const hi = s.intradayHigh || 0, lo = s.intradayLow || 0, p = s.currentPrice || 0;
-                    if (!hi || !lo || hi <= lo)
-                        return 1;
-                    const pos = ((p - lo) / (hi - lo)) * 100;
-                    return pos < 25 ? 3 : pos < 50 ? 2 : pos < 75 ? 1 : 0;
-                };
-                const ia = calcIntradayScore(a), ib = calcIntradayScore(b);
-                if (ia !== ib)
-                    return ib - ia;
+                const ruA = calcRemainingUpside(a);
+                const ruB = calcRemainingUpside(b);
+                if (ruA !== ruB)
+                    return ruB - ruA;
+                const mfA = a.mainForceInflow || 0;
+                const mfB = b.mainForceInflow || 0;
+                if (mfA !== mfB)
+                    return mfB - mfA;
                 const sa = a.score || 0;
                 const sb = b.score || 0;
                 if (sb !== sa)
