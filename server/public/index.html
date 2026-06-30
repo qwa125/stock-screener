@@ -790,6 +790,8 @@ async function fetchAuctionData(codes,limit){
   for(var i=0;i<codes.length;i+=limit){
     var batch=codes.slice(i,i+limit)
     var promises=batch.map(async function(code){
+      var auctionData=null
+      // === 主源: EastMoney（完整竞价数据：量比/竞价量/金额/未匹配/方向）===
       try{
         var secId2=code>='600000'?'1.':'0.'
         var emUrl='https://push2.eastmoney.com/api/qt/stock/get?secid='+secId2+code+'&fields=f50,f257,f258,f259,f260&ut=bd1d9ddb04089700cf9c27f6f7426281'
@@ -797,7 +799,7 @@ async function fetchAuctionData(codes,limit){
         var d=await r.json()
         var dd=d&&d.data
         if(dd){
-          var a={
+          auctionData={
             volumeRatio:dd.f50?Math.round(dd.f50/100*10)/10:0,
             auctionVolume:dd.f257,
             auctionAmount:dd.f258,
@@ -811,12 +813,61 @@ async function fetchAuctionData(codes,limit){
             var _price=parseFloat(_s.f2)||0,_chg=parseFloat(_s.f3)||0
             if(_price&&_chg){
               var _prev=_price/(1+_chg/100)
-              a.gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
+              auctionData.gap=Math.round((parseFloat(_s.f17)/_prev-1)*1000)/10
             }
           }
-          results[String(code)]=a
         }
       }catch(e){/* silent */}
+
+      // === 备选1: Sina hq.sinajs.cn（无完整竞价指标，但能算开盘gap）===
+      if(!auctionData){
+        try{
+          var sinaPrefix=code>='600000'?'sh':'sz'
+          var sr=await fetch('https://hq.sinajs.cn/list='+sinaPrefix+code,{
+            headers:{'Referer':'https://finance.sina.com.cn'},
+            signal:timeoutSignal(5000)
+          })
+          var stxt=await sr.text()
+          var sp=stxt.split(',')
+          if(sp&&sp.length>30){
+            var open=parseFloat(sp[1])
+            var preClose=parseFloat(sp[2])
+            if(open>0&&preClose>0){
+              auctionData={
+                volumeRatio:0,auctionVolume:0,auctionAmount:0,
+                auctionUnmatched:0,auctionDirection:'',
+                gap:Math.round((open/preClose-1)*1000)/10
+              }
+            }
+          }
+        }catch(e){/* silent */}
+      }
+
+      // === 备选2: Tencent qt.gtimg.cn（同样拿开盘价算gap）===
+      if(!auctionData){
+        try{
+          var tPrefix=code>='600000'?'sh':'sz'
+          var tr=await fetch('https://qt.gtimg.cn/q='+tPrefix+code,{
+            signal:timeoutSignal(5000)
+          })
+          var ttxt=await tr.text()
+          var tm=ttxt.match(/"([^"]+)"/)
+          if(tm&&tm[1]){
+            var tf=tm[1].split('~')
+            var open=parseFloat(tf[5])   // 今日开盘价
+            var preClose=parseFloat(tf[4]) // 昨收
+            if(open>0&&preClose>0){
+              auctionData={
+                volumeRatio:0,auctionVolume:0,auctionAmount:0,
+                auctionUnmatched:0,auctionDirection:'',
+                gap:Math.round((open/preClose-1)*1000)/10
+              }
+            }
+          }
+        }catch(e){/* silent */}
+      }
+
+      if(auctionData) results[String(code)]=auctionData
     })
     await Promise.all(promises)
   }
