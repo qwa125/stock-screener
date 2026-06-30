@@ -532,141 +532,33 @@ async function fetchKlineAndAnalyze(s){
       gapPercent=Math.round((openPrice/prevClose-1)*1000)/10
     }
 
-    // 多源K线强制拉取：东财为主数据源，备选源只补最新几天，不覆盖东财主缓存
+    // 纯腾讯K线（CORS *必通，成交额用量×均价×100估算）
     var klines=null
     if(!window._klineCache)window._klineCache={}
-    if(!window._emFailCount)window._emFailCount={}
-    if(!window._klineSource)window._klineSource={}  // 'em' 或 'backup'
     var _hasCache=window._klineCache[code]&&window._klineCache[code].length>=10
-    var _isBackup=window._klineSource[code]==='backup'
-    var _failCnt=window._emFailCount[code]||0
-    // 计算lmt：有东财主缓存→按缺口天数算；备选缓存→强制拉满等东财覆盖；无缓存→拉满
-    var lmt=120
-    if(_hasCache&&!_isBackup){
-      var _lastDay=window._klineCache[code][window._klineCache[code].length-1].day
-      var _gapDays=(Date.now()-new Date(_lastDay).getTime())/86400000
-      lmt=Math.min(120,Math.max(Math.round(_gapDays)+5,2))
-    }
-    var emCode=code.startsWith('6')?'1.'+code:'0.'+code
-    var sinCode=(code.startsWith('6')?'sh':'sz')+code
-    var gtCode=sinCode
-    // 东财主拉取（含备选缓存重补）
+    var gtCode=(code.startsWith('6')?'sh':'sz')+code
+    // 腾讯日K线直连（CORS *必通，成交额用量×均价×100估算）
     try{
       var ac=new AbortController()
-      var tid=setTimeout(function(){ac.abort()},8000)
-      var kr=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+lmt,{signal:ac.signal,mode:'cors'}).then(function(r){return r.json()})
+      var tid=setTimeout(function(){ac.abort()},10000)
+      var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,500,qfq',{signal:ac.signal})
       clearTimeout(tid)
-      if(kr&&kr.data&&kr.data.klines){
-        window._emFailCount[code]=0
-        window._klineSource[code]='em'
-        var _newLines=kr.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
-        if(_hasCache){
-          var _merged={}
-          window._klineCache[code].forEach(function(k){_merged[k.day]=k})
-          _newLines.forEach(function(k){_merged[k.day]=k})
-          klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
-        }else{klines=_newLines}
-        window._klineCache[code]=klines
-        console.log('[kline] 东财成功',code,'lmt='+lmt,_isBackup?'(备选缓存已覆盖)':'')
-      }
-    }catch(e){console.warn('东财K线失败('+code+'):',e.message);window._emFailCount[code]=(window._emFailCount[code]||0)+1}
-    // 备选源回退（东财失败时）：有缓存的只补最新2天标记backup；无缓存的新股拉满120
-    if(!klines||klines.length<5){
-      if(_hasCache){
-        // 有缓存：新浪只补最新几天，标记backup等东财恢复覆盖
-        try{
-          var ac2=new AbortController()
-          var tid2=setTimeout(function(){ac2.abort()},8000)
-          var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240',{signal:ac2.signal}).then(function(r){return r.json()})
-          clearTimeout(tid2)
-          if(sr&&sr.data&&sr.data.length){
-            window._klineSource[code]='backup'
-            var _sinaAll=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
-            var _sinaNew=_sinaAll.sort(function(a,b){return b.day.localeCompare(a.day)}).slice(0,2)  // 只取最新2天
-            var _mergedK={}
-            window._klineCache[code].forEach(function(k){_mergedK[k.day]=k})  // 保留东财历史
-            _sinaNew.forEach(function(k){_mergedK[k.day]=k})                  // 补最新2天
-            klines=Object.values(_mergedK).sort(function(a,b){return a.day.localeCompare(b.day)})
+      if(tr.ok||tr.status===0){
+        try{var tj=await tr.json()}catch(ee){tj=null}
+        if(tj&&tj.data){
+          var tk=tj.data[gtCode]
+          if(tk&&tk.qfqday&&tk.qfqday.length>=10){
+            var _newLines=tk.qfqday.map(function(l){var p=l.split(' ');var _v=parseFloat(p[5])||0;var _a=(parseFloat(p[1])+parseFloat(p[2]))/2||0;return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:_v,amount:_v*_a*100}})
+            if(_hasCache){
+              var _merged={};window._klineCache[code].forEach(function(k){_merged[k.day]=k});_newLines.forEach(function(k){_merged[k.day]=k})
+              klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
+            }else{klines=_newLines}
             window._klineCache[code]=klines
-            console.log('[kline] 新浪补2天（标记backup）',code,_sinaNew[0]?.day,'~',_sinaNew[_sinaNew.length-1]?.day)
+            console.log('[scan] 腾讯K线成功',code,klines.length+'bars')
           }
-        }catch(e){console.warn('新浪回退失败('+code+'):',e.message)}
-        // 腾讯回退（同样只补最新2天）
-        if(!klines||klines.length<5){
-          try{
-            var ac3=new AbortController()
-            var tid3=setTimeout(function(){ac3.abort()},8000)
-            var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
-            clearTimeout(tid3)
-            tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
-            var tj=JSON.parse(tr)
-            if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
-              window._klineSource[code]='backup'
-              var _tenAll=tj.data[gtCode].m5.map(function(l){var _tv=parseFloat(l[5])||0;var _ta=(parseFloat(l[1])+parseFloat(l[2]))/2||0;return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:_tv,amount:_tv*_ta*100}})
-              var _tenNew=_tenAll.sort(function(a,b){return b.day.localeCompare(a.day)}).slice(0,2)
-              var _mergedT={}
-              window._klineCache[code].forEach(function(k){_mergedT[k.day]=k})
-              _tenNew.forEach(function(k){_mergedT[k.day]=k})
-              klines=Object.values(_mergedT).sort(function(a,b){return a.day.localeCompare(b.day)})
-              window._klineCache[code]=klines
-              console.log('[kline] 腾讯补2天（标记backup）',code)
-            }
-          }catch(e){console.warn('腾讯回退失败('+code+'):',e.message)}
-        }
-      }else{
-        // 无缓存的新股：备选源拉满120天（唯一机会）
-        try{
-          var ac2=new AbortController()
-          var tid2=setTimeout(function(){ac2.abort()},8000)
-          var sr=await fetch('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=120&scale=240',{signal:ac2.signal}).then(function(r){return r.json()})
-          clearTimeout(tid2)
-          if(sr&&sr.data&&sr.data.length){
-            window._klineSource[code]='backup'
-            klines=sr.data.map(function(l){return{day:l.day,open:parseFloat(l.open),close:parseFloat(l.close),high:parseFloat(l.high),low:parseFloat(l.low),volume:parseFloat(l.volume),amount:parseFloat(l.amount)||0}})
-            window._klineCache[code]=klines
-            console.log('[kline] 新浪拉满120（新股无缓存）',code)
-          }
-        }catch(e){console.warn('新浪K线失败('+code+'):',e.message)}
-        if(!klines||klines.length<5){
-          try{
-            var ac3=new AbortController()
-            var tid3=setTimeout(function(){ac3.abort()},8000)
-            var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode+',m5,,120',{signal:ac3.signal}).then(function(r){return r.text()})
-            clearTimeout(tid3)
-            tr=tr.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
-            var tj=JSON.parse(tr)
-            if(tj&&tj.data&&tj.data[gtCode]&&tj.data[gtCode].m5){
-              window._klineSource[code]='backup'
-              klines=tj.data[gtCode].m5.map(function(l){var _tv=parseFloat(l[5])||0;var _ta=(parseFloat(l[1])+parseFloat(l[2]))/2||0;return{day:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:_tv,amount:_tv*_ta*100}})
-              window._klineCache[code]=klines
-            }
-          }catch(e){console.warn('腾讯K线失败('+code+'):',e.message)}
         }
       }
-    }
-    // 如果所有来源都失败，1.5秒后重试东财一次（覆盖backup标记）
-    if(!klines||klines.length<5){
-      try{
-        await new Promise(function(r){setTimeout(r,1500)})
-        var ac4=new AbortController()
-        var tid4=setTimeout(function(){ac4.abort()},10000)
-        var kr2=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emCode+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+lmt,{signal:ac4.signal,mode:'cors'}).then(function(r){return r.json()})
-        clearTimeout(tid4)
-        if(kr2&&kr2.data&&kr2.data.klines){
-          window._emFailCount[code]=0
-          window._klineSource[code]='em'
-          var _newL=kr2.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
-          if(_hasCache||_isBackup){
-            var _merged={}
-            window._klineCache[code].forEach(function(k){_merged[k.day]=k})
-            _newL.forEach(function(k){_merged[k.day]=k})
-            klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
-          }else{klines=_newL}
-          window._klineCache[code]=klines
-          console.log('[kline] 东财重试成功（backup已覆盖）',code)
-        }
-      }catch(e){console.warn('东财重试也失败('+code+'):',e.message)}
-    }
+    }catch(e){console.warn('[scan] 腾讯K线失败('+code+'):',e.message||e)}
 
     // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
     if(window._cachedStockSet&&window._cachedStockSet.has(code)){
@@ -1225,46 +1117,29 @@ async function showDetail(i){
   ;(async function(){
     try{
       var code=s.code
-      // 先拉K线：前端直连东财 → 失败走代理（有缓存则只拉当天增量）
+      // 先拉K线：纯腾讯直连（CORS *必通，成交额用量×均价×100估算，有缓存则增量）
       var kdata=null
       var _kcache=window._klineCache&&window._klineCache[code]
       var _hasKC=_kcache&&_kcache.length>=10
-      var _klmt=_hasKC?2:120
       try{
-        var emSec3=(code.startsWith('6')?'1.':'0.')+code
-        var ekr3=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSec3+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+_klmt,{signal:8000,mode:'cors'})
-        if(ekr3.ok){
-          try{var ekd3=await ekr3.json()}catch(ee){ekd3=null}
-          if(ekd3&&ekd3.data&&ekd3.data.klines&&ekd3.data.klines.length>=5){
-            var _nk=ekd3.data.klines.map(function(l){var p=l.split(',');return{day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
-            if(_hasKC&&_klmt<120){ // 增量合并缓存
-              var _mg={};_kcache.forEach(function(k){_mg[k.day]=k});_nk.forEach(function(k){_mg[k.day]=k})
-              kdata=Object.values(_mg).sort(function(a,b){return a.day.localeCompare(b.day)})
-            }else{kdata=_nk}
-            window._klineCache[code]=kdata
+        var tqPrefix=code.startsWith('6')?'sh':'sz'
+        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq',{signal:timeoutSignal(10000)})
+        if(tqr.ok||tqr.status===0){
+          try{var tqd=await tqr.json()}catch(ee){tqd=null}
+          if(tqd&&tqd.data){
+            var tk=tqd.data[tqPrefix+code]
+            if(tk&&tk.qfqday&&tk.qfqday.length>=10){
+              var _nk=tk.qfqday.map(function(l){var p=l.split(' ');var _v=parseFloat(p[5])||0;var _a=(parseFloat(p[1])+parseFloat(p[2]))/2||0;return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:_v,amount:_v*_a*100}})
+              if(_hasKC){ // 增量合并缓存
+                var _mg={};_kcache.forEach(function(k){_mg[k.day]=k});_nk.forEach(function(k){_mg[k.day]=k})
+                kdata=Object.values(_mg).sort(function(a,b){return a.day.localeCompare(b.day)})
+              }else{kdata=_nk}
+              window._klineCache[code]=kdata
+              console.log('[detail] tencent kline got '+kdata.length+' bars')
+            }
           }
         }
-      }catch(e){}
-      // ★ 备选1：腾讯行情K线（直连）
-      if(!kdata) try{
-        var tqPrefix=code.startsWith('6')?'sh':'sz'
-        var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,500,qfq'
-        var tqr=await fetch(tqUrl,{signal:8000})
-        if(tqr.ok){try{var tqd=await tqr.json()}catch(ee){tqd=null};if(tqd&&tqd.data){var tk=tqd.data[tqPrefix+code];if(tk&&tk.qfqday&&tk.qfqday.length>=5){kdata=tk.qfqday.map(function(l){var p=l.split(' ');var _v=parseFloat(p[5])||0;var _a=(parseFloat(p[1])+parseFloat(p[2]))/2||0;return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:_v,amount:_v*_a*100}});console.log('[detail] tencent kline got '+kdata.length+' bars')}}}
-      }catch(e){}
-      // ★ 备选2：新浪行情K线（直连）
-      if(!kdata) try{
-        var sinaPrefix=code.startsWith('6')?'sh':'sz'
-        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+code+'&scale=240&ma=no&datalen=120'
-        var srr=await fetch(sinaUrl,{signal:8000})
-        if(srr.ok){try{var srd=await srr.json()}catch(ee){srd=null};if(srd&&Array.isArray(srd)&&srd.length>=5){kdata=srd.map(function(l){return{day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:parseFloat(l.amount)||0}});console.log('[detail] sina kline got '+kdata.length+' bars')}}
-      }catch(e){}
-      // ★ 备选3：前端直调东财（分钟K线 view=min）
-      if(!kdata) try{
-        var _em3=(code.startsWith('6')||code.startsWith('68'))?'1.':'0.'
-        var ek3=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+_em3+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(10000),mode:'cors'})
-        if(ek3.ok){var ed3=await ek3.json();if(ed3&&ed3.data&&ed3.data.klines&&ed3.data.klines.length>=5){kdata=ed3.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[detail] eastmoney3 kline got '+kdata.length+' bars')}}
-      }catch(e){}
+      }catch(e){console.warn('[detail] tencent kline failed:',e.message||e)}
       // 再分析
       var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,name:s.name,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
       var aj=await ar.json()
@@ -2831,48 +2706,20 @@ async function doSearch(){
     try{
       da.style.minHeight='auto';da.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:13px">🔍 搜索 '+stockName+' ('+stockCode+') — ⏳ 正在拉取K线数据进行分析……</div>'
       
-      // 1. 前端直连拉K线（与机会区扫描同源：东财→新浪→腾讯）
+      // 1. 前端直连腾讯K线（CORS *必通，成交额用量×均价×100估算后与东财一致）
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
-      
-      // ★ 主源：东财K线（有成交额字段，机构活跃度最准确）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        var _em4=(stockCode.startsWith('6')||stockCode.startsWith('68'))?'1.':'0.'
-        var er4=await fetch('https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+_em4+stockCode+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=120',{signal:timeoutSignal(10000),mode:'cors'})
-        if(er4.ok){var ed4=await er4.json();if(ed4&&ed4.data&&ed4.data.klines&&ed4.data.klines.length>=5){kdata=ed4.data.klines.map(function(l){var p=l.split(',');return{day:p[0].replace(/-/g,''),open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:parseFloat(p[5])||0,amount:parseFloat(p[6])||0}});console.log('[search] eastmoney kline got '+kdata.length+' bars')}}
-      }catch(e){console.warn('[search] eastmoney kline failed:',e.message||e)}
-      
-      // ★ 备选1：新浪K线（有成交额字段）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
-        var sinaPrefix=prefix==='sz'?'sz':'sh'
-        var sinaUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol='+sinaPrefix+stockCode+'&scale=240&ma=no&datalen=120'
-        var srr=await fetch(sinaUrl,{signal:timeoutSignal(8000)})
-        if(srr.ok||srr.status===0){
-          try{var srd=await srr.json()}catch(ee){srd=null}
-          if(srd&&Array.isArray(srd)&&srd.length>=5){
-            kdata=srd.map(function(l){
-              return {day:(l.day||'').replace(/-/g,''),open:parseFloat(l.open)||0,close:parseFloat(l.close)||0,high:parseFloat(l.high)||0,low:parseFloat(l.low)||0,volume:parseFloat(l.volume)||0,amount:parseFloat(l.amount)||0}
-            })
-            console.log('[search] sina kline got '+kdata.length+' bars')
-          }
-        }
-      }catch(e){console.warn('[search] sina kline failed:',e.message||e)}
-      
-      // ★ 备选2：腾讯K线（无成交额字段，用量×均价×100估算——保障CORS *必通）
-      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
+      if(stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
-        var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
-        var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)})
+        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq',{signal:timeoutSignal(10000)})
         if(tqr.ok||tqr.status===0){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
           if(tqd&&tqd.data){
             var tk=tqd.data[tqPrefix+stockCode]
-            if(tk&&tk.qfqday&&tk.qfqday.length>=5){
+            if(tk&&tk.qfqday&&tk.qfqday.length>=10){
               kdata=tk.qfqday.map(function(l){
-                var p=l.split(' ')
-                var vol=parseFloat(p[5])||0
-                var avg=(parseFloat(p[1])+parseFloat(p[2]))/2||0
-                return {day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:vol,amount:vol*avg*100}
+                var p=l.split(' ');var vol=parseFloat(p[5])||0;var avg=(parseFloat(p[1])+parseFloat(p[2]))/2||0
+                return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:vol,amount:vol*avg*100}
               })
               console.log('[search] tencent kline got '+kdata.length+' bars')
             }
