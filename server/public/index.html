@@ -480,20 +480,6 @@ async function autoLightScan(){
         }
       }catch(e){}
     }
-    // ★ 最后备选：后端代理Sina排行（浏览器直连都失败时）
-    if(!totalList||!totalList.length){
-      setStatus('⏳ 轻量扫描: 后端代理排行...')
-      try{
-        var br=await fetchWithRetry('/api/gem/proxy/stock-list?node=hs_a&page=1&num=5000&sort=changepercent&asc=0',2)
-        var bj=await br.json()
-        if(bj&&bj.data&&bj.data.length){
-          var bList=bj.data.filter(function(s){return s.code&&(s.code.startsWith('60')||s.code.startsWith('00'))}).slice(0,500)
-          var bGem=bj.data.filter(function(s){return s.code&&s.code.startsWith('30')}).slice(0,500)
-          totalList=bList.concat(bGem)
-          window._cachedSinaEMData=bj.data.map(function(s){return{f12:s.code,f14:s.name||'',f2:s.trade||0,f3:s.changepercent||0,f15:s.high||0,f16:s.low||0,f17:s.open||0}})
-        }
-      }catch(e){}
-    }
     if(!totalList||!totalList.length)throw new Error('未获取到热门股票')
     setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
     // ④ 扫描前拉取后端缓存清单，跳过已有分析结果的股（只更新价格）
@@ -3036,8 +3022,7 @@ setInterval(function(){
               renderList()
               setStatus('⏳ 当前无买入信号，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
             }else{
-              setStatus('⏳ 缓存数据不足，正在启动自动扫描...')
-              setTimeout(function(){if(!_autoScanning&&!loading)autoLightScan()},1000)
+              setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
             }
             return
           }
@@ -3059,8 +3044,7 @@ setInterval(function(){
             }
           }
         }catch(e){}
-        setStatus('⏳ 后端缓存为空，正在启动扫描...')
-        setTimeout(function(){if(!_autoScanning&&!loading)autoLightScan()},1000)
+        setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
       })
       .catch(function(e){
         console.log('⚠️ 读缓存失败:',e.message)
