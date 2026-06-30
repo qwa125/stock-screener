@@ -2184,49 +2184,56 @@ async function doFullRescan(saveToBackend){
     }
     console.log('📤 Step③ 准备写回后端, upgradeList='+upgradeList.length+' 只, 信号分布:', JSON.stringify(sigCount))
     if(upgradeList.length>0){
-      var resp=await fetch(API+'/gem/update-upgraded',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({list:upgradeList})
-      })
-      var j=await resp.json()
-      if(j.code===200){
-        console.log('✅ Step③ 写回成功: '+j.msg+' data='+JSON.stringify(j.data))
-        // 立即读回验证
-        try{
-          var vr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
-          var vd=await vr.json()
-          if(vd.code===200&&vd.data){
-            var verified=0,mismatch=0
-            var vmap={};for(var vi=0;vi<vd.data.length;vi++){vmap[vd.data[vi].code]=vd.data[vi]}
-            var buyList=upgradeList.filter(function(u){return u.suggestion==='重仓买入'||u.suggestion==='买入'})
-            for(var vi=0;vi<buyList.length;vi++){
-              var bu=buyList[vi],back=vmap[bu.code]
-              if(back&&back.suggestion===bu.suggestion){verified++}
-              else{mismatch++}
-            }
-            if(mismatch===0){
-              var msg='✅ 缓存验证通过: '+verified+' 只重仓买入/买入信号已同步'
-              setSyncStatus(msg+' | '+new Date().toLocaleTimeString(),true)
-              console.log(msg)
-            }else{
-              var detail=''
-              for(var vi=0;vi<buyList.length&&vi<30;vi++){
-                var bu=buyList[vi],back=vmap[bu.code]
-                if(!back||back.suggestion!==bu.suggestion){
-                  detail+=(detail?',':'')+bu.code+'('+(back?back.suggestion||'无':'无此股')+'→'+bu.suggestion+')'
-                }
-              }
-              setSyncStatus('⚠️ 缓存验证: '+verified+' 匹配/'+mismatch+' 不匹配 ['+detail+']',false)
-              console.warn('缓存验证不匹配:',verified,mismatch,detail)
-            }
-          }
-        }catch(ve){
-          console.warn('读回验证失败:',ve.message)
-        }
+      // ★ 无买入信号时不覆盖后端快照，保留前次扫描结果（如13:00有信号，13:10无信号时保留13:00的）
+      var _hasBuy=upgradeList.some(function(u){return u.suggestion==='重仓买入'||u.suggestion==='买入'})
+      if(!_hasBuy){
+        console.log('⏭️ 本次无买入信号跳过写后端，保留前次快照')
+        setSyncStatus('⏭️ 无买入信号，保留前次快照 | '+new Date().toLocaleTimeString(),false)
       }else{
-        setSyncStatus('❌ 写回失败: '+JSON.stringify(j),false)
-        console.warn('Step③ 写回失败:',j)
+        var resp=await fetch(API+'/gem/update-upgraded',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({list:upgradeList})
+        })
+        var j=await resp.json()
+        if(j.code===200){
+          console.log('✅ Step③ 写回成功: '+j.msg+' data='+JSON.stringify(j.data))
+          // 立即读回验证
+          try{
+            var vr=await fetch(API+'/gem/rescan',{signal:AbortSignal.timeout(28000)})
+            var vd=await vr.json()
+            if(vd.code===200&&vd.data){
+              var verified=0,mismatch=0
+              var vmap={};for(var vi=0;vi<vd.data.length;vi++){vmap[vd.data[vi].code]=vd.data[vi]}
+              var buyList=upgradeList.filter(function(u){return u.suggestion==='重仓买入'||u.suggestion==='买入'})
+              for(var vi=0;vi<buyList.length;vi++){
+                var bu=buyList[vi],back=vmap[bu.code]
+                if(back&&back.suggestion===bu.suggestion){verified++}
+                else{mismatch++}
+              }
+              if(mismatch===0){
+                var msg='✅ 缓存验证通过: '+verified+' 只重仓买入/买入信号已同步'
+                setSyncStatus(msg+' | '+new Date().toLocaleTimeString(),true)
+                console.log(msg)
+              }else{
+                var detail=''
+                for(var vi=0;vi<buyList.length&&vi<30;vi++){
+                  var bu=buyList[vi],back=vmap[bu.code]
+                  if(!back||back.suggestion!==bu.suggestion){
+                    detail+=(detail?',':'')+bu.code+'('+(back?back.suggestion||'无':'无此股')+'→'+bu.suggestion+')'
+                  }
+                }
+                setSyncStatus('⚠️ 缓存验证: '+verified+' 匹配/'+mismatch+' 不匹配 ['+detail+']',false)
+                console.warn('缓存验证不匹配:',verified,mismatch,detail)
+              }
+            }
+          }catch(ve){
+            console.warn('读回验证失败:',ve.message)
+          }
+        }else{
+          setSyncStatus('❌ 写回失败: '+JSON.stringify(j),false)
+          console.warn('Step③ 写回失败:',j)
+        }
       }
     }
   }catch(e){
