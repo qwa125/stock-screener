@@ -2351,42 +2351,43 @@ async function fetchSinaUS(code){
   }catch(e){return null}
 }
 
-// ---------- 拼音搜索下拉（输入字母实时搜索） ----------
+// ---------- 搜索下拉（支持代码/中文/拼音首字母实时搜索） ----------
 var searchTimer=null
+var searchAbort=null
 function onSearchInput(){
   $('searchError').style.display='none'
-  var v=$('searchInput').value.trim().toLowerCase()
+  var v=$('searchInput').value.trim()
   var dd=$('searchDropdown')
-  // 清空旧的timer
   if(searchTimer)clearTimeout(searchTimer)
-  // 输入为空或含数字（可能是代码），隐藏下拉
-  if(!v||/\d/.test(v)||!/^[a-z]+$/.test(v)){
-    dd.style.display='none'
-    return
-  }
+  if(!v){dd.style.display='none';return}
   // 防抖300ms
   searchTimer=setTimeout(function(){
-    fetch('/api/gem/search?q='+encodeURIComponent(v))
+    if(searchAbort)searchAbort.abort()
+    searchAbort=new AbortController()
+    fetch('https://searchadapter.eastmoney.com/api/suggest/get?input='+encodeURIComponent(v)+'&type=14&count=8&token=D43BF722C8E14A9C61B0D6E303FC9C19',{signal:searchAbort.signal,mode:'cors'})
       .then(function(r){return r.json()})
       .then(function(d){
-        if(d.code===200&&d.data&&d.data.length>0){
-          var html=''
-          for(var i=0;i<d.data.length;i++){
-            var s=d.data[i]
-            var sug=s.suggestion||''
-            var sugColor=sug.indexOf('买入')>=0?'#22c55e':sug.indexOf('卖出')>=0?'#ef4444':'#888'
-            html+='<div onclick="selectPinyinStock(\''+s.code+'\',\''+s.name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
-            html+='<span style="font-weight:600;min-width:68px">'+s.code+'</span>'
-            html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</span>'
-            html+='</div>'
-          }
-          dd.innerHTML=html
-          dd.style.display='block'
-        }else{
-          dd.style.display='none'
-        }
+        var items=d&&d.QuotationCodeTable&&d.QuotationCodeTable.Data
+        if(items&&items.length){
+          // 只保留A股
+          var aStocks=items.filter(function(x){return ['沪A','深A','创业板','科创板','京市A','北交所'].indexOf(x.SecurityTypeName)>=0})
+          if(aStocks.length>8)aStocks=aStocks.slice(0,8)
+          if(aStocks.length){
+            var html=''
+            for(var i=0;i<aStocks.length;i++){
+              var s=aStocks[i]
+              html+='<div onclick="selectPinyinStock(\''+s.Code+'\',\''+s.Name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
+              html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.Code+'</span>'
+              html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+s.Name+'</span>'
+              html+='<span style="font-size:11px;color:#999;white-space:nowrap">'+s.SecurityTypeName+'</span>'
+              html+='</div>'
+            }
+            dd.innerHTML=html
+            dd.style.display='block'
+          }else{dd.style.display='none'}
+        }else{dd.style.display='none'}
       })
-      .catch(function(){dd.style.display='none'})
+      .catch(function(e){if(e.name!=='AbortError')dd.style.display='none'})
   },300)
 }
 function selectPinyinStock(code,name){
