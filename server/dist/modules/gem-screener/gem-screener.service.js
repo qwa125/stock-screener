@@ -20,7 +20,6 @@ const bai_ling_xing_1 = require("../stock/bai-ling-xing");
 const xing_xing_1 = require("../stock/xing-xing");
 const fs_1 = require("fs");
 const node_path_1 = require("node:path");
-const iconv = require("iconv-lite");
 const data_fetcher_service_1 = require("../stock/data-fetcher.service");
 const stock_service_1 = require("../stock/stock.service");
 const market_time_1 = require("../../utils/market-time");
@@ -1595,46 +1594,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
     }
     async enrichWithMainForceFlow(results) {
-        if (results.length === 0)
-            return;
-        const BATCH = 50;
-        for (let i = 0; i < results.length; i += BATCH) {
-            const batch = results.slice(i, i + BATCH);
-            const secids = batch.map(r => {
-                const mkt = r.code.startsWith('6') ? 1 : 0;
-                return `${mkt}.${r.code}`;
-            });
-            const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=${secids.join(',')}&fields=f12,f14,f62,f184`;
-            try {
-                const res = await fetch(url, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        Referer: 'https://quote.eastmoney.com/',
-                    },
-                    signal: AbortSignal.timeout(15000),
-                });
-                if (!res.ok) {
-                    this.logger.warn(`⚠️ 东方财富主力资金API返回 ${res.status}`);
-                    continue;
-                }
-                const data = await res.json();
-                if (!data?.data?.diff)
-                    continue;
-                for (const item of data.data.diff) {
-                    const code = String(item.f12);
-                    const mainForce = item.f62;
-                    if (mainForce !== undefined && mainForce !== null) {
-                        const target = results.find(r => r.code === code);
-                        if (target) {
-                            target.mainForceInflow = Math.round(mainForce);
-                        }
-                    }
-                }
-            }
-            catch (err) {
-                this.logger.warn(`⚠️ 东方财富主力资金获取失败: ${err.message}`);
-            }
-        }
+        return;
     }
     calcMultiScore(s, kline) {
         const closeArr = kline.map(k => k.close);
@@ -2322,183 +2282,10 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         return { concentration90, peakPosition, pattern };
     }
     async fetchGEMCandidates() {
-        const candidates = [];
-        const allCodes = [];
-        for (let prefix of ['300', '301']) {
-            for (let i = 1; i <= 999; i++) {
-                allCodes.push(`sz${prefix}${String(i).padStart(3, '0')}`);
-            }
-        }
-        this.logger.log(`📡 腾讯行情: 共 ${allCodes.length} 只 GEM 待查, 分 ${Math.ceil(allCodes.length / this.TENANT_BATCH)} 批`);
-        for (let b = 0; b < allCodes.length; b += this.TENANT_BATCH) {
-            const batch = allCodes.slice(b, b + this.TENANT_BATCH);
-            const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
-            try {
-                const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-                const buf = await res.arrayBuffer();
-                const raw = iconv.decode(Buffer.from(buf), 'gbk');
-                const lines = raw.split('\n').filter(l => l.trim());
-                for (const line of lines) {
-                    const match = line.match(/v_sz\d+="(.+?)";?\s*/);
-                    if (!match)
-                        continue;
-                    const fields = match[1].split('~');
-                    const code = fields[2] || '';
-                    if (!code.startsWith('300') && !code.startsWith('301'))
-                        continue;
-                    const curPrice = parseFloat(fields[3]);
-                    const yestClose = parseFloat(fields[4]);
-                    const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
-                    if (changePct < this.MIN_GAIN_PCT)
-                        continue;
-                    const volumeShares = parseFloat(fields[6]) || 0;
-                    const amount = volumeShares * curPrice;
-                    candidates.push({
-                        code,
-                        name: fields[1] || '',
-                        inflow: Math.round(amount),
-                        changePercent: Math.round(changePct * 100) / 100,
-                        currentPrice: curPrice,
-                    });
-                }
-            }
-            catch (err) {
-                this.logger.warn(`⚠️ 腾讯行情批 ${b / this.TENANT_BATCH + 1} 失败: ${err.message}`);
-            }
-        }
-        candidates.sort((a, b) => b.changePercent - a.changePercent);
-        this.logger.log(`📡 腾讯行情: 获取 ${candidates.length} 只上涨GEM, 全量扫描`);
-        return candidates;
-    }
-    parseSinaBatch(lines) {
-        const result = [];
-        for (const line of lines) {
-            const match = line.match(/var hq_str_(sh|sz)(\d+)="(.+)";?\s*/);
-            if (!match)
-                continue;
-            const prefix = match[1];
-            const codeStr = match[2];
-            const rawFields = match[3];
-            const fields = rawFields.split(',');
-            const code = `${prefix.toUpperCase()}${codeStr}`;
-            if (code.startsWith('SH300') || code.startsWith('SZ300') || code.startsWith('SZ301'))
-                continue;
-            if (code.startsWith('SH688') || code.startsWith('SZ688'))
-                continue;
-            if (!fields[2] || fields[2] === '0.00')
-                continue;
-            const name = fields[0]?.trim() || '';
-            if (name.includes('ST') || name.includes('*ST') || name.includes('退'))
-                continue;
-            const yestClose = parseFloat(fields[2]);
-            const curPrice = parseFloat(fields[3]);
-            const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
-            if (changePct < this.MIN_GAIN_PCT)
-                continue;
-            const volumeShares = parseFloat(fields[8]) || 0;
-            const amount = volumeShares * curPrice;
-            result.push({
-                code: code.replace(/^(SH|SZ)/, ''),
-                name,
-                inflow: Math.round(amount),
-                changePercent: Math.round(changePct * 100) / 100,
-                currentPrice: curPrice,
-                marketCap: 0,
-            });
-        }
-        return result;
+        return [];
     }
     async fetchMainBoardCandidates() {
-        const candidates = [];
-        const shCodes = [];
-        for (let i = 0; i <= 5999; i++) {
-            shCodes.push(`sh60${String(i).padStart(4, '0')}`);
-        }
-        const szCodes = [];
-        for (const prefix of ['000', '001', '002']) {
-            for (let i = 0; i <= 999; i++) {
-                szCodes.push(`sz${prefix}${String(i).padStart(3, '0')}`);
-            }
-        }
-        const allCodes = [...shCodes, ...szCodes];
-        let tencentFailures = 0;
-        for (let b = 0; b < allCodes.length; b += this.TENANT_BATCH) {
-            const batch = allCodes.slice(b, b + this.TENANT_BATCH);
-            const batchIdx = b / this.TENANT_BATCH + 1;
-            let batchSuccess = false;
-            try {
-                const url = `https://qt.gtimg.cn/q=${batch.join(',')}`;
-                const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
-                const buf = await res.arrayBuffer();
-                const raw = iconv.decode(Buffer.from(buf), 'gbk');
-                const lines = raw.split('\n').filter(l => l.trim());
-                for (const line of lines) {
-                    const match = line.match(/v_(?:sh|sz)\d+="(.+?)";?\s*/);
-                    if (!match)
-                        continue;
-                    const fields = match[1].split('~');
-                    const code = fields[2] || '';
-                    if (code.startsWith('300') || code.startsWith('301'))
-                        continue;
-                    if (code.startsWith('688') || code.startsWith('689'))
-                        continue;
-                    const curPrice = parseFloat(fields[3]);
-                    const yestClose = parseFloat(fields[4]);
-                    const changePct = yestClose > 0 ? ((curPrice - yestClose) / yestClose) * 100 : 0;
-                    if (changePct < this.MIN_GAIN_PCT)
-                        continue;
-                    const name = fields[1] || '';
-                    if (name.includes('ST') || name.includes('*ST') || name.includes('退'))
-                        continue;
-                    const marketCap = parseInt(fields[45]) || 0;
-                    const marketCapInYuan = marketCap * 100_000_000;
-                    if (marketCapInYuan > 0 && marketCapInYuan > this.MAX_MARKET_CAP)
-                        continue;
-                    if (marketCapInYuan > 0 && marketCapInYuan < this.MIN_MARKET_CAP)
-                        continue;
-                    const volumeShares = parseFloat(fields[6]) || 0;
-                    const amount = volumeShares * curPrice;
-                    candidates.push({
-                        code, name,
-                        inflow: Math.round(amount),
-                        changePercent: Math.round(changePct * 100) / 100,
-                        currentPrice: curPrice,
-                        marketCap,
-                    });
-                }
-                batchSuccess = true;
-            }
-            catch (err) {
-                tencentFailures++;
-                this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 腾讯失败, 切换新浪: ${err instanceof Error ? err.message : String(err)}`);
-            }
-            if (!batchSuccess) {
-                try {
-                    const sinaBatch = batch.map(c => c.toLowerCase());
-                    const sinaUrl = `https://hq.sinajs.cn/list=${sinaBatch.join(',')}`;
-                    const sinaRes = await fetch(sinaUrl, {
-                        signal: AbortSignal.timeout(30000),
-                        headers: { 'Referer': 'https://finance.sina.com.cn' },
-                    });
-                    const sinaText = await sinaRes.text();
-                    const sinaLines = sinaText.split('\n').filter(l => l.trim());
-                    const sinaCandidates = this.parseSinaBatch(sinaLines);
-                    candidates.push(...sinaCandidates);
-                    if (sinaCandidates.length > 0) {
-                        this.logger.log(`  新浪降级批 ${batchIdx}: 解析到 ${sinaCandidates.length} 只上涨`);
-                    }
-                }
-                catch (sinaErr) {
-                    this.logger.warn(`⚠️ 主板行情批 ${batchIdx} 新浪也失败: ${sinaErr instanceof Error ? sinaErr.message : String(sinaErr)}`);
-                }
-            }
-            if (batchIdx % 5 === 0) {
-                await new Promise(r => setTimeout(r, 200));
-            }
-        }
-        candidates.sort((a, b) => b.changePercent - a.changePercent);
-        this.logger.log(`📡 主板: 获取 ${candidates.length} 只上涨 (腾讯失败 ${tencentFailures} 批, 新浪降级)`);
-        return candidates;
+        return [];
     }
     async scanMainBoardStocks() {
         const candidates = await this.fetchMainBoardCandidates();
@@ -3585,64 +3372,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
             this.logger.log(`🔍 共收集 ${allCodes.length} 只候选股票`);
             const heavyBuyResults = [];
-            const BATCH = 100;
-            for (let i = 0; i < allCodes.length; i += BATCH) {
-                const batch = allCodes.slice(i, i + BATCH);
-                const qStr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
-                try {
-                    const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(qStr);
-                    const res = await fetch(url);
-                    const buf = Buffer.from(await res.arrayBuffer());
-                    const txt = iconv.decode(buf, 'gbk');
-                    const lines = txt.split('\n').filter(l => l.includes('~'));
-                    this.logger.log(`  📊 腾讯API返回 ${lines.length} 条行情`);
-                    for (const line of lines) {
-                        try {
-                            const parts = line.split('~');
-                            const name = parts[1]?.trim() || '';
-                            const rawCode = parts[2]?.trim() || '';
-                            const code = rawCode.startsWith('sh') || rawCode.startsWith('sz') ? rawCode.substring(2) : rawCode;
-                            const price = parseFloat(parts[3]) || 0;
-                            const changePct = parseFloat(parts[32]) || 0;
-                            if (/^(\*)?ST/.test(name) || /银行|保险/.test(name))
-                                continue;
-                            if (changePct < 0 || price < 2)
-                                continue;
-                            try {
-                                const result = await this.computeFullSuggestion(code);
-                                if (result && result.suggestion === '重仓买入') {
-                                    heavyBuyResults.push({
-                                        code,
-                                        name,
-                                        currentPrice: price,
-                                        changePercent: Math.round(changePct * 100) / 100,
-                                        priceIncrease: 0,
-                                        mainForceInflow: 0,
-                                        pricePosition: 0,
-                                        capitalRank: 0,
-                                        baiXiaoDays: 0,
-                                        score: result.score,
-                                        suggestion: '重仓买入',
-                                        entryTiming: 0,
-                                        safetyScore: 0,
-                                        isGoldenCross: false,
-                                        diff: 0,
-                                        dea: 0,
-                                        buySignal: '',
-                                    });
-                                }
-                            }
-                            catch (klineErr) {
-                            }
-                        }
-                        catch (parseErr) {
-                        }
-                    }
-                }
-                catch (batchErr) {
-                    this.logger.warn(`  ⚠️ 批次 ${i}-${i + BATCH} 获取失败: ${batchErr.message}`);
-                }
-            }
+            this.logger.log(`🔍 后端不主动调外部API，全局重仓买入扫描跳过`);
             heavyBuyResults.sort((a, b) => (b.score || 0) - (a.score || 0));
             this.logger.log(`✅ [全局重仓买入] 完成, 发现 ${heavyBuyResults.length} 只`);
             return heavyBuyResults.slice(0, 3);
@@ -3664,35 +3394,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         this.logger.log(`📊 获取行业板块实时热度: ${ALL_SECTORS.length}个板块(含概念), ${allCodes.length}只成分股`);
         const quoteMap = new Map();
-        const BATCH = 80;
-        for (let i = 0; i < allCodes.length; i += BATCH) {
-            const batch = allCodes.slice(i, i + BATCH);
-            const qstr = batch.map(c => (c.startsWith('6') ? 'sh' : 'sz') + c).join(',');
-            try {
-                const url = 'https://qt.gtimg.cn/q=' + encodeURIComponent(qstr);
-                const res = await fetch(url);
-                const buf = Buffer.from(await res.arrayBuffer());
-                const txt = iconv.decode(buf, 'gbk');
-                const lines = txt.trim().split(';');
-                for (const line of lines) {
-                    const cm = line.match(/v_(sh\d+|sz\d+)="(.*)"/);
-                    if (!cm || !cm[2])
-                        continue;
-                    const parts = cm[2].split('~');
-                    const code = cm[1].replace(/^(sh|sz)/, '');
-                    const name = parts[1] || '';
-                    if (!code || !name || /^\d+$/.test(name))
-                        continue;
-                    const price = parseFloat(parts[3]) || 0;
-                    const changePercent = parseFloat(parts[32]) || 0;
-                    quoteMap.set(code, { name, price, changePercent });
-                }
-            }
-            catch (e) {
-                this.logger.warn(`腾讯行情批次失败: ${e.message}`);
-            }
-        }
-        this.logger.log(`📊 获取到 ${quoteMap.size}/${allCodes.length} 只行情数据`);
+        this.logger.log(`📊 后端不主动调外部API，板块热度跳过实时行情`);
         const sectorMap = new Map();
         for (const sec of ALL_SECTORS) {
             let totalChange = 0;
@@ -4294,81 +3996,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary,
         };
     }
-    async fetchMinuteKLine(code, minute = 5) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const kltMap = { 1: 1, 5: 5, 15: 15, 30: 30, 60: 60 };
-                const klt = kltMap[minute] || 102;
-                const secId = (code.startsWith('6') || code.startsWith('68')) ? 1 : 0;
-                const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid=${secId}.${code}&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=${klt}&fqt=1&end=20500101&lmt=500`;
-                const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-                if (!resp.ok)
-                    return [];
-                const json = await resp.json();
-                const klines = json?.data?.klines;
-                if (!klines || !Array.isArray(klines) || klines.length === 0)
-                    return [];
-                return klines.map((l) => {
-                    const p = l.split(',');
-                    return {
-                        time: p[0],
-                        open: parseFloat(p[1]),
-                        close: parseFloat(p[2]),
-                        high: parseFloat(p[3]),
-                        low: parseFloat(p[4]),
-                        volume: parseFloat(p[5]),
-                        amount: parseFloat(p[6]) || 0,
-                    };
-                });
-            }
-            catch (e) {
-                if (attempt === 0) {
-                    this.logger.warn(`获取分钟K线失败 ${code}（尝试重试）: ${e.message}`);
-                    await new Promise(r => setTimeout(r, 500));
-                    continue;
-                }
-                this.logger.warn(`获取分钟K线失败 ${code}: ${e.message}`);
-                return [];
-            }
-        }
+    async fetchMinuteKLine(_code, _minute = 5) {
         return [];
     }
-    async fetchAuctionTrend(code) {
-        try {
-            const secId = (code.startsWith('6') || code.startsWith('68')) ? '1.' : '0.';
-            const url = `https://push2.eastmoney.com/api/qt/stock/trends2/get?secid=${secId}${code}&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&ut=bd1d9ddb04089700cf9c27f6f7426281&ndays=1&iscr=1`;
-            const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-            if (!resp.ok)
-                return [];
-            const json = await resp.json();
-            const trends = json?.data?.trends;
-            if (!trends || !Array.isArray(trends))
-                return [];
-            const prePrice = json.data.prePrice || 0;
-            const auction = trends.filter(t => {
-                const timeStr = t.split(',')[0];
-                const time = timeStr.split(" ")[1] ? timeStr.split(" ")[1].replace(/:/g, "") : timeStr;
-                return time >= "0915" && time <= "0925";
-            });
-            return auction.map(t => {
-                const p = t.split(',');
-                const price = parseFloat(p[1]) || 0;
-                const volume = parseFloat(p[3]) || 0;
-                const amount = parseFloat(p[4]) || 0;
-                return {
-                    time: p[0],
-                    price,
-                    avgPrice: parseFloat(p[2]) || 0,
-                    volume,
-                    amount,
-                    change: prePrice > 0 ? ((price - prePrice) / prePrice * 100) : 0,
-                };
-            });
-        }
-        catch (e) {
-            this.logger.warn(`获取竞价走势失败 ${code}: ${e.message}`);
-            return [];
-        }
+    async fetchAuctionTrend(_code) {
+        return [];
     }
 };
 exports.GemScreenerService = GemScreenerService;

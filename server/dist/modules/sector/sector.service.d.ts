@@ -6,7 +6,6 @@ export declare class SectorService implements OnApplicationBootstrap {
     private readonly dataFetcher;
     private readonly gemScreener;
     private readonly logger;
-    private readonly agent;
     private cache;
     private loadingPromise;
     private readonly CACHE_TTL;
@@ -35,8 +34,6 @@ export declare class SectorService implements OnApplicationBootstrap {
     private getSectorConstituents;
     private fetchStockQuotes;
     private formatDateTime;
-    private httpsGetJson;
-    private httpsGetText;
     private fetchAllSectorKLines;
     private fetchSectorKLine;
     private fetchRealtimePrices;

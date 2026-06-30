@@ -9,7 +9,6 @@ var DataFetcherService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DataFetcherService = void 0;
 const common_1 = require("@nestjs/common");
-const iconv = require("iconv-lite");
 let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
     constructor() {
         this.logger = new common_1.Logger(DataFetcherService_1.name);
@@ -26,28 +25,9 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
     async getAllStocks() {
         if (this.stockListCache)
             return this.stockListCache;
-        try {
-            const url = 'https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
-            const res = await fetch(url, {
-                headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' },
-                signal: AbortSignal.timeout(8000),
-            });
-            if (res.ok) {
-                const text = await res.text();
-                const data = JSON.parse(text);
-                const list = (data?.data?.diff || []).map((item) => ({
-                    code: String(item.f12).padStart(6, '0'),
-                    name: item.f14 || '',
-                    market: 0,
-                })).filter((s) => s.name);
-                this.stockListCache = list;
-                this.logger.log(`加载全部A股列表: ${list.length}只`);
-                return list;
-            }
-        }
-        catch (e) {
-            this.logger.warn(`获取全部A股列表失败: ${e.message}`);
-        }
+        this.logger.warn('后端不直接调用外部API获取股票列表，请前端推送');
+        this.stockListCache = [];
+        return [];
         const fallback = this.getHotStockList();
         this.stockListCache = fallback;
         return fallback;
@@ -76,32 +56,7 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
         return this.fallbackSearch(keyword);
     }
     async searchEastMoney(keyword) {
-        try {
-            const url = `${this.EASTMONEY_SEARCH_URL}?input=${encodeURIComponent(keyword)}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    Referer: 'https://quote.eastmoney.com/',
-                },
-                signal: AbortSignal.timeout(8000),
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const list = data?.QuotationCodeTable?.Data || [];
-                const results = list
-                    .filter((item) => item.Code && item.Name)
-                    .map((item) => ({
-                    code: String(item.Code).padStart(6, '0'),
-                    name: item.Name,
-                    market: item.MarketType === 1 ? 1 : 0,
-                }));
-                if (results.length > 0)
-                    return results;
-            }
-        }
-        catch (e) {
-            this.logger.warn(`搜索接口不可用，降级: ${e.message}`);
-        }
+        this.logger.warn(`后端跳过外部搜索: ${keyword}`);
         return [];
     }
     async getKLineData(code, market) {
@@ -113,37 +68,8 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
         return [];
     }
     async fetchRealTimeQuote(code, market) {
-        const mkt = market ?? this.detectMarket(code);
-        const prefix = this.getMarketPrefix(mkt);
-        try {
-            const response = await fetch(`${this.TENCENT_QUOTE_URL}=${prefix}${code}`, {
-                signal: AbortSignal.timeout(8000),
-            });
-            if (!response.ok)
-                return null;
-            const buffer = await response.arrayBuffer();
-            const text = iconv.decode(Buffer.from(buffer), 'gbk');
-            const match = text.match(/"(.*)"/);
-            if (!match)
-                return null;
-            const fields = match[1].split('~');
-            if (fields.length < 40)
-                return null;
-            return {
-                code: fields[2] || code,
-                name: fields[1] || `股票${code}`,
-                market: this.detectMarket(code),
-                price: parseFloat(fields[3]) || undefined,
-                lastClose: parseFloat(fields[4]) || undefined,
-                high: parseFloat(fields[33]) || undefined,
-                low: parseFloat(fields[34]) || undefined,
-                changePercent: parseFloat(fields[32]) || undefined,
-            };
-        }
-        catch (e) {
-            this.logger.warn(`腾讯实时行情不可用: ${e.message}`);
-            return null;
-        }
+        this.logger.warn(`[data-fetcher] 跳过外部行情API，数据由前端推送`);
+        return null;
     }
     fallbackSearch(keyword) {
         const isCode = /^\d{6}$/.test(keyword.trim());

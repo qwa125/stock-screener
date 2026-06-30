@@ -9,31 +9,12 @@ export declare class StockController {
     sinaList(page?: string, num?: string, node?: string): Promise<{
         code: number;
         msg: string;
-        data: any[];
-    } | {
-        code: number;
-        msg: any;
         data: never[];
     }>;
     quote(code: string): Promise<{
         code: number;
         msg: string;
         data: null;
-    } | {
-        code: number;
-        msg: string;
-        data: {
-            code: string;
-            name: string;
-            price: number;
-            trade: number;
-            open: number;
-            high: number;
-            low: number;
-            yClose: number;
-            change: number;
-            changePercent: number;
-        };
     }>;
     search(query: string): Promise<{
         code: number;

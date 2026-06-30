@@ -1,6 +1,4 @@
 import { Injectable, Logger, Inject, forwardRef, OnApplicationBootstrap } from '@nestjs/common';
-import * as https from 'node:https';
-import * as iconvlite from 'iconv-lite';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'node:path';
 import { DataFetcherService } from '../stock/data-fetcher.service';
@@ -111,7 +109,6 @@ interface BaiXiaoCheckResult {
 @Injectable()
 export class SectorService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SectorService.name);
-  private readonly agent = new https.Agent({ rejectUnauthorized: false });
   private cache: CacheEntry | null = null;
   private loadingPromise: Promise<void> | null = null; // 后台预加载锁
   private readonly CACHE_TTL = 5 * 60 * 1000; // 盘中5分钟
@@ -660,79 +657,14 @@ export class SectorService implements OnApplicationBootstrap {
 
   /** 获取板块成分股（带缓存） */
   private async getSectorConstituents(code: string): Promise<Array<{ code: string; name: string; weight: number }>> {
-    const cached = this.consCache.get(code);
-    if (cached && Date.now() - cached.timestamp < this.CONS_CACHE_TTL) {
-      return cached.stocks;
-    }
-
-    try {
-      const url = `https://www.swsresearch.com/institute-sw/api/index_publish/details/component_stocks/?swindexcode=${code}&page=1&page_size=10000`;
-      const json = await this.httpsGetJson(url);
-      const results: any[] = json?.data?.results || [];
-
-      const stocks = results.map((item: any) => ({
-        code: String(item.stockcode).trim().padStart(6, '0'),
-        name: String(item.stockname || '').trim(),
-        weight: parseFloat(item.newweight) || 0,
-      })).filter(s => s.code && s.name);
-
-      // 按权重降序排列
-      stocks.sort((a, b) => b.weight - a.weight);
-
-      this.consCache.set(code, { stocks, timestamp: Date.now() });
-      this.logger.log(`板块 ${code} 成分股加载完成: ${stocks.length}只`);
-      return stocks;
-    } catch (err) {
-      this.logger.error(`获取板块 ${code} 成分股失败: ${err instanceof Error ? err.message : String(err)}`);
-      return [];
-    }
+    // 后端不再主动调用外部API，返回空（由前端推送数据）
+    return [];
   }
 
   /** 批量获取股票实时行情（腾讯API），含主力流入和总市值 */
   private async fetchStockQuotes(codes: string[]): Promise<Map<string, { price: number; changePercent: number; inflow: number; marketCap: number }>> {
-    const map = new Map<string, { price: number; changePercent: number; inflow: number; marketCap: number }>();
-    if (codes.length === 0) return map;
-
-    try {
-      // 分批请求，每批最多50只
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < codes.length; i += BATCH_SIZE) {
-        const batch = codes.slice(i, i + BATCH_SIZE);
-        // 构建腾讯API所需格式：sh600000,sz000001
-        const symbols = batch.map(code => {
-          if (code.startsWith('6') || code.startsWith('9')) return `sh${code}`;
-          return `sz${code}`;
-        }).join(',');
-
-        const url = `https://qt.gtimg.cn/q=${symbols}`;
-        const raw = await this.httpsGetText(url);
-
-        // 解析腾讯返回格式: v_sh600000="1~平安银行~...~15.20~..."
-        for (const code of batch) {
-          const prefix = code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz';
-          const regex = new RegExp(`v_${prefix}${code}="([^"]+)"`);
-          const match = raw.match(regex);
-          if (match) {
-            const fields = match[1].split('~');
-            // 腾讯格式: 1=名称, 2=代码, 3=当前价, 4=昨收, ...
-            // 涨跌幅 = (现价-昨收)/昨收 * 100
-            const name = fields[1] || '';
-            const price = parseFloat(fields[3]) || 0;
-            const yesterdayClose = parseFloat(fields[4]) || 0;
-            const changePercent = yesterdayClose > 0 ? Math.round(((price - yesterdayClose) / yesterdayClose) * 10000) / 100 : 0;
-            // 使用成交额(volumeShares * price)作为资金活跃度代理，与GEM筛选器保持一致
-            const volumeShares = parseFloat(fields[6]) || 0;
-            const inflow = Math.round(volumeShares * price);
-            const marketCap = parseFloat(fields[37]) || 0;
-            map.set(code, { price, changePercent, inflow, marketCap });
-          }
-        }
-      }
-    } catch (err) {
-      this.logger.error(`获取股票行情失败: ${err instanceof Error ? err.message : String(err)}`);
-    }
-
-    return map;
+    // 后端不再主动调用外部API，返回空（由前端推送数据）
+    return new Map();
   }
 
   // ====== HTTP 请求工具 ======
@@ -745,49 +677,6 @@ export class SectorService implements OnApplicationBootstrap {
     const h = String(date.getHours()).padStart(2, '0');
     const m = String(date.getMinutes()).padStart(2, '0');
     return `${y}年${M}月${d}日 ${h}:${m}`;
-  }
-
-  /** 发起 HTTPS GET 请求并返回 JSON（绕过SSL验证） */
-  private httpsGetJson(url: string, timeoutMs = 15000): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const req = https.get(url, { agent: this.agent, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.swsresearch.com/' } }, (res) => {
-        let data = '';
-        res.on('data', (chunk: string) => { data += chunk; });
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            reject(new Error(`JSON解析失败: ${data.slice(0, 200)}`));
-          }
-        });
-      });
-      req.on('error', reject);
-      req.setTimeout(timeoutMs, () => {
-        req.destroy();
-        reject(new Error(`请求超时 (${timeoutMs}ms)`));
-      });
-    });
-  }
-
-  /** 发起 HTTPS GET 请求并返回文本（绕过SSL验证，支持GBK解码） */
-  private httpsGetText(url: string, timeoutMs = 10000): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const req = https.get(url, { agent: this.agent, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.swsresearch.com/' } }, (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => { chunks.push(chunk); });
-        res.on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          // 腾讯API返回GBK编码
-          const text = iconvlite.decode(buffer, 'gbk');
-          resolve(text);
-        });
-      });
-      req.on('error', reject);
-      req.setTimeout(timeoutMs, () => {
-        req.destroy();
-        reject(new Error(`请求超时 (${timeoutMs}ms)`));
-      });
-    });
   }
 
   /** 批量获取所有板块的历史K线（并行请求，每次5个） */
@@ -812,41 +701,14 @@ export class SectorService implements OnApplicationBootstrap {
 
   /** 获取单个板块的历史K线数据 */
   private async fetchSectorKLine(code: string): Promise<SectorKLine[]> {
-    try {
-      const url = `https://www.swsresearch.com/institute-sw/api/index_publish/trend/?swindexcode=${code}&period=DAY`;
-      const json = await this.httpsGetJson(url);
-      // API 返回 JSON 数组（非封装格式），若包在 { data: [...] } 中则取 data
-      const rawList: any[] = Array.isArray(json) ? json : (json?.data || []);
-
-      return rawList.map((item: any) => ({
-        date: item.bargaindate,
-        close: item.closeindex,
-      }));
-    } catch (err) {
-      this.logger.error(`获取板块 ${code} K线失败: ${err instanceof Error ? err.message : String(err)}`);
-      return [];
-    }
+    // 后端不再主动调用外部API，返回空（由前端推送数据）
+    return [];
   }
 
   /** 获取所有板块的实时行情 */
   private async fetchRealtimePrices(): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
-    try {
-      const url = 'https://www.swsresearch.com/institute-sw/api/index_publish/current/?page=1&page_size=50&indextype=一级行业';
-      const json = await this.httpsGetJson(url);
-      const results: any[] = json?.data?.results || [];
-
-      for (const item of results) {
-        const code = String(item.swindexcode).trim();
-        const price = parseFloat(item.l3); // l3 = 最新指数值
-        if (code && !isNaN(price)) {
-          map.set(code, price);
-        }
-      }
-    } catch (err) {
-      this.logger.error(`获取板块实时行情失败: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    return map;
+    // 后端不再主动调用外部API，返回空（由前端推送数据）
+    return new Map();
   }
 
   /** 批量检查主力资金净流入，要求 > 2000万 */
@@ -873,26 +735,9 @@ export class SectorService implements OnApplicationBootstrap {
 
   /** 获取单只股票的主力资金净流入 */
   private async getSingleMoneyFlow(code: string): Promise<number | null> {
-    try {
-      // 判断市场: 6开头=上交所(1), 0/3开头=深交所(0)
-      const market = code.startsWith('6') || code.startsWith('9') ? '1' : '0';
-      const url = `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?secid=${market}.${code}&fields1=f1,f2,f3,f4,f5&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59&klt=1&lmt=1`;
-      
-      const json = await this.httpsGetJson(url);
-      const klines: string[] = json?.data?.klines || [];
-      
-      if (klines.length === 0) return null;
-      
-      // 格式: "20260611,-12345678.00,2345678.00,3456789.00,4567890.00,-1.23,0.45,0.67,-0.89"
-      const parts = klines[0].split(',');
-      const mainForce = parseFloat(parts[1]); // f52: 主力净流入-净额
-      
-      if (isNaN(mainForce)) return null;
-      return mainForce;
-    } catch (err) {
-      this.logger.warn(`获取 ${code} 资金流向失败: ${err instanceof Error ? err.message : String(err)}`);
-      return null;
-    }
+    // 后端不再主动调用外部API，返回null（由前端推送数据）
+    return null;
   }
 
-  }
+  // ====== 板块排名服务 ======
+}

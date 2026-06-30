@@ -303,12 +303,12 @@ export declare class GemScreenerController {
     proxyStockList(node: string, page: string, num: string, sort?: string, asc?: string): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: never[];
     }>;
     proxyEastMoneyList(node: string, page: string, num: string): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: never[];
     }>;
     proxySearch(query: string, count?: string): Promise<{
         code: number;
@@ -317,7 +317,7 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: any;
+        data: never[];
     }>;
     proxySinaUS(code: string): Promise<{
         code: number;
@@ -331,7 +331,7 @@ export declare class GemScreenerController {
     proxyKLine(code: string, market: string): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: never[];
     }>;
     proxyStockDetail(code: string): Promise<{
         code: number;
@@ -340,7 +340,13 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: Record<string, any>;
+        data: {
+            volumeRatio: number;
+            auctionVolume: number;
+            auctionAmount: number;
+            auctionUnmatched: number;
+            auctionDirection: number;
+        };
     }>;
     recalcCache(): Promise<{
         code: number;

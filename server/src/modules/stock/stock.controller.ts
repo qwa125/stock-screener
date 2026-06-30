@@ -40,66 +40,15 @@ export class StockController {
     @Query('num') num: string = '100',
     @Query('node') node: string = 'sh_a',
   ) {
-    try {
-      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${page}&num=${num}&sort=symbol&asc=1&node=${node}`;
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://finance.sina.com.cn/',
-        },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) {
-        return { code: 500, msg: `新浪API返回HTTP ${res.status}`, data: [] };
-      }
-      const text = await res.text();
-      // 兼容可能的GBK编码
-      let data;
-      try { data = JSON.parse(text); } catch (e) {
-        try {
-          const iconv = require('iconv-lite');
-          const buf = Buffer.from(text, 'binary');
-          data = JSON.parse(iconv.decode(buf, 'gbk'));
-        } catch { return { code: 500, msg: '解析新浪数据失败', data: [] }; }
-      }
-      return { code: 200, msg: 'success', data: Array.isArray(data) ? data : [] };
-    } catch (e: any) {
-      this.logger.error(`获取新浪股票列表失败: ${e.message}`);
-      return { code: 500, msg: e.message, data: [] };
-    }
+    // 后端不主动调外部API
+    return { code: 200, msg: 'success', data: [] };
   }
 
   @Get('quote')
   async quote(@Query('code') code: string) {
     if (!code) return { code: 200, msg: 'success', data: null };
-    try {
-      const prefix = code.startsWith('6') || code.startsWith('68') ? 'sh' : 'sz';
-      const url = `https://hq.sinajs.cn/list=${prefix}${code}`;
-      const resp = await fetch(url, {
-        headers: { Referer: 'https://finance.sina.com.cn/' },
-        signal: AbortSignal.timeout(5000),
-      });
-      const text = await resp.text();
-      // var hq_str_sh603200="上海洗霸,17.880,17.860,17.610,17.940,17.490,17.610,17.620,...";
-      const match = text.match(/"(.+)"/);
-      if (!match) return { code: 200, msg: 'success', data: null };
-      const parts = match[1].split(',');
-      const name = parts[0];
-      const open = parseFloat(parts[1]);
-      const yClose = parseFloat(parts[2]);
-      const price = parseFloat(parts[3]);
-      const high = parseFloat(parts[4]);
-      const low = parseFloat(parts[5]);
-      const pChg = price - yClose;
-      const pct = yClose > 0 ? (pChg / yClose) * 100 : 0;
-      return {
-        code: 200, msg: 'success',
-        data: { code, name, price: price || 0, trade: price || 0, open, high, low, yClose, change: pChg, changePercent: Math.round(pct * 100) / 100 },
-      };
-    } catch (e: any) {
-      this.logger.error(`获取实时行情失败: ${e.message}`);
-      return { code: 200, msg: 'success', data: null };
-    }
+    // 后端不主动调外部API
+    return { code: 200, msg: 'success', data: null };
   }
 
   @Get('search')

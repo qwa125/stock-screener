@@ -235,7 +235,6 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private applySignalContinuity;
     private calcChipAnalysis;
     private fetchGEMCandidates;
-    private parseSinaBatch;
     private fetchMainBoardCandidates;
     scanMainBoardStocks(): Promise<OpportunityStock[]>;
     getMainBoardOpportunities(): Promise<{
@@ -304,5 +303,5 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     intradayAnalysis(code: string): Promise<any>;
     doIntradayAnalysis(code: string, minData: any[]): Promise<any>;
     private fetchMinuteKLine;
-    fetchAuctionTrend(code: string): Promise<any[]>;
+    fetchAuctionTrend(_code: string): Promise<any[]>;
 }

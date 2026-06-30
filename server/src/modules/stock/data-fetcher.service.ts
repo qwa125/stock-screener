@@ -19,34 +19,12 @@ export class DataFetcherService {
   }
   private stockListCache: StockInfo[] | null = null;
 
-  /** 获取全部A股列表（带缓存） */
+  /** 获取全部A股列表（纯前端推送，后端不直接调用API） */
   async getAllStocks(): Promise<StockInfo[]> {
     if (this.stockListCache) return this.stockListCache;
-
-    try {
-      // 从腾讯API获取全量股票列表
-      const url = 'https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
-        const text = await res.text();
-        const data = JSON.parse(text);
-        const list: StockInfo[] = (data?.data?.diff || []).map((item: any) => ({
-          code: String(item.f12).padStart(6, '0'),
-          name: item.f14 || '',
-          market: 0,
-        })).filter((s: StockInfo) => s.name);
-        this.stockListCache = list;
-        this.logger.log(`加载全部A股列表: ${list.length}只`);
-        return list;
-      }
-    } catch (e) {
-      this.logger.warn(`获取全部A股列表失败: ${(e as Error).message}`);
-    }
-
-    // 降级：返回热门股票
+    this.logger.warn('后端不直接调用外部API获取股票列表，请前端推送');
+    this.stockListCache = [];
+    return [];
     const fallback = this.getHotStockList();
     this.stockListCache = fallback;
     return fallback;
@@ -87,33 +65,9 @@ export class DataFetcherService {
     return this.fallbackSearch(keyword);
   }
 
-  /** 东方财富股票搜索 */
+  /** 东方财富股票搜索（禁用外部API） */
   private async searchEastMoney(keyword: string): Promise<StockInfo[]> {
-    try {
-      const url = `${this.EASTMONEY_SEARCH_URL}?input=${encodeURIComponent(keyword)}&type=14&token=D43BF722C8E14A9C61B0D6E303FC9C19`;
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://quote.eastmoney.com/',
-        },
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const list = data?.QuotationCodeTable?.Data || [];
-        const results = list
-          .filter((item: any) => item.Code && item.Name)
-          .map((item: any) => ({
-            code: String(item.Code).padStart(6, '0'),
-            name: item.Name,
-            market: item.MarketType === 1 ? 1 : 0,
-          }));
-        if (results.length > 0) return results;
-      }
-    } catch (e) {
-      this.logger.warn(`搜索接口不可用，降级: ${(e as Error).message}`);
-    }
+    this.logger.warn(`后端跳过外部搜索: ${keyword}`);
     return [];
   }
 
@@ -137,39 +91,9 @@ export class DataFetcherService {
    * 从腾讯获取实时行情数据（注意：腾讯API使用GBK编码）
    */
   async fetchRealTimeQuote(code: string, market?: number): Promise<StockInfo & { price?: number; lastClose?: number; high?: number; low?: number; changePercent?: number } | null> {
-    const mkt = market ?? this.detectMarket(code);
-    const prefix = this.getMarketPrefix(mkt);
-    try {
-      const response = await fetch(`${this.TENCENT_QUOTE_URL}=${prefix}${code}`, {
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!response.ok) return null;
-
-      // 腾讯API使用GBK编码，用arraybuffer获取后手动解码
-      const buffer = await response.arrayBuffer();
-      const text = iconv.decode(Buffer.from(buffer), 'gbk');
-      const match = text.match(/"(.*)"/);
-      if (!match) return null;
-
-      const fields = match[1].split('~');
-      if (fields.length < 40) return null;
-
-      return {
-        code: fields[2] || code,
-        name: fields[1] || `股票${code}`,
-        market: this.detectMarket(code),
-        price: parseFloat(fields[3]) || undefined,
-        lastClose: parseFloat(fields[4]) || undefined,
-        high: parseFloat(fields[33]) || undefined,
-        low: parseFloat(fields[34]) || undefined,
-        changePercent: parseFloat(fields[32]) || undefined,
-      };
-    } catch (e) {
-      this.logger.warn(`腾讯实时行情不可用: ${(e as Error).message}`);
-      return null;
-    }
-  }
+    this.logger.warn(`[data-fetcher] 跳过外部行情API，数据由前端推送`);
+    return null;
+        }
 
   /** 降级搜索 */
   private fallbackSearch(keyword: string): StockInfo[] {

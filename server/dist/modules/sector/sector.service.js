@@ -12,8 +12,6 @@ var SectorService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SectorService = void 0;
 const common_1 = require("@nestjs/common");
-const https = require("node:https");
-const iconvlite = require("iconv-lite");
 const fs_1 = require("fs");
 const node_path_1 = require("node:path");
 const data_fetcher_service_1 = require("../stock/data-fetcher.service");
@@ -98,7 +96,6 @@ let SectorService = SectorService_1 = class SectorService {
         this.dataFetcher = dataFetcher;
         this.gemScreener = gemScreener;
         this.logger = new common_1.Logger(SectorService_1.name);
-        this.agent = new https.Agent({ rejectUnauthorized: false });
         this.cache = null;
         this.loadingPromise = null;
         this.CACHE_TTL = 5 * 60 * 1000;
@@ -560,66 +557,10 @@ let SectorService = SectorService_1 = class SectorService {
         };
     }
     async getSectorConstituents(code) {
-        const cached = this.consCache.get(code);
-        if (cached && Date.now() - cached.timestamp < this.CONS_CACHE_TTL) {
-            return cached.stocks;
-        }
-        try {
-            const url = `https://www.swsresearch.com/institute-sw/api/index_publish/details/component_stocks/?swindexcode=${code}&page=1&page_size=10000`;
-            const json = await this.httpsGetJson(url);
-            const results = json?.data?.results || [];
-            const stocks = results.map((item) => ({
-                code: String(item.stockcode).trim().padStart(6, '0'),
-                name: String(item.stockname || '').trim(),
-                weight: parseFloat(item.newweight) || 0,
-            })).filter(s => s.code && s.name);
-            stocks.sort((a, b) => b.weight - a.weight);
-            this.consCache.set(code, { stocks, timestamp: Date.now() });
-            this.logger.log(`板块 ${code} 成分股加载完成: ${stocks.length}只`);
-            return stocks;
-        }
-        catch (err) {
-            this.logger.error(`获取板块 ${code} 成分股失败: ${err instanceof Error ? err.message : String(err)}`);
-            return [];
-        }
+        return [];
     }
     async fetchStockQuotes(codes) {
-        const map = new Map();
-        if (codes.length === 0)
-            return map;
-        try {
-            const BATCH_SIZE = 50;
-            for (let i = 0; i < codes.length; i += BATCH_SIZE) {
-                const batch = codes.slice(i, i + BATCH_SIZE);
-                const symbols = batch.map(code => {
-                    if (code.startsWith('6') || code.startsWith('9'))
-                        return `sh${code}`;
-                    return `sz${code}`;
-                }).join(',');
-                const url = `https://qt.gtimg.cn/q=${symbols}`;
-                const raw = await this.httpsGetText(url);
-                for (const code of batch) {
-                    const prefix = code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz';
-                    const regex = new RegExp(`v_${prefix}${code}="([^"]+)"`);
-                    const match = raw.match(regex);
-                    if (match) {
-                        const fields = match[1].split('~');
-                        const name = fields[1] || '';
-                        const price = parseFloat(fields[3]) || 0;
-                        const yesterdayClose = parseFloat(fields[4]) || 0;
-                        const changePercent = yesterdayClose > 0 ? Math.round(((price - yesterdayClose) / yesterdayClose) * 10000) / 100 : 0;
-                        const volumeShares = parseFloat(fields[6]) || 0;
-                        const inflow = Math.round(volumeShares * price);
-                        const marketCap = parseFloat(fields[37]) || 0;
-                        map.set(code, { price, changePercent, inflow, marketCap });
-                    }
-                }
-            }
-        }
-        catch (err) {
-            this.logger.error(`获取股票行情失败: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        return map;
+        return new Map();
     }
     formatDateTime(date) {
         const y = date.getFullYear();
@@ -628,45 +569,6 @@ let SectorService = SectorService_1 = class SectorService {
         const h = String(date.getHours()).padStart(2, '0');
         const m = String(date.getMinutes()).padStart(2, '0');
         return `${y}年${M}月${d}日 ${h}:${m}`;
-    }
-    httpsGetJson(url, timeoutMs = 15000) {
-        return new Promise((resolve, reject) => {
-            const req = https.get(url, { agent: this.agent, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.swsresearch.com/' } }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    }
-                    catch (e) {
-                        reject(new Error(`JSON解析失败: ${data.slice(0, 200)}`));
-                    }
-                });
-            });
-            req.on('error', reject);
-            req.setTimeout(timeoutMs, () => {
-                req.destroy();
-                reject(new Error(`请求超时 (${timeoutMs}ms)`));
-            });
-        });
-    }
-    httpsGetText(url, timeoutMs = 10000) {
-        return new Promise((resolve, reject) => {
-            const req = https.get(url, { agent: this.agent, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.swsresearch.com/' } }, (res) => {
-                const chunks = [];
-                res.on('data', (chunk) => { chunks.push(chunk); });
-                res.on('end', () => {
-                    const buffer = Buffer.concat(chunks);
-                    const text = iconvlite.decode(buffer, 'gbk');
-                    resolve(text);
-                });
-            });
-            req.on('error', reject);
-            req.setTimeout(timeoutMs, () => {
-                req.destroy();
-                reject(new Error(`请求超时 (${timeoutMs}ms)`));
-            });
-        });
     }
     async fetchAllSectorKLines() {
         const map = new Map();
@@ -685,38 +587,10 @@ let SectorService = SectorService_1 = class SectorService {
         return map;
     }
     async fetchSectorKLine(code) {
-        try {
-            const url = `https://www.swsresearch.com/institute-sw/api/index_publish/trend/?swindexcode=${code}&period=DAY`;
-            const json = await this.httpsGetJson(url);
-            const rawList = Array.isArray(json) ? json : (json?.data || []);
-            return rawList.map((item) => ({
-                date: item.bargaindate,
-                close: item.closeindex,
-            }));
-        }
-        catch (err) {
-            this.logger.error(`获取板块 ${code} K线失败: ${err instanceof Error ? err.message : String(err)}`);
-            return [];
-        }
+        return [];
     }
     async fetchRealtimePrices() {
-        const map = new Map();
-        try {
-            const url = 'https://www.swsresearch.com/institute-sw/api/index_publish/current/?page=1&page_size=50&indextype=一级行业';
-            const json = await this.httpsGetJson(url);
-            const results = json?.data?.results || [];
-            for (const item of results) {
-                const code = String(item.swindexcode).trim();
-                const price = parseFloat(item.l3);
-                if (code && !isNaN(price)) {
-                    map.set(code, price);
-                }
-            }
-        }
-        catch (err) {
-            this.logger.error(`获取板块实时行情失败: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        return map;
+        return new Map();
     }
     async checkMoneyFlowBatch(codes) {
         const flowMap = new Map();
@@ -735,23 +609,7 @@ let SectorService = SectorService_1 = class SectorService {
         return flowMap;
     }
     async getSingleMoneyFlow(code) {
-        try {
-            const market = code.startsWith('6') || code.startsWith('9') ? '1' : '0';
-            const url = `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?secid=${market}.${code}&fields1=f1,f2,f3,f4,f5&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59&klt=1&lmt=1`;
-            const json = await this.httpsGetJson(url);
-            const klines = json?.data?.klines || [];
-            if (klines.length === 0)
-                return null;
-            const parts = klines[0].split(',');
-            const mainForce = parseFloat(parts[1]);
-            if (isNaN(mainForce))
-                return null;
-            return mainForce;
-        }
-        catch (err) {
-            this.logger.warn(`获取 ${code} 资金流向失败: ${err instanceof Error ? err.message : String(err)}`);
-            return null;
-        }
+        return null;
     }
 };
 exports.SectorService = SectorService;
