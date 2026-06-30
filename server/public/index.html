@@ -209,7 +209,7 @@ function isTH(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var
 function isCallAuction(){var b=getBJ();if(b.getDay()===0||b.getDay()===6)return false;var m=b.getHours()*60+b.getMinutes();return m>=555&&m<565}
 function freezeMsg(){var b=getBJ(),d=b.getDay(),m=b.getHours()*60+b.getMinutes();if(d===0||d===6)return'周末休市，已冻结至周一 9:25';if(m>=900)return d===5?'周五收盘，已冻结至下周一 9:25':'收盘已冻结，明早 9:25 恢复';if(m>=690&&m<780)return'午休已冻结，13:00 恢复';if(m>=555&&m<565)return'';if(m<555)return'盘前已冻结，9:25 恢复';return''}
 
-var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false,_lastBuySignals=[]
+var stocks=[],loading=false,deviceRegistered=false,realtimePrices={},lastScanTime='',intradayTimer=null,lastIntradayCode='',isDetailView=false,_lastBuySignals=[],_listPriceTimer=null
 // 日内买卖点锁定：一旦显示，买点永不降低，卖点只升不降
 var _lockedBuyPrice=null,_lockedBuyTime='',_lockedSellPrice=null,_lockedSellTime=''
 // ========== 冻结快照（休盘后展示最后一次扫描结果） ==========
@@ -1194,6 +1194,7 @@ function gridChipLine(s,entry){
 async function showDetail(i){
   isDetailView=true
   selectedIdx=i
+  stopListPriceRefresh() // 进入详情，机会区停止2秒刷新
   var s=stocks[i],rt=realtimePrices[s.code]||{}
   if(!s){console.error('showDetail: stocks['+i+'] 无效');return}
   
@@ -1601,13 +1602,64 @@ function renderList(){
     card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
   })
+  // 机会区列表渲染完成后，启动每2秒价格刷新
+  if(!isDetailView&&stocks.length)startListPriceRefresh()
+}
+
+// ---------- 机会区所有股票每2秒刷新实时价格 ----------
+var _listPriceRunning=false,_listPriceAbort=null
+async function _fetchAndUpdateListPrices(){
+  if(_listPriceRunning)return;_listPriceRunning=true
+  try{
+    var codes=stocks.map(function(s){return s.code})
+    var fresh=await fetchRealtime(codes)
+    if(!fresh)return
+    var updated=0
+    Object.keys(fresh).forEach(function(code){realtimePrices[code]=fresh[code];updated++})
+    if(updated<1)return
+    // 更新每个股票卡片的股价/涨幅DOM
+    var cards=$('stockList').children
+    for(var i=0;i<stocks.length&&i<cards.length;i++){
+      var s=stocks[i],rt=fresh[s.code]
+      if(!rt)continue
+      // 更新股价
+      var ps=cards[i].querySelector('.price')
+      if(ps)ps.textContent=rt.price.toFixed(2)
+      // 更新涨幅
+      var cs=cards[i].querySelector('.chg')
+      if(cs){
+        var chgP=rt.chgP||0
+        cs.textContent=(chgP>=0?'+':'')+chgP.toFixed(2)+'%'
+        cs.style.color=chgP>=0?'#ef4444':'#22c55e'
+      }
+      // 更新当前pricePosition
+      if(rt.high>rt.low){
+        var pp=Math.round(((rt.price-rt.low)/(rt.high-rt.low))*100)
+        var posEl=cards[i].querySelector('.pos')
+        if(posEl){
+          posEl.textContent=pp+'%'
+          posEl.style.color=pp<50?'#22c55e':pp<80?'#eab308':'#ef4444'
+        }
+      }
+    }
+  }catch(e){}finally{_listPriceRunning=false}
+}
+function startListPriceRefresh(){
+  stopListPriceRefresh()
+  if(!stocks.length)return
+  _listPriceTimer=setInterval(_fetchAndUpdateListPrices,2000)
+  // 立即执行一次
+  _fetchAndUpdateListPrices()
+}
+function stopListPriceRefresh(){
+  if(_listPriceTimer){clearInterval(_listPriceTimer);_listPriceTimer=null}
 }
 
 // ---------- 扫描（全部数据前端直调，后端仅分析） ----------
 async function doScan(){
   if(!deviceRegistered)return
   if(loading)return;loading=true;$('scanBtn').disabled=true;$('scanBtn').textContent='扫描中...'
-  stopPriceRefresh()
+  stopPriceRefresh();stopListPriceRefresh();stopListPriceRefresh()
   setStatus('🔄 前端拉取全市场行情数据...')
   try{
     // 1. 前端直调Sina获取全市场股票+实时价格
