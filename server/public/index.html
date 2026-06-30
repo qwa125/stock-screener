@@ -271,6 +271,8 @@ function hideBlocked(){
   $("pageBlur").style.display='none'
   deviceRegistered=true
   renderList()
+  // 注册成功后自动启动轻量扫描（用户无需再点"立即扫描"）
+  if(!loading&&!_autoScanning)setTimeout(function(){autoLightScan()},500)
 }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
@@ -431,8 +433,8 @@ async function autoLightScan(){
       }
       console.log('📦 新浪排行 '+shStocks.length+'+'+szStocks.length+' 只, 筛选主板 '+mb_s.length+' + 创业板 '+gem_s.length)
     }catch(e){}
-    // ★ 备用：东财 clist API（新浪失败时，pz=5000单次返回全量）
-    if(!totalList||!totalList.length){
+    // ★ 备用：东财 clist API（新浪不足时，pz=5000单次返回全量）
+    if(!totalList||!totalList.length||mb_s.length<500||gem_s.length<500){
       setStatus('⏳ 轻量扫描: 备用东财排行...')
       try{
         var emr=await fetchWithRetry('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3,f15,f16&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048',2)
