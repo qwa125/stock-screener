@@ -191,6 +191,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.marketHoursBeganAt = 0;
         this._pgSql = null;
         this._pgReady = false;
+        this.CACHE_MAX_SIZE = 3000;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -606,9 +607,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     getUpgradedSnapshot() {
         return this.upgradedSnapshot;
     }
+    evictToLimit(data, max) {
+        if (data.length <= max)
+            return data;
+        return data
+            .slice()
+            .sort((a, b) => (b._cachedAt || 0) - (a._cachedAt || 0))
+            .slice(0, max);
+    }
     updateUpgradedCache(list) {
         if (!list?.length)
             return;
+        const now = Date.now();
         const map = new Map();
         for (const s of list)
             if (s?.code)
@@ -620,24 +630,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const upgraded = map.get(item.code);
                 if (upgraded) {
                     mainBoardChanged = true;
+                    item._cachedAt = now;
                     if (upgraded.name !== undefined)
                         item.name = upgraded.name;
                     if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
                         if (upgraded.suggestion === '减仓' || upgraded.suggestion === '卖出' || upgraded.suggestion === '不要介入') {
-                            if (item.code === '300260' || item.code === '300749') {
-                                this.logger.log(`📦 updateUpgraded: ${item.code} ${item.suggestion}→${upgraded.suggestion} (负面直接覆盖)`);
-                            }
                             item.suggestion = upgraded.suggestion;
                         }
                         else {
                             const oldP = this.SUGGESTION_PRIORITY[item.suggestion ?? ''] ?? 99;
                             const newP = this.SUGGESTION_PRIORITY[upgraded.suggestion] ?? 99;
-                            if (newP < oldP) {
-                                if (item.code === '300260' || item.code === '300749') {
-                                    this.logger.log(`📦 updateUpgraded: ${item.code} ${item.suggestion}→${upgraded.suggestion} (只升不降)`);
-                                }
+                            if (newP < oldP)
                                 item.suggestion = upgraded.suggestion;
-                            }
                         }
                     }
                     if (upgraded.score !== undefined)
@@ -674,8 +678,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                         item.auction = upgraded.auction;
                 }
             }
-            if (mainBoardChanged)
-                this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
         }
         let gemChanged = false;
         if (this.cache?.data?.length) {
@@ -684,24 +686,18 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 const upgraded = map.get(item.code);
                 if (upgraded) {
                     gemChanged = true;
+                    item._cachedAt = now;
                     if (upgraded.name !== undefined)
                         item.name = upgraded.name;
                     if (upgraded.suggestion !== undefined && upgraded.suggestion !== item.suggestion) {
                         if (upgraded.suggestion === '减仓' || upgraded.suggestion === '卖出' || upgraded.suggestion === '不要介入') {
-                            if (item.code === '300260' || item.code === '300749') {
-                                this.logger.log(`📦 updateUpgraded(GEM): ${item.code} ${item.suggestion}→${upgraded.suggestion} (负面直接覆盖)`);
-                            }
                             item.suggestion = upgraded.suggestion;
                         }
                         else {
                             const oldP = this.SUGGESTION_PRIORITY[item.suggestion ?? ''] ?? 99;
                             const newP = this.SUGGESTION_PRIORITY[upgraded.suggestion] ?? 99;
-                            if (newP < oldP) {
-                                if (item.code === '300260' || item.code === '300749') {
-                                    this.logger.log(`📦 updateUpgraded(GEM): ${item.code} ${item.suggestion}→${upgraded.suggestion} (只升不降)`);
-                                }
+                            if (newP < oldP)
                                 item.suggestion = upgraded.suggestion;
-                            }
                         }
                     }
                     if (upgraded.score !== undefined)
@@ -762,54 +758,42 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 if (isGEM) {
                     if (!this.cache)
                         this.cache = { data: [], timestamp: Date.now() };
-                    this.cache.data.push({
-                        code,
-                        name: upgraded.name || '',
-                        suggestion: upgraded.suggestion || '持有',
-                        score: upgraded.score ?? 50,
-                        entryTiming: upgraded.entryTiming ?? 0,
-                        currentPrice: upgraded.currentPrice ?? 0,
-                        changePercent: upgraded.changePercent ?? 0,
-                        pricePosition: upgraded.pricePosition ?? 0,
-                        priceIncrease: upgraded.priceIncrease ?? 0,
-                        safetyScore: upgraded.safetyScore ?? 0,
-                        capitalRank: upgraded.capitalRank ?? 999,
-                        mainForceInflow: upgraded.mainForceInflow ?? 0,
-                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
-                    });
+                    this.cache.data.push({ ...upgraded, _cachedAt: now });
                     gemChanged = true;
                     newAdded++;
                 }
                 else if (isMainBoard) {
                     if (!this.mainBoardCache)
                         this.mainBoardCache = { data: [], timestamp: Date.now() };
-                    this.mainBoardCache.data.push({
-                        code,
-                        name: upgraded.name || '',
-                        suggestion: upgraded.suggestion || '持有',
-                        score: upgraded.score ?? 50,
-                        entryTiming: upgraded.entryTiming ?? 0,
-                        currentPrice: upgraded.currentPrice ?? 0,
-                        changePercent: upgraded.changePercent ?? 0,
-                        pricePosition: upgraded.pricePosition ?? 0,
-                        priceIncrease: upgraded.priceIncrease ?? 0,
-                        safetyScore: upgraded.safetyScore ?? 0,
-                        capitalRank: upgraded.capitalRank ?? 999,
-                        mainForceInflow: upgraded.mainForceInflow ?? 0,
-                        baiXiaoDays: upgraded.baiXiaoDays ?? 0,
-                    });
+                    this.mainBoardCache.data.push({ ...upgraded, _cachedAt: now });
                     mainBoardChanged = true;
                     newAdded++;
                 }
             }
         }
-        const now = Date.now();
+        if (this.mainBoardCache?.data) {
+            const before = this.mainBoardCache.data.length;
+            this.mainBoardCache.data = this.evictToLimit(this.mainBoardCache.data, this.CACHE_MAX_SIZE);
+            if (this.mainBoardCache.data.length < before) {
+                mainBoardChanged = true;
+                this.logger.warn(`🧹 主板缓存淘汰: ${before}→${this.mainBoardCache.data.length} 只`);
+            }
+        }
+        if (this.cache?.data) {
+            const before = this.cache.data.length;
+            this.cache.data = this.evictToLimit(this.cache.data, this.CACHE_MAX_SIZE);
+            if (this.cache.data.length < before) {
+                gemChanged = true;
+                this.logger.warn(`🧹 GEM缓存淘汰: ${before}→${this.cache.data.length} 只`);
+            }
+        }
+        const ts = Date.now();
         if (mainBoardChanged && this.mainBoardCache) {
-            this.mainBoardCache.timestamp = now;
+            this.mainBoardCache.timestamp = ts;
             this.saveMainBoardCacheToDisk().catch(e => this.logger.error(`主板缓存磁盘写入失败: ${e.message}`));
         }
         if (gemChanged && this.cache) {
-            this.cache.timestamp = now;
+            this.cache.timestamp = ts;
             this.saveCacheToDisk().catch(e => this.logger.error(`GEM缓存磁盘写入失败: ${e.message}`));
         }
         if (newAdded > 0)
@@ -832,9 +816,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return;
             }
             if (isGEMStock) {
+                opp._cachedAt = Date.now();
                 this.cache.data.push(opp);
-                if (this.cache.data.length > 3000)
-                    this.cache.data = this.cache.data.slice(-2000);
+                if (this.cache.data.length > this.CACHE_MAX_SIZE) {
+                    this.cache.data = this.evictToLimit(this.cache.data, this.CACHE_MAX_SIZE);
+                    this.logger.warn(`🧹 GEM缓存淘汰: >${this.CACHE_MAX_SIZE}`);
+                }
                 await this.saveCacheToDisk();
                 this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
                 return;
@@ -852,9 +839,12 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 return;
             }
             if (isMainBoardStock) {
+                opp._cachedAt = Date.now();
                 this.mainBoardCache.data.push(opp);
-                if (this.mainBoardCache.data.length > 3000)
-                    this.mainBoardCache.data = this.mainBoardCache.data.slice(-2000);
+                if (this.mainBoardCache.data.length > this.CACHE_MAX_SIZE) {
+                    this.mainBoardCache.data = this.evictToLimit(this.mainBoardCache.data, this.CACHE_MAX_SIZE);
+                    this.logger.warn(`🧹 主板缓存淘汰: >${this.CACHE_MAX_SIZE}`);
+                }
                 this.logger.log(`🆕 新加入主板缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
                 return;
             }
