@@ -2958,7 +2958,19 @@ async function doSearch(){
   }
 }
 
-// 每分钟刷新市场状态（不含自动扫描，用户手动点"立即扫描"触发）
+// 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
+[['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
+  var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
+  if(n<t)setTimeout(async function(){if(!loading){await autoLightScan()}},t.getTime()-n.getTime());
+});
+
+// 每10分钟交易时段自动轻量扫描
+setInterval(function(){
+  if(isTH()&&!loading){autoLightScan()}
+  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+  $('scanBtn').textContent='🔄 立即扫描'
+},600000)
+// 每分钟刷新市场状态
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
