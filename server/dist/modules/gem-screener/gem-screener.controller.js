@@ -500,7 +500,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return (b.score || 0) - (a.score || 0);
         });
         this.logger.log(`批量分析完成: ${results.length} 只有效结果`);
-        return { code: 200, msg: 'ok', data: results.slice(0, 30) };
+        return { code: 200, msg: 'ok', data: results };
     }
     async proxyStockList(node, page, num, sort, asc) {
         return { code: 200, msg: 'success', data: [] };
