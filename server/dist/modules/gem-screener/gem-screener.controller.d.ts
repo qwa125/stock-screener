@@ -7,6 +7,7 @@ export declare class GemScreenerController {
     private readonly scheduler;
     private readonly stockService;
     private readonly logger;
+    private readonly klineProxyCache;
     constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
     getMarketState(): Promise<{
         code: number;
@@ -333,10 +334,24 @@ export declare class GemScreenerController {
         msg: string;
         data: string;
     }>;
-    proxyKLine(code: string, market: string): Promise<{
+    proxyKLine(code: string): Promise<{
         code: number;
         msg: string;
-        data: never[];
+        data: null;
+        cached?: undefined;
+        age?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: any[];
+        cached: boolean;
+        age: number;
+    } | {
+        code: number;
+        msg: string;
+        data: null;
+        cached: boolean;
+        age?: undefined;
     }>;
     proxyStockDetail(code: string): Promise<{
         code: number;

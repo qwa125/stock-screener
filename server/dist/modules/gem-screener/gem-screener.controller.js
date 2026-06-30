@@ -28,6 +28,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.scheduler = scheduler;
         this.stockService = stockService;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
+        this.klineProxyCache = new Map();
         this.intradayBuffer = new Map();
     }
     async getMarketState() {
@@ -535,10 +536,16 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         return { code: 200, msg: 'success', data: '' };
     }
-    async proxyKLine(code, market) {
+    async proxyKLine(code) {
         if (!code)
-            return { code: 400, msg: '缺少股票代码', data: [] };
-        return { code: 200, msg: 'success', data: [] };
+            return { code: 400, msg: '缺少股票代码', data: null };
+        const cached = this.klineProxyCache.get(code);
+        if (cached && cached.data && cached.data.length >= 5) {
+            const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
+            this.logger.log(`📦 K线代理返回缓存数据: ${code} (${age}分钟前缓存)`);
+            return { code: 200, msg: `代理K线(缓存${age}分钟前)`, data: cached.data, cached: true, age };
+        }
+        return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
     }
     async proxyStockDetail(code) {
         if (!code)
@@ -568,6 +575,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 volume: parseFloat(item.volume) || 0,
                 amount: item.amount || 0,
             }));
+            if (body.code && klineData.length >= 5) {
+                this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
+            }
             let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
             if (!opp) {
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
@@ -1009,9 +1019,8 @@ __decorate([
     (0, common_1.Get)('proxy/kline'),
     (0, access_limit_guard_1.SkipAccessLimit)(),
     __param(0, (0, common_1.Query)('code')),
-    __param(1, (0, common_1.Query)('market')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxyKLine", null);
 __decorate([

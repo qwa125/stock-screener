@@ -543,6 +543,17 @@ async function fetchKlineAndAnalyze(s){
       }
     }catch(e){console.warn('[scan] 腾讯K线失败('+code+'):',e.message||e)}
 
+    // 腾讯失败 → 后端备选（仅拉缓存K线，不触发分析）
+    if(!klines||klines.length<5) try{
+      var pkr=await fetch(API+'/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
+      if(pkr.ok){var pkj=await pkr.json()
+        if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>5){
+          klines=pkj.data;window._klineCache[code]=klines
+          console.log('[scan] proxy kline got',code,klines.length+'bars')
+        }
+      }
+    }catch(ee){console.warn('[scan] proxy kline fallback failed:',ee.message||ee)}
+
     // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
     if(window._cachedStockSet&&window._cachedStockSet.has(code)){
       console.log('[scan] skip backend',code,'(cached)')
@@ -1139,6 +1150,16 @@ async function showDetail(i){
           }
         }
       }catch(e){console.warn('[detail] tencent kline failed:',e.message||e)}
+      // 腾讯失败 → 后端备选（仅拉缓存K线）
+      if(!kdata||kdata.length<5) try{
+        var pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
+        if(pkr.ok){var pkj=await pkr.json()
+          if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>5){
+            kdata=pkj.data;window._klineCache[code]=kdata
+            console.log('[detail] proxy kline got '+kdata.length+' bars')
+          }
+        }
+      }catch(ee){console.warn('[detail] proxy kline fallback failed:',ee.message||ee)}
       // 再分析
       var ar=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,name:s.name,kline:Array.isArray(kdata)?kdata:kdata.list||kdata.kline||[]})})
       var aj=await ar.json()
@@ -1221,6 +1242,13 @@ function _reAnalyzeDetail(code){
             })
         }
       }catch(e){}
+      // 腾讯失败 → 后端备选（仅拉缓存K线）
+      if(!kdata||!kdata.length) try{
+        var _pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
+        if(_pkr.ok){var _pkj=await _pkr.json()
+          if(_pkj&&_pkj.code===200&&_pkj.data&&_pkj.data.length>5){kdata=_pkj.data}
+        }
+      }catch(_ee){}
       if(!kdata||!kdata.length)return
       var _kr=await fetch('/api/gem/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,kline:kdata,name:window['_lastDetailName_'+code]||''})}).then(function(r){return r.json()})
       var _sd=_kr&&_kr.data||_kr
@@ -2693,6 +2721,14 @@ async function doSearch(){
         }
       }catch(e){console.warn('[search] tencent kline failed:',e.message||e)}
       
+      // 2B. 腾讯失败 → 后端备选（仅拉缓存K线，不触发任何分析）
+      if(!kdata||kdata.length<10) try{
+        var pkr=await fetch('/api/gem/proxy/kline?code='+stockCode+'&market='+(prefix||'sh'),{signal:timeoutSignal(10000)})
+        if(pkr.ok){var pkj=await pkr.json()
+          if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>0){
+            kdata=pkj.data;console.log('[search] proxy kline got '+kdata.length+' bars')
+          }}
+      }catch(ee){console.warn('[search] proxy kline fallback failed:',ee.message||ee)}
       
       if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       // ★ K线数据有效 → 前端直接从原始K线计算机构活跃度（不依赖后端）

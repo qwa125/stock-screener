@@ -12,6 +12,8 @@ import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 @Controller('gem')
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
+  private readonly klineProxyCache = new Map<string, { data: any[]; timestamp: number }>();
+
   constructor(
     private readonly gemScreener: GemScreenerService,
     private readonly scheduler: GemScreenerScheduler,
@@ -668,10 +670,15 @@ export class GemScreenerController {
    */
   @Get('proxy/kline')
   @SkipAccessLimit()
-  async proxyKLine(@Query('code') code: string, @Query('market') market: string) {
-    if (!code) return { code: 400, msg: '缺少股票代码', data: [] };
-    // 后端不主动调外部API，K线由前端拉取后推送到后端
-    return { code: 200, msg: 'success', data: [] };
+  async proxyKLine(@Query('code') code: string) {
+    if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    const cached = this.klineProxyCache.get(code);
+    if (cached && cached.data && cached.data.length >= 5) {
+      const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
+      this.logger.log(`📦 K线代理返回缓存数据: ${code} (${age}分钟前缓存)`);
+      return { code: 200, msg: `代理K线(缓存${age}分钟前)`, data: cached.data, cached: true, age };
+    }
+    return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
   }
 
   /**
@@ -716,6 +723,10 @@ export class GemScreenerController {
         volume: parseFloat(item.volume) || 0,
         amount: item.amount || 0,
       }));
+      // 缓存原始K线（备选代理用，仅腾讯挂了才走）
+      if (body.code && klineData.length >= 5) {
+        this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
+      }
       let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
       if (!opp) {
         opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
