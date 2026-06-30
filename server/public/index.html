@@ -2712,7 +2712,11 @@ function startIntradayRefresh(code,high,low,price){
     return
   }
   refreshDetailPrice(code,low,high,price) // 立即执行一次
-  intradayTimer=setInterval(function(){
+  intradayTimer=setInterval(async function(){
+    try{
+      var fr=await fetchRealtime([code])
+      if(fr&&fr[code])realtimePrices[code]=fr[code]
+    }catch(e){}
     var _rp=realtimePrices[code]
     refreshDetailPrice(code,_rp&&_rp.low||low,_rp&&_rp.high||high,_rp&&_rp.price||price)
   },2000)
