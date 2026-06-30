@@ -2204,7 +2204,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const len = closeArr.length;
         if (len < 20)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const N = Math.min(60, len);
+        const N = Math.min(120, len);
         const c = closeArr.slice(-N);
         const h = highArr.slice(-N);
         const l = lowArr.slice(-N);
@@ -2220,18 +2220,22 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (let i = 0; i < N; i++) {
             const dayLow = l[i];
             const dayHigh = h[i];
+            const dayClose = c[i];
             const dayVol = v[i];
             const dayRange = dayHigh - dayLow;
             if (dayRange < 0.01)
                 continue;
+            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
             const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
             const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
             if (startBin === endBin) {
                 bins[startBin] += dayVol;
             }
             else {
-                const totalSteps = endBin - startBin + 1;
-                const volPerBin = dayVol / totalSteps;
+                bins[closeBin] += dayVol * 0.6;
+                const spreadSteps = endBin - startBin + 1;
+                const spreadVol = dayVol * 0.4;
+                const volPerBin = spreadVol / spreadSteps;
                 for (let b = startBin; b <= endBin; b++) {
                     bins[b] += volPerBin;
                 }
@@ -2260,7 +2264,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const concentration90 = Math.round((binsNeeded / BINS) * 100);
         const mainPeakIdx = peaks[0];
         const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-        const pricePositionPct = (currentPrice - minPrice) / range;
         let peakPosition;
         if (peakPrice < currentPrice * 0.85) {
             peakPosition = 'low';

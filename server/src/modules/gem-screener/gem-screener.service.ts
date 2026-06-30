@@ -2554,8 +2554,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const len = closeArr.length;
     if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
 
-    // 取近60天数据
-    const N = Math.min(60, len);
+    // 取最近120天数据（腾讯最多返回120条，更长周期筹码分布更准）
+    const N = Math.min(120, len);
     const c = closeArr.slice(-N);
     const h = highArr.slice(-N);
     const l = lowArr.slice(-N);
@@ -2572,23 +2572,30 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const binSize = range / BINS;
     const bins = new Array(BINS).fill(0);
 
-    // 将每日成交量分配到价格区间（按当日 high-low 范围线性分配）
+    // 将每日成交量分配到价格区间（收盘价权重分配法）
+    // 真实交易中 60% 成交量集中在收盘价附近，剩余40%线性铺开
     for (let i = 0; i < N; i++) {
       const dayLow = l[i];
       const dayHigh = h[i];
+      const dayClose = c[i];
       const dayVol = v[i];
       const dayRange = dayHigh - dayLow;
       if (dayRange < 0.01) continue;
 
+      const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
       const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
       const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
 
       if (startBin === endBin) {
+        // 一日区间只跨1个bin，全量给该bin
         bins[startBin] += dayVol;
       } else {
-        // 线性分配成交量到每个触及的价格区间
-        const totalSteps = endBin - startBin + 1;
-        const volPerBin = dayVol / totalSteps;
+        // 60% 成交量集中到收盘价所在bin
+        bins[closeBin] += dayVol * 0.6;
+        // 40% 成交量线性分配
+        const spreadSteps = endBin - startBin + 1;
+        const spreadVol = dayVol * 0.4;
+        const volPerBin = spreadVol / spreadSteps;
         for (let b = startBin; b <= endBin; b++) {
           bins[b] += volPerBin;
         }
@@ -2623,7 +2630,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     // 峰位: 主峰对应的价格相对于当前价格的位置
     const mainPeakIdx = peaks[0];
     const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-    const pricePositionPct = (currentPrice - minPrice) / range;
     let peakPosition: 'low' | 'mid' | 'high';
     if (peakPrice < currentPrice * 0.85) {
       peakPosition = 'low';  // 峰在下方（支撑位）
