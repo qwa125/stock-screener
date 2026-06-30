@@ -2835,34 +2835,31 @@ async function doSearch(){
       var prefix=(stockMarket||(stockCode.startsWith('6')?'sh':'sz'))
       var kdata=null
       
-      // ★ 优先：东财K线（JSONP直连，绕过CORS）
+      // ★ 优先：腾讯行情K线（直连fetch，有CORS *，任何域名必通）
+      if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
+        var tqPrefix=prefix==='sz'?'sz':'sh'
+        var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
+        var tqr=await fetch(tqUrl,{signal:timeoutSignal(8000)})
+        var tk=await tqr.json()
+        if(tk&&tk.qfqday&&tk.qfqday.length>=5)kdata=tk.qfqday.map(function(l){return{d:l[0],o:+l[1],c:+l[2],h:+l[3],l:+l[4],v:+l[5],a:+l[6]}})
+      }catch(ee){}
+      // ★ 备选：东财K线JSONP（Cloudflare不开Rocket Loader时可用）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var emSecId2=(stockCode.startsWith('6')?'1.':'0.')+stockCode
         var _skc2=window._klineCache&&window._klineCache[stockCode]
-        var _skh2=_skc2&&_skc2.length>=10
-        var ekurl2='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt='+(_skh2?2:120)+'&callback=jQuery'
-        var ekd2=await new Promise(function(rv){
-          var to=setTimeout(function(){delete window.jQuery;if(sc&&sc.parentNode)sc.parentNode.removeChild(sc);rv(null)},8000)
-          window.jQuery=function(d){clearTimeout(to);if(sc&&sc.parentNode)sc.parentNode.removeChild(sc);rv(d)}
-          var sc=document.createElement('script');sc.src=ekurl2;sc.onerror=function(){clearTimeout(to);delete window.jQuery;if(sc.parentNode)sc.parentNode.removeChild(sc);rv(null)}
-          document.body.appendChild(sc)
-        })
-        if(ekd2&&ekd2.data&&ekd2.data.klines&&ekd2.data.klines.length>=5){
-          kdata=ekd2.data.klines.map(function(l){
-            var p=l.split(',')
-            return {day:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
-          })
-          if(_skh2&&window._klineCache[stockCode]){
-            var _mg2={};window._klineCache[stockCode].forEach(function(k){_mg2[k.day]=k})
-            kdata.forEach(function(k){_mg2[k.day]=k})
-            kdata=Object.values(_mg2).sort(function(a,b){return a.day.localeCompare(b.day)})
-          }
-          window._klineCache[stockCode]=kdata
-          console.log('[search] eastmoney jsonp got '+kdata.length+' bars')
+        if(!_skc2)try{
+          var _es2=document.createElement('script')
+          window._emKlineCb=function(d){_skc2=d}
+          _es2.src='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+emSecId2+'&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=500&callback=_emKlineCb'
+          document.body.appendChild(_es2)
+          await new Promise(function(r){setTimeout(function(){r()},10000)})
+        }catch(ee2){}
+        if(_skc2&&_skc2.data&&_skc2.data.klines){
+          var kl=_skc2.data.klines;window._klineCache=window._klineCache||{};window._klineCache[stockCode]=_skc2
+          if(kl.length>=5)kdata=kl.map(function(l){var p=l.split(',');return{d:p[0],o:+p[1],c:+p[2],h:+p[3],l:+p[4],v:+p[5],a:+p[6]}})
         }
-      }catch(e){console.warn('[search] eastmoney jsonp failed:',e.message||e)}
-      
-      // ★ 备选1：腾讯行情K线（直连）
+      }catch(ee){}
+// ★ 备选1：腾讯行情K线（直连）
       if(!kdata&&stockMarket!=='hk'&&stockMarket!=='us')try{
         var tqPrefix=prefix==='sz'?'sz':'sh'
         var tqUrl='https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+stockCode+',day,,,500,qfq'
