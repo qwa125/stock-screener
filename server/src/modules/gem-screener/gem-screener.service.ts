@@ -89,6 +89,8 @@ export interface OpportunityStock {
   future_1_2Day_suggestion?: string;
   /** DEBUG调试 */
   _debug?: Record<string, any>;
+  /** LRU 淘汰时间戳 */
+  _cachedAt?: number;
   /** 评分系统未来1-2日预测: 多因子评分对未来短期走势的预测判断 */
   forecast1_2Day?: {
     direction: string;    // 强烈看涨|看涨|震荡偏强|方向不明|震荡偏弱|看跌
