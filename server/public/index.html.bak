@@ -1898,8 +1898,8 @@ async function doFullRescan(saveToBackend){
     newStocks.push({code:code,name:name,currentPrice:price,
       intradayHigh:item.f15,intradayLow:item.f16,
       pricePosition:50,
-      // 新股按搜索显示的自然信号给标签，_newStock标记让展示层过滤掉
-      suggestion:hasLiveData?liveSuggestion:'持有',_newStock:true,
+      // 新股按涨跌幅给基础评分，但最高只给轻仓买入（需后端K线分析确认买入/重仓买入）
+      suggestion:hasLiveData?(['重仓买入','买入'].indexOf(liveSuggestion)>=0?'轻仓买入':liveSuggestion):'持有',
       score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
@@ -1950,21 +1950,73 @@ async function doFullRescan(saveToBackend){
     setStatus('🔄 共 '+newStocks.length+' 只，筛选重仓买入/买入...')
     stocks=newStocks
 
-    // 前端不做排序——后端sortStocks已完成6层排序，前端只筛选展示
-    // 排除_newStock：新股未经后端K线分析，实时涨幅再高也不入选机会区
-    var ALLOWED={"重仓买入":1,"买入":1}
-    if(stocks.filter(function(s){return !s._newStock && ALLOWED[s.suggestion]?1:0}).length>0){
-      _lastBuySignals=stocks.filter(function(s){return !s._newStock && ALLOWED[s.suggestion]?1:0}).slice()
+    // === 只有6层排序：板块热度→上涨空间→入场时机→买入信号→机构活跃→主力资金 ===
+    var PRI={'重仓买入':0,'买入':1,'轻仓买入':2,'持有':3,'减仓':4,'卖出':5,'不要介入':6}
+    var TIMING={'最佳':5,'可以':4,'可关注':3,'谨慎':2,'观望':1}
+    // 计算板块热度
+    var sectorHeat={},sectorCount={}
+    for(var _si6=0;_si6<stocks.length;_si6++){
+      var _s6=stocks[_si6]
+      if(!_s6.sectorName)continue
+      sectorHeat[_s6.sectorName]=(sectorHeat[_s6.sectorName]||0)+(_s6.changePercent||0)
+      sectorCount[_s6.sectorName]=(sectorCount[_s6.sectorName]||0)+1
     }
-    stocks=stocks.filter(function(s){return !s._newStock && ALLOWED[s.suggestion]?1:0})
+    for(var k6 in sectorHeat){sectorHeat[k6]=sectorHeat[k6]/sectorCount[k6]}
+    function calcUpside6(s){
+      var conc=s.chipConcentration90
+      if(conc===null||conc===undefined||conc===-1) return 40
+      var cs;if(conc<=3)cs=100;else if(conc<=5)cs=95;else if(conc<=10)cs=85;else if(conc<=15)cs=70;else if(conc<=25)cs=50;else if(conc<=40)cs=30;else cs=10
+      var pk=s.chipPeakPosition
+      if(pk==='low')cs=cs*1.15
+      else if(pk==='high'){if(conc<=10)cs=cs*1.3;else if(conc<=20)cs=cs*0.9;else cs=cs*0.5}
+      return Math.min(100,cs)
+    }
+    stocks.sort(function(a,b){
+      // 0️⃣ 数据完整性：有后端分析数据(有sectorName+筹码)的优先，实时新股靠后
+      var ha=a.sectorName&&a.sectorName!==''&&a.chipConcentration90>=0?1:0
+      var hb=b.sectorName&&b.sectorName!==''&&b.chipConcentration90>=0?1:0
+      if(ha!==hb) return hb-ha
+      // ① 板块热度
+      var sa=sectorHeat[a.sectorName]||0,sb=sectorHeat[b.sectorName]||0
+      if(sb!==sa) return sb-sa
+      // ② 上涨空间
+      var ua=calcUpside6(a),ub=calcUpside6(b)
+      if(ub!==ua) return ub-ua
+      // ③ 入场时机
+      var ta=TIMING[a.entryTiming]||0,tb=TIMING[b.entryTiming]||0
+      if(tb!==ta) return tb-ta
+      // ④ 买入信号
+      var pa=PRI[a.suggestion||'不要介入']??9,pb=PRI[b.suggestion||'不要介入']??9
+      if(pa!==pb) return pa-pb
+      // ⑤ 机构活跃度
+      var ia=a.jiGouActiveScore||0,ib=b.jiGouActiveScore||0
+      if(ib!==ia) return ib-ia
+      // ⑥ 主力资金
+      return (b.mainForceInflow||0)-(a.mainForceInflow||0)
+    })
+    // ====== DEBUG: 排序后 ======
+    try{
+      var _sigD={};stocks.forEach(function(s){var sg=s.suggestion||'未知';_sigD[sg]=(_sigD[sg]||0)+1})
+      var _spD=[];if(_sigD['重仓买入']){_spD.push('🔥重仓买入'+_sigD['重仓买入']+'只')}if(_sigD['买入']){_spD.push('✅买入'+_sigD['买入']+'只')}if(_sigD['轻仓买入']){_spD.push('⚪轻仓买入'+_sigD['轻仓买入']+'只')}
+      console.log('🔍 6层排序完成: 共'+stocks.length+'只: '+_spD.join(' | '))
+      stocks.slice(0,Math.min(5,stocks.length)).forEach(function(s,i){console.log('  #'+(i+1)+': '+s.code+' '+s.name+' '+s.suggestion+' chg='+s.changePercent+'%')})
+    }catch(e){}
+    // 过滤：只保留重仓买入/买入
+    var ALLOWED={'重仓买入':1,'买入':1}
+    // ★ 备份本轮完整排序结果，无信号时保留前10分钟数据
+    if(stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0}).length>0){
+      _lastBuySignals=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0}).slice()
+    }
+    stocks=stocks.filter(function(s){return ALLOWED[s.suggestion]?1:0})
     if(stocks.length===0){
       if(_lastBuySignals.length){
         stocks=_lastBuySignals.slice()
-        setStatus("⚠️ 当前无符合条件的个股，保持前10分钟的结果（"+_lastBuySignals.length+" 只）")
+        setStatus('⚠️ 当前无符合条件的个股，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
       }else{
-        setStatus("⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）")
+        setStatus('⚠️ 信号过滤后无符合条件个股（今日无重仓买入/买入）')
       }
     }
+    // 持久化到浏览器本地，服务器重启后可恢复（存排序后的精选股，非全量）
     try{localStorage.setItem('cache_snapshot',JSON.stringify({stocks:stocks,ts:Date.now()}))}catch(e){}
     try{localStorage.setItem('lastStocks',JSON.stringify({list:stocks,ts:Date.now()}))}catch(e){}
     // 跳过东方财富主力资金（已弃用，腾讯API已覆盖）
