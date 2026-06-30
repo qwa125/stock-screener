@@ -3816,7 +3816,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         const _greenValleys = [];
         const _redPeaks = [];
-        const MIN_RUN = 5;
+        const MIN_RUN = 15;
         for (let i = MIN_RUN + 1; i < len - 1; i++) {
             if (macdHist[i] < 0) {
                 let dropping = true;
@@ -3830,7 +3830,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     const valleyIdx = i - 1;
                     const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
                     const last = _greenValleys[_greenValleys.length - 1];
-                    if (!last || valleyIdx - last.idx >= 3) {
+                    if (!last || valleyIdx - last.idx >= 10) {
                         _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
                     }
                 }
@@ -3847,7 +3847,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     const peakIdx = i - 1;
                     const thisPrice = Math.round(close[peakIdx] * 100) / 100;
                     const last = _redPeaks[_redPeaks.length - 1];
-                    if (!last || peakIdx - last.idx >= 3) {
+                    if (!last || peakIdx - last.idx >= 10) {
                         _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
                     }
                 }

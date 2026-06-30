@@ -4417,12 +4417,12 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
-    // ─── MACD红峰/绿峰检测（波段高低点：连续运动≥5根+拐头确认，避免中途杂波） ───
-    // 绿峰: MACD柱<0, 连续下降≥5根后拐头向上 → 波段低点
-    // 红峰: MACD柱>0, 连续上升≥5根后拐头向下 → 波段高点
+    // ─── MACD红峰/绿峰检测（1分钟K线波段高低点） ───
+    // 绿峰: MACD柱<0, 连续下降≥15根(15分钟)后拐头向上 → 波段低点
+    // 红峰: MACD柱>0, 连续上升≥15根(15分钟)后拐头向下 → 波段高点
     const _greenValleys: { idx: number; price: number; time: string; macdVal: number }[] = [];
     const _redPeaks: { idx: number; price: number; time: string; macdVal: number }[] = [];
-    const MIN_RUN = 5; // 最少连续运动根数 → 去除中途杂波，只抓真实波段
+    const MIN_RUN = 15; // 1分钟K线：连续运动≥15根(15分钟)→只抓真实波段，避免中途杂波
     for (let i = MIN_RUN + 1; i < len - 1; i++) {
       // 绿峰检测：连续下降≥MIN_RUN根后拐头向上
       if (macdHist[i] < 0) {
@@ -4434,7 +4434,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           const valleyIdx = i - 1;
           const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
           const last = _greenValleys[_greenValleys.length - 1];
-          if (!last || valleyIdx - last.idx >= 3) {
+          if (!last || valleyIdx - last.idx >= 10) {
             _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
           }
         }
@@ -4449,7 +4449,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
           const peakIdx = i - 1;
           const thisPrice = Math.round(close[peakIdx] * 100) / 100;
           const last = _redPeaks[_redPeaks.length - 1];
-          if (!last || peakIdx - last.idx >= 3) {
+          if (!last || peakIdx - last.idx >= 10) {
             _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
           }
         }
@@ -4457,8 +4457,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     }
 
     // ─── MACD红峰/绿峰背离检测（大红峰接小红峰 / 大绿峰接小绿峰）───
-    // 顶背离(大红峰接小红峰): 价格创新高但MACD红柱缩小 → 上涨乏力，卖出信号增强
-    // 底背离(大绿峰接小绿峰): 价格创新低但MACD绿柱缩小 → 下跌衰竭，买入信号增强
+    // 顶背离(大红峰接小红峰,1分钟K线): 价格创新高但MACD红柱缩小 → 上涨乏力，卖出信号增强
+    // 底背离(大绿峰接小绿峰,1分钟K线): 价格创新低但MACD绿柱缩小 → 下跌衰竭，买入信号增强
     const _divergences: { type: '顶背离' | '底背离'; idx: number; time: string; price: number; macdVal: number; prevMacdVal: number; strength: number; prevPrice: number }[] = [];
     if (_redPeaks.length >= 2) {
       for (let i = 1; i < _redPeaks.length; i++) {
