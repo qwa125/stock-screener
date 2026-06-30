@@ -2633,7 +2633,7 @@ async function doSearch(){
             if(tk&&tk.qfqday&&tk.qfqday.length>=10){
               kdata=tk.qfqday.map(function(l){
                 var vol=parseFloat(l[5])||0;var avg=(parseFloat(l[1])+parseFloat(l[2]))/2||0
-                return{day:p[0],open:parseFloat(p[1])||0,close:parseFloat(p[2])||0,high:parseFloat(p[3])||0,low:parseFloat(p[4])||0,volume:vol,amount:vol*avg*100}
+                return{day:l[0],open:parseFloat(l[1])||0,close:parseFloat(l[2])||0,high:parseFloat(l[3])||0,low:parseFloat(l[4])||0,volume:vol,amount:vol*avg*100}
               })
               console.log('[search] tencent kline got '+kdata.length+' bars')
             }
@@ -2650,7 +2650,6 @@ async function doSearch(){
           }}
       }catch(ee){console.warn('[search] proxy kline fallback failed:',ee.message||ee)}
       
-      if(!kdata&&stockMarket!=='us')throw new Error('所有K线源均不可用')
       // ★ K线数据有效 → 前端直接从原始K线计算机构活跃度（不依赖后端）
       var jiGouFromKdata=0
       if(kdata&&kdata.length>=20){
@@ -2701,10 +2700,12 @@ async function doSearch(){
         throw new Error('分析无结果')
       }
     }catch(e){
+      var errMsg=e.message||'未知错误'
+      console.error('[search] 搜索失败:', errMsg, e.stack||'')
       da.innerHTML='<div style="font-size:13px;font-weight:600;padding:12px 0 0;color:#333">🔍 搜索 — '+stockName+' ('+stockCode+')</div>'
         +'<div style="padding:16px;text-align:center;color:#999;font-size:13px;line-height:1.8">'
         +'<span style="font-size:28px;display:block;margin-bottom:8px">⚠️</span>'
-        +'网络错误，请稍后重试</div>'
+        +'网络错误，请稍后重试<br/><span style="font-size:11px;color:#bbb">'+errMsg+'</span></div>'
     }
   }else{
     da.style.display='block'

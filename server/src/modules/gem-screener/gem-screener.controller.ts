@@ -678,6 +678,31 @@ export class GemScreenerController {
       this.logger.log(`📦 K线代理返回缓存数据: ${code} (${age}分钟前缓存)`);
       return { code: 200, msg: `代理K线(缓存${age}分钟前)`, data: cached.data, cached: true, age };
     }
+    // 无缓存 → 从腾讯API实时拉取
+    try {
+      const prefix = code.startsWith('6') ? 'sh' : 'sz';
+      const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
+      this.logger.log(`🌐 K线代理拉取腾讯: ${url}`);
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (res.ok || res.status === 0) {
+        const json = await res.json();
+        const tk = json?.data?.[prefix + code];
+        if (tk?.qfqday && tk.qfqday.length >= 10) {
+          const data = tk.qfqday.map((l: any) => ({
+            day: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
+            high: parseFloat(l[3]) || 0, low: parseFloat(l[4]) || 0,
+            volume: parseFloat(l[5]) || 0,
+            amount: (parseFloat(l[5]) || 0) * ((parseFloat(l[1]) + parseFloat(l[2])) / 2 || 0) * 100
+          }));
+          this.klineProxyCache.set(code, { data, timestamp: Date.now() });
+          this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
+          return { code: 200, msg: '代理K线成功', data, cached: false };
+        }
+      }
+      this.logger.warn(`⚠️ K线代理拉取无数据: ${code}`);
+    } catch (e: any) {
+      this.logger.error(`❌ K线代理拉取失败: ${code} ${e.message || e}`);
+    }
     return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
   }
 

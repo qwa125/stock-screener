@@ -349,7 +349,7 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: null;
+        data: any;
         cached: boolean;
         age?: undefined;
     }>;
