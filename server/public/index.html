@@ -1490,6 +1490,8 @@ function renderList(){
     card.onclick=function(){showDetail(i)}
     card.innerHTML='<div class="stock-row"><div class="stock-info"><span class="rank-badge '+(i<3?'rank-top3':'rank-other')+'">#'+(i+1)+'</span><div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</div><div style="font-size:10px;color:#999">'+s.code+'</div></div></div><span class="signal-badge" style="background:'+sg+'">'+(s.suggestion||'-')+'</span><span class="price">'+price.toFixed(2)+'</span><span class="chg" style="color:'+chgClr+'">'+chgT+'</span><span class="pos" style="color:'+posClr+'">'+p.toFixed(0)+'%</span></div>'
     list.appendChild(card)
+    // ★ 保存后端原始信号，供2秒动态更新时计算降级使用
+    window['_baseSig_'+s.code]=s.suggestion
   })
   // 机会区列表渲染完成后，启动每2秒价格刷新
   if(!isDetailView&&stocks.length)startListPriceRefresh()
@@ -1506,7 +1508,7 @@ async function _fetchAndUpdateListPrices(){
     var updated=0
     Object.keys(fresh).forEach(function(code){realtimePrices[code]=fresh[code];updated++})
     if(updated<1)return
-    // 更新每个股票卡片的股价/涨幅DOM
+    // 更新每个股票卡片的股价/涨幅/信号标签DOM
     var cards=$('stockList').children
     for(var i=0;i<stocks.length&&i<cards.length;i++){
       var s=stocks[i],rt=fresh[s.code]
@@ -1528,6 +1530,30 @@ async function _fetchAndUpdateListPrices(){
         if(posEl){
           posEl.textContent=pp+'%'
           posEl.style.color=pp<50?'#22c55e':pp<80?'#eab308':'#ef4444'
+        }
+      }
+      // ★ 动态更新信号标签：价格下跌时降级，但股票留在机会区
+      var baseSig=window['_baseSig_'+s.code]||s.suggestion
+      if(baseSig&&rt.chgP!==undefined){
+        var chgP=rt.chgP||0
+        var PRI=["重仓买入","买入","轻仓买入","持有","减仓","卖出","不要介入"]
+        var baseIdx=PRI.indexOf(baseSig)
+        if(baseIdx>=0){
+          var liveSig=baseSig
+          // 跌幅越大，降级越多
+          if(chgP<-9)liveSig=PRI[Math.min(baseIdx+3,PRI.length-1)]
+          else if(chgP<-6)liveSig=PRI[Math.min(baseIdx+2,PRI.length-1)]
+          else if(chgP<-3)liveSig=PRI[Math.min(baseIdx+1,PRI.length-1)]
+          // 涨幅够大，可升级（不超中仓买入）
+          if(chgP>=9)liveSig="重仓买入"
+          else if(chgP>=6&&baseIdx<=2)liveSig="买入"
+          else if(chgP>=3&&baseIdx<=1)liveSig="轻仓买入"
+          // 更新DOM中的信号标签
+          var sigEl=cards[i].querySelector('.signal-badge')
+          if(sigEl&&sigEl.textContent!==liveSig){
+            sigEl.textContent=liveSig
+            sigEl.style.backgroundColor=COLORS[liveSig]||'#999'
+          }
         }
       }
     }
