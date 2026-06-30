@@ -2347,54 +2347,39 @@ async function fetchIntraday(code){
   if(_intradayFetching[code])return null
   _intradayFetching[code]=true
   try{
-    // ====== 东财1分钟K线（首选） ======
+    // ====== 东财/新浪/腾讯 并行拉取（哪个先返回用哪个）=====
     var klineData=null
     var secId=code>='600000'?'1.':'0.'
+    var sinCode2=code.startsWith('6')?'sh'+code:'sz'+code
+    var gtCode2=code.startsWith('6')?'sh'+code:'sz'+code
     var mkUrl='https://push2his.eastmoney.com/api/qt/stock/kline/get2?secid='+secId+code+'&fields1=f1&fields2=f51,f52,f53,f54,f55,f56,f57&klt=1&fqt=1&end=20500101&lmt=240'
-    try{
-      var mkRes=await fetch(mkUrl,{mode:'cors',signal:AbortSignal.timeout(8000)})
-      var mkJson=await mkRes.json()
-      var rawKlines=mkJson&&mkJson.data&&mkJson.data.klines||[]
-      if(rawKlines&&rawKlines.length>=50){
-        klineData=rawKlines.map(function(k){
-          var p=k.split(',')
-          return{time:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}
-        })
-        console.log('[fetchIntraday] 东财分钟K线成功',code,rawKlines.length)
-      }
-    }catch(e){console.warn('[fetchIntraday] 东财分钟K线失败:',e.message)}
-    // ====== 新浪1分钟K线备选（纯前端） ======
-    if(!klineData){
-      try{
-        var sinCode2=code.startsWith('6')?'sh'+code:'sz'+code
-        var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode2+'&datalen=240&scale=1'
-        var sRes=await fetch(sUrl,{mode:'cors',signal:AbortSignal.timeout(8000)})
-        var sText=await sRes.text()
+    var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode2+'&datalen=240&scale=1'
+    var tUrl='https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240'
+    // 并行请求，统一6秒超时
+    var _abortAll=new AbortController()
+    var _tmrAll=setTimeout(function(){_abortAll.abort()},6000)
+    var _tasks=[
+      fetch(mkUrl,{mode:'cors',signal:_abortAll.signal}).then(function(r){return r.json()}).then(function(mkJson){
+        var raw=mkJson&&mkJson.data&&mkJson.data.klines||[]
+        if(raw&&raw.length>=50)return raw.map(function(k){var p=k.split(',');return{time:p[0],open:parseFloat(p[1]),close:parseFloat(p[2]),high:parseFloat(p[3]),low:parseFloat(p[4]),volume:parseFloat(p[5]),amount:parseFloat(p[6])||0}})
+        return null
+      }).catch(function(){return null}),
+      fetch(sUrl,{mode:'cors',signal:_abortAll.signal}).then(function(r){return r.text()}).then(function(sText){
         var sJson=JSON.parse(sText.replace(/^\(|\)$/g,''))
-        if(sJson&&sJson.data&&sJson.data.length>=48){
-          klineData=sJson.data.map(function(d){
-            return{time:d.day,open:parseFloat(d.open),close:parseFloat(d.close),high:parseFloat(d.high),low:parseFloat(d.low),volume:parseFloat(d.volume),amount:parseFloat(d.amount)||0}
-          })
-          console.log('[fetchIntraday] 新浪1分钟K线备选成功',code,klineData.length)
-        }
-      }catch(e2){console.warn('[fetchIntraday] 新浪备选也失败:',e2.message)}
-    }
-    // ====== 腾讯1分钟K线备选（纯前端） ======
-    if(!klineData){
-      try{
-        var gtCode2=code.startsWith('6')?'sh'+code:'sz'+code
-        var tUrl='https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240'
-        var tRes=await fetch(tUrl,{signal:AbortSignal.timeout(8000)}).then(function(r){return r.text()})
+        if(sJson&&sJson.data&&sJson.data.length>=48)return sJson.data.map(function(d){return{time:d.day,open:parseFloat(d.open),close:parseFloat(d.close),high:parseFloat(d.high),low:parseFloat(d.low),volume:parseFloat(d.volume),amount:parseFloat(d.amount)||0}})
+        return null
+      }).catch(function(){return null}),
+      fetch(tUrl,{signal:_abortAll.signal}).then(function(r){return r.text()}).then(function(tRes){
         var tText=tRes.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
         var tJson=JSON.parse(tText)
-        if(tJson&&tJson.data&&tJson.data[gtCode2]&&tJson.data[gtCode2].m1){
-          klineData=tJson.data[gtCode2].m1.map(function(l){
-            return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}
-          })
-          console.log('[fetchIntraday] 腾讯1分钟K线备选成功',code,klineData.length)
-        }
-      }catch(e3){console.warn('[fetchIntraday] 腾讯备选也失败:',e3.message)}
-    }
+        if(tJson&&tJson.data&&tJson.data[gtCode2]&&tJson.data[gtCode2].m1)return tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
+        return null
+      }).catch(function(){return null})
+    ]
+    // 3个并行，取第一个成功的
+    var _faster=await Promise.allSettled(_tasks)
+    clearTimeout(_tmrAll)
+    for(var _fi=0;_fi<_faster.length;_fi++){if(_faster[_fi].status==='fulfilled'&&_faster[_fi].value&&_faster[_fi].value.length>=48){klineData=_faster[_fi].value;break}}
     if(!klineData||klineData.length<48)return null
     // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
     var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},10000)
@@ -2411,6 +2396,9 @@ async function fetchIntraday(code){
 async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   console.log('[refreshDetailPrice] called',code,low,high,lastPrice,'isTH=',isTH())
   var _rttmp=realtimePrices[code]||{}
+  // ★ 立即更新实时价格（不等分析数据，确保2秒刷新不卡壳）
+  var _liveNow=lastPrice||_rttmp.price||0
+  if(_liveNow>0){var _pe=$('livePrice');if(_pe)_pe.innerHTML=_liveNow.toFixed(2)}
   // ★ 取数据：交易时段实时拉取，非交易时段使用冻结缓存（无缓存则拉取一次后冻结）
   var ia=analysisData
   if(!ia){
@@ -2436,8 +2424,14 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
         ia=await _fetchIA(code)
       }
     }else{
-      ia=await fetchIntraday(code)
-      if(ia&&ia.currentPrice)window._frozenIA[code]=ia
+      // 交易时段：每60秒拉一次完整分析，中间用缓存不阻塞价格刷新
+      var _now=Date.now()
+      ia=window._frozenIA[code]||null
+      if(!window._lastIntradayTs||_now-window._lastIntradayTs>60000){
+        window._lastIntradayTs=_now
+        var fresh=await fetchIntraday(code)
+        if(fresh&&fresh.currentPrice){window._frozenIA[code]=fresh;ia=fresh}
+      }
     }
     if(!ia||!ia.currentPrice||!ia.suggestions||ia.suggestions.length===0){
 	var _frozen=window._frozenIA[code]||null
