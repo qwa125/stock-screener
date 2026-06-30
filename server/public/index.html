@@ -2237,22 +2237,28 @@ function onSearchInput(){
   var dd=$('searchDropdown')
   if(searchTimer)clearTimeout(searchTimer)
   if(!v){dd.style.display='none';return}
-  // 防抖300ms
   searchTimer=setTimeout(function(){
-    // 清理上次的script标签
     if(searchScript){document.body.removeChild(searchScript);searchScript=null}
-    delete window._emSuggestCb
-    // JSONP回调
-    window._emSuggestCb=function(d){
-      var items=d&&d.QuotationCodeTable&&d.QuotationCodeTable.Data
-      if(items&&items.length){
-        // 只保留A股
-        var aStocks=items.filter(function(x){return ['沪A','深A','创业板','科创板','京市A','北交所'].indexOf(x.SecurityTypeName)>=0})
-        if(aStocks.length>8)aStocks=aStocks.slice(0,8)
-        if(aStocks.length){
+    // 腾讯smartbox: 支持中文/代码/拼音首字母, script标签注入绕过CORS
+    var sc=document.createElement('script')
+    sc.src='https://smartbox.gtimg.cn/s3/?q='+encodeURIComponent(v)+'&t=all'
+    sc.onload=function(){
+      var raw=window.v_hint;delete window.v_hint
+      if(raw&&raw.length>5){
+        var parts=raw.replace(/^v_hint="/,'').replace(/"$/,'').split('^')
+        var items=[]
+        for(var i=0;i<parts.length;i++){
+          var f=parts[i].split('~')
+          if(f.length>=5){
+            var exchange=f[0],code=f[1],name=f[2],pin=f[3],type=f[4]
+            if(type==='GP-A'||type==='GP'||type==='创业板'){items.push({Code:code,Name:name,Pin:pin,Ex:exchange})}
+          }
+        }
+        if(items.length>8)items=items.slice(0,8)
+        if(items.length){
           var html=''
-          for(var i=0;i<aStocks.length;i++){
-            var s=aStocks[i]
+          for(var i=0;i<items.length;i++){
+            var s=items[i]
             html+='<div onclick="selectPinyinStock(\''+s.Code+'\',\''+s.Name.replace(/'/g,"\\'")+'\')" style="padding:8px 12px;border-bottom:1px solid #eee;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px">'
             html+='<span style="font-weight:600;min-width:68px;color:#333">'+s.Code+'</span>'
             html+='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555">'+s.Name+'</span>'
@@ -2263,9 +2269,7 @@ function onSearchInput(){
         }else{dd.style.display='none'}
       }else{dd.style.display='none'}
     }
-    // script标签注入（JSONP绕过CORS）
-    var sc=document.createElement('script')
-    sc.src='https://searchadapter.eastmoney.com/api/suggest/get?input='+encodeURIComponent(v)+'&type=14&count=8&token=D43BF722C8E14A9C61B0D6E303FC9C19&cb=_emSuggestCb'
+    sc.onerror=function(){dd.style.display='none'}
     searchScript=sc
     document.body.appendChild(sc)
   },300)
