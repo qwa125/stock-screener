@@ -4119,7 +4119,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
         }
         const calcRemainingUpside = (s) => {
-            const peakMap = { high: 100, mid: 60, low: 30 };
+            const peakMap = { low: 100, mid: 60, high: 30 };
             const peakScore = peakMap[s.chipPeakPosition] ?? 40;
             const gain = Math.max(0, s.priceIncrease ?? 0);
             const gainScore = Math.max(0, (20 - gain) / 20) * 100;

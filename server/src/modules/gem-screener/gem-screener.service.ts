@@ -4790,8 +4790,8 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
 
     /** 计算剩余上涨空间评分 (0-100)，越高=上涨动力越强=越靠前 */
     const calcRemainingUpside = (s: any): number => {
-      // ① 筹码峰位置: 用户说"大绿峰山顶了就是最佳"
-      const peakMap: Record<string, number> = { high: 100, mid: 60, low: 30 };
+      // ① 筹码峰位置: 峰在底部=主力低位吸筹完成=上涨空间大，峰在顶部=已到高位=空间有限
+      const peakMap: Record<string, number> = { low: 100, mid: 60, high: 30 };
       const peakScore = peakMap[s.chipPeakPosition] ?? 40;
 
       // ② 当前涨幅(priceIncrease): 越小=刚启动=剩余空间大
