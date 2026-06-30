@@ -271,9 +271,7 @@ function hideBlocked(){
   $("pageBlur").style.display='none'
   deviceRegistered=true
   renderList()
-  // 注册成功后自动启动轻量扫描（用户无需再点"立即扫描"）
-  if(!loading&&!_autoScanning)setTimeout(function(){autoLightScan()},500)
-}
+  }
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 
