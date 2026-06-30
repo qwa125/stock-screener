@@ -203,7 +203,9 @@ export class GemScreenerScheduler implements OnModuleInit {
 
     this.isScanning = true;
     this.state.lastScanTime = Date.now();
-    this.logger.log(`🚀 [${label}] 开始扫描`);
+    // 记录内存水位，用于排查OOM
+    const _mem = process.memoryUsage();
+    this.logger.log(`🚀 [${label}] 开始扫描 | RSS=${Math.round(_mem.rss/1024/1024)}MB heap=${Math.round(_mem.heapUsed/1024/1024)}/${Math.round(_mem.heapTotal/1024/1024)}MB`);
 
     try {
       // 使用启动时预加载的全市场缓存（不重复读盘，不写 /tmp 耗内存）

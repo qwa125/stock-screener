@@ -166,7 +166,8 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         }
         this.isScanning = true;
         this.state.lastScanTime = Date.now();
-        this.logger.log(`🚀 [${label}] 开始扫描`);
+        const _mem = process.memoryUsage();
+        this.logger.log(`🚀 [${label}] 开始扫描 | RSS=${Math.round(_mem.rss / 1024 / 1024)}MB heap=${Math.round(_mem.heapUsed / 1024 / 1024)}/${Math.round(_mem.heapTotal / 1024 / 1024)}MB`);
         try {
             if (!this._cacheLoaded)
                 this._preloadCache();

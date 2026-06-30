@@ -3970,6 +3970,27 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary,
             lastRefresh: Date.now(),
         });
+        if (this.intradaySignalCache.size > 100) {
+            const _now = Date.now();
+            let _cleared = 0;
+            for (const [_k, _v] of this.intradaySignalCache) {
+                if (_v.date !== _today && _now - (_v.lastRefresh || 0) > 12 * 3600 * 1000) {
+                    this.intradaySignalCache.delete(_k);
+                    if (++_cleared > 500)
+                        break;
+                }
+            }
+            if (this.intradaySignalCache.size > 2000) {
+                const _sorted = [...this.intradaySignalCache.entries()]
+                    .sort((a, b) => (a[1].lastRefresh || 0) - (b[1].lastRefresh || 0));
+                const _toDelete = _sorted.slice(0, _sorted.length - 1500);
+                for (const [_k] of _toDelete)
+                    this.intradaySignalCache.delete(_k);
+                _cleared += _toDelete.length;
+            }
+            if (_cleared > 0)
+                this.logger.log(`🧹 日内缓存清理: 移除 ${_cleared} 条, 剩余 ${this.intradaySignalCache.size} 条`);
+        }
         return {
             code,
             date: new Date().toISOString().slice(0, 10),
