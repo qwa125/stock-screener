@@ -1056,7 +1056,7 @@ function gridChipLine(s,entry){
     return '<div class="indicator-item"><div class="label">筹码集中</div><div class="value gray">暂无数据 …</div></div>'
       +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value gray">—</div></div>'
   }
-  var concClr=cd.conc<=25?'green':cd.conc<=45?'yellow':'red'
+  var concClr=cd.conc>=10?'green':cd.conc>=5?'yellow':'red'
   var patIcon=cd.pattern=='single_peak'?'⛰️':cd.pattern=='double_peak'?'⛰️⛰️':'💨'
   var peakClr=cd.peak=='low'?'green':cd.peak=='mid'?'yellow':'red'
   var peakLabel=cd.peak=='low'?'下方支撑':cd.peak=='mid'?'当前附近':'上方压力'

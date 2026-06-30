@@ -2232,171 +2232,73 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const len = closeArr.length;
         if (len < 20)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const runAnalysis = (period) => {
-            const N = Math.min(period, len);
-            const c = closeArr.slice(-N);
-            const h = highArr.slice(-N);
-            const l = lowArr.slice(-N);
-            const v = volumeArr.slice(-N);
-            const minPrice = Math.min(...l);
-            const maxPrice = Math.max(...h);
-            const range = maxPrice - minPrice;
-            if (range < 0.01)
-                return null;
-            const BINS = 50;
-            const binSize = range / BINS;
-            const bins = new Array(BINS).fill(0);
-            for (let i = 0; i < N; i++) {
-                const dayLow = l[i];
-                const dayHigh = h[i];
-                const dayClose = c[i];
-                const dayVol = v[i];
-                const dayRange = dayHigh - dayLow;
-                if (dayRange < 0.01)
-                    continue;
-                const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
-                const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
-                const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
-                if (startBin === endBin) {
-                    bins[startBin] += dayVol;
-                }
-                else {
-                    bins[closeBin] += dayVol * 0.75;
-                    const spreadVol = dayVol * 0.25;
-                    let totalWeight = 0;
-                    const weights = [];
-                    for (let b = startBin; b <= endBin; b++) {
-                        if (b === closeBin) {
-                            weights.push(0);
-                            continue;
-                        }
-                        const w = 1 / (Math.abs(b - closeBin) + 1);
-                        weights.push(w);
-                        totalWeight += w;
-                    }
-                    if (totalWeight > 0) {
-                        let wi = 0;
-                        for (let b = startBin; b <= endBin; b++) {
-                            if (b === closeBin)
-                                continue;
-                            bins[b] += spreadVol * weights[wi] / totalWeight;
-                            wi++;
-                        }
-                    }
-                }
-            }
-            const smoothed = new Array(BINS).fill(0);
-            const kernel = [0.05, 0.25, 0.4, 0.25, 0.05];
-            for (let i = 0; i < BINS; i++) {
-                let sum = 0;
-                for (let k = -2; k <= 2; k++) {
-                    const idx = i + k;
-                    if (idx >= 0 && idx < BINS) {
-                        sum += bins[idx] * kernel[k + 2];
-                    }
-                }
-                smoothed[i] = sum;
-            }
-            const totalVol = bins.reduce((a, b) => a + b, 0);
-            const peaks = [];
-            for (let i = 2; i < BINS - 2; i++) {
-                if (smoothed[i] > smoothed[i - 1] && smoothed[i] > smoothed[i - 2]
-                    && smoothed[i] > smoothed[i + 1] && smoothed[i] > smoothed[i + 2]
-                    && bins[i] > totalVol * 0.03) {
-                    peaks.push(i);
-                }
-            }
-            if (peaks.length === 0) {
-                const maxIdx = bins.indexOf(Math.max(...bins));
-                peaks.push(maxIdx);
-            }
-            if (peaks.length >= 2) {
-                const mergedPeaks = [peaks[0]];
-                for (let p = 1; p < peaks.length; p++) {
-                    const prev = mergedPeaks[mergedPeaks.length - 1];
-                    const curr = peaks[p];
-                    let valleyIdx = prev;
-                    let valleyVal = Infinity;
-                    for (let b = prev; b <= curr; b++) {
-                        if (bins[b] < valleyVal) {
-                            valleyVal = bins[b];
-                            valleyIdx = b;
-                        }
-                    }
-                    const lowerPeakVal = Math.min(bins[prev], bins[curr]);
-                    if (valleyVal > lowerPeakVal * 0.7) {
-                        if (bins[curr] > bins[prev]) {
-                            mergedPeaks[mergedPeaks.length - 1] = curr;
-                        }
-                    }
-                    else {
-                        mergedPeaks.push(curr);
-                    }
-                }
-                peaks.length = 0;
-                peaks.push(...mergedPeaks);
-            }
-            const sortedBins = [...bins].sort((a, b) => b - a);
-            let cumVol = 0;
-            let binsNeeded = 0;
-            for (const vol of sortedBins) {
-                cumVol += vol;
-                binsNeeded++;
-                if (cumVol >= totalVol * 0.9)
-                    break;
-            }
-            let concentration90;
-            if (binsNeeded <= 1) {
-                concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+        const N = Math.min(60, len);
+        const c = closeArr.slice(-N);
+        const h = highArr.slice(-N);
+        const l = lowArr.slice(-N);
+        const v = volumeArr.slice(-N);
+        const minPrice = Math.min(...l);
+        const maxPrice = Math.max(...h);
+        const range = maxPrice - minPrice;
+        if (range < 0.01)
+            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+        const BINS = 50;
+        const binSize = range / BINS;
+        const bins = new Array(BINS).fill(0);
+        for (let i = 0; i < N; i++) {
+            const dayLow = l[i], dayHigh = h[i], dayClose = c[i], dayVol = v[i];
+            const dayRange = dayHigh - dayLow;
+            if (dayRange < 0.01)
+                continue;
+            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
+            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+            if (startBin === endBin) {
+                bins[startBin] += dayVol;
             }
             else {
-                const prevVol = cumVol - sortedBins[binsNeeded - 1];
-                const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
-                const fractionalBins = (binsNeeded - 1) + needMore;
-                concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+                bins[closeBin] += dayVol * 0.8;
+                const spreadVol = dayVol * 0.2;
+                let spreadBins = 0;
+                for (let b = startBin; b <= endBin; b++) {
+                    if (b !== closeBin)
+                        spreadBins++;
+                }
+                if (spreadBins > 0) {
+                    const volPerBin = spreadVol / spreadBins;
+                    for (let b = startBin; b <= endBin; b++) {
+                        if (b !== closeBin)
+                            bins[b] += volPerBin;
+                    }
+                }
             }
-            const mainPeakIdx = peaks[0];
-            const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-            let peakPosition;
-            const pctOff = (peakPrice - currentPrice) / currentPrice;
-            if (pctOff < -0.10)
-                peakPosition = 'low';
-            else if (pctOff > 0.10)
-                peakPosition = 'high';
-            else
-                peakPosition = 'mid';
-            let pattern;
-            if (peaks.length >= 3)
-                pattern = 'dispersed';
-            else if (peaks.length >= 2) {
-                const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-                pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
-            }
-            else
-                pattern = 'single_peak';
-            return { concentration90, peakPosition, pattern, bins };
-        };
-        const result60 = runAnalysis(60);
-        const result120 = runAnalysis(120);
-        if (!result60 && !result120)
+        }
+        const totalVol = bins.reduce((a, b) => a + b, 0);
+        if (totalVol < 0.001)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        if (!result60)
-            return { concentration90: result120.concentration90, peakPosition: result120.peakPosition, pattern: result120.pattern };
-        if (!result120)
-            return { concentration90: result60.concentration90, peakPosition: result60.peakPosition, pattern: result60.pattern };
-        const avgConcentration = Math.round((result60.concentration90 + result120.concentration90) / 2 * 100) / 100;
-        let finalPattern;
-        if (result60.pattern === 'single_peak' && result120.pattern === 'single_peak') {
-            finalPattern = 'single_peak';
+        const maxBinVol = Math.max(...bins);
+        const concentration90 = Math.round((maxBinVol / totalVol) * 100 * 100) / 100;
+        const sortedIndices = bins.map((vol, idx) => ({ vol, idx })).sort((a, b) => b.vol - a.vol);
+        const mainPeakIdx = sortedIndices[0].idx;
+        let secondPeakIdx = -1;
+        for (const si of sortedIndices) {
+            if (si.idx === mainPeakIdx)
+                continue;
+            if (Math.abs(si.idx - mainPeakIdx) < 3)
+                continue;
+            if (si.vol > sortedIndices[0].vol * 0.55) {
+                secondPeakIdx = si.idx;
+                break;
+            }
         }
-        else if (result60.pattern === 'dispersed' || result120.pattern === 'dispersed') {
-            finalPattern = 'dispersed';
-        }
-        else {
-            finalPattern = 'double_peak';
-        }
-        const finalPosition = result120.peakPosition;
-        return { concentration90: avgConcentration, peakPosition: finalPosition, pattern: finalPattern };
+        const peaks = [mainPeakIdx];
+        if (secondPeakIdx >= 0)
+            peaks.push(secondPeakIdx);
+        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+        const pctOff = (peakPrice - currentPrice) / currentPrice;
+        const peakPosition = pctOff < -0.10 ? 'low' : pctOff > 0.10 ? 'high' : 'mid';
+        const pattern = peaks.length >= 2 ? 'double_peak' : 'single_peak';
+        return { concentration90, peakPosition, pattern };
     }
     async fetchGEMCandidates() {
         return [];
@@ -2783,170 +2685,73 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const len = closeArr.length;
         if (len < 20)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const runAnalysis = (period) => {
-            const N = Math.min(period, len);
-            const c = closeArr.slice(-N);
-            const h = highArr.slice(-N);
-            const l = lowArr.slice(-N);
-            const v = volumeArr.slice(-N);
-            const minPrice = Math.min(...l);
-            const maxPrice = Math.max(...h);
-            const range = maxPrice - minPrice;
-            if (range < 0.01)
-                return null;
-            const BINS = 50;
-            const binSize = range / BINS;
-            const bins = new Array(BINS).fill(0);
-            for (let i = 0; i < N; i++) {
-                const dayLow = l[i];
-                const dayHigh = h[i];
-                const dayClose = c[i];
-                const dayVol = v[i];
-                const dayRange = dayHigh - dayLow;
-                if (dayRange < 0.01)
-                    continue;
-                const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
-                const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
-                const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
-                if (startBin === endBin) {
-                    bins[startBin] += dayVol;
-                }
-                else {
-                    bins[closeBin] += dayVol * 0.75;
-                    const spreadVol = dayVol * 0.25;
-                    let totalWeight = 0;
-                    const weights = [];
-                    for (let b = startBin; b <= endBin; b++) {
-                        if (b === closeBin) {
-                            weights.push(0);
-                            continue;
-                        }
-                        const w = 1 / (Math.abs(b - closeBin) + 1);
-                        weights.push(w);
-                        totalWeight += w;
-                    }
-                    if (totalWeight > 0) {
-                        let wi = 0;
-                        for (let b = startBin; b <= endBin; b++) {
-                            if (b === closeBin)
-                                continue;
-                            bins[b] += spreadVol * weights[wi] / totalWeight;
-                            wi++;
-                        }
-                    }
-                }
-            }
-            const smoothed = new Array(BINS).fill(0);
-            const kernel = [0.05, 0.25, 0.4, 0.25, 0.05];
-            for (let i = 0; i < BINS; i++) {
-                let sum = 0;
-                for (let k = -2; k <= 2; k++) {
-                    const idx = i + k;
-                    if (idx >= 0 && idx < BINS) {
-                        sum += bins[idx] * kernel[k + 2];
-                    }
-                }
-                smoothed[i] = sum;
-            }
-            const totalVol = bins.reduce((a, b) => a + b, 0);
-            const peaks = [];
-            for (let i = 2; i < BINS - 2; i++) {
-                if (smoothed[i] > smoothed[i - 1] && smoothed[i] > smoothed[i - 2]
-                    && smoothed[i] > smoothed[i + 1] && smoothed[i] > smoothed[i + 2]
-                    && bins[i] > totalVol * 0.03) {
-                    peaks.push(i);
-                }
-            }
-            if (peaks.length === 0) {
-                const maxIdx = bins.indexOf(Math.max(...bins));
-                peaks.push(maxIdx);
-            }
-            if (peaks.length >= 2) {
-                const mergedPeaks = [peaks[0]];
-                for (let p = 1; p < peaks.length; p++) {
-                    const prev = mergedPeaks[mergedPeaks.length - 1];
-                    const curr = peaks[p];
-                    let valleyIdx = prev;
-                    let valleyVal = Infinity;
-                    for (let b = prev; b <= curr; b++) {
-                        if (bins[b] < valleyVal) {
-                            valleyVal = bins[b];
-                            valleyIdx = b;
-                        }
-                    }
-                    const lowerPeakVal = Math.min(bins[prev], bins[curr]);
-                    if (valleyVal > lowerPeakVal * 0.7) {
-                        if (bins[curr] > bins[prev]) {
-                            mergedPeaks[mergedPeaks.length - 1] = curr;
-                        }
-                    }
-                    else {
-                        mergedPeaks.push(curr);
-                    }
-                }
-                peaks.length = 0;
-                peaks.push(...mergedPeaks);
-            }
-            const sortedBins = [...bins].sort((a, b) => b - a);
-            let cumVol = 0;
-            let binsNeeded = 0;
-            for (const vol of sortedBins) {
-                cumVol += vol;
-                binsNeeded++;
-                if (cumVol >= totalVol * 0.9)
-                    break;
-            }
-            let concentration90;
-            if (binsNeeded <= 1) {
-                concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+        const N = Math.min(60, len);
+        const c = closeArr.slice(-N);
+        const h = highArr.slice(-N);
+        const l = lowArr.slice(-N);
+        const v = volumeArr.slice(-N);
+        const minPrice = Math.min(...l);
+        const maxPrice = Math.max(...h);
+        const range = maxPrice - minPrice;
+        if (range < 0.01)
+            return { concentration90: 5, peakPosition: 'mid', pattern: 'single_peak' };
+        const BINS = 50;
+        const binSize = range / BINS;
+        const bins = new Array(BINS).fill(0);
+        for (let i = 0; i < N; i++) {
+            const dayLow = l[i], dayHigh = h[i], dayClose = c[i], dayVol = v[i];
+            const dayRange = dayHigh - dayLow;
+            if (dayRange < 0.01)
+                continue;
+            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
+            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+            if (startBin === endBin) {
+                bins[startBin] += dayVol;
             }
             else {
-                const prevVol = cumVol - sortedBins[binsNeeded - 1];
-                const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
-                const fractionalBins = (binsNeeded - 1) + needMore;
-                concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+                bins[closeBin] += dayVol * 0.8;
+                const spreadVol = dayVol * 0.2;
+                let spreadBins = 0;
+                for (let b = startBin; b <= endBin; b++) {
+                    if (b !== closeBin)
+                        spreadBins++;
+                }
+                if (spreadBins > 0) {
+                    const volPerBin = spreadVol / spreadBins;
+                    for (let b = startBin; b <= endBin; b++) {
+                        if (b !== closeBin)
+                            bins[b] += volPerBin;
+                    }
+                }
             }
-            const mainPeakIdx = peaks[0];
-            const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-            let peakPosition;
-            const pctOff = (peakPrice - currentPrice) / currentPrice;
-            if (pctOff < -0.10)
-                peakPosition = 'low';
-            else if (pctOff > 0.10)
-                peakPosition = 'high';
-            else
-                peakPosition = 'mid';
-            let pattern;
-            if (peaks.length >= 3)
-                pattern = 'dispersed';
-            else if (peaks.length >= 2) {
-                const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-                pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
-            }
-            else
-                pattern = 'single_peak';
-            return { concentration90, peakPosition, pattern };
-        };
-        const result60 = runAnalysis(60);
-        const result120 = runAnalysis(120);
-        if (!result60 && !result120)
+        }
+        const totalVol = bins.reduce((a, b) => a + b, 0);
+        if (totalVol < 0.001)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        if (!result60)
-            return { concentration90: result120.concentration90, peakPosition: result120.peakPosition, pattern: result120.pattern };
-        if (!result120)
-            return { concentration90: result60.concentration90, peakPosition: result60.peakPosition, pattern: result60.pattern };
-        const avgConcentration = Math.round((result60.concentration90 + result120.concentration90) / 2 * 100) / 100;
-        let finalPattern;
-        if (result60.pattern === 'single_peak' && result120.pattern === 'single_peak') {
-            finalPattern = 'single_peak';
+        const maxBinVol = Math.max(...bins);
+        const concentration90 = Math.round((maxBinVol / totalVol) * 100 * 100) / 100;
+        const sortedIndices = bins.map((vol, idx) => ({ vol, idx })).sort((a, b) => b.vol - a.vol);
+        const mainPeakIdx = sortedIndices[0].idx;
+        let secondPeakIdx = -1;
+        for (const si of sortedIndices) {
+            if (si.idx === mainPeakIdx)
+                continue;
+            if (Math.abs(si.idx - mainPeakIdx) < 3)
+                continue;
+            if (si.vol > sortedIndices[0].vol * 0.55) {
+                secondPeakIdx = si.idx;
+                break;
+            }
         }
-        else if (result60.pattern === 'dispersed' || result120.pattern === 'dispersed') {
-            finalPattern = 'dispersed';
-        }
-        else {
-            finalPattern = 'double_peak';
-        }
-        return { concentration90: avgConcentration, peakPosition: result120.peakPosition, pattern: finalPattern };
+        const peaks = [mainPeakIdx];
+        if (secondPeakIdx >= 0)
+            peaks.push(secondPeakIdx);
+        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+        const pctOff = (peakPrice - currentPrice) / currentPrice;
+        const peakPosition = pctOff < -0.10 ? 'low' : pctOff > 0.10 ? 'high' : 'mid';
+        const pattern = peaks.length >= 2 ? 'double_peak' : 'single_peak';
+        return { concentration90, peakPosition, pattern };
     }
     async quickAnalyze(code, name, keepAll, rawKline, frontendMainForce) {
         const raw = rawKline || await this.dataFetcher.getKLineData(code);
