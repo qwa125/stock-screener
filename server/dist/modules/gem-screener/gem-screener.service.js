@@ -3950,51 +3950,68 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
         }
         const _signalList = [];
-        let _lastBuyPrice = Infinity;
+        const _buyCands = [];
         for (const gv of _greenValleys) {
-            if (_signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30))
-                continue;
-            if (gv.price < _lastBuyPrice) {
-                _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点', source: '最佳买入' });
-                _lastBuyPrice = gv.price;
+            const t = gv.time.slice(11, 16);
+            const nearbyMainBuy = zhuliBuyPoints.filter(z => Math.abs(z.idx - gv.idx) <= 5);
+            _buyCands.push({ idx: gv.idx, time: t, price: gv.price, source: nearbyMainBuy.length > 0 ? '绿峰+主力(最佳买入)' : '绿峰谷底', score: nearbyMainBuy.length > 0 ? 90 : 60 });
+        }
+        for (const zb of zhuliBuyPoints) {
+            if (!_greenValleys.some(g => Math.abs(g.idx - zb.idx) <= 5)) {
+                _buyCands.push({ idx: zb.idx, time: zb.time.slice(11, 16), price: zb.price, source: '主力低吸', score: 50 });
             }
         }
-        if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
-            const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
-            _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点', source: '最佳买入(主力信号)' });
+        for (const dv of _divergences.filter(d => d.type === '底背离')) {
+            if (_buyCands.some(c => Math.abs(c.idx - dv.idx) < 30))
+                continue;
+            const nearbyMain = zhuliBuyPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+            _buyCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
         }
-        let _lastSellPrice = 0;
+        const _sellCands = [];
         for (const rp of _redPeaks) {
-            if (_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30))
+            const t = rp.time.slice(11, 16);
+            const nearbyMainSell = zhuliSellPoints.filter(z => Math.abs(z.idx - rp.idx) <= 5);
+            _sellCands.push({ idx: rp.idx, time: t, price: rp.price, source: nearbyMainSell.length > 0 ? '红峰+主力(最佳卖出)' : '红峰峰顶', score: nearbyMainSell.length > 0 ? 90 : 60 });
+        }
+        for (const zs of zhuliSellPoints) {
+            if (!_redPeaks.some(r => Math.abs(r.idx - zs.idx) <= 5)) {
+                _sellCands.push({ idx: zs.idx, time: zs.time.slice(11, 16), price: zs.price, source: '主力高抛', score: 50 });
+            }
+        }
+        for (const dv of _divergences.filter(d => d.type === '顶背离')) {
+            if (_sellCands.some(c => Math.abs(c.idx - dv.idx) < 30))
                 continue;
-            if (rp.price > _lastSellPrice) {
-                _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点', source: '最佳卖出' });
-                _lastSellPrice = rp.price;
+            const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+            _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
+        }
+        _buyCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
+        const _finalBuys = [];
+        let _lastBuyP = Infinity;
+        for (const bc of _buyCands) {
+            if (_finalBuys.some(f => Math.abs(f.idx - bc.idx) < 30))
+                continue;
+            if (bc.price < _lastBuyP) {
+                _finalBuys.push(bc);
+                _lastBuyP = bc.price;
             }
         }
-        if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
-            const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
-            _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点', source: '最佳卖出(主力信号)' });
+        _sellCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
+        const _finalSells = [];
+        let _lastSellP = 0;
+        for (const sc of _sellCands) {
+            if (_finalSells.some(f => Math.abs(f.idx - sc.idx) < 30))
+                continue;
+            if (sc.price > _lastSellP) {
+                _finalSells.push(sc);
+                _lastSellP = sc.price;
+            }
         }
-        for (const dv of _divergences) {
-            if (dv.type === '顶背离') {
-                if (!_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
-                    _signalList.push({
-                        idx: dv.idx, time: dv.time.slice(11, 16),
-                        price: dv.price, type: '卖出点',
-                        source: `顶背离(大红峰接小红峰,强度${dv.strength}%)`,
-                    });
-                }
-            }
-            else if (dv.type === '底背离') {
-                if (!_signalList.filter(s => s.type === '买入点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
-                    _signalList.push({
-                        idx: dv.idx, time: dv.time.slice(11, 16),
-                        price: dv.price, type: '买入点',
-                        source: `底背离(大绿峰接小绿峰,强度${dv.strength}%)`,
-                    });
-                }
-            }
+        _signalList.length = 0;
+        for (const fb of _finalBuys.sort((a, b) => a.idx - b.idx)) {
+            _signalList.push({ idx: fb.idx, time: fb.time, price: fb.price, type: '买入点', source: fb.source });
+        }
+        for (const fs of _finalSells.sort((a, b) => a.idx - b.idx)) {
+            _signalList.push({ idx: fs.idx, time: fs.time, price: fs.price, type: '卖出点', source: fs.source });
         }
         suggestions.length = 0;
         _signalList.sort((a, b) => a.time.localeCompare(b.time));

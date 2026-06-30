@@ -4584,70 +4584,76 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
     }
 
-	    // ─── 买卖信号：MACD红峰/绿峰 + 主力/散户（通达信做T） ───
-	    // 红峰峰顶=卖点（涨不动了），绿峰谷底=买点（跌不动了）
-	    // 核心原则：卖出点必须价格创新高（真正波段峰顶），买入点必须价格创新低（真正波段谷底）
-	    // 同一波段中的小拐点不会产生重复信号，缓存合并确保历史信号不消失
+	    	    // ─── 买卖信号：MACD(40,120,40)大红峰/大绿峰 + 背离 + 通达信做T双重确认 ───
+	    // 最佳买卖点 = MACD红峰/绿谷 + 主力信号(通达信做T) 多重确认，评分择优
 	    const _signalList: any[] = [];
 
-	    // ─── 买入点：MACD绿峰谷底，价格逐个创新低才算新波段 ───
-	    let _lastBuyPrice = Infinity;
+	    // 1) 买入候选集：绿峰谷底 + 主力买入 + 底背离，评分集成
+	    interface _BuyCand { idx: number; time: string; price: number; source: string; score: number }
+	    const _buyCands: _BuyCand[] = [];
+	    // 绿峰谷底：附近有主力低吸信号=双重确认最佳买入
 	    for (const gv of _greenValleys) {
-	      // 同类型间隔>30分钟（避免同一波段的重复检测）
-	      if (_signalList.filter(s => s.type === '买入点').some(s => Math.abs(gv.idx - s.idx) < 30)) continue;
-	      // 价格必须比上一个买入点更低（真正的波段谷底），或这是第一个买入点
-	      if (gv.price < _lastBuyPrice) {
-	        _signalList.push({ idx: gv.idx, time: gv.time.slice(11, 16), price: gv.price, type: '买入点' as const, source: '最佳买入' });
-	        _lastBuyPrice = gv.price;
+	      const t = gv.time.slice(11, 16);
+	      const nearbyMainBuy = zhuliBuyPoints.filter(z => Math.abs(z.idx - gv.idx) <= 5);
+	      _buyCands.push({ idx: gv.idx, time: t, price: gv.price, source: nearbyMainBuy.length > 0 ? '绿峰+主力(最佳买入)' : '绿峰谷底', score: nearbyMainBuy.length > 0 ? 90 : 60 });
+	    }
+	    // 主力低吸：独立买入信号（附近无绿峰）
+	    for (const zb of zhuliBuyPoints) {
+	      if (!_greenValleys.some(g => Math.abs(g.idx - zb.idx) <= 5)) {
+	      	        _buyCands.push({ idx: zb.idx, time: zb.time.slice(11, 16), price: zb.price, source: '主力低吸', score: 50 });
 	      }
 	    }
-	    // 兜底：无绿峰但有主力低吸（通达信做T信号）
-	    if (_signalList.filter(s => s.type === '买入点').length === 0 && zhuliBuyPoints.length > 0) {
-	      const _lowest = zhuliBuyPoints.reduce((a, b) => a.price < b.price ? a : b);
-	      _signalList.push({ idx: _lowest.idx, time: _lowest.time.slice(11, 16), price: _lowest.price, type: '买入点' as const, source: '最佳买入(主力信号)' });
+	    // 底背离：大绿峰接小绿峰，价格创新低MACD绿柱收窄
+	    for (const dv of _divergences.filter(d => d.type === '底背离')) {
+	      if (_buyCands.some(c => Math.abs(c.idx - dv.idx) < 30)) continue;
+	      const nearbyMain = zhuliBuyPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+	      _buyCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
 	    }
 
-	    // ─── 卖出点：MACD红峰峰顶，价格逐个创新高才算新波段 ───
-	    let _lastSellPrice = 0;
+	    // 2) 卖出候选集：红峰峰顶 + 主力卖出 + 顶背离，评分集成
+	    const _sellCands: _BuyCand[] = [];
+	    // 红峰峰顶：附近有主力高抛信号=双重确认最佳卖出
 	    for (const rp of _redPeaks) {
-	      // 同类型间隔>30分钟
-	      if (_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(rp.idx - s.idx) < 30)) continue;
-	      // 价格必须比上一个卖出点更高（真正的波段顶峰），或这是第一个卖出点
-	      if (rp.price > _lastSellPrice) {
-	        _signalList.push({ idx: rp.idx, time: rp.time.slice(11, 16), price: rp.price, type: '卖出点' as const, source: '最佳卖出' });
-	        _lastSellPrice = rp.price;
+	      const t = rp.time.slice(11, 16);
+	      const nearbyMainSell = zhuliSellPoints.filter(z => Math.abs(z.idx - rp.idx) <= 5);
+	      _sellCands.push({ idx: rp.idx, time: t, price: rp.price, source: nearbyMainSell.length > 0 ? '红峰+主力(最佳卖出)' : '红峰峰顶', score: nearbyMainSell.length > 0 ? 90 : 60 });
+	    }
+	    // 主力高抛：独立卖出信号（附近无红峰）
+	    for (const zs of zhuliSellPoints) {
+	      if (!_redPeaks.some(r => Math.abs(r.idx - zs.idx) <= 5)) {
+	      	        _sellCands.push({ idx: zs.idx, time: zs.time.slice(11, 16), price: zs.price, source: '主力高抛', score: 50 });
 	      }
 	    }
-	    // 兜底：无红峰但有主力高抛（通达信做T信号）
-	    if (_signalList.filter(s => s.type === '卖出点').length === 0 && zhuliSellPoints.length > 0) {
-	      const _highest = zhuliSellPoints.reduce((a, b) => a.price > b.price ? a : b);
-	      _signalList.push({ idx: _highest.idx, time: _highest.time.slice(11, 16), price: _highest.price, type: '卖出点' as const, source: '最佳卖出(主力信号)' });
+	    // 顶背离：大红峰接小红峰，价格创新高MACD红柱缩小
+	    for (const dv of _divergences.filter(d => d.type === '顶背离')) {
+	      if (_sellCands.some(c => Math.abs(c.idx - dv.idx) < 30)) continue;
+	      const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+	      _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
 	    }
-	    // ─── 背离信号：大红峰接小红峰(顶背离) / 大绿峰接小绿峰(底背离) ───
-	    // 顶背离 → 卖出点增强，底背离 → 买入点增强
-	    for (const dv of _divergences) {
-	      if (dv.type === '顶背离') {
-	        // 顶背离=大红峰接小红峰，价格创新高但MACD红柱缩小 → 卖出
-	        // 间隔>30分钟才添加
-	        if (!_signalList.filter(s => s.type === '卖出点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
-	          _signalList.push({
-	            idx: dv.idx, time: dv.time.slice(11, 16),
-	            price: dv.price, type: '卖出点' as const,
-	            source: `顶背离(大红峰接小红峰,强度${dv.strength}%)`,
-	          });
-	        }
-	      } else if (dv.type === '底背离') {
-	        // 底背离=大绿峰接小绿峰，价格创新低但MACD绿柱收窄 → 买入
-	        if (!_signalList.filter(s => s.type === '买入点').some(s => Math.abs(dv.idx - s.idx) < 30)) {
-	          _signalList.push({
-	            idx: dv.idx, time: dv.time.slice(11, 16),
-	            price: dv.price, type: '买入点' as const,
-	            source: `底背离(大绿峰接小绿峰,强度${dv.strength}%)`,
-	          });
-	        }
-	      }
+
+	    // 3) 评分降序 → 去重(同波段合并) → 价格创新低/新高过滤 → 最终信号
+	    _buyCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
+	    const _finalBuys: _BuyCand[] = [];
+	    let _lastBuyP = Infinity;
+	    for (const bc of _buyCands) {
+	      if (_finalBuys.some(f => Math.abs(f.idx - bc.idx) < 30)) continue;
+	      if (bc.price < _lastBuyP) { _finalBuys.push(bc); _lastBuyP = bc.price; }
 	    }
-    // 按时间排序加载到suggestions
+	    _sellCands.sort((a, b) => b.score - a.score || a.idx - b.idx);
+	    const _finalSells: _BuyCand[] = [];
+	    let _lastSellP = 0;
+	    for (const sc of _sellCands) {
+	      if (_finalSells.some(f => Math.abs(f.idx - sc.idx) < 30)) continue;
+	      if (sc.price > _lastSellP) { _finalSells.push(sc); _lastSellP = sc.price; }
+	    }
+
+	    _signalList.length = 0;
+	    for (const fb of _finalBuys.sort((a, b) => a.idx - b.idx)) {
+	      _signalList.push({ idx: fb.idx, time: fb.time, price: fb.price, type: '买入点' as const, source: fb.source });
+	    }
+	    for (const fs of _finalSells.sort((a, b) => a.idx - b.idx)) {
+	      _signalList.push({ idx: fs.idx, time: fs.time, price: fs.price, type: '卖出点' as const, source: fs.source });
+	    }// 按时间排序加载到suggestions
     suggestions.length = 0;
     _signalList.sort((a, b) => a.time.localeCompare(b.time));
     for (const s of _signalList) suggestions.push(s);
