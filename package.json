@@ -53,6 +53,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react-taro": "^1.4.1",
+    "postgres": "^3.4.9",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "tailwind-merge": "^3.5.0",
