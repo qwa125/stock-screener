@@ -520,12 +520,14 @@ async function fetchKlineAndAnalyze(s){
     if(!window._klineCache)window._klineCache={}
     var _ck=Object.keys(window._klineCache);if(_ck.length>2000){_ck.sort(function(a,b){return(window._klineCache[a]._t||0)-(window._klineCache[b]._t||0)});for(var _i=0;_i<_ck.length-1500;_i++)delete window._klineCache[_ck[_i]]}
     var _hasCache=window._klineCache[code]&&window._klineCache[code].length>=10
+    // 动态计算需要拉取的K线根数：间隔天数+5缓冲，最多120
+    var _needCount=120;if(_hasCache){try{var _ld=window._klineCache[code][window._klineCache[code].length-1].day;var _gap=Math.floor((Date.now()-new Date(_ld).getTime())/86400000);_needCount=Math.min(Math.max(_gap+5,10),120)}catch(e){}}
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
     // 腾讯日K线直连（CORS *必通，成交额用量×均价×100估算）
     try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
-      var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+(_hasCache?'10':'120')+',qfq',{signal:ac.signal})
+      var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+_needCount+',qfq',{signal:ac.signal})
       clearTimeout(tid)
       if(tr.ok||tr.status===0){
         try{var tj=await tr.json()}catch(ee){tj=null}
@@ -1133,9 +1135,11 @@ async function showDetail(i){
       var kdata=null
       var _kcache=window._klineCache&&window._klineCache[code]
       var _hasKC=_kcache&&_kcache.length>=10
+      // 动态计算K线根数：间隔天数+5缓冲，最多120
+      var _needKC=120;if(_hasKC){try{var _lkd=_kcache[_kcache.length-1].day;var _gap=Math.floor((Date.now()-new Date(_lkd).getTime())/86400000);_needKC=Math.min(Math.max(_gap+5,10),120)}catch(e){}}
       try{
         var tqPrefix=code.startsWith('6')?'sh':'sz'
-        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,'+(_hasKC?'10':'120')+',qfq',{signal:timeoutSignal(10000)})
+        var tqr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,'+_needKC+',qfq',{signal:timeoutSignal(10000)})
         if(tqr.ok||tqr.status===0){
           try{var tqd=await tqr.json()}catch(ee){tqd=null}
           if(tqd&&tqd.data){
