@@ -111,11 +111,6 @@ let DataFetcherService = DataFetcherService_1 = class DataFetcherService {
         }
         this.logger.warn(`K线数据未缓存: ${code}，跳过外部API调用`);
         return [];
-        if (result && result._isMock === undefined) {
-            result._isMock = !(result.length > 0 && ('date' in (result[0] ?? {}) || 'day' in (result[0] ?? {})));
-        }
-        this.klineCache.set(code, { data: result, timestamp: Date.now() });
-        return result;
     }
     async fetchRealTimeQuote(code, market) {
         const mkt = market ?? this.detectMarket(code);

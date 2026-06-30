@@ -128,18 +128,9 @@ export class DataFetcherService {
       return cached.data;
     }
 
-    // 没有缓存时返回null，不跨城调用外部API（Render海外服务器被东财/新浪拦截）
+    // 没有缓存时返回空数组，不跨境调用外部API（Render海外服务器被东财/新浪拦截）
     this.logger.warn(`K线数据未缓存: ${code}，跳过外部API调用`);
     return [];
-
-    // 确保 _isMock 已设置 (未被显式赋值的走自动检测)
-    if (result && (result as any)._isMock === undefined) {
-      (result as any)._isMock = !(result.length > 0 && ('date' in (result[0] ?? {}) || 'day' in (result[0] ?? {})));
-    }
-
-    // 写入缓存
-    this.klineCache.set(code, { data: result, timestamp: Date.now() });
-    return result;
   }
 
   /**
