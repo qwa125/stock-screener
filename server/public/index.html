@@ -3029,7 +3029,8 @@ setInterval(function(){
               renderList()
               setStatus('⏳ 当前无买入信号，保持前10分钟的结果（'+_lastBuySignals.length+' 只）')
             }else{
-              setStatus('⏳ 缓存中有 '+d.data.length+' 只，但无满足条件的买入信号')
+              setStatus('⏳ 缓存数据不足，正在启动自动扫描...')
+              setTimeout(function(){if(!_autoScanning&&!loading)autoLightScan()},1000)
             }
             return
           }
@@ -3051,7 +3052,8 @@ setInterval(function(){
             }
           }
         }catch(e){}
-        setStatus('⏳ 后端缓存为空，正在首次扫描构建...')
+        setStatus('⏳ 后端缓存为空，正在启动扫描...')
+        setTimeout(function(){if(!_autoScanning&&!loading)autoLightScan()},1000)
       })
       .catch(function(e){
         console.log('⚠️ 读缓存失败:',e.message)
