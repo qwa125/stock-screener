@@ -1036,32 +1036,26 @@ function calcChipAnalysis(kline){
 
 // 从 K 线数据推算筹码状态（当后端未提供时）
 function chipDisplay(s){
-  // 如果后端提供了筹码数据，直接使用
-  if(s.chipConcentration90!==void 0&&s.chipConcentration90!==null&&s.chipPattern!=='dispersed'){
+  // 后端提供了筹码数据，无论什么形态都直接使用
+  if(s.chipConcentration90!==void 0&&s.chipConcentration90!==null){
     var conc=s.chipConcentration90
     var peak=s.chipPeakPosition||'mid'
     var pat=s.chipPattern||'dispersed'
     return{conc:conc,peak:peak,pattern:pat}
   }
-  // 如果前端已计算过芯片数据，使用前端结果
+  // 前端已计算过芯片数据，使用前端结果
   if(s._chipAnalyzed&&s._chipConc){
     return{conc:s._chipConc,peak:s._chipPeak,pattern:s._chipPattern}
   }
-  // 用价位和趋势等信息估算
-  var pos=s.pricePosition??50
-  // 低位区(0-20)且无企稳→筹码分散在下方
-  if(pos<20) return{conc:10,peak:'low',pattern:'dispersed'}
-  // 低位偏上(20-40)→筹码部分集中
-  if(pos<40) return{conc:15,peak:'low',pattern:'double_peak'}
-  // 中位(40-60)→筹码集中，单峰
-    if(pos<60) return{conc:15,peak:'mid',pattern:'single_peak'}
-  // 中高位(60-80)→筹码开始分散
-    if(pos<80) return{conc:25,peak:'high',pattern:'double_peak'}
-  // 高位(80-100)→筹码分散在高位
-    return{conc:40,peak:'high',pattern:'dispersed'}
+  // 无数据时显示占位
+  return{conc:-1,peak:'mid',pattern:'dispersed'}
 }
 function gridChipLine(s,entry){
   var cd=chipDisplay(s)
+  if(cd.conc<0){
+    return '<div class="indicator-item"><div class="label">筹码集中</div><div class="value gray">暂无数据 …</div></div>'
+      +'<div class="indicator-item"><div class="label">筹码峰位</div><div class="value gray">—</div></div>'
+  }
   var concClr=cd.conc<=25?'green':cd.conc<=45?'yellow':'red'
   var patIcon=cd.pattern=='single_peak'?'⛰️':cd.pattern=='double_peak'?'⛰️⛰️':'💨'
   var peakClr=cd.peak=='low'?'green':cd.peak=='mid'?'yellow':'red'
@@ -1880,7 +1874,7 @@ async function doFullRescan(saveToBackend){
       score:hasLiveData?liveScore:Math.round(10+Math.abs(chg)*1.5),
       entryTiming:chg>0?Math.round(Math.min(chg*10,100)):0,
       changePercent:chg,
-      chipConcentration90:50,chipPeakPosition:'mid',chipPattern:'dispersed',
+      chipConcentration90:-1,chipPeakPosition:'mid',chipPattern:'dispersed',
       isGoldenCross:false,baiXiaoDays:0,jiGouActiveScore:0})
   }
   

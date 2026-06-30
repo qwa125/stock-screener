@@ -628,10 +628,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
       // 推导 jiGouActiveScore
       s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
-      // 推导芯片筹码字段（旧缓存缺失）
-      s.chipConcentration90 = s.chipConcentration90 ?? 50;
+      // 推导芯片筹码字段（旧缓存缺失时用 -1 标记，前端据此显示"暂无数据"）
+      s.chipConcentration90 = s.chipConcentration90 ?? -1;
       s.chipPeakPosition = s.chipPeakPosition ?? 'mid';
-          s.chipPattern = s.chipPattern ?? 'dispersed';
+      s.chipPattern = s.chipPattern ?? 'dispersed';
+      // 旧缓存缺失 forecast1_2Day 时保留 undefined，前端显示"等待分析结果"
+      // (无需赋值，undefined 已是默认)
     }
   }
 
@@ -2203,6 +2205,11 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
       kline.map(k=>k.volume || 0), result.pricePosition, result.trendState
     );
+    // ═══ 筹码分析：统一使用 calcChipAnalysis ═══
+    const chipResult = this.calcChipAnalysis(
+      kline.map(k=>k.close), kline.map(k=>k.high), kline.map(k=>k.low),
+      kline.map(k=>k.volume || 0), s.currentPrice
+    );
     return {
       capitalRank: 0,
       entryTiming: Math.round(entryTiming * 100) / 100,
@@ -2234,6 +2241,10 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
         mainForceInflow: s.inflow ?? 0,
         jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
       }),
+      // ═══ 筹码分析结果 ═══
+      chipConcentration90: chipResult.concentration90,
+      chipPeakPosition: chipResult.peakPosition,
+      chipPattern: chipResult.pattern,
     };
   }
 
@@ -3808,79 +3819,6 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     };
   }
 
-      // ═══ 共享技术面预测：与机会区缓存使用同一算法 ═══
-      const forecast1_2Day = GemScreenerService.computeTechnicalForecast({
-        entryTiming,
-        isGoldenCross: fullIsGoldenCross,
-        ma5: ma5, // 已在函数顶部从 closeArr 计算的5日均线
-        ma10: ma10,
-        pricePosition: pricePos,
-        mainForceInflow,
-        jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-      });
-
-      return {
-        code, name: name ?? '',
-        currentPrice: price,
-        changePercent: Math.round(changePct * 100) / 100,
-        priceIncrease: Math.round(priceIncrease * 100) / 100,
-        mainForceInflow,
-      pricePosition: Math.round(pricePos),
-      forecast1_2Day,
-      capitalRank: 0,
-      baiXiaoDays: (baiXing as any)?.baiXiaoDays ?? 0,
-      score,
-      suggestion: finalSuggestion,
-      entryTiming,
-      safetyScore,
-      isGoldenCross,
-      diff,
-      dea,
-      buySignal: !!(baiXing?.baiXiao || baiXing?.jiaCang || sanJiao?.shortBuy) ? '有信号' : '',
-      chipConcentration90,
-      chipPeakPosition,
-      chipPattern,
-      signalCombination: result.reason || '',
-      // 均线值（供前端三重卖点检测）
-      ma5: Math.round(ma5 * 100) / 100,
-      ma10: Math.round(ma10 * 100) / 100,
-      // 机构活跃度 = 基于成交量比率的评分 (0-20)
-      jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-      // ═══ 调试字段（仅搜索/分析时可见）═══
-      _debug: {
-        ma5: Math.round(ma5 * 100) / 100,
-        ma10: Math.round(ma10 * 100) / 100,
-        ma10_1dAgo: Math.round(ma10_1dAgo * 100) / 100,
-        ma5Up,
-        ma10Up,
-        ma10TurnUp,
-        baiXiao: !!baiXiao,
-        baiXiaoDays,
-        baiBuState: !!baiBuState,
-        qiangZhiFuGai,
-        ma10Down,
-        trendState,
-        price: Math.round(price * 100) / 100,
-        priceAboveMa5: price > ma5,
-        pricePos: Math.round(pricePos),
-        volRatio: Math.round(volRatio * 100) / 100,
-        volActive: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-        chipPattern,
-        chipPeakPosition,
-        chipConcentration90: Math.round(chipConcentration90 * 100) / 100,
-        chipDowngrade: chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30,
-        chipRisk: chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25,
-        sellLocked: !!sellEntry,
-        deepWashoutApplied: suggestion === '轻仓买入',
-        keepAll,
-      },
-    };
-  }
-
-  /**
-   * 缓存搜索：根据关键词搜索已缓存股票/ETF/可转债
-   * 注：不再调外部 API，纯缓存查询。前端实时分析走 POST /api/gem/analyze
-   */
   async searchStocks(keyword: string): Promise<OpportunityStock[]> {
     const results: OpportunityStock[] = [];
     try {

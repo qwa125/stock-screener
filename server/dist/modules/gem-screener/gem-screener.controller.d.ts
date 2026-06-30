@@ -157,7 +157,22 @@ export declare class GemScreenerController {
     getIndustrySectorsTop10(): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: {
+            sectors: Array<{
+                rank: number;
+                name: string;
+                avgChangePercent: number;
+                totalStocks: number;
+                upStocks: number;
+                stocks: Array<{
+                    code: string;
+                    name: string;
+                    price: number;
+                    changePercent: number;
+                }>;
+            }>;
+            timestamp: number;
+        };
     }>;
     seedCache(): Promise<{
         code: number;
@@ -177,7 +192,7 @@ export declare class GemScreenerController {
     searchStock(keyword: string): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: import("./gem-screener.service").OpportunityStock[];
     } | {
         code: number;
         msg: any;
@@ -257,7 +272,7 @@ export declare class GemScreenerController {
         code: number;
         msg: string;
         data: {
-            opportunities: any;
+            opportunities: any[];
             timestamp: number;
         };
     }>;
@@ -469,7 +484,7 @@ export declare class GemScreenerController {
     auctionTrend(code: string): Promise<{
         code: number;
         msg: string;
-        data: any;
+        data: any[];
     } | {
         code: number;
         msg: any;

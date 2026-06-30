@@ -158,15 +158,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.marketHoursBeganAt = 0;
         this._pgSql = null;
         this._pgReady = false;
-        this.forecast1_2Day = GemScreenerService_1.computeTechnicalForecast({
-            entryTiming,
-            isGoldenCross: fullIsGoldenCross,
-            ma5: ma5,
-            ma10: ma10,
-            pricePosition: pricePos,
-            mainForceInflow,
-            jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-        });
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -502,7 +493,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 s.signalCombination = '';
             }
             s.jiGouActiveScore = s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100;
-            s.chipConcentration90 = s.chipConcentration90 ?? 50;
+            s.chipConcentration90 = s.chipConcentration90 ?? -1;
             s.chipPeakPosition = s.chipPeakPosition ?? 'mid';
             s.chipPattern = s.chipPattern ?? 'dispersed';
         }
@@ -1954,6 +1945,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
     buildResult(s, kline, result, suggestion, signalCombination) {
         const entryTiming = this.calcEntryTiming(result.pricePosition, result.trendState, kline.map(k => k.close), kline.map(k => k.high), kline.map(k => k.low), kline.map(k => k.volume || 0), result.isGoldenCross);
         const safetyScore = this.calcSafetyScore(kline.map(k => k.close), kline.map(k => k.high), kline.map(k => k.low), kline.map(k => k.volume || 0), result.pricePosition, result.trendState);
+        const chipResult = this.calcChipAnalysis(kline.map(k => k.close), kline.map(k => k.high), kline.map(k => k.low), kline.map(k => k.volume || 0), s.currentPrice);
         return {
             capitalRank: 0,
             entryTiming: Math.round(entryTiming * 100) / 100,
@@ -1984,6 +1976,9 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 mainForceInflow: s.inflow ?? 0,
                 jiGouActiveScore: Math.round((result.signals?.jiGouHuoYueDu || result.volumeRatio * 6) * 100) / 100,
             }),
+            chipConcentration90: chipResult.concentration90,
+            chipPeakPosition: chipResult.peakPosition,
+            chipPattern: chipResult.pattern,
         };
     }
     static computeTechnicalForecast(params) {
@@ -3307,6 +3302,995 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             },
         };
     }
+    async searchStocks(keyword) {
+        const results = [];
+        try {
+            const allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+            const seen = new Set();
+            const deduped = allCached.filter(s => {
+                const key = s.code;
+                if (seen.has(key))
+                    return false;
+                seen.add(key);
+                return true;
+            });
+            const kw = keyword.toLowerCase().trim();
+            const matched = deduped.filter(s => {
+                if ((s.code || '').toLowerCase().includes(kw))
+                    return true;
+                if ((s.name || '').toLowerCase().includes(kw))
+                    return true;
+                try {
+                    const py = (0, pinyin_pro_1.pinyin)(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '');
+                    if (py.includes(kw))
+                        return true;
+                }
+                catch (_) { }
+                return false;
+            }).slice(0, 15);
+            if (matched.length === 0)
+                return results;
+            this.recalculateSuggestions(matched);
+            for (const r of matched) {
+                const sellEntry = this.sellStateCache.get(r.code);
+                if (sellEntry) {
+                    const hasBuySignal = ['重仓买入', '买入'].includes(r.suggestion || '') &&
+                        r.isGoldenCross === true &&
+                        (r.entryTiming ?? 0) >= 50;
+                    if (hasBuySignal) {
+                        this.sellStateCache.delete(r.code);
+                        this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
+                    }
+                    else {
+                        r.suggestion = '不要介入';
+                        r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
+                    }
+                }
+            }
+            this.addForecastToCache(matched);
+            results.push(...matched);
+        }
+        catch (e) {
+            this.logger.error(`缓存搜索失败: ${e.message}`);
+        }
+        return results;
+    }
+    async rescanMarket() {
+        const now = Date.now();
+        this.logger.log('开始按新标准重新评估缓存的个股...');
+        try {
+            const allCached = [];
+            if (this.cache?.data)
+                allCached.push(...this.cache.data);
+            if (this.mainBoardCache?.data)
+                allCached.push(...this.mainBoardCache.data);
+            const seenCodes = new Set();
+            const uniqueStocks = [];
+            for (const s of allCached) {
+                if (s.code && !seenCodes.has(s.code)) {
+                    seenCodes.add(s.code);
+                    uniqueStocks.push(s);
+                }
+            }
+            this.logger.log(`收集到 ${uniqueStocks.length} 只缓存的个股，应用新标准重新评估`);
+            const updated = [];
+            for (const s of uniqueStocks) {
+                try {
+                    const pp = s.pricePosition ?? 50;
+                    const goldenCross = s.isGoldenCross ?? false;
+                    const jiGou = s.jiGouActiveScore ?? 0;
+                    const chipConc = s.chipConcentration90 ?? 50;
+                    const chipPeak = s.chipPeakPosition ?? 'mid';
+                    const chipPat = s.chipPattern ?? 'dispersed';
+                    let trendState = 1;
+                    if (pp > 55 && goldenCross)
+                        trendState = 3;
+                    else if (pp > 40)
+                        trendState = 2;
+                    else if (pp < 25)
+                        trendState = 0;
+                    const sellEntry = this.sellStateCache.get(s.code);
+                    if (sellEntry) {
+                        const canUnlock = (s.suggestion && ['重仓买入', '买入'].includes(s.suggestion)) && goldenCross === true && pp >= 50;
+                        if (canUnlock) {
+                            this.sellStateCache.delete(s.code);
+                            this.logger.log(`🔓 [重扫] ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
+                        }
+                        else {
+                            updated.push({
+                                ...s,
+                                suggestion: '不要介入',
+                                score: Math.min(s.score ?? 50, 30),
+                            });
+                            continue;
+                        }
+                    }
+                    const SELL_SIGS = ['卖出', '减仓', '不要介入'];
+                    let newSuggestion;
+                    if (s.suggestion && SELL_SIGS.includes(s.suggestion)) {
+                        newSuggestion = s.suggestion ?? '持有';
+                        if (newSuggestion === '卖出') {
+                            this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
+                        }
+                    }
+                    else if (s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)) {
+                        newSuggestion = s.suggestion;
+                    }
+                    else {
+                        const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
+                        const baiXiaoDays = s.baiXiaoDays ?? 0;
+                        if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
+                            if (jiGou >= 14 && pp >= 20)
+                                newSuggestion = '重仓买入';
+                            else if (jiGou >= 10 || baiXiaoDays >= 4)
+                                newSuggestion = '买入';
+                            else
+                                newSuggestion = '轻仓买入';
+                        }
+                        else if (trendState >= 1 && goldenCross && pp > 10 && pp < 50) {
+                            if (baiXiaoDays >= 6)
+                                newSuggestion = '买入';
+                            else if (pp >= 25)
+                                newSuggestion = '轻仓买入';
+                            else
+                                newSuggestion = '持有';
+                        }
+                        else if (trendState >= 1 && pp > 15) {
+                            newSuggestion = '持有';
+                        }
+                        else {
+                            newSuggestion = '持有';
+                        }
+                        const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
+                        const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
+                        if (chipDowngrade || chipRisk) {
+                            if (newSuggestion === '重仓买入')
+                                newSuggestion = '买入';
+                            else if (newSuggestion === '买入')
+                                newSuggestion = '轻仓买入';
+                            else if (newSuggestion === '轻仓买入')
+                                newSuggestion = '持有';
+                        }
+                        if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
+                            if (newSuggestion === '买入')
+                                newSuggestion = '重仓买入';
+                            else if (newSuggestion === '轻仓买入')
+                                newSuggestion = '买入';
+                        }
+                        const entry = s.entryTiming ?? 50;
+                        const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
+                        const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
+                        if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
+                            newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
+                        }
+                        else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
+                            newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
+                        }
+                    }
+                    const chg = s.changePercent ?? 0;
+                    if (chg >= 9 && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
+                        newSuggestion = '轻仓买入';
+                    }
+                    else if (chg >= 6 && !['重仓买入', '买入', '轻仓买入', '减仓', '卖出'].includes(newSuggestion)) {
+                        newSuggestion = '轻仓买入';
+                    }
+                    else if (chg >= 3 && newSuggestion === '不要介入') {
+                        newSuggestion = '持有';
+                    }
+                    if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
+                        newSuggestion = '不要介入';
+                    }
+                    const BASE = {
+                        '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
+                    };
+                    let newScore = BASE[newSuggestion] ?? 30;
+                    if (pp < 30)
+                        newScore += 15;
+                    else if (pp < 50)
+                        newScore += 8;
+                    if (goldenCross)
+                        newScore += 10;
+                    if (jiGou >= 12)
+                        newScore += 8;
+                    if (chipConc <= 25)
+                        newScore += 10;
+                    updated.push({
+                        ...s,
+                        suggestion: newSuggestion,
+                        score: newScore,
+                        chipConcentration90: s.chipConcentration90 ?? 50,
+                        chipPeakPosition: s.chipPeakPosition ?? 'mid',
+                        chipPattern: s.chipPattern ?? 'dispersed',
+                        jiGouActiveScore: s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100,
+                    });
+                }
+                catch (e) {
+                    updated.push(s);
+                }
+            }
+            const PRIORITY = { '重仓买入': 0, '买入': 1, '轻仓买入': 2, '持有': 3, '减仓': 4, '卖出': 5, '不要介入': 6 };
+            updated.sort((a, b) => {
+                const pa = PRIORITY[a.suggestion || '不要介入'] ?? 9;
+                const pb = PRIORITY[b.suggestion || '不要介入'] ?? 9;
+                if (pa !== pb)
+                    return pa - pb;
+                return (b.score || 0) - (a.score || 0);
+            });
+            const gemStocks = updated.filter(s => /^30/.test(s.code));
+            const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
+            this.cache = { data: gemStocks, timestamp: now };
+            this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
+            await this.saveCacheToDisk();
+            await this.saveMainBoardCacheToDisk();
+            for (const stock of updated) {
+                if (!stock.trendPrediction) {
+                    stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
+                }
+            }
+            this.addForecastToCache(updated);
+            await this.saveSellStateCache();
+            this.logger.log(`重新评估完成：${updated.length} 只, 信号: ${updated.map(s => s.suggestion).join(',')}`);
+        }
+        catch (e) {
+            this.logger.error(`重新评估失败: ${e.message}`);
+        }
+        return [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
+    }
+    triggerAnalysisPreCacheFromCache() {
+        const cachedStocks = [];
+        if (this.cache?.data)
+            cachedStocks.push(...this.cache.data.map(s => s.code));
+        if (this.mainBoardCache?.data)
+            cachedStocks.push(...this.mainBoardCache.data.map(s => s.code));
+        if (cachedStocks.length > 0) {
+            this.stockService.preCacheAnalysisBatch(cachedStocks).catch(() => { });
+        }
+    }
+    triggerAnalysisPreCache(stocks) {
+        if (stocks.length > 0) {
+            this.stockService.preCacheAnalysisBatch(stocks.map(s => s.code)).catch(() => { });
+        }
+    }
+    async scanGlobalHeavyBuy() {
+        this.logger.log('🔍 [全局重仓买入] 开始扫描...');
+        try {
+            const allCodes = [];
+            const codeToSectorName = new Map();
+            for (const sector of ALL_SECTORS) {
+                for (const code of sector.codes) {
+                    if (!allCodes.includes(code)) {
+                        allCodes.push(code);
+                        codeToSectorName.set(code, sector.name);
+                    }
+                }
+            }
+            const cachedCodes = [
+                ...(this.cache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+                ...(this.mainBoardCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+                ...(this.sectorCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
+            ];
+            for (const c of cachedCodes) {
+                if (c && !allCodes.includes(c))
+                    allCodes.push(c);
+            }
+            this.logger.log(`🔍 共收集 ${allCodes.length} 只候选股票`);
+            const heavyBuyResults = [];
+            this.logger.log(`🔍 后端不主动调外部API，全局重仓买入扫描跳过`);
+            heavyBuyResults.sort((a, b) => (b.score || 0) - (a.score || 0));
+            this.logger.log(`✅ [全局重仓买入] 完成, 发现 ${heavyBuyResults.length} 只`);
+            return heavyBuyResults.slice(0, 3);
+        }
+        catch (error) {
+            this.logger.error(`❌ [全局重仓买入] 异常: ${error.message}`);
+            return [];
+        }
+    }
+    async getIndustrySectorTop10() {
+        const allCodes = [];
+        const codeToSector = new Map();
+        for (const sec of ALL_SECTORS) {
+            for (const code of sec.codes) {
+                codeToSector.set(code, sec.name);
+                if (!allCodes.includes(code))
+                    allCodes.push(code);
+            }
+        }
+        this.logger.log(`📊 获取行业板块实时热度: ${ALL_SECTORS.length}个板块(含概念), ${allCodes.length}只成分股`);
+        const quoteMap = new Map();
+        this.logger.log(`📊 后端不主动调外部API，板块热度跳过实时行情`);
+        const sectorMap = new Map();
+        for (const sec of ALL_SECTORS) {
+            let totalChange = 0;
+            let count = 0;
+            let upCount = 0;
+            const stocks = [];
+            for (const code of sec.codes) {
+                const q = quoteMap.get(code);
+                if (q && q.price > 0) {
+                    totalChange += q.changePercent;
+                    count++;
+                    if (q.changePercent > 0)
+                        upCount++;
+                    stocks.push({ code, name: q.name, price: q.price, changePercent: q.changePercent });
+                }
+            }
+            if (count > 0) {
+                sectorMap.set(sec.name, {
+                    totalChange,
+                    upCount,
+                    count,
+                    stocks: stocks.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, 5),
+                });
+            }
+        }
+        const sorted = Array.from(sectorMap.entries())
+            .map(([name, data]) => ({
+            name,
+            avgChangePercent: Math.round((data.totalChange / data.count) * 100) / 100,
+            totalStocks: data.count,
+            upStocks: data.upCount,
+            stocks: data.stocks,
+        }))
+            .sort((a, b) => b.avgChangePercent - a.avgChangePercent)
+            .slice(0, 10)
+            .map((s, i) => ({ rank: i + 1, ...s }));
+        this.logger.log(`📊 行业板块Top10: ${sorted.map(s => `${s.rank}.${s.name}(${s.avgChangePercent}%)`).join(', ')}`);
+        return { sectors: sorted, timestamp: Date.now() };
+    }
+    async scanAllWithFrontendData(stocks) {
+        const results = [];
+        for (const s of stocks) {
+            if (s.klines && s.klines.length >= 20) {
+                this.dataFetcher.preloadKline(s.code, s.klines);
+            }
+        }
+        for (const s of stocks) {
+            try {
+                const candidate = {
+                    code: s.code, name: s.name, inflow: s.inflow,
+                    changePercent: s.changePercent, currentPrice: s.price,
+                };
+                const result = await this.checkOpportunity(candidate);
+                if (result)
+                    results.push(result);
+            }
+            catch { }
+        }
+        if (results.length <= 3) {
+            for (const s of stocks) {
+                try {
+                    const candidate = {
+                        code: s.code, name: s.name, inflow: s.inflow,
+                        changePercent: s.changePercent, currentPrice: s.price,
+                    };
+                    const result = await this.checkOpportunityRelaxed(candidate);
+                    if (result && !results.find((ex) => ex.code === result.code))
+                        results.push(result);
+                }
+                catch { }
+            }
+        }
+        results.sort((a, b) => {
+            const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
+            const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
+            return pa !== pb ? pa - pb
+                : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
+                    : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
+                        : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
+        });
+        const SELL_LOCK = ['卖出'];
+        const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
+        for (const r of results) {
+            const code = r.code;
+            if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
+                this.soldOutStocks.delete(code);
+            }
+            else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
+                this.soldOutStocks.add(code);
+            }
+            else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
+                if (this.soldOutStocks.has(code)) {
+                    r.suggestion = '不要介入';
+                }
+            }
+        }
+        const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
+        const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
+        const finalResults = buyResults.slice(0, 30);
+        this.cache = { data: finalResults, timestamp: Date.now() };
+        this.saveCacheToDisk();
+        this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
+        return finalResults;
+    }
+    async runBacktest() {
+        const allCodes = [];
+        try {
+            for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                    const stocks = raw?.data || raw?.stocks || raw;
+                    if (Array.isArray(stocks))
+                        stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
+                            allCodes.push(s.code); });
+                }
+            }
+        }
+        catch { }
+        const sample = allCodes.slice(0, 20);
+        this.logger.log("\u56de\u5f52\u9a8c\u8bc1: \u62bd\u53d6 " + sample.length + " \u53ea\u80a1\u7968\uff0c\u6b65\u8fdb\u6d4b\u8bd5\u8bc4\u5206\u7684\u9884\u6d4b\u80fd\u529b");
+        const records = [];
+        let processed = 0, totalDays = 0;
+        for (const code of sample) {
+            try {
+                const kline = await this.dataFetcher.getKLineData(code);
+                if (!kline || kline.length < 150)
+                    continue;
+                processed++;
+                for (let day = 100; day < kline.length - 2; day += 5) {
+                    const slice = kline.slice(0, day + 1);
+                    const now = kline[day];
+                    const next1 = kline[day + 1];
+                    const next2 = kline[day + 2];
+                    if (!now?.close || !next1?.close || !next2?.close)
+                        continue;
+                    const result = this.calcMultiScore({ code, name: '' }, slice);
+                    if (!result)
+                        continue;
+                    const score = result.score;
+                    const ret1d = (next1.close - now.close) / now.close * 100;
+                    const ret2d = (next2.close - now.close) / now.close * 100;
+                    records.push({ score, ret1d, ret2d });
+                    totalDays++;
+                }
+            }
+            catch { }
+        }
+        const groups = {};
+        const ranges = [
+            { label: "0-3", min: 0, max: 3 },
+            { label: "4-5", min: 4, max: 5 },
+            { label: "6-7", min: 6, max: 7 },
+            { label: "8-9", min: 8, max: 9 },
+            { label: "10-11", min: 10, max: 11 },
+            { label: "12-16", min: 12, max: 16 },
+        ];
+        for (const r of ranges)
+            groups[r.label] = { scores: [], ret1ds: [], ret2ds: [] };
+        for (const rec of records) {
+            for (const r of ranges) {
+                if (rec.score >= r.min && rec.score <= r.max) {
+                    groups[r.label].scores.push(rec.score);
+                    groups[r.label].ret1ds.push(rec.ret1d);
+                    groups[r.label].ret2ds.push(rec.ret2d);
+                    break;
+                }
+            }
+        }
+        const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const winRate = (arr) => arr.length > 0 ? arr.filter(x => x > 0).length / arr.length * 100 : 0;
+        const resultGroups = ranges.map(r => {
+            const g = groups[r.label];
+            const n = g.scores.length;
+            const avg1d = parseFloat(avg(g.ret1ds).toFixed(2));
+            const avg2d = parseFloat(avg(g.ret2ds).toFixed(2));
+            const w1 = parseFloat(winRate(g.ret1ds).toFixed(1));
+            const w2 = parseFloat(winRate(g.ret2ds).toFixed(1));
+            return {
+                range: r.label,
+                count: n,
+                avgScore: n > 0 ? parseFloat((g.scores.reduce((a, b) => a + b, 0) / n).toFixed(1)) : 0,
+                avgRet1D: avg1d > 0 ? "+" + avg1d + "%" : avg1d + "%",
+                avgRet2D: avg2d > 0 ? "+" + avg2d + "%" : avg2d + "%",
+                winRate1D: w1 + "%",
+                winRate2D: w2 + "%",
+                _score: avg1d * n + avg2d * n * 0.5,
+            };
+        });
+        resultGroups.sort((a, b) => b._score - a._score);
+        this.logger.log("\u2705 \u56de\u5f52\u5b8c\u6210: " + processed + "/" + sample.length + " \u53ea\u6709\u6548K\u7ebf, " + totalDays + " \u4e2a\u6d4b\u8bd5\u70b9");
+        return {
+            summary: "\u56de\u5f52\u9a8c\u8bc1: " + processed + "/" + sample.length + " \u53ea\uff0c\u5171" + totalDays + "\u4e2a\u65e5\u7ebf\u6d4b\u8bd5\u70b9",
+            method: "\u6b65\u8fdb: \u4ece120\u65e5\u7ebf\u5f00\u59cb\uff0c\u6bcf3\u65e5\u4e3a1\u4e2a\u6d4b\u8bd5\u70b9\uff0c\u5f53\u524d\u8bc4\u5206 VS \u672a\u67651-2\u65e5\u771f\u5b9e\u6da8\u8dcc",
+            groups: resultGroups,
+            bestGroup: resultGroups[0],
+        };
+    }
+    async runForecastBacktest() {
+        const allCodes = [];
+        try {
+            for (const p of [(0, node_path_1.join)(process.cwd(), 'assets', 'gem-cache.json'), (0, node_path_1.join)(process.cwd(), 'assets', 'main-board-cache.json')]) {
+                if ((0, fs_1.existsSync)(p)) {
+                    const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
+                    const stocks = raw?.data || raw?.stocks || raw;
+                    if (Array.isArray(stocks))
+                        stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
+                            allCodes.push(s.code); });
+                }
+            }
+        }
+        catch { }
+        const sample = allCodes.slice(0, 25);
+        this.logger.log(`=== 评分预测过滤器回测: 抽取 ${sample.length} 只股票 ===`);
+        const records = [];
+        let processed = 0, totalDays = 0;
+        for (const code of sample) {
+            try {
+                const kline = await this.dataFetcher.getKLineData(code);
+                if (!kline || kline.length < 150)
+                    continue;
+                processed++;
+                for (let day = 100; day < kline.length - 2; day += 5) {
+                    const slice = kline.slice(0, day + 1);
+                    const now = kline[day];
+                    const next1 = kline[day + 1];
+                    const next2 = kline[day + 2];
+                    if (!now?.close || !next1?.close || !next2?.close)
+                        continue;
+                    const result = this.calcMultiScore({ code, name: '' }, slice);
+                    if (!result)
+                        continue;
+                    const ret1d = (next1.close - now.close) / now.close * 100;
+                    const ret2d = (next2.close - now.close) / now.close * 100;
+                    records.push({
+                        score: result.score,
+                        ret1d,
+                        ret2d,
+                        isGoldenCross: result.isGoldenCross || false,
+                        trendState: result.trendState || 0,
+                        pricePosition: result.pricePosition || 50,
+                        volumeRatio: result.volumeRatio || 0.5,
+                        jiGouActive: (result.signals?.jiGouActive) || false,
+                        baiXiaoDays: result.signals?.baiXiaoDays || 0,
+                        baiBu: result.signals?.baiBu || false,
+                    });
+                    totalDays++;
+                }
+            }
+            catch { }
+        }
+        const configs = [
+            { label: 'A.基准: score>=12', filter: r => r.score >= 12 },
+            { label: 'B.基准: score>=10', filter: r => r.score >= 10 },
+            { label: 'C.基准: score>=8', filter: r => r.score >= 8 },
+            { label: 'D.评分>=12+金叉', filter: r => r.score >= 12 && r.isGoldenCross },
+            { label: 'E.评分>=12+趋势>=2', filter: r => r.score >= 12 && r.trendState >= 2 },
+            { label: 'F.评分>=12+位置<70', filter: r => r.score >= 12 && r.pricePosition < 70 },
+            { label: 'G.评分>=12+金叉+趋势>=2', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 },
+            { label: 'H.评分>=12+金叉+趋势>=2+位置<70', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 },
+            { label: 'I.评分>=12+金叉+趋势>=2+位置<70+量比>0.6', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 && r.volumeRatio > 0.6 },
+            { label: 'J.评分>=10+金叉+趋势>=2+位置<80', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 80 },
+            { label: 'K.评分>=10+金叉+趋势>=1+位置<80+量比>0.6', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 1 && r.pricePosition < 80 && r.volumeRatio > 0.6 },
+            { label: 'L.评分>=8+金叉+趋势>=2+位置<75', filter: r => r.score >= 8 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 75 },
+            { label: 'M.评分>=14', filter: r => r.score >= 14 },
+            { label: 'N.评分>=12+金叉+机构活跃', filter: r => r.score >= 12 && r.isGoldenCross && r.jiGouActive },
+        ];
+        const results = [];
+        for (const cfg of configs) {
+            const matched = records.filter(cfg.filter);
+            const n = matched.length;
+            if (n < 3) {
+                results.push({ config: cfg.label, count: n, avgRet1D: 'N/A(样本不足)', winRate1D: 'N/A', avgRet2D: 'N/A', winRate2D: 'N/A', score: 0 });
+                continue;
+            }
+            const avg1d = matched.reduce((s, r) => s + r.ret1d, 0) / n;
+            const avg2d = matched.reduce((s, r) => s + r.ret2d, 0) / n;
+            const w1 = matched.filter(r => r.ret1d > 0).length / n * 100;
+            const w2 = matched.filter(r => r.ret2d > 0).length / n * 100;
+            const fmtRet = (v) => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+            results.push({
+                config: cfg.label,
+                count: n,
+                pct: (n / records.length * 100).toFixed(1) + '%',
+                avgRet1D: fmtRet(avg1d),
+                winRate1D: w1.toFixed(1) + '%',
+                avgRet2D: fmtRet(avg2d),
+                winRate2D: w2.toFixed(1) + '%',
+                _score: avg1d * 0.6 + avg2d * 0.3 + (w1 / 100) * 0.1,
+            });
+        }
+        results.sort((a, b) => b._score - a._score);
+        const midRecords = records.filter(r => r.score >= 6 && r.score <= 8 && r.isGoldenCross);
+        const midAvg1d = midRecords.length > 0 ? midRecords.reduce((s, r) => s + r.ret1d, 0) / midRecords.length : 0;
+        const midWin1 = midRecords.length > 0 ? midRecords.filter(r => r.ret1d > 0).length / midRecords.length * 100 : 0;
+        this.logger.log(`✅ 评分预测回测完成: ${processed}/${sample.length}只有效, ${totalDays}个测试点`);
+        return {
+            summary: `评分预测过滤器回测: ${processed}/${sample.length}只股票, ${totalDays}个测试点`,
+            records: `每个记录含 score/ret1d/ret2d/isGoldenCross/trendState/pricePosition/volumeRatio`,
+            totalRecords: records.length,
+            combinations: results,
+            bestConfig: results[0] || { config: '无足够数据' },
+            midRangeInfo: {
+                desc: '评分6-8+金叉(高胜率稳定区间)',
+                count: midRecords.length,
+                avgRet1D: midRecords.length > 0 ? (midAvg1d > 0 ? '+' : '') + midAvg1d.toFixed(2) + '%' : 'N/A',
+                winRate1D: midRecords.length > 0 ? midWin1.toFixed(1) + '%' : 'N/A',
+            },
+        };
+    }
+    async technicalAnalysis(code) {
+        const kline = await this.dataFetcher.getKLineData(code);
+        if (!kline || kline.length < 30) {
+            return {
+                code,
+                currentPrice: 0,
+                entryScore: 0,
+                entryLevel: '数据不足',
+                bestEntryPrice: 0,
+                reasoning: ['K线数据不足30条，无法进行技术分析'],
+                macd: null,
+                kdj: null,
+                bollinger: null,
+                rsi: null,
+                volumeRatio: null,
+            };
+        }
+        const taKlines = kline.map(k => ({
+            date: String(k.day || k.date || ''),
+            open: k.open || 0,
+            close: k.close || 0,
+            high: k.high || 0,
+            low: k.low || 0,
+            volume: k.volume || 0,
+            amount: k.amount || 0,
+        }));
+        const currentPrice = taKlines[taKlines.length - 1].close;
+        const result = (0, technical_analysis_1.analyzeTechnical)(taKlines, currentPrice);
+        return { code, ...result };
+    }
+    async intradayAnalysis(code) {
+        const minData = await this.fetchMinuteKLine(code, 1);
+        return this.doIntradayAnalysis(code, minData);
+    }
+    async doIntradayAnalysis(code, minData) {
+        if (!minData || minData.length < 50) {
+            return {
+                code,
+                date: new Date().toISOString().slice(0, 10),
+                status: '数据不足',
+                reason: `1分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
+                macdSignals: [],
+                zhuliSanhu: { signals: [] },
+                suggestions: [],
+                summary: '数据不足，无法提供日内介入参考',
+            };
+        }
+        const close = minData.map(k => k.close);
+        const high = minData.map(k => k.high);
+        const low = minData.map(k => k.low);
+        const open = minData.map(k => k.open);
+        const volume = minData.map(k => k.volume);
+        const len = close.length;
+        const alpha1 = 2 / (40 + 1);
+        const alpha2 = 2 / (120 + 1);
+        const alphaSignal = 2 / (40 + 1);
+        const ema40 = [close[0]];
+        const ema120 = [close[0]];
+        for (let i = 1; i < len; i++) {
+            ema40.push(alpha1 * close[i] + (1 - alpha1) * ema40[i - 1]);
+            ema120.push(alpha2 * close[i] + (1 - alpha2) * ema120[i - 1]);
+        }
+        const diff = [];
+        for (let i = 0; i < len; i++)
+            diff.push(ema40[i] - ema120[i]);
+        const dea = [diff[0]];
+        for (let i = 1; i < len; i++)
+            dea.push(alphaSignal * diff[i] + (1 - alphaSignal) * dea[i - 1]);
+        const macdHist = [];
+        for (let i = 0; i < len; i++)
+            macdHist.push(2 * (diff[i] - dea[i]));
+        const macdSignals = [];
+        for (let i = 1; i < len - 1; i++) {
+            if (diff[i - 1] < dea[i - 1] && diff[i] >= dea[i]) {
+                macdSignals.push({ time: minData[i].time, type: '金叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
+            }
+            else if (diff[i - 1] > dea[i - 1] && diff[i] <= dea[i]) {
+                macdSignals.push({ time: minData[i].time, type: '死叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
+            }
+        }
+        const _greenValleys = [];
+        const _redPeaks = [];
+        const MIN_RUN = 15;
+        for (let i = MIN_RUN + 1; i < len - 1; i++) {
+            if (macdHist[i] < 0) {
+                let dropping = true;
+                for (let j = i - MIN_RUN; j < i; j++) {
+                    if (macdHist[j] >= macdHist[j - 1]) {
+                        dropping = false;
+                        break;
+                    }
+                }
+                if (dropping && macdHist[i] > macdHist[i - 1]) {
+                    const valleyIdx = i - 1;
+                    const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
+                    const last = _greenValleys[_greenValleys.length - 1];
+                    if (!last || valleyIdx - last.idx >= 10) {
+                        _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
+                    }
+                }
+            }
+            if (macdHist[i] > 0) {
+                let rising = true;
+                for (let j = i - MIN_RUN; j < i; j++) {
+                    if (macdHist[j] <= macdHist[j - 1]) {
+                        rising = false;
+                        break;
+                    }
+                }
+                if (rising && macdHist[i] < macdHist[i - 1]) {
+                    const peakIdx = i - 1;
+                    const thisPrice = Math.round(close[peakIdx] * 100) / 100;
+                    const last = _redPeaks[_redPeaks.length - 1];
+                    if (!last || peakIdx - last.idx >= 10) {
+                        _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
+                    }
+                }
+            }
+        }
+        const _divergences = [];
+        if (_redPeaks.length >= 2) {
+            for (let i = 1; i < _redPeaks.length; i++) {
+                const prev = _redPeaks[i - 1];
+                const curr = _redPeaks[i];
+                if (curr.price > prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+                    _divergences.push({
+                        type: '顶背离',
+                        idx: curr.idx, time: curr.time,
+                        price: curr.price, macdVal: curr.macdVal,
+                        prevMacdVal: prev.macdVal, prevPrice: prev.price,
+                        strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+                    });
+                }
+            }
+        }
+        if (_greenValleys.length >= 2) {
+            for (let i = 1; i < _greenValleys.length; i++) {
+                const prev = _greenValleys[i - 1];
+                const curr = _greenValleys[i];
+                if (curr.price < prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
+                    _divergences.push({
+                        type: '底背离',
+                        idx: curr.idx, time: curr.time,
+                        price: curr.price, macdVal: curr.macdVal,
+                        prevMacdVal: prev.macdVal, prevPrice: prev.price,
+                        strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
+                    });
+                }
+            }
+        }
+        const var3 = [];
+        for (let i = 0; i < len; i++)
+            var3.push((2 * close[i] + high[i] + low[i]) / 4);
+        const llv21 = [];
+        const hhv21 = [];
+        for (let i = 0; i < len; i++) {
+            const start = Math.max(0, i - 21 + 1);
+            llv21.push(Math.min(...low.slice(start, i + 1)));
+            hhv21.push(Math.max(...high.slice(start, i + 1)));
+        }
+        const rawMain = [];
+        for (let i = 0; i < len; i++) {
+            const range = hhv21[i] - llv21[i];
+            rawMain.push(range > 0 ? ((var3[i] - llv21[i]) / range) * 100 : 50);
+        }
+        const ema7Alpha = 2 / (7 + 1);
+        const mainLine = [rawMain[0]];
+        for (let i = 1; i < len; i++)
+            mainLine.push(ema7Alpha * rawMain[i] + (1 - ema7Alpha) * mainLine[i - 1]);
+        const smoothMain = [mainLine[0]];
+        for (let i = 1; i < len; i++)
+            smoothMain.push(0.5 * mainLine[i - 1] + 0.5 * mainLine[i]);
+        const ema8Alpha = 2 / (8 + 1);
+        const retailLine = [smoothMain[0]];
+        for (let i = 1; i < len; i++)
+            retailLine.push(ema8Alpha * smoothMain[i] + (1 - ema8Alpha) * retailLine[i - 1]);
+        const mainUp = mainLine.map((v, i) => i === 0 ? false : v > mainLine[i - 1]);
+        const mainDown = mainLine.map((v, i) => i === 0 ? false : v < mainLine[i - 1]);
+        const zhuliBuyPoints = [];
+        const zhuliSellPoints = [];
+        for (let i = 3; i < len - 1; i++) {
+            const crossBuy = mainLine[i - 1] <= retailLine[i - 1] && mainLine[i] > retailLine[i];
+            const buyCond = crossBuy && mainLine[i] < 20 && mainUp[i];
+            if (buyCond) {
+                const lastBuy = zhuliBuyPoints[zhuliBuyPoints.length - 1];
+                if (!lastBuy || i - lastBuy.idx >= 3) {
+                    zhuliBuyPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
+                }
+            }
+            const crossSell = retailLine[i - 1] <= mainLine[i - 1] && retailLine[i] > mainLine[i];
+            const sellCond = crossSell && retailLine[i] > 70 && mainDown[i];
+            if (sellCond) {
+                const lastSell = zhuliSellPoints[zhuliSellPoints.length - 1];
+                if (!lastSell || i - lastSell.idx >= 3) {
+                    zhuliSellPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
+                }
+            }
+        }
+        const suggestions = [];
+        const lastIdx = len - 1;
+        const lastMain = mainLine[lastIdx];
+        const lastRetail = retailLine[lastIdx];
+        const lastDiff = diff[lastIdx];
+        const lastDea = dea[lastIdx];
+        const currentMacdStatus = lastDiff >= lastDea ? '金叉区' : '死叉区';
+        const currentZhuliStatus = lastMain > lastRetail ? '主力占优' : '散户占优';
+        let summary = '';
+        const _latestDivBuy = _divergences.filter(d => d.type === '底背离').pop();
+        const _latestDivSell = _divergences.filter(d => d.type === '顶背离').pop();
+        if (_latestDivSell) {
+            summary = `⚠️ 大红峰接小红峰顶背离（强度${_latestDivSell.strength}%）：价格${_latestDivSell.price.toFixed(2)}创新高但MACD红柱缩小，上涨乏力注意回调`;
+        }
+        else if (_latestDivBuy) {
+            summary = `✅ 大绿峰接小绿峰底背离（强度${_latestDivBuy.strength}%）：价格${_latestDivBuy.price.toFixed(2)}创新低但MACD绿柱收窄，下跌衰竭关注低吸`;
+        }
+        else if (zhuliBuyPoints.length > 0) {
+            const latest = zhuliBuyPoints[zhuliBuyPoints.length - 1];
+            summary = `近期出现主力低吸买入信号（${latest.time}，¥${latest.price.toFixed(2)}），可关注低吸机会`;
+        }
+        else if (zhuliSellPoints.length > 0) {
+            const latest = zhuliSellPoints[zhuliSellPoints.length - 1];
+            summary = `近期出现主力高抛卖出信号（${latest.time}，¥${latest.price.toFixed(2)}），注意回调风险`;
+        }
+        else {
+            summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
+        }
+        const _signalList = [];
+        const _buyCands = [];
+        for (const gv of _greenValleys) {
+            const t = gv.time.slice(11, 16);
+            const nearbyMainBuy = zhuliBuyPoints.filter(z => Math.abs(z.idx - gv.idx) <= 5);
+            _buyCands.push({ idx: gv.idx, time: t, price: gv.price, source: nearbyMainBuy.length > 0 ? '绿峰+主力(最佳买入)' : '绿峰谷底', score: nearbyMainBuy.length > 0 ? 90 : 60 });
+        }
+        for (const zb of zhuliBuyPoints) {
+            if (!_greenValleys.some(g => Math.abs(g.idx - zb.idx) <= 5)) {
+                _buyCands.push({ idx: zb.idx, time: zb.time.slice(11, 16), price: zb.price, source: '主力低吸', score: 50 });
+            }
+        }
+        for (const dv of _divergences.filter(d => d.type === '底背离')) {
+            if (_buyCands.some(c => Math.abs(c.idx - dv.idx) < 30))
+                continue;
+            const nearbyMain = zhuliBuyPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+            _buyCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
+        }
+        const _sellCands = [];
+        for (const rp of _redPeaks) {
+            const t = rp.time.slice(11, 16);
+            const nearbyMainSell = zhuliSellPoints.filter(z => Math.abs(z.idx - rp.idx) <= 5);
+            _sellCands.push({ idx: rp.idx, time: t, price: rp.price, source: nearbyMainSell.length > 0 ? '红峰+主力(最佳卖出)' : '红峰峰顶', score: nearbyMainSell.length > 0 ? 90 : 60 });
+        }
+        for (const zs of zhuliSellPoints) {
+            if (!_redPeaks.some(r => Math.abs(r.idx - zs.idx) <= 5)) {
+                _sellCands.push({ idx: zs.idx, time: zs.time.slice(11, 16), price: zs.price, source: '主力高抛', score: 50 });
+            }
+        }
+        for (const dv of _divergences.filter(d => d.type === '顶背离')) {
+            if (_sellCands.some(c => Math.abs(c.idx - dv.idx) < 30))
+                continue;
+            const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
+            _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
+        }
+        _signalList.length = 0;
+        const _allSorted = [..._buyCands, ..._sellCands].sort((a, b) => a.idx - b.idx);
+        for (const sig of _allSorted) {
+            _signalList.push({ idx: sig.idx, time: sig.time, price: sig.price, type: (sig.source.includes('卖出') || sig.source.includes('高抛') || sig.source.includes('顶背离')) ? '卖出点' : '买入点', source: sig.source });
+        }
+        suggestions.length = 0;
+        _signalList.sort((a, b) => a.time.localeCompare(b.time));
+        for (const s of _signalList)
+            suggestions.push(s);
+        const _todaySugsBuy = suggestions.filter(s => s.type === '买入点');
+        const _todaySugsSell = suggestions.filter(s => s.type === '卖出点');
+        let bestBuyPrice = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).price : 0;
+        let bestBuyTime = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).time : '';
+        let bestSellPrice = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).price : 0;
+        let bestSellTime = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).time : '';
+        const _td = minData[len - 1]?.time?.slice(0, 10) || '';
+        let todaySugs = [];
+        if (_td) {
+            todaySugs = [...suggestions];
+        }
+        else {
+            todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time : s.time }));
+            if (!bestBuyTime) {
+                bestBuyPrice = 0;
+                bestBuyTime = '';
+            }
+            if (!bestSellTime) {
+                bestSellPrice = 0;
+                bestSellTime = '';
+            }
+        }
+        const _today = new Date().toISOString().slice(0, 10);
+        const _cacheKey = `${code}:${_today}`;
+        const _cached = this.intradaySignalCache.get(_cacheKey);
+        if (_cached && _cached.date === _today) {
+            const _newKeySet = new Set(todaySugs.map(s => `${s.time}|${s.type}|${s.source}`));
+            const _oldOnly = _cached.suggestions.filter(s => !_newKeySet.has(`${s.time}|${s.type}|${s.source}`));
+            if (_oldOnly.length > 0) {
+                todaySugs = [..._oldOnly, ...todaySugs];
+                const _buySugs = todaySugs.filter(s => s.type === '买入点');
+                const _sellSugs = todaySugs.filter(s => s.type === '卖出点');
+                if (_buySugs.length > 0) {
+                    const _lockedLowest = _buySugs.reduce((a, b) => a.price < b.price ? a : b);
+                    bestBuyPrice = _lockedLowest.price;
+                    bestBuyTime = _lockedLowest.time;
+                }
+                if (_sellSugs.length > 0) {
+                    const _lockedHighest = _sellSugs.reduce((a, b) => a.price > b.price ? a : b);
+                    bestSellPrice = _lockedHighest.price;
+                    bestSellTime = _lockedHighest.time;
+                }
+                this.logger.log(`📌 日内缓存 ${code}: 保留 ${_oldOnly.length} 个历史信号，新增 ${todaySugs.length - _oldOnly.length} 个新信号`);
+            }
+        }
+        this.intradaySignalCache.set(_cacheKey, {
+            date: _today,
+            barCount: len,
+            suggestions: todaySugs,
+            bestBuyPrice,
+            bestBuyTime,
+            bestSellPrice,
+            bestSellTime,
+            summary,
+            lastRefresh: Date.now(),
+        });
+        if (this.intradaySignalCache.size > 100) {
+            const _now = Date.now();
+            let _cleared = 0;
+            for (const [_k, _v] of this.intradaySignalCache) {
+                if (_v.date !== _today && _now - (_v.lastRefresh || 0) > 12 * 3600 * 1000) {
+                    this.intradaySignalCache.delete(_k);
+                    if (++_cleared > 500)
+                        break;
+                }
+            }
+            if (this.intradaySignalCache.size > 2000) {
+                const _sorted = [...this.intradaySignalCache.entries()]
+                    .sort((a, b) => (a[1].lastRefresh || 0) - (b[1].lastRefresh || 0));
+                const _toDelete = _sorted.slice(0, _sorted.length - 1500);
+                for (const [_k] of _toDelete)
+                    this.intradaySignalCache.delete(_k);
+                _cleared += _toDelete.length;
+            }
+            if (_cleared > 0)
+                this.logger.log(`🧹 日内缓存清理: 移除 ${_cleared} 条, 剩余 ${this.intradaySignalCache.size} 条`);
+        }
+        return {
+            code,
+            date: new Date().toISOString().slice(0, 10),
+            status: 'ok',
+            dataCount: len,
+            currentPrice: close[lastIdx],
+            currentTime: minData[lastIdx].time,
+            macd: {
+                diff: Math.round(lastDiff * 100) / 100,
+                dea: Math.round(lastDea * 100) / 100,
+                macd: Math.round(macdHist[lastIdx] * 100) / 100,
+                status: currentMacdStatus,
+                goldenCrosses: macdSignals.filter(s => s.type === '金叉').length,
+                deathCrosses: macdSignals.filter(s => s.type === '死叉').length,
+                signals: macdSignals.slice(-10),
+            },
+            zhuliSanhu: {
+                main: Math.round(lastMain * 100) / 100,
+                retail: Math.round(lastRetail * 100) / 100,
+                status: currentZhuliStatus,
+                buySignals: zhuliBuyPoints,
+                sellSignals: zhuliSellPoints,
+            },
+            suggestions: todaySugs,
+            bestBuyPrice: bestBuyPrice || 0,
+            bestBuyTime: bestBuyTime,
+            bestSellPrice: bestSellPrice || 0,
+            bestSellTime: bestSellTime,
+            summary,
+        };
+    }
+    async fetchMinuteKLine(_code, _minute = 5) {
+        return [];
+    }
+    async fetchAuctionTrend(_code) {
+        return [];
+    }
 };
 exports.GemScreenerService = GemScreenerService;
 exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decorate([
@@ -3314,1088 +4298,3 @@ exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decor
     __metadata("design:paramtypes", [data_fetcher_service_1.DataFetcherService,
         stock_service_1.StockService])
 ], GemScreenerService);
-return {
-    code, name: name ?? '',
-    currentPrice: price,
-    changePercent: Math.round(changePct * 100) / 100,
-    priceIncrease: Math.round(priceIncrease * 100) / 100,
-    mainForceInflow,
-    pricePosition: Math.round(pricePos),
-    forecast1_2Day,
-    capitalRank: 0,
-    baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
-    score,
-    suggestion: finalSuggestion,
-    entryTiming,
-    safetyScore,
-    isGoldenCross,
-    diff,
-    dea,
-    buySignal: !!(baiXing?.baiXiao || baiXing?.jiaCang || sanJiao?.shortBuy) ? '有信号' : '',
-    chipConcentration90,
-    chipPeakPosition,
-    chipPattern,
-    signalCombination: result.reason || '',
-    ma5: Math.round(ma5 * 100) / 100,
-    ma10: Math.round(ma10 * 100) / 100,
-    jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-    _debug: {
-        ma5: Math.round(ma5 * 100) / 100,
-        ma10: Math.round(ma10 * 100) / 100,
-        ma10_1dAgo: Math.round(ma10_1dAgo * 100) / 100,
-        ma5Up,
-        ma10Up,
-        ma10TurnUp,
-        baiXiao: !!baiXiao,
-        baiXiaoDays,
-        baiBuState: !!baiBuState,
-        qiangZhiFuGai,
-        ma10Down,
-        trendState,
-        price: Math.round(price * 100) / 100,
-        priceAboveMa5: price > ma5,
-        pricePos: Math.round(pricePos),
-        volRatio: Math.round(volRatio * 100) / 100,
-        volActive: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-        chipPattern,
-        chipPeakPosition,
-        chipConcentration90: Math.round(chipConcentration90 * 100) / 100,
-        chipDowngrade: chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30,
-        chipRisk: chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25,
-        sellLocked: !!sellEntry,
-        deepWashoutApplied: suggestion === '轻仓买入',
-        keepAll,
-    },
-};
-async;
-searchStocks(keyword, string);
-Promise < OpportunityStock[] > {
-    const: results, OpportunityStock, []:  = [],
-    try: {
-        const: allCached = [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])],
-        const: seen = new Set(),
-        const: deduped = allCached.filter(s => {
-            const key = s.code;
-            if (seen.has(key))
-                return false;
-            seen.add(key);
-            return true;
-        }),
-        const: kw = keyword.toLowerCase().trim(),
-        const: matched = deduped.filter(s => {
-            if ((s.code || '').toLowerCase().includes(kw))
-                return true;
-            if ((s.name || '').toLowerCase().includes(kw))
-                return true;
-            try {
-                const py = (0, pinyin_pro_1.pinyin)(s.name || '', { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '');
-                if (py.includes(kw))
-                    return true;
-            }
-            catch (_) { }
-            return false;
-        }).slice(0, 15),
-        if(matched) { }, : .length === 0, return: results,
-        this: .recalculateSuggestions(matched),
-        for(, r, of, matched) {
-            const sellEntry = this.sellStateCache.get(r.code);
-            if (sellEntry) {
-                const hasBuySignal = ['重仓买入', '买入'].includes(r.suggestion || '') &&
-                    r.isGoldenCross === true &&
-                    (r.entryTiming ?? 0) >= 50;
-                if (hasBuySignal) {
-                    this.sellStateCache.delete(r.code);
-                    this.logger.log(`🔓 [搜索] ${r.name}(${r.code}) 出现买入信号，自动解除卖出锁定`);
-                }
-                else {
-                    r.suggestion = '不要介入';
-                    r.trendPrediction = { direction: '方向不明', score: 30, reason: '卖出锁定中', details: {} };
-                }
-            }
-        },
-        this: .addForecastToCache(matched),
-        results, : .push(...matched)
-    }, catch(e) {
-        this.logger.error(`缓存搜索失败: ${e.message}`);
-    },
-    return: results
-};
-async;
-rescanMarket();
-Promise < OpportunityStock[] > {
-    const: now = Date.now(),
-    this: .logger.log('开始按新标准重新评估缓存的个股...'),
-    try: {
-        const: allCached, OpportunityStock, []:  = [],
-        : .cache?.data, allCached, : .push(...this.cache.data),
-        : .mainBoardCache?.data, allCached, : .push(...this.mainBoardCache.data),
-        const: seenCodes = new Set(),
-        const: uniqueStocks, OpportunityStock, []:  = [],
-        for(, s, of, allCached) {
-            if (s.code && !seenCodes.has(s.code)) {
-                seenCodes.add(s.code);
-                uniqueStocks.push(s);
-            }
-        },
-        this: .logger.log(`收集到 ${uniqueStocks.length} 只缓存的个股，应用新标准重新评估`),
-        const: updated, OpportunityStock, []:  = [],
-        for(, s, of, uniqueStocks) {
-            try {
-                const pp = s.pricePosition ?? 50;
-                const goldenCross = s.isGoldenCross ?? false;
-                const jiGou = s.jiGouActiveScore ?? 0;
-                const chipConc = s.chipConcentration90 ?? 50;
-                const chipPeak = s.chipPeakPosition ?? 'mid';
-                const chipPat = s.chipPattern ?? 'dispersed';
-                let trendState = 1;
-                if (pp > 55 && goldenCross)
-                    trendState = 3;
-                else if (pp > 40)
-                    trendState = 2;
-                else if (pp < 25)
-                    trendState = 0;
-                const sellEntry = this.sellStateCache.get(s.code);
-                if (sellEntry) {
-                    const canUnlock = (s.suggestion && ['重仓买入', '买入'].includes(s.suggestion)) && goldenCross === true && pp >= 50;
-                    if (canUnlock) {
-                        this.sellStateCache.delete(s.code);
-                        this.logger.log(`🔓 [重扫] ${s.name}(${s.code}) 出现买入信号，自动解除卖出锁定`);
-                    }
-                    else {
-                        updated.push({
-                            ...s,
-                            suggestion: '不要介入',
-                            score: Math.min(s.score ?? 50, 30),
-                        });
-                        continue;
-                    }
-                }
-                const SELL_SIGS = ['卖出', '减仓', '不要介入'];
-                let newSuggestion;
-                if (s.suggestion && SELL_SIGS.includes(s.suggestion)) {
-                    newSuggestion = s.suggestion ?? '持有';
-                    if (newSuggestion === '卖出') {
-                        this.sellStateCache.set(s.code, { suggestion: newSuggestion, timestamp: Date.now() });
-                    }
-                }
-                else if (s.suggestion && ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)) {
-                    newSuggestion = s.suggestion;
-                }
-                else {
-                    const isBaiXiaoActive = (s.baiXiaoDays ?? 0) > 0 || (s.buySignal?.includes('信号'));
-                    const baiXiaoDays = s.baiXiaoDays ?? 0;
-                    if (trendState >= 2 && goldenCross && isBaiXiaoActive && jiGou >= 10 && pp >= 15 && pp <= 45) {
-                        if (jiGou >= 14 && pp >= 20)
-                            newSuggestion = '重仓买入';
-                        else if (jiGou >= 10 || baiXiaoDays >= 4)
-                            newSuggestion = '买入';
-                        else
-                            newSuggestion = '轻仓买入';
-                    }
-                    else if (trendState >= 1 && goldenCross && pp > 10 && pp < 50) {
-                        if (baiXiaoDays >= 6)
-                            newSuggestion = '买入';
-                        else if (pp >= 25)
-                            newSuggestion = '轻仓买入';
-                        else
-                            newSuggestion = '持有';
-                    }
-                    else if (trendState >= 1 && pp > 15) {
-                        newSuggestion = '持有';
-                    }
-                    else {
-                        newSuggestion = '持有';
-                    }
-                    const chipDowngrade = chipPat === 'dispersed' && chipPeak === 'high' && pp < 30;
-                    const chipRisk = chipConc > 40 && chipPeak === 'high' && pp < 25;
-                    if (chipDowngrade || chipRisk) {
-                        if (newSuggestion === '重仓买入')
-                            newSuggestion = '买入';
-                        else if (newSuggestion === '买入')
-                            newSuggestion = '轻仓买入';
-                        else if (newSuggestion === '轻仓买入')
-                            newSuggestion = '持有';
-                    }
-                    if (chipPat === 'single_peak' && chipPeak === 'low' && pp > 15 && pp < 45 && trendState >= 1) {
-                        if (newSuggestion === '买入')
-                            newSuggestion = '重仓买入';
-                        else if (newSuggestion === '轻仓买入')
-                            newSuggestion = '买入';
-                    }
-                    const entry = s.entryTiming ?? 50;
-                    const PRIORITY_LIST = ['重仓买入', '买入', '轻仓买入', '持有', '卖出', '不要介入'];
-                    const sugIdx2 = PRIORITY_LIST.indexOf(newSuggestion);
-                    if (sugIdx2 >= 0 && entry >= 65 && sugIdx2 > 1) {
-                        newSuggestion = sugIdx2 <= 2 ? PRIORITY_LIST[sugIdx2 - 1] : '轻仓买入';
-                    }
-                    else if (sugIdx2 >= 0 && entry < 35 && sugIdx2 <= 1) {
-                        newSuggestion = PRIORITY_LIST[sugIdx2 + 1];
-                    }
-                }
-                const chg = s.changePercent ?? 0;
-                if (chg >= 9 && !['重仓买入', '买入', '轻仓买入'].includes(newSuggestion)) {
-                    newSuggestion = '轻仓买入';
-                }
-                else if (chg >= 6 && !['重仓买入', '买入', '轻仓买入', '减仓', '卖出'].includes(newSuggestion)) {
-                    newSuggestion = '轻仓买入';
-                }
-                else if (chg >= 3 && newSuggestion === '不要介入') {
-                    newSuggestion = '持有';
-                }
-                if (!['重仓买入', '买入'].includes(newSuggestion) && (s.ma5 ?? 0) < (s.ma10 ?? 0)) {
-                    newSuggestion = '不要介入';
-                }
-                const BASE = {
-                    '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
-                };
-                let newScore = BASE[newSuggestion] ?? 30;
-                if (pp < 30)
-                    newScore += 15;
-                else if (pp < 50)
-                    newScore += 8;
-                if (goldenCross)
-                    newScore += 10;
-                if (jiGou >= 12)
-                    newScore += 8;
-                if (chipConc <= 25)
-                    newScore += 10;
-                updated.push({
-                    ...s,
-                    suggestion: newSuggestion,
-                    score: newScore,
-                    chipConcentration90: s.chipConcentration90 ?? 50,
-                    chipPeakPosition: s.chipPeakPosition ?? 'mid',
-                    chipPattern: s.chipPattern ?? 'dispersed',
-                    jiGouActiveScore: s.jiGouActiveScore ?? Math.round(((s.entryTiming || 0) / 100 * 20) * 100) / 100,
-                });
-            }
-            catch (e) {
-                updated.push(s);
-            }
-        },
-        const: PRIORITY
-    }
-};
-{
-    '重仓买入';
-    0, '买入';
-    1, '轻仓买入';
-    2, '持有';
-    3, '减仓';
-    4, '卖出';
-    5, '不要介入';
-    6;
-}
-;
-updated.sort((a, b) => {
-    const pa = PRIORITY[a.suggestion || '不要介入'] ?? 9;
-    const pb = PRIORITY[b.suggestion || '不要介入'] ?? 9;
-    if (pa !== pb)
-        return pa - pb;
-    return (b.score || 0) - (a.score || 0);
-});
-const gemStocks = updated.filter(s => /^30/.test(s.code));
-const mainBoardStocks = updated.filter(s => /^60/.test(s.code) || /^00/.test(s.code));
-this.cache = { data: gemStocks, timestamp: now };
-this.mainBoardCache = { data: mainBoardStocks, timestamp: now };
-await this.saveCacheToDisk();
-await this.saveMainBoardCacheToDisk();
-for (const stock of updated) {
-    if (!stock.trendPrediction) {
-        stock.trendPrediction = this.calcSimpleTrendPrediction(stock);
-    }
-}
-this.addForecastToCache(updated);
-await this.saveSellStateCache();
-this.logger.log(`重新评估完成：${updated.length} 只, 信号: ${updated.map(s => s.suggestion).join(',')}`);
-try { }
-catch (e) {
-    this.logger.error(`重新评估失败: ${e.message}`);
-}
-return [...(this.cache?.data || []), ...(this.mainBoardCache?.data || [])];
-triggerAnalysisPreCacheFromCache();
-{
-    const cachedStocks = [];
-    if (this.cache?.data)
-        cachedStocks.push(...this.cache.data.map(s => s.code));
-    if (this.mainBoardCache?.data)
-        cachedStocks.push(...this.mainBoardCache.data.map(s => s.code));
-    if (cachedStocks.length > 0) {
-        this.stockService.preCacheAnalysisBatch(cachedStocks).catch(() => { });
-    }
-}
-triggerAnalysisPreCache(stocks, OpportunityStock[]);
-{
-    if (stocks.length > 0) {
-        this.stockService.preCacheAnalysisBatch(stocks.map(s => s.code)).catch(() => { });
-    }
-}
-async;
-scanGlobalHeavyBuy();
-Promise < OpportunityStock[] > {
-    this: .logger.log('🔍 [全局重仓买入] 开始扫描...'),
-    try: {
-        const: allCodes, string, []:  = [],
-        const: codeToSectorName = new Map(),
-        for(, sector, of, ALL_SECTORS) {
-            for (const code of sector.codes) {
-                if (!allCodes.includes(code)) {
-                    allCodes.push(code);
-                    codeToSectorName.set(code, sector.name);
-                }
-            }
-        },
-        const: cachedCodes = [
-            ...(this.cache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
-            ...(this.mainBoardCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
-            ...(this.sectorCache?.data?.map(s => s.code.replace(/^(sh|sz)/, '')) ?? []),
-        ],
-        for(, c, of, cachedCodes) {
-            if (c && !allCodes.includes(c))
-                allCodes.push(c);
-        },
-        this: .logger.log(`🔍 共收集 ${allCodes.length} 只候选股票`),
-        const: heavyBuyResults, OpportunityStock, []:  = [],
-        this: .logger.log(`🔍 后端不主动调外部API，全局重仓买入扫描跳过`),
-        heavyBuyResults, : .sort((a, b) => (b.score || 0) - (a.score || 0)),
-        this: .logger.log(`✅ [全局重仓买入] 完成, 发现 ${heavyBuyResults.length} 只`),
-        return: heavyBuyResults.slice(0, 3)
-    }, catch(error) {
-        this.logger.error(`❌ [全局重仓买入] 异常: ${error.message}`);
-        return [];
-    }
-};
-async;
-getIndustrySectorTop10();
-Promise < {
-    sectors: (Array),
-    timestamp: number
-} > {
-    const: allCodes, string, []:  = [],
-    const: codeToSector = new Map(),
-    for(, sec, of, ALL_SECTORS) {
-        for (const code of sec.codes) {
-            codeToSector.set(code, sec.name);
-            if (!allCodes.includes(code))
-                allCodes.push(code);
-        }
-    },
-    this: .logger.log(`📊 获取行业板块实时热度: ${ALL_SECTORS.length}个板块(含概念), ${allCodes.length}只成分股`),
-    const: quoteMap = new Map(),
-    this: .logger.log(`📊 后端不主动调外部API，板块热度跳过实时行情`),
-    const: sectorMap = new Map(),
-    for(, sec, of, ALL_SECTORS) {
-        let totalChange = 0;
-        let count = 0;
-        let upCount = 0;
-        const stocks = [];
-        for (const code of sec.codes) {
-            const q = quoteMap.get(code);
-            if (q && q.price > 0) {
-                totalChange += q.changePercent;
-                count++;
-                if (q.changePercent > 0)
-                    upCount++;
-                stocks.push({ code, name: q.name, price: q.price, changePercent: q.changePercent });
-            }
-        }
-        if (count > 0) {
-            sectorMap.set(sec.name, {
-                totalChange,
-                upCount,
-                count,
-                stocks: stocks.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, 5),
-            });
-        }
-    },
-    const: sorted = Array.from(sectorMap.entries())
-        .map(([name, data]) => ({
-        name,
-        avgChangePercent: Math.round((data.totalChange / data.count) * 100) / 100,
-        totalStocks: data.count,
-        upStocks: data.upCount,
-        stocks: data.stocks,
-    }))
-        .sort((a, b) => b.avgChangePercent - a.avgChangePercent)
-        .slice(0, 10)
-        .map((s, i) => ({ rank: i + 1, ...s })),
-    this: .logger.log(`📊 行业板块Top10: ${sorted.map(s => `${s.rank}.${s.name}(${s.avgChangePercent}%)`).join(', ')}`),
-    return: { sectors: sorted, timestamp: Date.now() }
-};
-async;
-scanAllWithFrontendData(stocks, { code: string, name: string, price: number, changePercent: number, inflow: number, klines: any[] }[]);
-Promise < any[] > {
-    const: results, any, []:  = [],
-    for(, s, of, stocks) {
-        if (s.klines && s.klines.length >= 20) {
-            this.dataFetcher.preloadKline(s.code, s.klines);
-        }
-    },
-    for(, s, of, stocks) {
-        try {
-            const candidate = {
-                code: s.code, name: s.name, inflow: s.inflow,
-                changePercent: s.changePercent, currentPrice: s.price,
-            };
-            const result = await this.checkOpportunity(candidate);
-            if (result)
-                results.push(result);
-        }
-        catch { }
-    },
-    if(results) { }, : .length <= 3
-};
-{
-    for (const s of stocks) {
-        try {
-            const candidate = {
-                code: s.code, name: s.name, inflow: s.inflow,
-                changePercent: s.changePercent, currentPrice: s.price,
-            };
-            const result = await this.checkOpportunityRelaxed(candidate);
-            if (result && !results.find((ex) => ex.code === result.code))
-                results.push(result);
-        }
-        catch { }
-    }
-}
-results.sort((a, b) => {
-    const pa = this.SUGGESTION_PRIORITY[a.suggestion ?? ''] ?? 99;
-    const pb = this.SUGGESTION_PRIORITY[b.suggestion ?? ''] ?? 99;
-    return pa !== pb ? pa - pb
-        : (b.entryTiming ?? 0) !== (a.entryTiming ?? 0) ? (b.entryTiming ?? 0) - (a.entryTiming ?? 0)
-            : (b.safetyScore ?? 0) !== (a.safetyScore ?? 0) ? (b.safetyScore ?? 0) - (a.safetyScore ?? 0)
-                : (b.mainForceInflow ?? 0) - (a.mainForceInflow ?? 0);
-});
-const SELL_LOCK = ['卖出'];
-const BUY_SIGNALS = ['重仓买入', '买入', '轻仓买入'];
-for (const r of results) {
-    const code = r.code;
-    if (r.suggestion && BUY_SIGNALS.includes(r.suggestion)) {
-        this.soldOutStocks.delete(code);
-    }
-    else if (r.suggestion && SELL_LOCK.includes(r.suggestion)) {
-        this.soldOutStocks.add(code);
-    }
-    else if (!BUY_SIGNALS.includes(r.suggestion ?? '')) {
-        if (this.soldOutStocks.has(code)) {
-            r.suggestion = '不要介入';
-        }
-    }
-}
-const BUY_ONLY = ['重仓买入', '买入', '轻仓买入'];
-const buyResults = results.filter(r => BUY_ONLY.includes(r.suggestion ?? ''));
-const finalResults = buyResults.slice(0, 30);
-this.cache = { data: finalResults, timestamp: Date.now() };
-this.saveCacheToDisk();
-this.logger.log('\u2705 \u5168\u5e02\u573a\u626b\u63cf\u5b8c\u6210, Top' + finalResults.length + ' \u53ea');
-return finalResults;
-async;
-runBacktest();
-Promise < any > {
-    const: allCodes, string, []:  = [],
-    try: {
-        for(, p, of, [join]) { }
-    }(process.cwd(), 'assets', 'gem-cache.json'), join(process) { }, : .cwd(), 'assets': , 'main-board-cache.json': 
-};
-{
-    if ((0, fs_1.existsSync)(p)) {
-        const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
-        const stocks = raw?.data || raw?.stocks || raw;
-        if (Array.isArray(stocks))
-            stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
-                allCodes.push(s.code); });
-    }
-}
-try { }
-catch { }
-const sample = allCodes.slice(0, 20);
-this.logger.log("\u56de\u5f52\u9a8c\u8bc1: \u62bd\u53d6 " + sample.length + " \u53ea\u80a1\u7968\uff0c\u6b65\u8fdb\u6d4b\u8bd5\u8bc4\u5206\u7684\u9884\u6d4b\u80fd\u529b");
-const records = [];
-let processed = 0, totalDays = 0;
-for (const code of sample) {
-    try {
-        const kline = await this.dataFetcher.getKLineData(code);
-        if (!kline || kline.length < 150)
-            continue;
-        processed++;
-        for (let day = 100; day < kline.length - 2; day += 5) {
-            const slice = kline.slice(0, day + 1);
-            const now = kline[day];
-            const next1 = kline[day + 1];
-            const next2 = kline[day + 2];
-            if (!now?.close || !next1?.close || !next2?.close)
-                continue;
-            const result = this.calcMultiScore({ code, name: '' }, slice);
-            if (!result)
-                continue;
-            const score = result.score;
-            const ret1d = (next1.close - now.close) / now.close * 100;
-            const ret2d = (next2.close - now.close) / now.close * 100;
-            records.push({ score, ret1d, ret2d });
-            totalDays++;
-        }
-    }
-    catch { }
-}
-const groups = {};
-const ranges = [
-    { label: "0-3", min: 0, max: 3 },
-    { label: "4-5", min: 4, max: 5 },
-    { label: "6-7", min: 6, max: 7 },
-    { label: "8-9", min: 8, max: 9 },
-    { label: "10-11", min: 10, max: 11 },
-    { label: "12-16", min: 12, max: 16 },
-];
-for (const r of ranges)
-    groups[r.label] = { scores: [], ret1ds: [], ret2ds: [] };
-for (const rec of records) {
-    for (const r of ranges) {
-        if (rec.score >= r.min && rec.score <= r.max) {
-            groups[r.label].scores.push(rec.score);
-            groups[r.label].ret1ds.push(rec.ret1d);
-            groups[r.label].ret2ds.push(rec.ret2d);
-            break;
-        }
-    }
-}
-const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-const winRate = (arr) => arr.length > 0 ? arr.filter(x => x > 0).length / arr.length * 100 : 0;
-const resultGroups = ranges.map(r => {
-    const g = groups[r.label];
-    const n = g.scores.length;
-    const avg1d = parseFloat(avg(g.ret1ds).toFixed(2));
-    const avg2d = parseFloat(avg(g.ret2ds).toFixed(2));
-    const w1 = parseFloat(winRate(g.ret1ds).toFixed(1));
-    const w2 = parseFloat(winRate(g.ret2ds).toFixed(1));
-    return {
-        range: r.label,
-        count: n,
-        avgScore: n > 0 ? parseFloat((g.scores.reduce((a, b) => a + b, 0) / n).toFixed(1)) : 0,
-        avgRet1D: avg1d > 0 ? "+" + avg1d + "%" : avg1d + "%",
-        avgRet2D: avg2d > 0 ? "+" + avg2d + "%" : avg2d + "%",
-        winRate1D: w1 + "%",
-        winRate2D: w2 + "%",
-        _score: avg1d * n + avg2d * n * 0.5,
-    };
-});
-resultGroups.sort((a, b) => b._score - a._score);
-this.logger.log("\u2705 \u56de\u5f52\u5b8c\u6210: " + processed + "/" + sample.length + " \u53ea\u6709\u6548K\u7ebf, " + totalDays + " \u4e2a\u6d4b\u8bd5\u70b9");
-return {
-    summary: "\u56de\u5f52\u9a8c\u8bc1: " + processed + "/" + sample.length + " \u53ea\uff0c\u5171" + totalDays + "\u4e2a\u65e5\u7ebf\u6d4b\u8bd5\u70b9",
-    method: "\u6b65\u8fdb: \u4ece120\u65e5\u7ebf\u5f00\u59cb\uff0c\u6bcf3\u65e5\u4e3a1\u4e2a\u6d4b\u8bd5\u70b9\uff0c\u5f53\u524d\u8bc4\u5206 VS \u672a\u67651-2\u65e5\u771f\u5b9e\u6da8\u8dcc",
-    groups: resultGroups,
-    bestGroup: resultGroups[0],
-};
-async;
-runForecastBacktest();
-Promise < any > {
-    const: allCodes, string, []:  = [],
-    try: {
-        for(, p, of, [join]) { }
-    }(process.cwd(), 'assets', 'gem-cache.json'), join(process) { }, : .cwd(), 'assets': , 'main-board-cache.json': 
-};
-{
-    if ((0, fs_1.existsSync)(p)) {
-        const raw = JSON.parse((0, fs_1.readFileSync)(p, 'utf-8'));
-        const stocks = raw?.data || raw?.stocks || raw;
-        if (Array.isArray(stocks))
-            stocks.forEach((s) => { if (s.code && !allCodes.includes(s.code))
-                allCodes.push(s.code); });
-    }
-}
-try { }
-catch { }
-const sample = allCodes.slice(0, 25);
-this.logger.log(`=== 评分预测过滤器回测: 抽取 ${sample.length} 只股票 ===`);
-const records = [];
-let processed = 0, totalDays = 0;
-for (const code of sample) {
-    try {
-        const kline = await this.dataFetcher.getKLineData(code);
-        if (!kline || kline.length < 150)
-            continue;
-        processed++;
-        for (let day = 100; day < kline.length - 2; day += 5) {
-            const slice = kline.slice(0, day + 1);
-            const now = kline[day];
-            const next1 = kline[day + 1];
-            const next2 = kline[day + 2];
-            if (!now?.close || !next1?.close || !next2?.close)
-                continue;
-            const result = this.calcMultiScore({ code, name: '' }, slice);
-            if (!result)
-                continue;
-            const ret1d = (next1.close - now.close) / now.close * 100;
-            const ret2d = (next2.close - now.close) / now.close * 100;
-            records.push({
-                score: result.score,
-                ret1d,
-                ret2d,
-                isGoldenCross: result.isGoldenCross || false,
-                trendState: result.trendState || 0,
-                pricePosition: result.pricePosition || 50,
-                volumeRatio: result.volumeRatio || 0.5,
-                jiGouActive: (result.signals?.jiGouActive) || false,
-                baiXiaoDays: result.signals?.baiXiaoDays || 0,
-                baiBu: result.signals?.baiBu || false,
-            });
-            totalDays++;
-        }
-    }
-    catch { }
-}
-const configs = [
-    { label: 'A.基准: score>=12', filter: r => r.score >= 12 },
-    { label: 'B.基准: score>=10', filter: r => r.score >= 10 },
-    { label: 'C.基准: score>=8', filter: r => r.score >= 8 },
-    { label: 'D.评分>=12+金叉', filter: r => r.score >= 12 && r.isGoldenCross },
-    { label: 'E.评分>=12+趋势>=2', filter: r => r.score >= 12 && r.trendState >= 2 },
-    { label: 'F.评分>=12+位置<70', filter: r => r.score >= 12 && r.pricePosition < 70 },
-    { label: 'G.评分>=12+金叉+趋势>=2', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 },
-    { label: 'H.评分>=12+金叉+趋势>=2+位置<70', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 },
-    { label: 'I.评分>=12+金叉+趋势>=2+位置<70+量比>0.6', filter: r => r.score >= 12 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 70 && r.volumeRatio > 0.6 },
-    { label: 'J.评分>=10+金叉+趋势>=2+位置<80', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 80 },
-    { label: 'K.评分>=10+金叉+趋势>=1+位置<80+量比>0.6', filter: r => r.score >= 10 && r.isGoldenCross && r.trendState >= 1 && r.pricePosition < 80 && r.volumeRatio > 0.6 },
-    { label: 'L.评分>=8+金叉+趋势>=2+位置<75', filter: r => r.score >= 8 && r.isGoldenCross && r.trendState >= 2 && r.pricePosition < 75 },
-    { label: 'M.评分>=14', filter: r => r.score >= 14 },
-    { label: 'N.评分>=12+金叉+机构活跃', filter: r => r.score >= 12 && r.isGoldenCross && r.jiGouActive },
-];
-const results = [];
-for (const cfg of configs) {
-    const matched = records.filter(cfg.filter);
-    const n = matched.length;
-    if (n < 3) {
-        results.push({ config: cfg.label, count: n, avgRet1D: 'N/A(样本不足)', winRate1D: 'N/A', avgRet2D: 'N/A', winRate2D: 'N/A', score: 0 });
-        continue;
-    }
-    const avg1d = matched.reduce((s, r) => s + r.ret1d, 0) / n;
-    const avg2d = matched.reduce((s, r) => s + r.ret2d, 0) / n;
-    const w1 = matched.filter(r => r.ret1d > 0).length / n * 100;
-    const w2 = matched.filter(r => r.ret2d > 0).length / n * 100;
-    const fmtRet = (v) => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
-    results.push({
-        config: cfg.label,
-        count: n,
-        pct: (n / records.length * 100).toFixed(1) + '%',
-        avgRet1D: fmtRet(avg1d),
-        winRate1D: w1.toFixed(1) + '%',
-        avgRet2D: fmtRet(avg2d),
-        winRate2D: w2.toFixed(1) + '%',
-        _score: avg1d * 0.6 + avg2d * 0.3 + (w1 / 100) * 0.1,
-    });
-}
-results.sort((a, b) => b._score - a._score);
-const midRecords = records.filter(r => r.score >= 6 && r.score <= 8 && r.isGoldenCross);
-const midAvg1d = midRecords.length > 0 ? midRecords.reduce((s, r) => s + r.ret1d, 0) / midRecords.length : 0;
-const midWin1 = midRecords.length > 0 ? midRecords.filter(r => r.ret1d > 0).length / midRecords.length * 100 : 0;
-this.logger.log(`✅ 评分预测回测完成: ${processed}/${sample.length}只有效, ${totalDays}个测试点`);
-return {
-    summary: `评分预测过滤器回测: ${processed}/${sample.length}只股票, ${totalDays}个测试点`,
-    records: `每个记录含 score/ret1d/ret2d/isGoldenCross/trendState/pricePosition/volumeRatio`,
-    totalRecords: records.length,
-    combinations: results,
-    bestConfig: results[0] || { config: '无足够数据' },
-    midRangeInfo: {
-        desc: '评分6-8+金叉(高胜率稳定区间)',
-        count: midRecords.length,
-        avgRet1D: midRecords.length > 0 ? (midAvg1d > 0 ? '+' : '') + midAvg1d.toFixed(2) + '%' : 'N/A',
-        winRate1D: midRecords.length > 0 ? midWin1.toFixed(1) + '%' : 'N/A',
-    },
-};
-async;
-technicalAnalysis(code, string);
-Promise < any > {
-    const: kline, any, []:  = await this.dataFetcher.getKLineData(code),
-    if(, kline) { }
-} || kline.length < 30;
-{
-    return {
-        code,
-        currentPrice: 0,
-        entryScore: 0,
-        entryLevel: '数据不足',
-        bestEntryPrice: 0,
-        reasoning: ['K线数据不足30条，无法进行技术分析'],
-        macd: null,
-        kdj: null,
-        bollinger: null,
-        rsi: null,
-        volumeRatio: null,
-    };
-}
-const taKlines = kline.map(k => ({
-    date: String(k.day || k.date || ''),
-    open: k.open || 0,
-    close: k.close || 0,
-    high: k.high || 0,
-    low: k.low || 0,
-    volume: k.volume || 0,
-    amount: k.amount || 0,
-}));
-const currentPrice = taKlines[taKlines.length - 1].close;
-const result = (0, technical_analysis_1.analyzeTechnical)(taKlines, currentPrice);
-return { code, ...result };
-async;
-intradayAnalysis(code, string);
-Promise < any > {
-    const: minData = await this.fetchMinuteKLine(code, 1),
-    return: this.doIntradayAnalysis(code, minData)
-};
-async;
-doIntradayAnalysis(code, string, minData, any[]);
-Promise < any > {
-    if(, minData) { }
-} || minData.length < 50;
-{
-    return {
-        code,
-        date: new Date().toISOString().slice(0, 10),
-        status: '数据不足',
-        reason: `1分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
-        macdSignals: [],
-        zhuliSanhu: { signals: [] },
-        suggestions: [],
-        summary: '数据不足，无法提供日内介入参考',
-    };
-}
-const close = minData.map(k => k.close);
-const high = minData.map(k => k.high);
-const low = minData.map(k => k.low);
-const open = minData.map(k => k.open);
-const volume = minData.map(k => k.volume);
-const len = close.length;
-const alpha1 = 2 / (40 + 1);
-const alpha2 = 2 / (120 + 1);
-const alphaSignal = 2 / (40 + 1);
-const ema40 = [close[0]];
-const ema120 = [close[0]];
-for (let i = 1; i < len; i++) {
-    ema40.push(alpha1 * close[i] + (1 - alpha1) * ema40[i - 1]);
-    ema120.push(alpha2 * close[i] + (1 - alpha2) * ema120[i - 1]);
-}
-const diff = [];
-for (let i = 0; i < len; i++)
-    diff.push(ema40[i] - ema120[i]);
-const dea = [diff[0]];
-for (let i = 1; i < len; i++)
-    dea.push(alphaSignal * diff[i] + (1 - alphaSignal) * dea[i - 1]);
-const macdHist = [];
-for (let i = 0; i < len; i++)
-    macdHist.push(2 * (diff[i] - dea[i]));
-const macdSignals = [];
-for (let i = 1; i < len - 1; i++) {
-    if (diff[i - 1] < dea[i - 1] && diff[i] >= dea[i]) {
-        macdSignals.push({ time: minData[i].time, type: '金叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
-    }
-    else if (diff[i - 1] > dea[i - 1] && diff[i] <= dea[i]) {
-        macdSignals.push({ time: minData[i].time, type: '死叉', idx: i, price: close[i], diff: diff[i], dea: dea[i] });
-    }
-}
-const _greenValleys = [];
-const _redPeaks = [];
-const MIN_RUN = 15;
-for (let i = MIN_RUN + 1; i < len - 1; i++) {
-    if (macdHist[i] < 0) {
-        let dropping = true;
-        for (let j = i - MIN_RUN; j < i; j++) {
-            if (macdHist[j] >= macdHist[j - 1]) {
-                dropping = false;
-                break;
-            }
-        }
-        if (dropping && macdHist[i] > macdHist[i - 1]) {
-            const valleyIdx = i - 1;
-            const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
-            const last = _greenValleys[_greenValleys.length - 1];
-            if (!last || valleyIdx - last.idx >= 10) {
-                _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
-            }
-        }
-    }
-    if (macdHist[i] > 0) {
-        let rising = true;
-        for (let j = i - MIN_RUN; j < i; j++) {
-            if (macdHist[j] <= macdHist[j - 1]) {
-                rising = false;
-                break;
-            }
-        }
-        if (rising && macdHist[i] < macdHist[i - 1]) {
-            const peakIdx = i - 1;
-            const thisPrice = Math.round(close[peakIdx] * 100) / 100;
-            const last = _redPeaks[_redPeaks.length - 1];
-            if (!last || peakIdx - last.idx >= 10) {
-                _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
-            }
-        }
-    }
-}
-const _divergences = [];
-if (_redPeaks.length >= 2) {
-    for (let i = 1; i < _redPeaks.length; i++) {
-        const prev = _redPeaks[i - 1];
-        const curr = _redPeaks[i];
-        if (curr.price > prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
-            _divergences.push({
-                type: '顶背离',
-                idx: curr.idx, time: curr.time,
-                price: curr.price, macdVal: curr.macdVal,
-                prevMacdVal: prev.macdVal, prevPrice: prev.price,
-                strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
-            });
-        }
-    }
-}
-if (_greenValleys.length >= 2) {
-    for (let i = 1; i < _greenValleys.length; i++) {
-        const prev = _greenValleys[i - 1];
-        const curr = _greenValleys[i];
-        if (curr.price < prev.price && Math.abs(curr.macdVal) < Math.abs(prev.macdVal) * 0.7) {
-            _divergences.push({
-                type: '底背离',
-                idx: curr.idx, time: curr.time,
-                price: curr.price, macdVal: curr.macdVal,
-                prevMacdVal: prev.macdVal, prevPrice: prev.price,
-                strength: Math.round((1 - Math.abs(curr.macdVal) / Math.abs(prev.macdVal)) * 100),
-            });
-        }
-    }
-}
-const var3 = [];
-for (let i = 0; i < len; i++)
-    var3.push((2 * close[i] + high[i] + low[i]) / 4);
-const llv21 = [];
-const hhv21 = [];
-for (let i = 0; i < len; i++) {
-    const start = Math.max(0, i - 21 + 1);
-    llv21.push(Math.min(...low.slice(start, i + 1)));
-    hhv21.push(Math.max(...high.slice(start, i + 1)));
-}
-const rawMain = [];
-for (let i = 0; i < len; i++) {
-    const range = hhv21[i] - llv21[i];
-    rawMain.push(range > 0 ? ((var3[i] - llv21[i]) / range) * 100 : 50);
-}
-const ema7Alpha = 2 / (7 + 1);
-const mainLine = [rawMain[0]];
-for (let i = 1; i < len; i++)
-    mainLine.push(ema7Alpha * rawMain[i] + (1 - ema7Alpha) * mainLine[i - 1]);
-const smoothMain = [mainLine[0]];
-for (let i = 1; i < len; i++)
-    smoothMain.push(0.5 * mainLine[i - 1] + 0.5 * mainLine[i]);
-const ema8Alpha = 2 / (8 + 1);
-const retailLine = [smoothMain[0]];
-for (let i = 1; i < len; i++)
-    retailLine.push(ema8Alpha * smoothMain[i] + (1 - ema8Alpha) * retailLine[i - 1]);
-const mainUp = mainLine.map((v, i) => i === 0 ? false : v > mainLine[i - 1]);
-const mainDown = mainLine.map((v, i) => i === 0 ? false : v < mainLine[i - 1]);
-const zhuliBuyPoints = [];
-const zhuliSellPoints = [];
-for (let i = 3; i < len - 1; i++) {
-    const crossBuy = mainLine[i - 1] <= retailLine[i - 1] && mainLine[i] > retailLine[i];
-    const buyCond = crossBuy && mainLine[i] < 20 && mainUp[i];
-    if (buyCond) {
-        const lastBuy = zhuliBuyPoints[zhuliBuyPoints.length - 1];
-        if (!lastBuy || i - lastBuy.idx >= 3) {
-            zhuliBuyPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
-        }
-    }
-    const crossSell = retailLine[i - 1] <= mainLine[i - 1] && retailLine[i] > mainLine[i];
-    const sellCond = crossSell && retailLine[i] > 70 && mainDown[i];
-    if (sellCond) {
-        const lastSell = zhuliSellPoints[zhuliSellPoints.length - 1];
-        if (!lastSell || i - lastSell.idx >= 3) {
-            zhuliSellPoints.push({ time: minData[i].time, idx: i, price: close[i], main: mainLine[i], retail: retailLine[i] });
-        }
-    }
-}
-const suggestions = [];
-const lastIdx = len - 1;
-const lastMain = mainLine[lastIdx];
-const lastRetail = retailLine[lastIdx];
-const lastDiff = diff[lastIdx];
-const lastDea = dea[lastIdx];
-const currentMacdStatus = lastDiff >= lastDea ? '金叉区' : '死叉区';
-const currentZhuliStatus = lastMain > lastRetail ? '主力占优' : '散户占优';
-let summary = '';
-const _latestDivBuy = _divergences.filter(d => d.type === '底背离').pop();
-const _latestDivSell = _divergences.filter(d => d.type === '顶背离').pop();
-if (_latestDivSell) {
-    summary = `⚠️ 大红峰接小红峰顶背离（强度${_latestDivSell.strength}%）：价格${_latestDivSell.price.toFixed(2)}创新高但MACD红柱缩小，上涨乏力注意回调`;
-}
-else if (_latestDivBuy) {
-    summary = `✅ 大绿峰接小绿峰底背离（强度${_latestDivBuy.strength}%）：价格${_latestDivBuy.price.toFixed(2)}创新低但MACD绿柱收窄，下跌衰竭关注低吸`;
-}
-else if (zhuliBuyPoints.length > 0) {
-    const latest = zhuliBuyPoints[zhuliBuyPoints.length - 1];
-    summary = `近期出现主力低吸买入信号（${latest.time}，¥${latest.price.toFixed(2)}），可关注低吸机会`;
-}
-else if (zhuliSellPoints.length > 0) {
-    const latest = zhuliSellPoints[zhuliSellPoints.length - 1];
-    summary = `近期出现主力高抛卖出信号（${latest.time}，¥${latest.price.toFixed(2)}），注意回调风险`;
-}
-else {
-    summary = `当前MACD${currentMacdStatus}，${currentZhuliStatus}，暂无明确买卖信号`;
-}
-const _signalList = [];
-const _buyCands = [];
-for (const gv of _greenValleys) {
-    const t = gv.time.slice(11, 16);
-    const nearbyMainBuy = zhuliBuyPoints.filter(z => Math.abs(z.idx - gv.idx) <= 5);
-    _buyCands.push({ idx: gv.idx, time: t, price: gv.price, source: nearbyMainBuy.length > 0 ? '绿峰+主力(最佳买入)' : '绿峰谷底', score: nearbyMainBuy.length > 0 ? 90 : 60 });
-}
-for (const zb of zhuliBuyPoints) {
-    if (!_greenValleys.some(g => Math.abs(g.idx - zb.idx) <= 5)) {
-        _buyCands.push({ idx: zb.idx, time: zb.time.slice(11, 16), price: zb.price, source: '主力低吸', score: 50 });
-    }
-}
-for (const dv of _divergences.filter(d => d.type === '底背离')) {
-    if (_buyCands.some(c => Math.abs(c.idx - dv.idx) < 30))
-        continue;
-    const nearbyMain = zhuliBuyPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
-    _buyCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '底背离+主力(最佳买入)' : '底背离(大绿峰接小绿峰)', score: nearbyMain.length > 0 ? 95 : 70 });
-}
-const _sellCands = [];
-for (const rp of _redPeaks) {
-    const t = rp.time.slice(11, 16);
-    const nearbyMainSell = zhuliSellPoints.filter(z => Math.abs(z.idx - rp.idx) <= 5);
-    _sellCands.push({ idx: rp.idx, time: t, price: rp.price, source: nearbyMainSell.length > 0 ? '红峰+主力(最佳卖出)' : '红峰峰顶', score: nearbyMainSell.length > 0 ? 90 : 60 });
-}
-for (const zs of zhuliSellPoints) {
-    if (!_redPeaks.some(r => Math.abs(r.idx - zs.idx) <= 5)) {
-        _sellCands.push({ idx: zs.idx, time: zs.time.slice(11, 16), price: zs.price, source: '主力高抛', score: 50 });
-    }
-}
-for (const dv of _divergences.filter(d => d.type === '顶背离')) {
-    if (_sellCands.some(c => Math.abs(c.idx - dv.idx) < 30))
-        continue;
-    const nearbyMain = zhuliSellPoints.filter(z => Math.abs(z.idx - dv.idx) <= 5);
-    _sellCands.push({ idx: dv.idx, time: dv.time.slice(11, 16), price: dv.price, source: nearbyMain.length > 0 ? '顶背离+主力(最佳卖出)' : '顶背离(大红峰接小红峰)', score: nearbyMain.length > 0 ? 95 : 70 });
-}
-_signalList.length = 0;
-const _allSorted = [..._buyCands, ..._sellCands].sort((a, b) => a.idx - b.idx);
-for (const sig of _allSorted) {
-    _signalList.push({ idx: sig.idx, time: sig.time, price: sig.price, type: (sig.source.includes('卖出') || sig.source.includes('高抛') || sig.source.includes('顶背离')) ? '卖出点' : '买入点', source: sig.source });
-}
-suggestions.length = 0;
-_signalList.sort((a, b) => a.time.localeCompare(b.time));
-for (const s of _signalList)
-    suggestions.push(s);
-const _todaySugsBuy = suggestions.filter(s => s.type === '买入点');
-const _todaySugsSell = suggestions.filter(s => s.type === '卖出点');
-let bestBuyPrice = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).price : 0;
-let bestBuyTime = _todaySugsBuy.length > 0 ? _todaySugsBuy.reduce((a, b) => a.price < b.price ? a : b).time : '';
-let bestSellPrice = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).price : 0;
-let bestSellTime = _todaySugsSell.length > 0 ? _todaySugsSell.reduce((a, b) => a.price > b.price ? a : b).time : '';
-const _td = minData[len - 1]?.time?.slice(0, 10) || '';
-let todaySugs = [];
-if (_td) {
-    todaySugs = [...suggestions];
-}
-else {
-    todaySugs = suggestions.slice(-20).map(s => ({ ...s, time: s.time ? s.time : s.time }));
-    if (!bestBuyTime) {
-        bestBuyPrice = 0;
-        bestBuyTime = '';
-    }
-    if (!bestSellTime) {
-        bestSellPrice = 0;
-        bestSellTime = '';
-    }
-}
-const _today = new Date().toISOString().slice(0, 10);
-const _cacheKey = `${code}:${_today}`;
-const _cached = this.intradaySignalCache.get(_cacheKey);
-if (_cached && _cached.date === _today) {
-    const _newKeySet = new Set(todaySugs.map(s => `${s.time}|${s.type}|${s.source}`));
-    const _oldOnly = _cached.suggestions.filter(s => !_newKeySet.has(`${s.time}|${s.type}|${s.source}`));
-    if (_oldOnly.length > 0) {
-        todaySugs = [..._oldOnly, ...todaySugs];
-        const _buySugs = todaySugs.filter(s => s.type === '买入点');
-        const _sellSugs = todaySugs.filter(s => s.type === '卖出点');
-        if (_buySugs.length > 0) {
-            const _lockedLowest = _buySugs.reduce((a, b) => a.price < b.price ? a : b);
-            bestBuyPrice = _lockedLowest.price;
-            bestBuyTime = _lockedLowest.time;
-        }
-        if (_sellSugs.length > 0) {
-            const _lockedHighest = _sellSugs.reduce((a, b) => a.price > b.price ? a : b);
-            bestSellPrice = _lockedHighest.price;
-            bestSellTime = _lockedHighest.time;
-        }
-        this.logger.log(`📌 日内缓存 ${code}: 保留 ${_oldOnly.length} 个历史信号，新增 ${todaySugs.length - _oldOnly.length} 个新信号`);
-    }
-}
-this.intradaySignalCache.set(_cacheKey, {
-    date: _today,
-    barCount: len,
-    suggestions: todaySugs,
-    bestBuyPrice,
-    bestBuyTime,
-    bestSellPrice,
-    bestSellTime,
-    summary,
-    lastRefresh: Date.now(),
-});
-if (this.intradaySignalCache.size > 100) {
-    const _now = Date.now();
-    let _cleared = 0;
-    for (const [_k, _v] of this.intradaySignalCache) {
-        if (_v.date !== _today && _now - (_v.lastRefresh || 0) > 12 * 3600 * 1000) {
-            this.intradaySignalCache.delete(_k);
-            if (++_cleared > 500)
-                break;
-        }
-    }
-    if (this.intradaySignalCache.size > 2000) {
-        const _sorted = [...this.intradaySignalCache.entries()]
-            .sort((a, b) => (a[1].lastRefresh || 0) - (b[1].lastRefresh || 0));
-        const _toDelete = _sorted.slice(0, _sorted.length - 1500);
-        for (const [_k] of _toDelete)
-            this.intradaySignalCache.delete(_k);
-        _cleared += _toDelete.length;
-    }
-    if (_cleared > 0)
-        this.logger.log(`🧹 日内缓存清理: 移除 ${_cleared} 条, 剩余 ${this.intradaySignalCache.size} 条`);
-}
-return {
-    code,
-    date: new Date().toISOString().slice(0, 10),
-    status: 'ok',
-    dataCount: len,
-    currentPrice: close[lastIdx],
-    currentTime: minData[lastIdx].time,
-    macd: {
-        diff: Math.round(lastDiff * 100) / 100,
-        dea: Math.round(lastDea * 100) / 100,
-        macd: Math.round(macdHist[lastIdx] * 100) / 100,
-        status: currentMacdStatus,
-        goldenCrosses: macdSignals.filter(s => s.type === '金叉').length,
-        deathCrosses: macdSignals.filter(s => s.type === '死叉').length,
-        signals: macdSignals.slice(-10),
-    },
-    zhuliSanhu: {
-        main: Math.round(lastMain * 100) / 100,
-        retail: Math.round(lastRetail * 100) / 100,
-        status: currentZhuliStatus,
-        buySignals: zhuliBuyPoints,
-        sellSignals: zhuliSellPoints,
-    },
-    suggestions: todaySugs,
-    bestBuyPrice: bestBuyPrice || 0,
-    bestBuyTime: bestBuyTime,
-    bestSellPrice: bestSellPrice || 0,
-    bestSellTime: bestSellTime,
-    summary,
-};
-async;
-fetchMinuteKLine(_code, string, _minute, number = 5);
-Promise < any[] > {
-    return: []
-};
-async;
-fetchAuctionTrend(_code, string);
-Promise < any[] > {
-    return: []
-};
