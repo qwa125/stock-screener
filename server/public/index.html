@@ -2398,6 +2398,17 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
     html+='<div style="margin-top:4px;margin-bottom:2px"><span style="color:#22c55e;font-weight:600;font-size:11px">⬇ 卖出点</span> <span style="color:#9ca3af;font-size:11px">暂无信号</span></div>'
   }
   html+='</div></div>'
+  // 主力散户动向
+  if(zs&&(zs.main!=null||zs.sg||zs.signal)){
+    var zsVal=zs.main||0, zsRetail=zs.retail||0, zsStatus=zs.status||(zsVal>zsRetail?"主力强势":"主力弱势")
+    html+=`<div style="margin-top:4px;padding:5px 0;border-top:1px dashed #e5e7eb;font-size:12px">`
+    html+=`<span style="color:#6b7280;font-size:10px">📊 主力散户动向</span>`
+    html+=`<div style="display:flex;justify-content:space-between;margin-top:2px">`
+    html+=`<span style="color:#1f2937">主力 <span style="font-weight:600;color:`+(zsVal>0?"#ef4444":"#22c55e")+`">`+(zsVal>0?"+":"")+zsVal.toFixed(1)+`</span></span>`
+    html+=`<span style="color:#1f2937">散户 <span style="font-weight:600;color:`+(zsRetail>0?"#22c55e":"#ef4444")+`">`+(zsRetail>0?"+":"")+zsRetail.toFixed(1)+`</span></span>`
+    html+=`<span style="font-weight:600;color:`+(zsVal>zsRetail?"#ef4444":"#22c55e")+`">`+zsStatus+`</span>`
+    html+=`</div></div>`
+  }
   // 挂单参考
   html+='<div style="margin-top:4px;padding:6px;background:#f9fafb;border-radius:6px;font-size:12px">'
   html+='<div style="font-size:10px;color:#6b7280;margin-bottom:4px">📋 挂单参考范围（支撑区→压力区）</div>'
