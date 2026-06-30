@@ -158,8 +158,15 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.marketHoursBeganAt = 0;
         this._pgSql = null;
         this._pgReady = false;
-        this.totalVol = bins.reduce((a, b) => a + b, 0);
-        this.peaks = [];
+        this.forecast1_2Day = GemScreenerService_1.computeTechnicalForecast({
+            entryTiming,
+            isGoldenCross: fullIsGoldenCross,
+            ma5: ma5,
+            ma10: ma10,
+            pricePosition: pricePos,
+            mainForceInflow,
+            jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+        });
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -2230,115 +2237,171 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const len = closeArr.length;
         if (len < 20)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const N = Math.min(120, len);
-        const c = closeArr.slice(-N);
-        const h = highArr.slice(-N);
-        const l = lowArr.slice(-N);
-        const v = volumeArr.slice(-N);
-        const minPrice = Math.min(...l);
-        const maxPrice = Math.max(...h);
-        const range = maxPrice - minPrice;
-        if (range < 0.01)
-            return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
-        const BINS = 50;
-        const binSize = range / BINS;
-        const bins = new Array(BINS).fill(0);
-        for (let i = 0; i < N; i++) {
-            const dayLow = l[i];
-            const dayHigh = h[i];
-            const dayClose = c[i];
-            const dayVol = v[i];
-            const dayRange = dayHigh - dayLow;
-            if (dayRange < 0.01)
-                continue;
-            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
-            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
-            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
-            if (startBin === endBin) {
-                bins[startBin] += dayVol;
+        const runAnalysis = (period) => {
+            const N = Math.min(period, len);
+            const c = closeArr.slice(-N);
+            const h = highArr.slice(-N);
+            const l = lowArr.slice(-N);
+            const v = volumeArr.slice(-N);
+            const minPrice = Math.min(...l);
+            const maxPrice = Math.max(...h);
+            const range = maxPrice - minPrice;
+            if (range < 0.01)
+                return null;
+            const BINS = 50;
+            const binSize = range / BINS;
+            const bins = new Array(BINS).fill(0);
+            for (let i = 0; i < N; i++) {
+                const dayLow = l[i];
+                const dayHigh = h[i];
+                const dayClose = c[i];
+                const dayVol = v[i];
+                const dayRange = dayHigh - dayLow;
+                if (dayRange < 0.01)
+                    continue;
+                const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
+                const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+                const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+                if (startBin === endBin) {
+                    bins[startBin] += dayVol;
+                }
+                else {
+                    bins[closeBin] += dayVol * 0.75;
+                    const spreadVol = dayVol * 0.25;
+                    let totalWeight = 0;
+                    const weights = [];
+                    for (let b = startBin; b <= endBin; b++) {
+                        if (b === closeBin) {
+                            weights.push(0);
+                            continue;
+                        }
+                        const w = 1 / (Math.abs(b - closeBin) + 1);
+                        weights.push(w);
+                        totalWeight += w;
+                    }
+                    if (totalWeight > 0) {
+                        let wi = 0;
+                        for (let b = startBin; b <= endBin; b++) {
+                            if (b === closeBin)
+                                continue;
+                            bins[b] += spreadVol * weights[wi] / totalWeight;
+                            wi++;
+                        }
+                    }
+                }
+            }
+            const smoothed = new Array(BINS).fill(0);
+            const kernel = [0.05, 0.25, 0.4, 0.25, 0.05];
+            for (let i = 0; i < BINS; i++) {
+                let sum = 0;
+                for (let k = -2; k <= 2; k++) {
+                    const idx = i + k;
+                    if (idx >= 0 && idx < BINS) {
+                        sum += bins[idx] * kernel[k + 2];
+                    }
+                }
+                smoothed[i] = sum;
+            }
+            const totalVol = bins.reduce((a, b) => a + b, 0);
+            const peaks = [];
+            for (let i = 2; i < BINS - 2; i++) {
+                if (smoothed[i] > smoothed[i - 1] && smoothed[i] > smoothed[i - 2]
+                    && smoothed[i] > smoothed[i + 1] && smoothed[i] > smoothed[i + 2]
+                    && bins[i] > totalVol * 0.03) {
+                    peaks.push(i);
+                }
+            }
+            if (peaks.length === 0) {
+                const maxIdx = bins.indexOf(Math.max(...bins));
+                peaks.push(maxIdx);
+            }
+            if (peaks.length >= 2) {
+                const mergedPeaks = [peaks[0]];
+                for (let p = 1; p < peaks.length; p++) {
+                    const prev = mergedPeaks[mergedPeaks.length - 1];
+                    const curr = peaks[p];
+                    let valleyIdx = prev;
+                    let valleyVal = Infinity;
+                    for (let b = prev; b <= curr; b++) {
+                        if (bins[b] < valleyVal) {
+                            valleyVal = bins[b];
+                            valleyIdx = b;
+                        }
+                    }
+                    const lowerPeakVal = Math.min(bins[prev], bins[curr]);
+                    if (valleyVal > lowerPeakVal * 0.7) {
+                        if (bins[curr] > bins[prev]) {
+                            mergedPeaks[mergedPeaks.length - 1] = curr;
+                        }
+                    }
+                    else {
+                        mergedPeaks.push(curr);
+                    }
+                }
+                peaks.length = 0;
+                peaks.push(...mergedPeaks);
+            }
+            const sortedBins = [...bins].sort((a, b) => b - a);
+            let cumVol = 0;
+            let binsNeeded = 0;
+            for (const vol of sortedBins) {
+                cumVol += vol;
+                binsNeeded++;
+                if (cumVol >= totalVol * 0.9)
+                    break;
+            }
+            let concentration90;
+            if (binsNeeded <= 1) {
+                concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
             }
             else {
-                bins[closeBin] += dayVol * 0.75;
-                const spreadVol = dayVol * 0.25;
-                let totalWeight = 0;
-                const weights = [];
-                for (let b = startBin; b <= endBin; b++) {
-                    if (b === closeBin) {
-                        weights.push(0);
-                        continue;
-                    }
-                    const w = 1 / (Math.abs(b - closeBin) + 1);
-                    weights.push(w);
-                    totalWeight += w;
-                }
-                if (totalWeight > 0) {
-                    let wi = 0;
-                    for (let b = startBin; b <= endBin; b++) {
-                        if (b === closeBin)
-                            continue;
-                        bins[b] += spreadVol * weights[wi] / totalWeight;
-                        wi++;
-                    }
-                }
+                const prevVol = cumVol - sortedBins[binsNeeded - 1];
+                const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
+                const fractionalBins = (binsNeeded - 1) + needMore;
+                concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
             }
-        }
-        const totalVol = bins.reduce((a, b) => a + b, 0);
-        const peaks = [];
-        for (let i = 2; i < BINS - 2; i++) {
-            if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
-                && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
-                && bins[i] > totalVol * 0.03) {
-                peaks.push(i);
+            const mainPeakIdx = peaks[0];
+            const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+            let peakPosition;
+            const pctOff = (peakPrice - currentPrice) / currentPrice;
+            if (pctOff < -0.10)
+                peakPosition = 'low';
+            else if (pctOff > 0.10)
+                peakPosition = 'high';
+            else
+                peakPosition = 'mid';
+            let pattern;
+            if (peaks.length >= 3)
+                pattern = 'dispersed';
+            else if (peaks.length >= 2) {
+                const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+                pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
             }
+            else
+                pattern = 'single_peak';
+            return { concentration90, peakPosition, pattern, bins };
+        };
+        const result60 = runAnalysis(60);
+        const result120 = runAnalysis(120);
+        if (!result60 && !result120)
+            return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+        if (!result60)
+            return { concentration90: result120.concentration90, peakPosition: result120.peakPosition, pattern: result120.pattern };
+        if (!result120)
+            return { concentration90: result60.concentration90, peakPosition: result60.peakPosition, pattern: result60.pattern };
+        const avgConcentration = Math.round((result60.concentration90 + result120.concentration90) / 2 * 100) / 100;
+        let finalPattern;
+        if (result60.pattern === 'single_peak' && result120.pattern === 'single_peak') {
+            finalPattern = 'single_peak';
         }
-        if (peaks.length === 0) {
-            const maxIdx = bins.indexOf(Math.max(...bins));
-            peaks.push(maxIdx);
-        }
-        const sortedBins = [...bins].sort((a, b) => b - a);
-        let cumVol = 0;
-        let binsNeeded = 0;
-        for (const vol of sortedBins) {
-            cumVol += vol;
-            binsNeeded++;
-            if (cumVol >= totalVol * 0.9)
-                break;
-        }
-        let concentration90;
-        if (binsNeeded <= 1) {
-            concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
-        }
-        else {
-            const prevVol = cumVol - sortedBins[binsNeeded - 1];
-            const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
-            const fractionalBins = (binsNeeded - 1) + needMore;
-            concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
-        }
-        const mainPeakIdx = peaks[0];
-        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-        let peakPosition;
-        const pctOff = (peakPrice - currentPrice) / currentPrice;
-        if (pctOff < -0.10) {
-            peakPosition = 'low';
-        }
-        else if (pctOff > 0.10) {
-            peakPosition = 'high';
+        else if (result60.pattern === 'dispersed' || result120.pattern === 'dispersed') {
+            finalPattern = 'dispersed';
         }
         else {
-            peakPosition = 'mid';
+            finalPattern = 'double_peak';
         }
-        let pattern;
-        if (peaks.length >= 3) {
-            pattern = 'dispersed';
-        }
-        else if (peaks.length >= 2) {
-            const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-            pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
-        }
-        else {
-            pattern = 'single_peak';
-        }
-        return { concentration90, peakPosition, pattern };
+        const finalPosition = result120.peakPosition;
+        return { concentration90: avgConcentration, peakPosition: finalPosition, pattern: finalPattern };
     }
     async fetchGEMCandidates() {
         return [];
@@ -2725,112 +2788,525 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         const len = closeArr.length;
         if (len < 20)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const N = Math.min(120, len);
-        const c = closeArr.slice(-N);
-        const h = highArr.slice(-N);
-        const l = lowArr.slice(-N);
-        const v = volumeArr.slice(-N);
-        const minPrice = Math.min(...l);
-        const maxPrice = Math.max(...h);
-        const range = maxPrice - minPrice;
-        if (range < 0.01)
-            return { concentration90: 95, peakPosition: 'mid', pattern: 'single_peak' };
-        const BINS = 50;
-        const binSize = range / BINS;
-        const bins = new Array(BINS).fill(0);
-        for (let i = 0; i < N; i++) {
-            const dayLow = l[i];
-            const dayHigh = h[i];
-            const dayClose = c[i];
-            const dayVol = v[i];
-            const dayRange = dayHigh - dayLow;
-            if (dayRange < 0.01)
-                continue;
-            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
-            const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
-            const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
-            if (startBin === endBin) {
-                bins[startBin] += dayVol;
+        const runAnalysis = (period) => {
+            const N = Math.min(period, len);
+            const c = closeArr.slice(-N);
+            const h = highArr.slice(-N);
+            const l = lowArr.slice(-N);
+            const v = volumeArr.slice(-N);
+            const minPrice = Math.min(...l);
+            const maxPrice = Math.max(...h);
+            const range = maxPrice - minPrice;
+            if (range < 0.01)
+                return null;
+            const BINS = 50;
+            const binSize = range / BINS;
+            const bins = new Array(BINS).fill(0);
+            for (let i = 0; i < N; i++) {
+                const dayLow = l[i];
+                const dayHigh = h[i];
+                const dayClose = c[i];
+                const dayVol = v[i];
+                const dayRange = dayHigh - dayLow;
+                if (dayRange < 0.01)
+                    continue;
+                const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
+                const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
+                const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
+                if (startBin === endBin) {
+                    bins[startBin] += dayVol;
+                }
+                else {
+                    bins[closeBin] += dayVol * 0.75;
+                    const spreadVol = dayVol * 0.25;
+                    let totalWeight = 0;
+                    const weights = [];
+                    for (let b = startBin; b <= endBin; b++) {
+                        if (b === closeBin) {
+                            weights.push(0);
+                            continue;
+                        }
+                        const w = 1 / (Math.abs(b - closeBin) + 1);
+                        weights.push(w);
+                        totalWeight += w;
+                    }
+                    if (totalWeight > 0) {
+                        let wi = 0;
+                        for (let b = startBin; b <= endBin; b++) {
+                            if (b === closeBin)
+                                continue;
+                            bins[b] += spreadVol * weights[wi] / totalWeight;
+                            wi++;
+                        }
+                    }
+                }
+            }
+            const smoothed = new Array(BINS).fill(0);
+            const kernel = [0.05, 0.25, 0.4, 0.25, 0.05];
+            for (let i = 0; i < BINS; i++) {
+                let sum = 0;
+                for (let k = -2; k <= 2; k++) {
+                    const idx = i + k;
+                    if (idx >= 0 && idx < BINS) {
+                        sum += bins[idx] * kernel[k + 2];
+                    }
+                }
+                smoothed[i] = sum;
+            }
+            const totalVol = bins.reduce((a, b) => a + b, 0);
+            const peaks = [];
+            for (let i = 2; i < BINS - 2; i++) {
+                if (smoothed[i] > smoothed[i - 1] && smoothed[i] > smoothed[i - 2]
+                    && smoothed[i] > smoothed[i + 1] && smoothed[i] > smoothed[i + 2]
+                    && bins[i] > totalVol * 0.03) {
+                    peaks.push(i);
+                }
+            }
+            if (peaks.length === 0) {
+                const maxIdx = bins.indexOf(Math.max(...bins));
+                peaks.push(maxIdx);
+            }
+            if (peaks.length >= 2) {
+                const mergedPeaks = [peaks[0]];
+                for (let p = 1; p < peaks.length; p++) {
+                    const prev = mergedPeaks[mergedPeaks.length - 1];
+                    const curr = peaks[p];
+                    let valleyIdx = prev;
+                    let valleyVal = Infinity;
+                    for (let b = prev; b <= curr; b++) {
+                        if (bins[b] < valleyVal) {
+                            valleyVal = bins[b];
+                            valleyIdx = b;
+                        }
+                    }
+                    const lowerPeakVal = Math.min(bins[prev], bins[curr]);
+                    if (valleyVal > lowerPeakVal * 0.7) {
+                        if (bins[curr] > bins[prev]) {
+                            mergedPeaks[mergedPeaks.length - 1] = curr;
+                        }
+                    }
+                    else {
+                        mergedPeaks.push(curr);
+                    }
+                }
+                peaks.length = 0;
+                peaks.push(...mergedPeaks);
+            }
+            const sortedBins = [...bins].sort((a, b) => b - a);
+            let cumVol = 0;
+            let binsNeeded = 0;
+            for (const vol of sortedBins) {
+                cumVol += vol;
+                binsNeeded++;
+                if (cumVol >= totalVol * 0.9)
+                    break;
+            }
+            let concentration90;
+            if (binsNeeded <= 1) {
+                concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
             }
             else {
-                bins[closeBin] += dayVol * 0.75;
-                const spreadVol = dayVol * 0.25;
-                let totalWeight = 0;
-                const weights = [];
-                for (let b = startBin; b <= endBin; b++) {
-                    if (b === closeBin) {
-                        weights.push(0);
-                        continue;
-                    }
-                    const w = 1 / (Math.abs(b - closeBin) + 1);
-                    weights.push(w);
-                    totalWeight += w;
-                }
-                if (totalWeight > 0) {
-                    let wi = 0;
-                    for (let b = startBin; b <= endBin; b++) {
-                        if (b === closeBin)
-                            continue;
-                        bins[b] += spreadVol * weights[wi] / totalWeight;
-                        wi++;
-                    }
-                }
+                const prevVol = cumVol - sortedBins[binsNeeded - 1];
+                const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
+                const fractionalBins = (binsNeeded - 1) + needMore;
+                concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
             }
-        }
-        const totalVol = bins.reduce((a, b) => a + b, 0);
-        const peaks = [];
-        for (let i = 2; i < BINS - 2; i++) {
-            if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
-                && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
-                && bins[i] > totalVol * 0.03) {
-                peaks.push(i);
+            const mainPeakIdx = peaks[0];
+            const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
+            let peakPosition;
+            const pctOff = (peakPrice - currentPrice) / currentPrice;
+            if (pctOff < -0.10)
+                peakPosition = 'low';
+            else if (pctOff > 0.10)
+                peakPosition = 'high';
+            else
+                peakPosition = 'mid';
+            let pattern;
+            if (peaks.length >= 3)
+                pattern = 'dispersed';
+            else if (peaks.length >= 2) {
+                const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
+                pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
             }
+            else
+                pattern = 'single_peak';
+            return { concentration90, peakPosition, pattern };
+        };
+        const result60 = runAnalysis(60);
+        const result120 = runAnalysis(120);
+        if (!result60 && !result120)
+            return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
+        if (!result60)
+            return { concentration90: result120.concentration90, peakPosition: result120.peakPosition, pattern: result120.pattern };
+        if (!result120)
+            return { concentration90: result60.concentration90, peakPosition: result60.peakPosition, pattern: result60.pattern };
+        const avgConcentration = Math.round((result60.concentration90 + result120.concentration90) / 2 * 100) / 100;
+        let finalPattern;
+        if (result60.pattern === 'single_peak' && result120.pattern === 'single_peak') {
+            finalPattern = 'single_peak';
         }
-        if (peaks.length === 0) {
-            const maxIdx = bins.indexOf(Math.max(...bins));
-            peaks.push(maxIdx);
-        }
-        const sortedBins = [...bins].sort((a, b) => b - a);
-        let cumVol = 0;
-        let binsNeeded = 0;
-        for (const vol of sortedBins) {
-            cumVol += vol;
-            binsNeeded++;
-            if (cumVol >= totalVol * 0.9)
-                break;
-        }
-        let concentration90;
-        if (binsNeeded <= 1) {
-            concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
+        else if (result60.pattern === 'dispersed' || result120.pattern === 'dispersed') {
+            finalPattern = 'dispersed';
         }
         else {
-            const prevVol = cumVol - sortedBins[binsNeeded - 1];
-            const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
-            const fractionalBins = (binsNeeded - 1) + needMore;
-            concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
+            finalPattern = 'double_peak';
         }
-        const mainPeakIdx = peaks[0];
-        const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-        let peakPosition;
-        const pctOff = (peakPrice - currentPrice) / currentPrice;
-        if (pctOff < -0.10)
-            peakPosition = 'low';
-        else if (pctOff > 0.10)
-            peakPosition = 'high';
-        else
-            peakPosition = 'mid';
-        let pattern;
-        if (peaks.length >= 3)
-            pattern = 'dispersed';
-        else if (peaks.length >= 2) {
-            const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-            pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
-        }
-        else
-            pattern = 'single_peak';
-        return { concentration90, peakPosition, pattern };
+        return { concentration90: avgConcentration, peakPosition: result120.peakPosition, pattern: finalPattern };
     }
-    for(let, i = 2, i, , BINS) { }
+    async quickAnalyze(code, name, keepAll, rawKline, frontendMainForce) {
+        const raw = rawKline || await this.dataFetcher.getKLineData(code);
+        if (!raw?.length || raw.length < 5)
+            return null;
+        const klineV = raw.slice(-120);
+        const closeArr = klineV.map((k) => Number(k.close));
+        const volumeArr = klineV.map((k) => Number(k.volume));
+        const highArr = klineV.map((k) => Number(k.high));
+        const lowArr = klineV.map((k) => Number(k.low));
+        const price = closeArr[closeArr.length - 1];
+        const high60 = Math.max(...highArr.slice(-60));
+        const low60 = Math.min(...lowArr.slice(-60));
+        const pricePos = ((price - low60) / (high60 - low60)) * 100;
+        const n = closeArr.length;
+        const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, n);
+        const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, n);
+        const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, n);
+        const macdR = this.calcCustomMACD(klineV);
+        const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
+        const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
+        const ma5_1dAgo2 = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : 0;
+        const ma5Up = ma5 >= ma5_1dAgo2 * 0.995;
+        const ma10_1dAgo2 = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : 0;
+        const ma10Up = ma10 >= ma10_1dAgo2 * 0.995;
+        const ma10Down = closeArr.length > 15
+            && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
+        let trendState = 1;
+        if (ma5 > ma10 && ma5Up && ma10Up)
+            trendState = 3;
+        else if (ma5 > ma10 && ma10Up)
+            trendState = 2;
+        else if (ma5 > ma10 && ma5Up)
+            trendState = 2;
+        else if (ma5 < ma10 && ma10 < ma20)
+            trendState = 0;
+        else if (ma5 < ma10)
+            trendState = 0;
+        const klineO = klineV.map((k) => Number(k.open));
+        const klineH = klineV.map((k) => Number(k.high));
+        const klineL = klineV.map((k) => Number(k.low));
+        const klineA = klineV.map((k) => Number(k.amount ?? 0));
+        const engine = new formula_engine_1.FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: volumeArr, amount: klineA });
+        const baiXing = (0, bai_xing_1.calcBaiXing)(engine);
+        const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
+        const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
+        const baiXiao = baiXing?.baiXiao ?? false;
+        const baiXiaoDays = baiXing?.baiXiaoDays ?? 0;
+        const qiangZhiFuGai = !!baiXing?.qiangZhiFuGai;
+        const formulaInput = {
+            pricePosition: pricePos,
+            trendState,
+            trendStrength: baiXing?.trendStrength ?? sanJiao?.trendStrength ?? 0,
+            diff,
+            dea,
+            shortBuy: sanJiao?.shortBuy ?? false,
+            strictBuy: sanJiao?.strictBuy ?? false,
+            jiaCang: baiXing?.jiaCang ?? false,
+            shortSell: sanJiao?.shortSell ?? false,
+            strongSell: sanJiao?.strongSell ?? false,
+            safe: baiXing?.safe ?? false,
+            macdGoldenCross: macdR?.isGoldenCross ?? false,
+            macdDeathCross: false,
+            baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
+            baiBu: !!baiXing?.baiBu,
+            baiBuDays: baiXing?.baiBuDays ?? 0,
+            baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
+            baiXiao: !!baiXiao,
+            volumeStructure: sanJiao?.volumeStructure ?? 0,
+            qiangZhiFuGai,
+        };
+        const isGoldenCross = macdR?.isGoldenCross ?? false;
+        const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
+        let suggestion = result.action;
+        const predictionText = '';
+        const reasonText = result.reason || '';
+        const ma10_1dAgo = closeArr.length > 11
+            ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
+            : 0;
+        const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
+        if (ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
+            suggestion = '不要介入';
+        }
+        const pricePosForXmaPrediction = pricePos;
+        const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
+            lingXing?.zhuShengZhongWeiChuHuo ||
+            (lingXing)?.zhenShiChuHuo ||
+            (lingXing)?.jinJiChuHuo);
+        const priceBelowMa10InBaiXiao = baiXiao && price <= ma10;
+        const ma5DeathCrossInBaiXiao = baiXiao && ma5 < ma10 && pricePosForXmaPrediction >= 50;
+        const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
+        if (isHighWithBaiXiao && hasChuHuo) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+主力出货，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (baiXiao && pricePosForXmaPrediction >= 55 && priceBelowMa10InBaiXiao && hasChuHuo) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 白消+价破MA10+主力出货，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (isHighWithBaiXiao && priceBelowMa10InBaiXiao) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+价破MA10，XMA漂移预期变白布，提前卖出`);
+        }
+        else if (ma5DeathCrossInBaiXiao && priceBelowMa10InBaiXiao) {
+            suggestion = '减仓';
+            this.logger.log(`🟡 [白消减仓预警] ${name}(${code}) 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓`);
+        }
+        const baiBuState = !!baiXing?.baiBu;
+        const hasBaiBuSellSignals = !!(baiXing?.gaoKaiDiZouQingCang ||
+            baiXing?.baoLiangFuGaiQingCang ||
+            baiXing?.po5RiXian ||
+            baiXing?.yinDiePoWei);
+        if (baiBuState && (hasBaiBuSellSignals || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
+            suggestion = '卖出';
+            this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
+        }
+        if (suggestion === '不要介入') {
+            const ma10Prev5 = closeArr.length > 15
+                ? (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10)
+                : 0;
+            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
+        }
+        if ((suggestion === '不要介入' || suggestion === '减仓') && ma5 < ma10) {
+            const debugVolActive = (volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5)
+                / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6;
+            this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
+            if (ma10TurnUp && price > ma5) {
+                const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+                const avgVol20 = volumeArr.length >= 20
+                    ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
+                    : avgVol5;
+                const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+                this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: volActive=${volActive} >7=${volActive > 7}`);
+                if (volActive > 7) {
+                    suggestion = '轻仓买入';
+                    this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
+                    if (this.sellStateCache.has(code)) {
+                        this.sellStateCache.delete(code);
+                        this.logger.log(`🔓 [深度洗盘] ${name}(${code}) 洗盘结束信号，解除卖出锁定`);
+                    }
+                }
+                else {
+                    suggestion = '持有';
+                    this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=7, 只能设为持有`);
+                }
+            }
+        }
+        if (suggestion !== '卖出' && !baiBuState && baiXiao && ma10TurnUp && price > ma5) {
+            const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+            const avgVol20 = volumeArr.length >= 20
+                ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
+                : avgVol5;
+            const volRatio = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
+            this.logger.log(`🕵️ [白消恢复期] ${name}(${code}) DIFF>压力 baiXiao=${baiXiao} ma10TurnUp=${ma10TurnUp} price>ma5=${price > ma5} volRatio=${volRatio}`);
+            if (volRatio > 7) {
+                suggestion = '轻仓买入';
+                this.logger.log(`✅ [白消恢复期] ${name}(${code}) 设为轻仓买入`);
+            }
+            else if (volRatio > 5) {
+                suggestion = '持有';
+                this.logger.log(`⚠️ [白消恢复期] ${name}(${code}) 量能不足(volRatio=${volRatio})，只能设为持有`);
+            }
+            else {
+                this.logger.log(`ℹ️ [白消恢复期] ${name}(${code}) 量能太低(volRatio=${volRatio})，不改变信号`);
+            }
+        }
+        const NEGATIVE = ['减仓', '不要介入'];
+        if (suggestion === '卖出') {
+            this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
+        }
+        if (!keepAll && NEGATIVE.includes(suggestion))
+            return null;
+        const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
+        if (!keepAll && NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
+            return null;
+        const rawFull = raw;
+        const fullCloseArr = rawFull.map((k) => Number(k.close));
+        const fullVolumeArr = rawFull.map((k) => Number(k.volume));
+        const fullHighArr = rawFull.map((k) => Number(k.high));
+        const fullLowArr = rawFull.map((k) => Number(k.low));
+        const fullOpenArr = rawFull.map((k) => Number(k.open));
+        const fullAmountArr = rawFull.map((k) => Number(k.amount ?? 0));
+        const fullEngine = new formula_engine_1.FormulaEngine({
+            open: fullOpenArr, close: fullCloseArr, high: fullHighArr,
+            low: fullLowArr, volume: fullVolumeArr, amount: fullAmountArr,
+        });
+        const fullBaiXing = (0, bai_xing_1.calcBaiXing)(fullEngine);
+        const fullSanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(fullEngine);
+        const fullLingXing = (0, bai_ling_xing_1.calcBaiLingXing)(fullEngine);
+        const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
+        const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
+        const fullDiffV = szEma12 - szEma26;
+        const szDeaArr = fullCloseArr.reduce((arr, v, i) => {
+            const prev = arr.length ? arr[arr.length - 1] : 0;
+            arr.push(i === 0 ? fullCloseArr[0] : prev + (((szEma12 - szEma26) - prev) * 2 / 9));
+            return arr;
+        }, []);
+        const fullDeaV = szDeaArr[szDeaArr.length - 1] || 0;
+        const fullIsGoldenCross = fullDiffV > fullDeaV;
+        const crossInput = {
+            pricePosition: pricePos,
+            trendState,
+            trendStrength: fullBaiXing?.trendStrength ?? fullSanJiao?.trendStrength ?? 0,
+            diff: fullDiffV,
+            dea: fullDeaV,
+            shortBuy: fullSanJiao?.shortBuy ?? false,
+            strictBuy: fullSanJiao?.strictBuy ?? false,
+            jiaCang: fullBaiXing?.jiaCang ?? false,
+            shortSell: fullSanJiao?.shortSell ?? false,
+            strongSell: fullSanJiao?.strongSell ?? false,
+            safe: fullBaiXing?.safe ?? false,
+            macdGoldenCross: fullIsGoldenCross,
+            macdDeathCross: fullDiffV < fullDeaV,
+            baiXiaoDays: fullBaiXing?.baiXiaoDays ?? 0,
+            baiBu: !!fullBaiXing?.baiBu,
+            baiBuDays: fullBaiXing?.baiBuDays ?? 0,
+            baiCoverTrend: fullBaiXing?.baiCoverTrend ?? 'stable',
+            baiXiao: !!fullBaiXing?.baiXiao,
+            volumeStructure: fullSanJiao?.volumeStructure ?? 0,
+            qiangZhiFuGai: !!fullBaiXing?.qiangZhiFuGai,
+        };
+        const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
+        const crossSuggestion = crossResult.action;
+        const NEGATIVE_CROSS = ['卖出', '不要介入'];
+        if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion))
+            return null;
+        const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
+        const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
+        const BASE = {
+            '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
+        };
+        let score = BASE[suggestion] ?? 30;
+        if (pricePos < 30)
+            score += 15;
+        else if (pricePos < 50)
+            score += 8;
+        if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5])
+            score += 5;
+        else
+            score -= 5;
+        const chip = GemScreenerService_1.calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, price);
+        const chipConcentration90 = chip.concentration90;
+        const chipPeakPosition = chip.peakPosition;
+        const chipPattern = chip.pattern;
+        let finalSuggestion = suggestion;
+        const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
+        const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
+        if (chipDowngrade || chipRisk) {
+            if (finalSuggestion === '重仓买入')
+                finalSuggestion = '买入';
+            else if (finalSuggestion === '买入')
+                finalSuggestion = '轻仓买入';
+            else if (finalSuggestion === '轻仓买入')
+                finalSuggestion = '不要介入';
+            this.logger.log(`🕵️ [DEBUG 筹码降级] ${name}(${code}) 触发: chipPat=${chipPattern} peak=${chipPeakPosition} pp=${pricePos.toFixed(1)} sugerWas=${suggestion} now=${finalSuggestion}`);
+        }
+        if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePos > 15 && pricePos < 45 && trendState >= 1) {
+            if (finalSuggestion === '买入')
+                finalSuggestion = '重仓买入';
+            else if (finalSuggestion === '轻仓买入')
+                finalSuggestion = '买入';
+        }
+        const entryTiming = GemScreenerService_1.calcEntryTiming(pricePos, trendState, closeArr, isGoldenCross, volumeArr);
+        const safetyScore = GemScreenerService_1.calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePct);
+        const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const volRatio = avgVol5 / (avgVol20 || 1);
+        const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
+        const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
+        const sellEntry = this.sellStateCache.get(code);
+        if (sellEntry) {
+            const hasBuySignal = ['轻仓买入', '重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
+            if (hasBuySignal) {
+                this.sellStateCache.delete(code);
+                this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
+            }
+            else {
+                this.logger.log(`🕵️ [DEBUG 卖出锁] ${name}(${code}) sellLock=卖出锁定, finalSug=${finalSuggestion} gc=${isGoldenCross} et=${entryTiming} → 覆盖为不要介入`);
+                finalSuggestion = '不要介入';
+            }
+        }
+        const quickBaiBuDays = baiXing?.baiBuDays ?? 0;
+        if (finalSuggestion === '卖出' && quickBaiBuDays >= 3) {
+            this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+            finalSuggestion = '不要介入';
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 白布${quickBaiBuDays}天+卖出，自动锁定为不要介入`);
+        }
+        if (finalSuggestion === '卖出') {
+            this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
+            this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
+        }
+        const forecast1_2Day = GemScreenerService_1.computeTechnicalForecast({
+            entryTiming,
+            isGoldenCross: fullIsGoldenCross,
+            ma5: ma5,
+            ma10: ma10,
+            pricePosition: pricePos,
+            mainForceInflow,
+            jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+        });
+        return {
+            code, name: name ?? '',
+            currentPrice: price,
+            changePercent: Math.round(changePct * 100) / 100,
+            priceIncrease: Math.round(priceIncrease * 100) / 100,
+            mainForceInflow,
+            pricePosition: Math.round(pricePos),
+            forecast1_2Day,
+            capitalRank: 0,
+            baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
+            score,
+            suggestion: finalSuggestion,
+            entryTiming,
+            safetyScore,
+            isGoldenCross,
+            diff,
+            dea,
+            buySignal: !!(baiXing?.baiXiao || baiXing?.jiaCang || sanJiao?.shortBuy) ? '有信号' : '',
+            chipConcentration90,
+            chipPeakPosition,
+            chipPattern,
+            signalCombination: result.reason || '',
+            ma5: Math.round(ma5 * 100) / 100,
+            ma10: Math.round(ma10 * 100) / 100,
+            jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+            _debug: {
+                ma5: Math.round(ma5 * 100) / 100,
+                ma10: Math.round(ma10 * 100) / 100,
+                ma10_1dAgo: Math.round(ma10_1dAgo * 100) / 100,
+                ma5Up,
+                ma10Up,
+                ma10TurnUp,
+                baiXiao: !!baiXiao,
+                baiXiaoDays,
+                baiBuState: !!baiBuState,
+                qiangZhiFuGai,
+                ma10Down,
+                trendState,
+                price: Math.round(price * 100) / 100,
+                priceAboveMa5: price > ma5,
+                pricePos: Math.round(pricePos),
+                volRatio: Math.round(volRatio * 100) / 100,
+                volActive: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
+                chipPattern,
+                chipPeakPosition,
+                chipConcentration90: Math.round(chipConcentration90 * 100) / 100,
+                chipDowngrade: chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30,
+                chipRisk: chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25,
+                sellLocked: !!sellEntry,
+                deepWashoutApplied: suggestion === '轻仓买入',
+                keepAll,
+            },
+        };
+    }
 };
 exports.GemScreenerService = GemScreenerService;
 exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decorate([
@@ -2838,406 +3314,6 @@ exports.GemScreenerService = GemScreenerService = GemScreenerService_1 = __decor
     __metadata("design:paramtypes", [data_fetcher_service_1.DataFetcherService,
         stock_service_1.StockService])
 ], GemScreenerService);
--2;
-i++;
-{
-    if (bins[i] > bins[i - 1] && bins[i] > bins[i - 2]
-        && bins[i] > bins[i + 1] && bins[i] > bins[i + 2]
-        && bins[i] > totalVol * 0.03) {
-        peaks.push(i);
-    }
-}
-if (peaks.length === 0) {
-    const maxIdx = bins.indexOf(Math.max(...bins));
-    peaks.push(maxIdx);
-}
-const sortedBins = [...bins].sort((a, b) => b - a);
-let cumVol = 0;
-let binsNeeded = 0;
-for (const vol of sortedBins) {
-    cumVol += vol;
-    binsNeeded++;
-    if (cumVol >= totalVol * 0.9)
-        break;
-}
-let concentration90;
-if (binsNeeded <= 1) {
-    concentration90 = Math.round((1 / BINS) * 100 * 100) / 100;
-}
-else {
-    const prevVol = cumVol - sortedBins[binsNeeded - 1];
-    const needMore = (totalVol * 0.9 - prevVol) / sortedBins[binsNeeded - 1];
-    const fractionalBins = (binsNeeded - 1) + needMore;
-    concentration90 = Math.round((fractionalBins / BINS) * 100 * 100) / 100;
-}
-const mainPeakIdx = peaks[0];
-const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-let peakPosition;
-const pctOff = (peakPrice - currentPrice) / currentPrice;
-if (pctOff < -0.10)
-    peakPosition = 'low';
-else if (pctOff > 0.10)
-    peakPosition = 'high';
-else
-    peakPosition = 'mid';
-let pattern;
-if (peaks.length >= 3)
-    pattern = 'dispersed';
-else if (peaks.length >= 2) {
-    const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-    pattern = gap > 0.18 ? 'double_peak' : 'single_peak';
-}
-else
-    pattern = 'single_peak';
-return { concentration90, peakPosition, pattern };
-const totalVol = bins.reduce((a, b) => a + b, 0);
-const peaks = [];
-for (let i = 1; i < BINS - 1; i++) {
-    if (bins[i] > bins[i - 1] && bins[i] > bins[i + 1] && bins[i] > totalVol * 0.05) {
-        peaks.push(i);
-    }
-}
-if (peaks.length === 0) {
-    const maxIdx = bins.indexOf(Math.max(...bins));
-    peaks.push(maxIdx);
-}
-const sortedBins = [...bins].sort((a, b) => b - a);
-let cumVol = 0;
-let binsNeeded = 0;
-for (const vol of sortedBins) {
-    cumVol += vol;
-    binsNeeded++;
-    if (cumVol >= totalVol * 0.9)
-        break;
-}
-const concentration90 = Math.round((binsNeeded / BINS) * 100);
-const mainPeakIdx = peaks[0];
-const peakPrice = minPrice + (mainPeakIdx + 0.5) * binSize;
-let peakPosition;
-if (peakPrice < currentPrice * 0.85) {
-    peakPosition = 'low';
-}
-else if (peakPrice > currentPrice * 1.15) {
-    peakPosition = 'high';
-}
-else {
-    peakPosition = 'mid';
-}
-let pattern;
-if (peaks.length >= 3) {
-    pattern = 'dispersed';
-}
-else if (peaks.length >= 2) {
-    const gap = Math.abs(peaks[0] - peaks[1]) * binSize / range;
-    pattern = gap > 0.2 ? 'double_peak' : 'single_peak';
-}
-else {
-    pattern = 'single_peak';
-}
-return { concentration90, peakPosition, pattern };
-async;
-quickAnalyze(code, string, name ?  : string, keepAll ?  : boolean, rawKline ?  : any[], frontendMainForce ?  : number);
-Promise < OpportunityStock | null > {
-    const: raw, any, []:  = rawKline || await this.dataFetcher.getKLineData(code),
-    if(, raw, length) { }
-} || raw.length < 5;
-return null;
-const klineV = raw.slice(-120);
-const closeArr = klineV.map((k) => Number(k.close));
-const volumeArr = klineV.map((k) => Number(k.volume));
-const highArr = klineV.map((k) => Number(k.high));
-const lowArr = klineV.map((k) => Number(k.low));
-const price = closeArr[closeArr.length - 1];
-const high60 = Math.max(...highArr.slice(-60));
-const low60 = Math.min(...lowArr.slice(-60));
-const pricePos = ((price - low60) / (high60 - low60)) * 100;
-const n = closeArr.length;
-const ma5 = closeArr.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, n);
-const ma10 = closeArr.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, n);
-const ma20 = closeArr.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, n);
-const macdR = this.calcCustomMACD(klineV);
-const diff = Array.isArray(macdR?.diff) ? macdR.diff[macdR.diff.length - 1] : (macdR?.diff ?? 0);
-const dea = Array.isArray(macdR?.dea) ? macdR.dea[macdR.dea.length - 1] : (macdR?.dea ?? 0);
-const ma5_1dAgo2 = closeArr.length > 6 ? closeArr.slice(-6, -1).reduce((a, b) => a + b, 0) / 5 : 0;
-const ma5Up = ma5 >= ma5_1dAgo2 * 0.995;
-const ma10_1dAgo2 = closeArr.length > 11 ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10 : 0;
-const ma10Up = ma10 >= ma10_1dAgo2 * 0.995;
-const ma10Down = closeArr.length > 15
-    && ma10 < (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10);
-let trendState = 1;
-if (ma5 > ma10 && ma5Up && ma10Up)
-    trendState = 3;
-else if (ma5 > ma10 && ma10Up)
-    trendState = 2;
-else if (ma5 > ma10 && ma5Up)
-    trendState = 2;
-else if (ma5 < ma10 && ma10 < ma20)
-    trendState = 0;
-else if (ma5 < ma10)
-    trendState = 0;
-const klineO = klineV.map((k) => Number(k.open));
-const klineH = klineV.map((k) => Number(k.high));
-const klineL = klineV.map((k) => Number(k.low));
-const klineA = klineV.map((k) => Number(k.amount ?? 0));
-const engine = new formula_engine_1.FormulaEngine({ open: klineO, close: closeArr, high: klineH, low: klineL, volume: volumeArr, amount: klineA });
-const baiXing = (0, bai_xing_1.calcBaiXing)(engine);
-const sanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(engine);
-const lingXing = (0, bai_ling_xing_1.calcBaiLingXing)(engine);
-const baiXiao = baiXing?.baiXiao ?? false;
-const baiXiaoDays = baiXing?.baiXiaoDays ?? 0;
-const qiangZhiFuGai = !!baiXing?.qiangZhiFuGai;
-const formulaInput = {
-    pricePosition: pricePos,
-    trendState,
-    trendStrength: baiXing?.trendStrength ?? sanJiao?.trendStrength ?? 0,
-    diff,
-    dea,
-    shortBuy: sanJiao?.shortBuy ?? false,
-    strictBuy: sanJiao?.strictBuy ?? false,
-    jiaCang: baiXing?.jiaCang ?? false,
-    shortSell: sanJiao?.shortSell ?? false,
-    strongSell: sanJiao?.strongSell ?? false,
-    safe: baiXing?.safe ?? false,
-    macdGoldenCross: macdR?.isGoldenCross ?? false,
-    macdDeathCross: false,
-    baiXiaoDays: baiXing?.baiXiaoDays ?? 0,
-    baiBu: !!baiXing?.baiBu,
-    baiBuDays: baiXing?.baiBuDays ?? 0,
-    baiCoverTrend: baiXing?.baiCoverTrend ?? 'stable',
-    baiXiao: !!baiXiao,
-    volumeStructure: sanJiao?.volumeStructure ?? 0,
-    qiangZhiFuGai,
-};
-const isGoldenCross = macdR?.isGoldenCross ?? false;
-const result = (0, trading_suggestion_1.getTradingSuggestion)(formulaInput);
-let suggestion = result.action;
-const predictionText = '';
-const reasonText = result.reason || '';
-const ma10_1dAgo = closeArr.length > 11
-    ? closeArr.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
-    : 0;
-const ma10TurnUp = ma10_1dAgo > 0 && ma10 >= ma10_1dAgo * 0.995;
-if (ma5 < ma10 && ma10Down && !(baiXiao && ma10TurnUp)) {
-    suggestion = '不要介入';
-}
-const pricePosForXmaPrediction = pricePos;
-const hasChuHuo = !!(sanJiao?.zhuLiChuHuo ||
-    lingXing?.zhuShengZhongWeiChuHuo ||
-    (lingXing)?.zhenShiChuHuo ||
-    (lingXing)?.jinJiChuHuo);
-const priceBelowMa10InBaiXiao = baiXiao && price <= ma10;
-const ma5DeathCrossInBaiXiao = baiXiao && ma5 < ma10 && pricePosForXmaPrediction >= 50;
-const isHighWithBaiXiao = baiXiao && pricePosForXmaPrediction >= 60;
-if (isHighWithBaiXiao && hasChuHuo) {
-    suggestion = '卖出';
-    this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+主力出货，XMA漂移预期变白布，提前卖出`);
-}
-else if (baiXiao && pricePosForXmaPrediction >= 55 && priceBelowMa10InBaiXiao && hasChuHuo) {
-    suggestion = '卖出';
-    this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 白消+价破MA10+主力出货，XMA漂移预期变白布，提前卖出`);
-}
-else if (isHighWithBaiXiao && priceBelowMa10InBaiXiao) {
-    suggestion = '卖出';
-    this.logger.log(`🔴 [高位白消提前卖出] ${name}(${code}) 高位${pricePosForXmaPrediction.toFixed(0)}%白消+价破MA10，XMA漂移预期变白布，提前卖出`);
-}
-else if (ma5DeathCrossInBaiXiao && priceBelowMa10InBaiXiao) {
-    suggestion = '减仓';
-    this.logger.log(`🟡 [白消减仓预警] ${name}(${code}) 白消+MA5死叉+价破MA10，XMA漂移预期变白布，减仓`);
-}
-const baiBuState = !!baiXing?.baiBu;
-const hasBaiBuSellSignals = !!(baiXing?.gaoKaiDiZouQingCang ||
-    baiXing?.baoLiangFuGaiQingCang ||
-    baiXing?.po5RiXian ||
-    baiXing?.yinDiePoWei);
-if (baiBuState && (hasBaiBuSellSignals || hasChuHuo || sanJiao?.shortSell || sanJiao?.strongSell)) {
-    suggestion = '卖出';
-    this.logger.log(`🔴 [白布卖出] ${name}(${code}) 白布+强卖出信号，覆盖为卖出`);
-}
-if (suggestion === '不要介入') {
-    const ma10Prev5 = closeArr.length > 15
-        ? (closeArr.slice(-15, -5).reduce((a, b) => a + b, 0) / 10)
-        : 0;
-    this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_5dAgo=${ma10Prev5.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${((volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5) / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6).toFixed(1)}`);
-}
-if ((suggestion === '不要介入' || suggestion === '减仓') && ma5 < ma10) {
-    const debugVolActive = (volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5)
-        / ((volumeArr.length >= 20 ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20 : 1) || 1) * 6;
-    this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 检查: ma5=${ma5.toFixed(2)} ma10=${ma10.toFixed(2)} ma10_1dAgo=${ma10_1dAgo.toFixed(2)} ma10TurnUp=${ma10TurnUp} baiBu=${baiBuState} price=${price.toFixed(2)} price>ma5=${price > ma5} volActive=${debugVolActive.toFixed(1)}`);
-    if (ma10TurnUp && price > ma5) {
-        const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-        const avgVol20 = volumeArr.length >= 20
-            ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
-            : avgVol5;
-        const volActive = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
-        this.logger.log(`🕵️ [DEBUG 深度洗盘] ${name}(${code}) 条件全命中: volActive=${volActive} >7=${volActive > 7}`);
-        if (volActive > 7) {
-            suggestion = '轻仓买入';
-            this.logger.log(`✅ [DEBUG 深度洗盘] ${name}(${code}) 设为轻仓买入`);
-            if (this.sellStateCache.has(code)) {
-                this.sellStateCache.delete(code);
-                this.logger.log(`🔓 [深度洗盘] ${name}(${code}) 洗盘结束信号，解除卖出锁定`);
-            }
-        }
-        else {
-            suggestion = '持有';
-            this.logger.log(`⚠️ [DEBUG 深度洗盘] ${name}(${code}) volActive=${volActive}<=7, 只能设为持有`);
-        }
-    }
-}
-if (suggestion !== '卖出' && !baiBuState && baiXiao && ma10TurnUp && price > ma5) {
-    const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const avgVol20 = volumeArr.length >= 20
-        ? volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20
-        : avgVol5;
-    const volRatio = Math.round(avgVol5 / (avgVol20 || 1) * 6 * 100) / 100;
-    this.logger.log(`🕵️ [白消恢复期] ${name}(${code}) DIFF>压力 baiXiao=${baiXiao} ma10TurnUp=${ma10TurnUp} price>ma5=${price > ma5} volRatio=${volRatio}`);
-    if (volRatio > 7) {
-        suggestion = '轻仓买入';
-        this.logger.log(`✅ [白消恢复期] ${name}(${code}) 设为轻仓买入`);
-    }
-    else if (volRatio > 5) {
-        suggestion = '持有';
-        this.logger.log(`⚠️ [白消恢复期] ${name}(${code}) 量能不足(volRatio=${volRatio})，只能设为持有`);
-    }
-    else {
-        this.logger.log(`ℹ️ [白消恢复期] ${name}(${code}) 量能太低(volRatio=${volRatio})，不改变信号`);
-    }
-}
-const NEGATIVE = ['减仓', '不要介入'];
-if (suggestion === '卖出') {
-    this.sellStateCache.set(code, { suggestion, timestamp: Date.now() });
-    this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发${suggestion}信号，已锁定`);
-}
-if (!keepAll && NEGATIVE.includes(suggestion))
-    return null;
-const NEGATIVE_PREDICTION_KEYWORDS = ['偏弱', '探底', '风险较大', '风险大', '注意风险'];
-if (!keepAll && NEGATIVE_PREDICTION_KEYWORDS.some(kw => predictionText.includes(kw)))
-    return null;
-const rawFull = raw;
-const fullCloseArr = rawFull.map((k) => Number(k.close));
-const fullVolumeArr = rawFull.map((k) => Number(k.volume));
-const fullHighArr = rawFull.map((k) => Number(k.high));
-const fullLowArr = rawFull.map((k) => Number(k.low));
-const fullOpenArr = rawFull.map((k) => Number(k.open));
-const fullAmountArr = rawFull.map((k) => Number(k.amount ?? 0));
-const fullEngine = new formula_engine_1.FormulaEngine({
-    open: fullOpenArr, close: fullCloseArr, high: fullHighArr,
-    low: fullLowArr, volume: fullVolumeArr, amount: fullAmountArr,
-});
-const fullBaiXing = (0, bai_xing_1.calcBaiXing)(fullEngine);
-const fullSanJiao = (0, bai_san_jiao_1.calcBaiSanJiao)(fullEngine);
-const fullLingXing = (0, bai_ling_xing_1.calcBaiLingXing)(fullEngine);
-const szEma12 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 13, 0);
-const szEma26 = fullCloseArr.reduce((s, v, i) => i === 0 ? v : s + (v - s) * 2 / 27, 0);
-const fullDiffV = szEma12 - szEma26;
-const szDeaArr = fullCloseArr.reduce((arr, v, i) => {
-    const prev = arr.length ? arr[arr.length - 1] : 0;
-    arr.push(i === 0 ? fullCloseArr[0] : prev + (((szEma12 - szEma26) - prev) * 2 / 9));
-    return arr;
-}, []);
-const fullDeaV = szDeaArr[szDeaArr.length - 1] || 0;
-const fullIsGoldenCross = fullDiffV > fullDeaV;
-const crossInput = {
-    pricePosition: pricePos,
-    trendState,
-    trendStrength: fullBaiXing?.trendStrength ?? fullSanJiao?.trendStrength ?? 0,
-    diff: fullDiffV,
-    dea: fullDeaV,
-    shortBuy: fullSanJiao?.shortBuy ?? false,
-    strictBuy: fullSanJiao?.strictBuy ?? false,
-    jiaCang: fullBaiXing?.jiaCang ?? false,
-    shortSell: fullSanJiao?.shortSell ?? false,
-    strongSell: fullSanJiao?.strongSell ?? false,
-    safe: fullBaiXing?.safe ?? false,
-    macdGoldenCross: fullIsGoldenCross,
-    macdDeathCross: fullDiffV < fullDeaV,
-    baiXiaoDays: fullBaiXing?.baiXiaoDays ?? 0,
-    baiBu: !!fullBaiXing?.baiBu,
-    baiBuDays: fullBaiXing?.baiBuDays ?? 0,
-    baiCoverTrend: fullBaiXing?.baiCoverTrend ?? 'stable',
-    baiXiao: !!fullBaiXing?.baiXiao,
-    volumeStructure: fullSanJiao?.volumeStructure ?? 0,
-    qiangZhiFuGai: !!fullBaiXing?.qiangZhiFuGai,
-};
-const crossResult = (0, trading_suggestion_1.getTradingSuggestion)(crossInput);
-const crossSuggestion = crossResult.action;
-const NEGATIVE_CROSS = ['卖出', '不要介入'];
-if (!keepAll && NEGATIVE_CROSS.includes(crossSuggestion))
-    return null;
-const priceIncrease = ((price - closeArr[closeArr.length - 20]) / closeArr[closeArr.length - 20]) * 100;
-const changePct = ((price - closeArr[closeArr.length - 2]) / closeArr[closeArr.length - 2]) * 100;
-const BASE = {
-    '重仓买入': 100, '买入': 80, '轻仓买入': 65, '持有': 40,
-};
-let score = BASE[suggestion] ?? 30;
-if (pricePos < 30)
-    score += 15;
-else if (pricePos < 50)
-    score += 8;
-if (closeArr[closeArr.length - 1] > closeArr[closeArr.length - 5])
-    score += 5;
-else
-    score -= 5;
-const chip = GemScreenerService.calcChipAnalysis(closeArr, highArr, lowArr, volumeArr, price);
-const chipConcentration90 = chip.concentration90;
-const chipPeakPosition = chip.peakPosition;
-const chipPattern = chip.pattern;
-let finalSuggestion = suggestion;
-const chipDowngrade = chipPattern === 'dispersed' && chipPeakPosition === 'high' && pricePos < 30;
-const chipRisk = chipConcentration90 > 40 && chipPeakPosition === 'high' && pricePos < 25;
-if (chipDowngrade || chipRisk) {
-    if (finalSuggestion === '重仓买入')
-        finalSuggestion = '买入';
-    else if (finalSuggestion === '买入')
-        finalSuggestion = '轻仓买入';
-    else if (finalSuggestion === '轻仓买入')
-        finalSuggestion = '不要介入';
-    this.logger.log(`🕵️ [DEBUG 筹码降级] ${name}(${code}) 触发: chipPat=${chipPattern} peak=${chipPeakPosition} pp=${pricePos.toFixed(1)} sugerWas=${suggestion} now=${finalSuggestion}`);
-}
-if (chipPattern === 'single_peak' && chipPeakPosition === 'low' && pricePos > 15 && pricePos < 45 && trendState >= 1) {
-    if (finalSuggestion === '买入')
-        finalSuggestion = '重仓买入';
-    else if (finalSuggestion === '轻仓买入')
-        finalSuggestion = '买入';
-}
-const entryTiming = GemScreenerService.calcEntryTiming(pricePos, trendState, closeArr, isGoldenCross, volumeArr);
-const safetyScore = GemScreenerService.calcSafetyScore(closeArr, highArr, lowArr, pricePos, changePct);
-const avgVol5 = volumeArr.slice(-5).reduce((a, b) => a + b, 0) / 5;
-const avgVol20 = volumeArr.slice(-20).reduce((a, b) => a + b, 0) / 20;
-const volRatio = avgVol5 / (avgVol20 || 1);
-const inflowBase = (volRatio - 1) * price * avgVol5 / 10000000;
-const mainForceInflow = frontendMainForce !== undefined ? frontendMainForce : Math.round(Math.max(Math.min(inflowBase, 20), -10) * 10) / 10;
-const sellEntry = this.sellStateCache.get(code);
-if (sellEntry) {
-    const hasBuySignal = ['轻仓买入', '重仓买入', '买入'].includes(finalSuggestion) && isGoldenCross && (entryTiming ?? 0) >= 50;
-    if (hasBuySignal) {
-        this.sellStateCache.delete(code);
-        this.logger.log(`🔓 [实时分析] ${name}(${code}) 出现买入信号，自动解除卖出锁定`);
-    }
-    else {
-        this.logger.log(`🕵️ [DEBUG 卖出锁] ${name}(${code}) sellLock=卖出锁定, finalSug=${finalSuggestion} gc=${isGoldenCross} et=${entryTiming} → 覆盖为不要介入`);
-        finalSuggestion = '不要介入';
-    }
-}
-const quickBaiBuDays = baiXing?.baiBuDays ?? 0;
-if (finalSuggestion === '卖出' && quickBaiBuDays >= 3) {
-    this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
-    finalSuggestion = '不要介入';
-    this.logger.log(`🔒 [实时分析] ${name}(${code}) 白布${quickBaiBuDays}天+卖出，自动锁定为不要介入`);
-}
-if (finalSuggestion === '卖出') {
-    this.sellStateCache.set(code, { suggestion: finalSuggestion, timestamp: Date.now() });
-    this.logger.log(`🔒 [实时分析] ${name}(${code}) 触发卖出信号，已锁定`);
-}
-const forecast1_2Day = GemScreenerService.computeTechnicalForecast({
-    entryTiming,
-    isGoldenCross: fullIsGoldenCross,
-    ma5: ma5,
-    ma10: ma10,
-    pricePosition: pricePos,
-    mainForceInflow,
-    jiGouActiveScore: Math.round(Math.min(Math.max(volRatio, 0) * 6, 20) * 100) / 100,
-});
 return {
     code, name: name ?? '',
     currentPrice: price,

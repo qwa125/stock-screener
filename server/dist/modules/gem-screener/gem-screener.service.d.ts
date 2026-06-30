@@ -267,7 +267,10 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private static calcEntryTiming;
     private static calcSafetyScore;
     private static calcChipAnalysis;
-    const totalVol: any;
-    const peaks: number[];
-    for(let: any, i: number | undefined, i: any, : any, BINS: any): any;
+    quickAnalyze(code: string, name?: string, keepAll?: boolean, rawKline?: any[], frontendMainForce?: number): Promise<OpportunityStock | null>;
+    const forecast1_2Day: {
+        direction: string;
+        confidence: string;
+        detail: string;
+    };
 }

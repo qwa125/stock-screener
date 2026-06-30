@@ -375,7 +375,39 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: any[];
+        data: {
+            code: string;
+            name: string;
+            suggestion: string;
+            score: number;
+            entryTiming: number;
+            currentPrice: number;
+            changePercent: number;
+            pricePosition: number;
+            priceIncrease: number;
+            mainForceInflow: number;
+            baiXiaoDays: number;
+            capitalRank: number;
+            safetyScore: number;
+            trade: number;
+            price: number;
+            changepercent: number;
+            inflow: number;
+            timestamp: number;
+        }[];
+    } | {
+        code: number;
+        msg: string;
+        data: import("./gem-screener.service").OpportunityStock[];
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            code: string;
+            name: string;
+            suggestion: string;
+            score: number;
+        }[];
     } | {
         code: number;
         msg: string;
