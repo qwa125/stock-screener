@@ -1143,14 +1143,24 @@ async function showDetail(i){
   isDetailView=true
   selectedIdx=i
   var s=stocks[i],rt=realtimePrices[s.code]||{}
-  if(!window._auctionDataCache||!window._auctionDataCache[s.code])await fetchAuctionData([s.code],5)
+  if(!s){console.error('showDetail: stocks['+i+'] 无效');return}
+  
+  // ★ 先渲染初始详情（立即执行，不阻塞）
   var da=$('detailArea')
   da.style.display='block'
   da.style.minHeight='';da.innerHTML=buildDetail(s,rt,s)
   da.scrollIntoView({behavior:'smooth',block:'nearest'})
   renderList()
-  // 渲染集合竞价数据
-  renderAuctionSection(s.code,rt.low||s.intradayLow||0,rt.high||s.intradayHigh||0,rt.price||s.currentPrice||0)
+  // 渲染集合竞价数据（如果有缓存则直接渲染，无缓存则异步拉取）
+  if(window._auctionDataCache&&window._auctionDataCache[s.code]){
+    renderAuctionSection(s.code,rt.low||s.intradayLow||0,rt.high||s.intradayHigh||0,rt.price||s.currentPrice||0)
+  }else{
+    // 异步拉取竞价数据，不阻塞详情渲染
+    fetchAuctionData([s.code],5).then(function(){
+      if(window._auctionDataCache&&window._auctionDataCache[s.code])
+        renderAuctionSection(s.code,rt.low||s.intradayLow||0,rt.high||s.intradayHigh||0,rt.price||s.currentPrice||0)
+    }).catch(function(){})
+  }
   // 立即启动日内参考刷新（实时价格+买卖信号），同时异步拉K线分析
   startIntradayRefresh(s.code,rt.high||s.intradayHigh||0,rt.low||s.intradayLow||0,rt.price||s.currentPrice||0)
   if(!rt.high&&!rt.low&&s.code){
