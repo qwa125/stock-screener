@@ -702,7 +702,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.upgradedSnapshot = { list, timestamp: Date.now() };
     this.saveSnapshotToDisk();
     this.uploadSnapshotToCloud(); // 异步上传到 TOS
-    this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch(() => {}); // 同时存PG，重启不丢
+    this.saveCacheToPg('snapshot', this.upgradedSnapshot).catch((e) => this.logger.warn(`⚠️ PG快照写入失败: ${(e as Error).message}`));
     this.logger.log(`📸 Step③快照已保存: ${list.length} 只`);
   }
 
