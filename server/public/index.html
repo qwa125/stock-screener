@@ -2271,22 +2271,37 @@ async function fetchIntraday(code){
         console.log('[fetchIntraday] 东财分钟K线成功',code,rawKlines.length)
       }
     }catch(e){console.warn('[fetchIntraday] 东财分钟K线失败:',e.message)}
-    // ====== 新浪5分钟K线备选（纯前端，不走后端代理） ======
+    // ====== 新浪1分钟K线备选（纯前端） ======
     if(!klineData){
       try{
-        var sinCode=code.startsWith('6')?'sh'+code:'sz'+code
-        var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode+'&datalen=240&scale=5'
+        var sinCode2=code.startsWith('6')?'sh'+code:'sz'+code
+        var sUrl='https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/TechnicalService.getStocksKline?symbol='+sinCode2+'&datalen=240&scale=1'
         var sRes=await fetch(sUrl,{mode:'cors',signal:AbortSignal.timeout(8000)})
         var sText=await sRes.text()
         var sJson=JSON.parse(sText.replace(/^\(|\)$/g,''))
         if(sJson&&sJson.data&&sJson.data.length>=48){
           klineData=sJson.data.map(function(d){
-            var p=d.day.split(' ')
             return{time:d.day,open:parseFloat(d.open),close:parseFloat(d.close),high:parseFloat(d.high),low:parseFloat(d.low),volume:parseFloat(d.volume),amount:parseFloat(d.amount)||0}
           })
-          console.log('[fetchIntraday] 新浪5分钟K线备选成功',code,klineData.length)
+          console.log('[fetchIntraday] 新浪1分钟K线备选成功',code,klineData.length)
         }
       }catch(e2){console.warn('[fetchIntraday] 新浪备选也失败:',e2.message)}
+    }
+    // ====== 腾讯1分钟K线备选（纯前端） ======
+    if(!klineData){
+      try{
+        var gtCode2=code.startsWith('6')?'sh'+code:'sz'+code
+        var tUrl='https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240'
+        var tRes=await fetch(tUrl,{signal:AbortSignal.timeout(8000)}).then(function(r){return r.text()})
+        var tText=tRes.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'')
+        var tJson=JSON.parse(tText)
+        if(tJson&&tJson.data&&tJson.data[gtCode2]&&tJson.data[gtCode2].m1){
+          klineData=tJson.data[gtCode2].m1.map(function(l){
+            return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}
+          })
+          console.log('[fetchIntraday] 腾讯1分钟K线备选成功',code,klineData.length)
+        }
+      }catch(e3){console.warn('[fetchIntraday] 腾讯备选也失败:',e3.message)}
     }
     if(!klineData||klineData.length<48)return null
     // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
