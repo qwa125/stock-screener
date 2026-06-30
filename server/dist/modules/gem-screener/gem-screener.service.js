@@ -4118,11 +4118,28 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         for (const [sect, entry] of sectorMap) {
             sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
         }
+        const calcRemainingUpside = (s) => {
+            const peakMap = { high: 100, mid: 60, low: 30 };
+            const peakScore = peakMap[s.chipPeakPosition] ?? 40;
+            const gain = Math.max(0, s.priceIncrease ?? 0);
+            const gainScore = Math.max(0, (20 - gain) / 20) * 100;
+            const pos = s.pricePosition ?? 50;
+            const posScore = Math.max(0, 100 - pos);
+            return peakScore * 0.4 + gainScore * 0.3 + posScore * 0.3;
+        };
+        const upsideCache = new Map();
+        for (const s of stocks) {
+            upsideCache.set(s, calcRemainingUpside(s));
+        }
         stocks.sort((a, b) => {
             const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
             const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
             if (sectA !== sectB)
                 return sectB - sectA;
+            const ua = upsideCache.get(a) ?? 0;
+            const ub = upsideCache.get(b) ?? 0;
+            if (ua !== ub)
+                return ub - ua;
             const ta = TIMING_ORDER[a.entryTiming] ?? 0;
             const tb = TIMING_ORDER[b.entryTiming] ?? 0;
             if (ta !== tb)

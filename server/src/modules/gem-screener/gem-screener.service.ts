@@ -4751,14 +4751,17 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     // 后端不再主动调用外部API（由前端推送数据到后端分析）
     return [];
   }
-  /** 统一排序：细分板块 → 入场时机 → 买入信号 → 机构活跃度 → 主力资金
+  /** 统一排序：细分板块 → 上涨空间 → 入场时机 → 买入信号 → 机构活跃度 → 主力资金
    *  排序规则：
    *    1. 板块热度：先按细分板块（sectorName）分组，计算各板块平均涨幅，
    *       同一板块的股票排在一起，板块平均涨幅越高越靠前
-   *    2. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
-   *    3. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
-   *    4. 机构活跃度(jiGouActiveScore): 高→低
-   *    5. 主力资金净流入(mainForceInflow): 高→低
+   *    2. 上涨空间：计算剩余上涨动力评分(0-100)，
+   *       筹码峰在顶部(ready to launch)+价格低位+刚启动=高分→靠前
+   *       滞涨/高位/已大幅上涨=低分→靠后
+   *    3. 入场时机：最佳(5) > 可以(4) > 可关注(3) > 谨慎(2) > 观望(1)
+   *    4. 买入信号：重仓买入(0) > 买入(1) > 轻仓买入(2) > 持有(3) > 减仓(4) > 卖出(5) > 不要介入(6)
+   *    5. 机构活跃度(jiGouActiveScore): 高→低
+   *    6. 主力资金净流入(mainForceInflow): 高→低
    */
   static sortStocks(stocks: any[]): any[] {
     if (!stocks || stocks.length === 0) return stocks || [];
@@ -4785,28 +4788,57 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       sectorHeat.set(sect, entry.count > 0 ? Math.round((entry.total / entry.count) * 100) / 100 : 0);
     }
 
+    /** 计算剩余上涨空间评分 (0-100)，越高=上涨动力越强=越靠前 */
+    const calcRemainingUpside = (s: any): number => {
+      // ① 筹码峰位置: 用户说"大绿峰山顶了就是最佳"
+      const peakMap: Record<string, number> = { high: 100, mid: 60, low: 30 };
+      const peakScore = peakMap[s.chipPeakPosition] ?? 40;
+
+      // ② 当前涨幅(priceIncrease): 越小=刚启动=剩余空间大
+      const gain = Math.max(0, s.priceIncrease ?? 0);
+      const gainScore = Math.max(0, (20 - gain) / 20) * 100; // 假设目标涨幅20%
+
+      // ③ 价格位置(pricePosition): 越低=底部=上涨空间大
+      const pos = s.pricePosition ?? 50;
+      const posScore = Math.max(0, 100 - pos);
+
+      // 加权综合: 峰位置40% + 涨幅空间30% + 价格位置30%
+      return peakScore * 0.4 + gainScore * 0.3 + posScore * 0.3;
+    };
+
+    // 预计算上涨空间评分(避免重复计算)
+    const upsideCache = new Map<any, number>();
+    for (const s of stocks) {
+      upsideCache.set(s, calcRemainingUpside(s));
+    }
+
     stocks.sort((a, b) => {
       // 1️⃣ 板块热度
       const sectA = sectorHeat.get(a.sectorName || '其他') || 0;
       const sectB = sectorHeat.get(b.sectorName || '其他') || 0;
       if (sectA !== sectB) return sectB - sectA;
 
-      // 2️⃣ 入场时机
+      // 2️⃣ 上涨空间：剩余上涨动力评分，高→低
+      const ua = upsideCache.get(a) ?? 0;
+      const ub = upsideCache.get(b) ?? 0;
+      if (ua !== ub) return ub - ua;
+
+      // 3️⃣ 入场时机
       const ta = TIMING_ORDER[a.entryTiming] ?? 0;
       const tb = TIMING_ORDER[b.entryTiming] ?? 0;
       if (ta !== tb) return tb - ta;
 
-      // 3️⃣ 买入信号强度
+      // 4️⃣ 买入信号强度
       const sa = PRI_ORDER[a.suggestion] ?? 7;
       const sb = PRI_ORDER[b.suggestion] ?? 7;
       if (sa !== sb) return sa - sb;
 
-      // 4️⃣ 机构活跃度
+      // 5️⃣ 机构活跃度
       const ja = a.jiGouActiveScore ?? 0;
       const jb = b.jiGouActiveScore ?? 0;
       if (ja !== jb) return jb - ja;
 
-      // 5️⃣ 主力资金净流入
+      // 6️⃣ 主力资金净流入
       return (b.mainForceInflow || 0) - (a.mainForceInflow || 0);
     });
 
