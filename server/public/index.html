@@ -572,11 +572,17 @@ async function fetchKlineAndAnalyze(s){
     }else{
       var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
       if(klines&&klines.length>=5)payload.kline=klines
-      await fetch(API+'/gem/analyze',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
-      }).then(function(r){return r.json()})
+      try{
+        var ac2=new AbortController()
+        var tid2=setTimeout(function(){ac2.abort()},10000)
+        await fetch(API+'/gem/analyze',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(payload),
+          signal:ac2.signal
+        }).then(function(r){return r.json()})
+        clearTimeout(tid2)
+      }catch(pe){console.warn('[scan] analyze超时或失败('+code+'):',pe.message||pe)}
     }
   }catch(e){/* 静默跳过 */}
 }
