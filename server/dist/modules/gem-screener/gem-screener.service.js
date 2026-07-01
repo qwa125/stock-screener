@@ -197,6 +197,39 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return map;
     }
+    async saveKlineCacheToPg(entries) {
+        if (!entries || entries.size < 50)
+            return;
+        try {
+            const obj = {};
+            for (const [code, v] of entries) {
+                if (v?.data?.length >= 5)
+                    obj[code] = { data: v.data, ts: v.ts || 0 };
+            }
+            await this.saveCacheToPg('kline_cache', obj);
+            this.logger.log(`📦 PostgreSQL K-line 缓存已保存: ${Object.keys(obj).length} 只`);
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL K-line 缓存保存失败: ${e.message}`);
+        }
+    }
+    async loadKlineCacheFromPg() {
+        const map = new Map();
+        try {
+            const data = await this.loadCacheFromPg('kline_cache');
+            if (data) {
+                for (const [code, val] of Object.entries(data)) {
+                    if (val?.data && Array.isArray(val.data) && val.data.length >= 10) {
+                        map.set(code, { data: val.data, ts: val.ts || 0 });
+                    }
+                }
+            }
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL K-line 缓存加载失败: ${e.message}`);
+        }
+        return map;
+    }
     loadAnalysisCache() {
         try {
             if (!(0, node_fs_1.existsSync)(this.ANALYSIS_CACHE_FILE))
@@ -294,6 +327,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.REFRESH_INTERVAL = 5 * 60 * 1000;
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
         this.SNAPSHOT_FILE = '/tmp/gem-upgraded-snapshot.json';
+        this.klineDbCache = null;
         this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.upgradedSnapshot = { list: [], timestamp: 0 };
@@ -1110,6 +1144,11 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             catch { }
         }
         this.logger.log('📦 K-line 磁盘缓存就绪（首次访问时懒加载）');
+        const pgKline = await this.loadKlineCacheFromPg();
+        if (pgKline.size > 50) {
+            this.klineDbCache = pgKline;
+            this.logger.log(`✅ PostgreSQL K-line 缓存就绪: ${pgKline.size} 只（首次访问时懒加载到内存）`);
+        }
         this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length ?? 0} 只, 主板 ${this.mainBoardCache?.data?.length ?? 0} 只`);
     }
     calcKDJ(kline) {

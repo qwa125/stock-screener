@@ -65,6 +65,10 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private readonly REFRESH_INTERVAL;
     private readonly CACHE_FILE;
     private readonly SNAPSHOT_FILE;
+    klineDbCache: Map<string, {
+        data: any[];
+        ts: number;
+    }> | null;
     private intradaySignalCache;
     private readonly SELL_STATE_FILE;
     private upgradedSnapshot;
@@ -111,6 +115,14 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         ts: number;
     }>): Promise<void>;
     loadKlineCacheFromDisk(): Promise<Map<string, {
+        data: any[];
+        ts: number;
+    }>>;
+    saveKlineCacheToPg(entries: Map<string, {
+        data: any[];
+        ts: number;
+    }>): Promise<void>;
+    loadKlineCacheFromPg(): Promise<Map<string, {
         data: any[];
         ts: number;
     }>>;

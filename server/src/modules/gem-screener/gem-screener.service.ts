@@ -111,6 +111,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
   private readonly REFRESH_INTERVAL = 5 * 60 * 1000; // 盘中每5分钟全量扫描
   private readonly CACHE_FILE = '/tmp/gem-opportunities-cache.json';
   private readonly SNAPSHOT_FILE = '/tmp/gem-upgraded-snapshot.json';
+  /** PostgreSQL 持久化 K-line 缓存（跨重启不丢，controller 懒加载到内存） */
+  klineDbCache: Map<string, { data: any[]; ts: number }> | null = null;
 
   /** 日内分析信号缓存：同一只股票、同一天内，已发现的买入/卖出点永不消失 */
   private intradaySignalCache = new Map<string, {
@@ -294,6 +296,40 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
     } catch (e) {
       // 文件不存在或损坏，正常返回空 map
+    }
+    return map;
+  }
+
+  // ─── K-line 缓存持久化（PostgreSQL，跨重启不丢） ───
+  /** 保存 K-line 缓存到 PostgreSQL（供部署/休眠后恢复） */
+  async saveKlineCacheToPg(entries: Map<string, { data: any[]; ts: number }>): Promise<void> {
+    if (!entries || entries.size < 50) return; // 数据太少不写
+    try {
+      const obj: Record<string, { data: any[]; ts: number }> = {};
+      for (const [code, v] of entries) {
+        if (v?.data?.length >= 5) obj[code] = { data: v.data, ts: v.ts || 0 };
+      }
+      await this.saveCacheToPg('kline_cache', obj);
+      this.logger.log(`📦 PostgreSQL K-line 缓存已保存: ${Object.keys(obj).length} 只`);
+    } catch (e) {
+      this.logger.warn(`⚠️ PostgreSQL K-line 缓存保存失败: ${(e as Error).message}`);
+    }
+  }
+
+  /** 从 PostgreSQL 加载 K-line 缓存 */
+  async loadKlineCacheFromPg(): Promise<Map<string, { data: any[]; ts: number }>> {
+    const map = new Map<string, { data: any[]; ts: number }>();
+    try {
+      const data = await this.loadCacheFromPg<Record<string, { data: any[]; ts: number }>>('kline_cache');
+      if (data) {
+        for (const [code, val] of Object.entries(data)) {
+          if (val?.data && Array.isArray(val.data) && val.data.length >= 10) {
+            map.set(code, { data: val.data, ts: val.ts || 0 });
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ PostgreSQL K-line 缓存加载失败: ${(e as Error).message}`);
     }
     return map;
   }
@@ -1212,6 +1248,12 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
     // ─── K-line 磁盘缓存恢复（供 controller 懒加载） ───
     this.logger.log('📦 K-line 磁盘缓存就绪（首次访问时懒加载）');
+    // ─── K-line PostgreSQL 缓存恢复（磁盘在 Render 重启后消失，PG 保留） ───
+    const pgKline = await this.loadKlineCacheFromPg();
+    if (pgKline.size > 50) {
+      this.klineDbCache = pgKline;
+      this.logger.log(`✅ PostgreSQL K-line 缓存就绪: ${pgKline.size} 只（首次访问时懒加载到内存）`);
+    }
 
     this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length??0} 只, 主板 ${this.mainBoardCache?.data?.length??0} 只`);
 

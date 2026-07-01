@@ -661,7 +661,7 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async proxyKLine(@Query('code') code: string) {
     if (!code) return { code: 400, msg: '缺少股票代码', data: null };
-    // 首次请求时从 PG 恢复 K-line 缓存
+    // 首次请求时从磁盘或 PG 恢复 K-line 缓存
     if (!this.klineDiskRestored) {
       const disk = await this.gemScreener.loadKlineCacheFromDisk();
       let loaded = 0;
@@ -672,6 +672,17 @@ export class GemScreenerController {
         }
       }
       this.logger.log(`📦 磁盘 K-line 缓存恢复: ${loaded} 只`);
+      // 如果磁盘不够多，尝试从 PG 补充（Render 重启后磁盘消失，PG 保留）
+      if (loaded < 50 && this.gemScreener.klineDbCache && this.gemScreener.klineDbCache.size > 50) {
+        let pgLoaded = 0;
+        for (const [c, v] of this.gemScreener.klineDbCache) {
+          if (!this.klineProxyCache.has(c) && v?.data?.length >= 10) {
+            this.klineProxyCache.set(c, { data: v.data, timestamp: v.ts });
+            pgLoaded++;
+          }
+        }
+        this.logger.log(`📦 PostgreSQL K-line 缓存恢复: ${pgLoaded} 只`);
+      }
       this.klineDiskRestored = true;
     }
     const cached = this.klineProxyCache.get(code);
@@ -934,6 +945,8 @@ export class GemScreenerController {
         if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
       }
       await this.gemScreener.persistFullKlineCache(mapForPersist);
+      // 持久化到 PostgreSQL（跨重启不丢）
+      await this.gemScreener.saveKlineCacheToPg(mapForPersist);
     }
     // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
     await this.gemScreener.saveAnalysisCache();

@@ -572,6 +572,16 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 }
             }
             this.logger.log(`📦 磁盘 K-line 缓存恢复: ${loaded} 只`);
+            if (loaded < 50 && this.gemScreener.klineDbCache && this.gemScreener.klineDbCache.size > 50) {
+                let pgLoaded = 0;
+                for (const [c, v] of this.gemScreener.klineDbCache) {
+                    if (!this.klineProxyCache.has(c) && v?.data?.length >= 10) {
+                        this.klineProxyCache.set(c, { data: v.data, timestamp: v.ts });
+                        pgLoaded++;
+                    }
+                }
+                this.logger.log(`📦 PostgreSQL K-line 缓存恢复: ${pgLoaded} 只`);
+            }
             this.klineDiskRestored = true;
         }
         const cached = this.klineProxyCache.get(code);
@@ -784,6 +794,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     mapForPersist.set(k, { data: v.data, ts: v.timestamp });
             }
             await this.gemScreener.persistFullKlineCache(mapForPersist);
+            await this.gemScreener.saveKlineCacheToPg(mapForPersist);
         }
         await this.gemScreener.saveAnalysisCache();
         return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
