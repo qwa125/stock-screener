@@ -345,163 +345,27 @@ var _rescanAll=false
 async function handleRescanClick(){
   if(_rescanAll||loading)return
   _rescanAll=true
-  var btn=$('rescanBtn')
-  var prog=$('rescanProgress')
-  var bar=$('rescanBar')
-  var txt=$('rescanText')
-  if(btn)btn.textContent='⏳ 全市场重扫中...'
-  if(prog)prog.style.display='block'
-  if(!deviceRegistered){showBlocked(true);return}
   try{
-  // ② 按涨跌幅排序取热门股（主板前500 + 创业板前500）
-    setStatus('正在获取热门A股...')
-    txt.textContent='获取涨跌幅排行中...'
-    async function fetchNodePages(node,pages,label){
-      var all=[]
-      for(var p=1;p<=pages;p++){
-        txt.textContent='获取 '+label+' 涨跌幅排行 '+p+'/'+pages+' 页...'
-        try{
-          var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node)
-            .then(function(r){return r.text()})
-          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-          try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
-            var m=src.match(/\[[\s\S]*\]/)
-            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
-          }
-        }catch(e){
-          console.warn('第'+p+'页获取失败:',e.message)
-        }
-        if(p<pages)await new Promise(function(r){setTimeout(r,200)})
-      }
-      return all
-    }
-    setStatus('正在抓取沪市热门股...')
-    var shList=await fetchNodePages('sh_a',15,'沪市')
-    setStatus('正在抓取深市热门股...')
-    var szList=await fetchNodePages('sz_a',20,'深市')
-    // 主板：沪60 + 深00（上限1000）
-    var mainBoard=shList.filter(function(s){return s.code&&s.code.startsWith('60')})
-    var sz00=szList.filter(function(s){return s.code&&s.code.startsWith('00')})
-    mainBoard=mainBoard.concat(sz00).slice(0,500)
-    // 创业板：深30（上限500）
-    var gem=szList.filter(function(s){return s.code&&s.code.startsWith('30')}).slice(0,500)
-    var stocks=mainBoard.concat(gem)
-    if(!stocks.length)throw new Error('未获取到热门股票')
-    txt.textContent='分析 '+stocks.length+' 只热门A股 (0%)...'
-    if(bar)bar.style.width='0%'
-    var done=0,total=stocks.length
-    // ③ 分批并行抓取K线并推送到后端，每批20只，批次间增加间隔避免限流
-    var batchSize=20
-    for(var i=0;i<total;i+=batchSize){
-      var batch=stocks.slice(i,i+batchSize)
-      var promises=batch.map(function(s){return fetchKlineAndAnalyze(s)})
-      await Promise.allSettled(promises)
-      done=Math.min(i+batchSize,total)
-      var pct=Math.round(done/total*100)
-      if(bar)bar.style.width=pct+'%'
-      txt.textContent='分析中 '+done+'/'+total+' ('+pct+'%)'
-      // 每批后等待200ms，避免腾讯限流
-      if(i+batchSize<total)await new Promise(function(r){setTimeout(r,200)})
-    }
-    txt.textContent='✅ 全市场扫描完成! 已获取 '+total+' 只热门A股并推送后端分析'
-    if(bar)bar.style.width='100%'
-    setStatus('⏳ 正在查询后端缓存状态...')
-    // ③ 查询后端缓存确认数据已落盘
-    try{
-      var cr2=await fetch(API+'/gem/cache-all',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json()})
-      var cachedTotal=cr2?.data?.total||0
-      setStatus('✅ 后端已缓存 '+cachedTotal+' 只股票，正在加载机会区...')
-    }catch(e){
-      setStatus('✅ 后端分析完成，正在加载机会区...')
-    }
-    // ④ 刷新机会区（错误不影响缓存）
-    try{
-      await doFullRescan()
-      setStatus('✅ 全市场重扫完毕 | 已分析 '+total+' 只热门A股')
-    }catch(e2){
-      setStatus('❌ 机会区加载异常: '+e2.message)
-    }
+    await doScan()
   }catch(e){
     console.error('全市场重扫失败:',e)
-    setStatus('全市场重扫失败: '+e.message)
-    txt.textContent='失败: '+e.message
   }finally{
     _rescanAll=false
-    if(btn)btn.textContent='🌐 全市场重扫'
-    setTimeout(function(){if(prog)prog.style.display='none'},5000)
   }
 }
-/** 交易时段每10分钟：拉成交量前1000主板+前500创业板，推送后端分析覆盖旧缓存 */
+/** 交易时段每10分钟：统一走doScan（和立即扫描完全一致） */
 var _autoScanning=false
 async function autoLightScan(){
+  // 为避免并发，统一由doScan的loading控制
   if(_autoScanning||loading||_rescanAll)return
-  // 未注册时不执行自动扫描
   if(!deviceRegistered)return
   _autoScanning=true
   try{
-    setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
-    var totalList=[]
-    // ★ 首选：新浪排行榜（沪市10页+深市10页，每页100只，按涨跌幅排序）
-    try{
-      var shStocks=[],szStocks=[]
-      for(var p=1;p<=10;p++){
-        var src=await fetchWithRetry('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a',2).then(function(r){return r.text()})
-        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-        try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}}
-      }
-      for(var p=1;p<=10;p++){
-        var src=await fetchWithRetry('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a',2).then(function(r){return r.text()})
-        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-        try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}}
-      }
-      var mb_s=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
-      var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
-      var gem_s=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
-      mb_s=mb_s.concat(sz00).slice(0,500);gem_s=gem_s.slice(0,500)
-      totalList=mb_s.concat(gem_s)
-      if(totalList.length){
-        try{var _se=[],_all=shStocks.concat(szStocks)
-          for(var _si=0;_si<_all.length;_si++){var _sc=_all[_si],_c=String(_sc.code||'');if(!_c)continue;_se.push({f12:_c,f14:_sc.name||'',f2:parseFloat(_sc.trade)||0,f3:parseFloat(_sc.changepercent)||0,f15:parseFloat(_sc.high)||0,f16:parseFloat(_sc.low)||0})}
-          window._cachedSinaEMData=_se
-        }catch(e){}
-      }
-      console.log('📦 新浪排行 '+shStocks.length+'+'+szStocks.length+' 只, 筛选主板 '+mb_s.length+' + 创业板 '+gem_s.length)
-    }catch(e){}
-    // 新浪排行CORS *必通，无需东财备用（东财无CORS且已全部改用腾讯K线）
-    if(!totalList||!totalList.length)throw new Error('未获取到热门股票')
-    setStatus('⏳ 轻量扫描: '+totalList.length+' 只热门股分析中...')
-    // ④ 扫描前拉取后端缓存清单，跳过已有分析结果的股（只更新价格）
-    window._cachedStockSet=new Set()
-    try{
-      var _cr=await fetch(API+'/gem/cache-all',{signal:timeoutSignal(8000)}).then(function(r){return r.json()})
-      if(_cr&&_cr.data&&_cr.data.stocks&&_cr.data.stocks.length) _cr.data.stocks.forEach(function(s){if(s.code)window._cachedStockSet.add(s.code)})
-      console.log('[scan] cached stocks:',window._cachedStockSet.size)
-    }catch(e){}
-    // ⑤ 分批抓K线+分析（每批20只，间隔200ms）
-    var done=0,total=totalList.length
-    var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
-    if(prog)prog.style.display='block'
-    if(bar)bar.style.width='0%'
-    if(txt)txt.textContent='准备中...'
-    for(var i=0;i<total;i+=20){
-      var batch=totalList.slice(i,i+20)
-      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze(s)}))
-      done=Math.min(i+20,total)
-      if(txt)txt.textContent='轻量分析 '+done+'/'+total
-      if(bar)bar.style.width=Math.round(done/total*100)+'%'
-      if(i+20<total)await new Promise(function(r){setTimeout(r,200)})
-    }
-    if(txt)txt.textContent='轻量扫描完成!'
-    if(bar)bar.style.width='100%'
-    // ⑥ 前端读取缓存→按实时涨跌幅升级→写回后端（缓存即前端计算后的最终信号）
-    // ⑦ 刷新机会区（从后端读取已升级的最终缓存）
-    await doFullRescan()
-    setStatus('✅ 轻量扫描 '+total+' 只完成，缓存已更新 | '+new Date().toLocaleTimeString())
+    await doScan()
   }catch(e){
-    console.error('轻量扫描失败:',e)
+    console.error('自动扫描失败:',e)
   }finally{
     _autoScanning=false
-    setTimeout(function(){if($('rescanProgress'))$('rescanProgress').style.display='none'},3000)
   }
 }
 // 浏览器拉K线 → 推送到后端分析（已修复字段名和格式）
@@ -568,24 +432,20 @@ async function fetchKlineAndAnalyze(s){
     // 写入浏览器缓存（供下次gap+5复用）
     if(klines&&klines.length>=5){window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()}
 
-    // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
-    if(window._cachedStockSet&&window._cachedStockSet.has(code)){
-      console.log('[scan] skip backend',code,'(cached)')
-    }else{
-      var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
-      if(klines&&klines.length>=5)payload.kline=klines
-      try{
-        var ac2=new AbortController()
-        var tid2=setTimeout(function(){ac2.abort()},10000)
-        await fetch(API+'/gem/analyze',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(payload),
-          signal:ac2.signal
-        }).then(function(r){return r.json()})
-        clearTimeout(tid2)
-      }catch(pe){console.warn('[scan] analyze超时或失败('+code+'):',pe.message||pe)}
-    }
+    // 每次扫描都重新分析，不再跳过已缓存股票（确保机会区随行情变化更新）
+    var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
+    if(klines&&klines.length>=5)payload.kline=klines
+    try{
+      var ac2=new AbortController()
+      var tid2=setTimeout(function(){ac2.abort()},10000)
+      await fetch(API+'/gem/analyze',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        signal:ac2.signal
+      }).then(function(r){return r.json()})
+      clearTimeout(tid2)
+    }catch(pe){console.warn('[scan] analyze超时或失败('+code+'):',pe.message||pe)}
   }catch(e){/* 静默跳过 */}
 }
 function setStatus(s){$('status').textContent=s}
@@ -1755,12 +1615,9 @@ async function fetchAndCacheSina(){
 
 // ---------- 全市场重扫（新浪排行：主板+创业板） ----------
 async function doFullRescan(saveToBackend){
-  var btn=$('rescanBtn');
-  // 按钮存在时才操作按钮状态（兼容计时器自动触发场景）
-  if(btn){if(loading||btn.disabled)return;btn.disabled=true;btn.textContent='重扫中...'}else if(loading){return}
-  // 未注册时不允许扫描
+  // 改为由调用方(doScan/autoLightScan)管理loading，本函数不再做loading检查
   if(!deviceRegistered)return
-  loading=true
+  if(!loading)loading=true
   stopPriceRefresh()
   setStatus('🔄 加载缓存数据（来自后端分析）...')
   
@@ -1974,7 +1831,7 @@ async function doFullRescan(saveToBackend){
   }else{
     setStatus('❌ 重扫无结果')
   }
-  loading=false;if(btn){btn.disabled=false;btn.textContent='🌐 全市场重扫'}
+  loading=false
   // ─── Step ③: 前端升级信号回写到后端（全量覆盖缓存，供其他设备读取） ───
   if(saveToBackend!==false) try{
     var upgradeList=[]
@@ -2709,12 +2566,12 @@ async function doSearch(){
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
 [['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(async function(){if(!loading){await autoLightScan()}},t.getTime()-n.getTime());
+  if(n<t)setTimeout(async function(){if(!loading){await doScan()}},t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动轻量扫描
+// 每10分钟交易时段自动轻量扫描（统一走doScan）
 setInterval(function(){
-  if(isTH()&&!loading){autoLightScan()}
+  if(isTH()&&!loading){doScan()}
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
 },600000)
