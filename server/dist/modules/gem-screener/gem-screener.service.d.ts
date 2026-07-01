@@ -106,6 +106,10 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private saveCacheToPg;
     private loadCacheFromPg;
     saveKlineCacheToDisk(code: string, data: any[], timestamp: number): Promise<void>;
+    persistFullKlineCache(entries: Map<string, {
+        data: any[];
+        ts: number;
+    }>): Promise<void>;
     loadKlineCacheFromDisk(): Promise<Map<string, {
         data: any[];
         ts: number;

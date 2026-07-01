@@ -169,6 +169,19 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.warn(`⚠️ K-line 磁盘缓存写入失败: ${e.message}`);
         }
     }
+    async persistFullKlineCache(entries) {
+        try {
+            const obj = {};
+            for (const [code, v] of entries) {
+                if (v?.data?.length >= 5)
+                    obj[code] = v;
+            }
+            await node_fs_1.promises.writeFile(this._klineCacheFile, JSON.stringify(obj), 'utf-8');
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 批量K线持久化失败: ${e.message}`);
+        }
+    }
     async loadKlineCacheFromDisk() {
         const map = new Map();
         try {

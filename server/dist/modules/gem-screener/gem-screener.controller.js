@@ -695,7 +695,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }));
             if (body.code && klineData.length >= 5) {
                 this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
-                this.gemScreener.saveKlineCacheToDisk(body.code, klineData, Date.now()).catch(() => { });
                 if (this.klineProxyCache.size > 2000) {
                     const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
                     entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
@@ -738,6 +737,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
             }
             await new Promise(resolve => setImmediate(resolve));
+        }
+        if (this.klineProxyCache.size > 0) {
+            await this.gemScreener.persistFullKlineCache(this.klineProxyCache);
         }
         return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
     }

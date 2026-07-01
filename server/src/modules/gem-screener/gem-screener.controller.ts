@@ -823,8 +823,6 @@ export class GemScreenerController {
       // 缓存原始K线（备选代理用，仅腾讯挂了才走）
       if (body.code && klineData.length >= 5) {
         this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
-        // 异步持久化到磁盘
-        this.gemScreener.saveKlineCacheToDisk(body.code, klineData, Date.now()).catch(() => {});
         if (this.klineProxyCache.size > 2000) {
           const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
           entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
@@ -872,6 +870,10 @@ export class GemScreenerController {
       }
       // 每分析一只就让出事件循环，新访客请求能插队处理
       await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
+    if (this.klineProxyCache.size > 0) {
+      await this.gemScreener.persistFullKlineCache(this.klineProxyCache);
     }
     return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
   }

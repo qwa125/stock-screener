@@ -268,6 +268,19 @@ export class GemScreenerService implements OnApplicationBootstrap {
     }
   }
 
+  /** 完整持久化当前缓存（给批量端点用，一次性写入避免竞争） */
+  async persistFullKlineCache(entries: Map<string, { data: any[]; ts: number }>): Promise<void> {
+    try {
+      const obj: Record<string, { data: any[]; ts: number }> = {};
+      for (const [code, v] of entries) {
+        if (v?.data?.length >= 5) obj[code] = v;
+      }
+      await fs.writeFile(this._klineCacheFile, JSON.stringify(obj), 'utf-8');
+    } catch (e) {
+      this.logger.warn(`⚠️ 批量K线持久化失败: ${(e as Error).message}`);
+    }
+  }
+
   /** 从磁盘加载全部 K-line 缓存，返回 Map<code, {data, ts}> */
   async loadKlineCacheFromDisk(): Promise<Map<string, { data: any[]; ts: number }>> {
     const map = new Map<string, { data: any[]; ts: number }>();
