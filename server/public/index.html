@@ -2201,6 +2201,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   if(_liveNow>0){var _pe=$('livePrice');if(_pe)_pe.innerHTML=_liveNow.toFixed(2)}
   // ★ 取数据：交易时段实时拉取，非交易时段使用冻结缓存（无缓存则拉取一次后冻结）
   var ia=analysisData
+  window._intradayLastPrice=lastPrice||_liveNow||0
   if(!ia){
     async function _fetchIA(code){
       // 若已有其他 fetch 正在拉取，等待它填充缓存（最多等20秒）
@@ -2228,6 +2229,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       var _now=Date.now()
       ia=window._frozenIA[code]||null
       window._lastIntradayFetchTs=window._lastIntradayFetchTs||{}
+      window._intradayLastPrice=lastPrice||_liveNow||0
       if(!window._lastIntradayFetchTs[code]||_now-window._lastIntradayFetchTs[code]>15000){
         var fresh=await fetchIntraday(code)
         if(fresh){
@@ -2236,10 +2238,18 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
           window._frozenIA[code]=fresh
           // 仅分析成功(有suggestions)才记录计时器，数据不足时2秒后可立即重试
           if(fresh.suggestions&&fresh.suggestions.length>0){
+            window._intradayFailCount=window._intradayFailCount||{};
+            delete window._intradayFailCount[code] // 成功时清零
             window._lastIntradayFetchTs[code]=_now
             ia=fresh
           }else if(fresh.currentPrice>0){
-            // 有价格但分析未就绪：让价格先显示，继续重试分析
+            // 有价格但分析未就绪：让价格先显示，检查重试次数
+            window._intradayFailCount=window._intradayFailCount||{}
+            window._intradayFailCount[code]=(window._intradayFailCount[code]||0)+1
+            if(window._intradayFailCount[code]>=3){
+              // 连续3次失败→等待1分钟再重试，避免无谓循环
+              window._lastIntradayFetchTs[code]=_now+45000
+            }
             ia=fresh
           }
         }
