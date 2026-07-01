@@ -80,6 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .empty{text-align:center;padding:48px 16px;font-size:14px;color:#999}
 
 /* Admin panel overlay */
+.btn-scan-disabled{opacity:.45;cursor:not-allowed!important}
 .admin-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000}
 .admin-overlay.open{display:block}
 .admin-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;max-width:380px;max-height:85vh;overflow-y:auto;background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.2);z-index:1001}
@@ -310,6 +311,24 @@ setInterval(function(){fetch('/api/gem/ping',{signal:AbortSignal.timeout(10000)}
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 var _forceReanalysis=false // 11:30/15:00强制完整分析（跳过缓存）
+var _isAdmin=false // 管理权限
+function updateScanBtn(){
+  var btn=$('scanBtn')
+  if(!btn)return
+  if(_isAdmin){
+    btn.disabled=false
+    btn.className='btn-scan'
+    btn.title=''
+  }else{
+    btn.disabled=true
+    btn.className='btn-scan btn-scan-disabled'
+    btn.title='需要管理员权限'
+  }
+}
+
+// 页面加载时检查管理员状态
+try{var savedPwd=localStorage.getItem('adminPassword');if(savedPwd||ADMIN_PWD){_isAdmin=true;updateScanBtn()}}catch(e){}
+setTimeout(function(){updateScanBtn()},500)
 
 // 毛玻璃按钮：点击注册，后端决定放行还是拒绝
 async function handleBlurClick(){
@@ -335,28 +354,12 @@ async function handleBlurClick(){
   $('blurMsg').innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试'
 }
 // 主页面扫描按钮：全量拉取Sina（15页并行）+ 读取K线缓存 + 分批分析
-// 管理员验证（仅首次需要）
-async function checkAdmin(){
-  var k=localStorage.getItem('adminKey')
-  if(k)return true
-  k=prompt('请输入管理员密码：')
-  if(!k)return false
-  try{
-    var r=await fetch('/api/gem/verify-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k})})
-    var d=await r.json()
-    if(d.data&&d.data.verified){localStorage.setItem('adminKey',k);return true}
-    alert('密码错误！')
-    return false
-  }catch(e){alert('验证失败：'+e.message);return false}
-}
 function handleScanClick(){
   if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
-  checkAdmin().then(function(ok){
-    if(!ok)return
-    _forceReanalysis=true
-    doScan()
-  })
+  if(!_isAdmin){showToast('❌ 仅管理员可执行扫描','error');return}
+  _forceReanalysis=true
+  doScan()
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
@@ -2944,6 +2947,8 @@ function checkAdminPwd(){
   if(!pwd){alert('请输入密码');return}
   if(pwd===ADMIN_DEFAULT_PWD||pwd==='qws1248szx'){
     ADMIN_PWD=pwd
+    _isAdmin=true
+    updateScanBtn()
     renderAdminView()
   }else{
     alert('密码错误，请重试')
