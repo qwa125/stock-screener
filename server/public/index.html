@@ -416,11 +416,19 @@ async function fetchKlineAndAnalyze(s){
     // 本地缓存<15分钟且非强制刷新时跳过
     var _skipLoc = false;
     if(window._klineCache[code]&&window._klineCache[code].length>=10){
-      // 缓存已有完整120根 → 直接复用，跳过腾讯直连（PG来的数据足够分析）
+      // 缓存有完整120根且最后一天是今天 → 直接复用，跳过腾讯
       if(window._klineCache[code].length >= 120){
-        klines = window._klineCache[code];
-        console.log('[scan] 缓存完整120根',code,klines.length+'bars');
-      } else if(params.forceKline !== true){
+        var _lb = window._klineCache[code][window._klineCache[code].length-1];
+        var _ld = _lb && _lb.day;
+        var _td = new Date().toISOString().slice(0,10);
+        if(_ld === _td){
+          klines = window._klineCache[code];
+          console.log('[scan] 缓存120根',code,klines.length+'bars,日期匹配');
+        } else {
+          console.log('[scan] 缓存120根但最后日'+(_ld||'?')+'≠今天'+_td+',需更新',code);
+        }
+      }
+      if(!klines && params.forceKline !== true){
         var _kt=window._klineCache[code]._t||0;
         _skipLoc=((Date.now()-_kt)/60000)<15;
       }
