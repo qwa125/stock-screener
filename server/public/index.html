@@ -2150,46 +2150,34 @@ async function fetchIntraday(code){
   if(_intradayFetching[code])return null
   _intradayFetching[code]=true
   try{
-    // ====== 腾讯分钟K线直连（东财/新浪CORS必失败，腾讯独通）=====
-    var klineData=null
+    // ====== 前端直连腾讯分钟K线（不走后端代理拉数据）======
     var gtCode2=code.startsWith('6')?'sh'+code:'sz'+code
+    var klineData=null
     try{
       var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param='+gtCode2+',m1,,240',{signal:timeoutSignal(8000)})
       if(tr.ok||tr.status===0){
         var tRes=await tr.text();var tText=tRes.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'');var tJson=JSON.parse(tText)
         if(tJson&&tJson.data&&tJson.data[gtCode2]&&tJson.data[gtCode2].m1&&tJson.data[gtCode2].m1.length>=48){
-          var allBars=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
-          // 只保留今天的分钟数据，避免参考昨天的
+          var allBars=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0}})
           var todayStr=new Date().toISOString().slice(0,10).replace(/-/g,'')
           var todayBars=allBars.filter(function(l){return l.time&&l.time.startsWith(todayStr)})
           console.log('[fetchIntraday]',code,'腾讯总条数:',allBars.length,'今日条数:',todayBars.length)
           klineData=todayBars.length>=5?todayBars:allBars
-        }else{
-          console.warn('[fetchIntraday]',code,'腾讯返回格式异常:',tJson)
-        }
+        }else{console.warn('[fetchIntraday]',code,'腾讯返回格式异常')}
       }
-    }catch(e){console.warn('腾讯分钟K线直连失败，尝试代理',e)}
-    // 直连失败→走后端代理
-    if(!klineData||klineData.length<48){
-      try{
-        var _p=await fetch('/api/gem/proxy/minkline?code='+code,{signal:timeoutSignal(8000)})
-        var _pj=await _p.json()
-        if(_pj&&_pj.code===200&&_pj.data&&_pj.data.length>=48){
-          var todayStr2=new Date().toISOString().slice(0,10).replace(/-/g,'')
-          var todayBars=_pj.data.filter(function(l){return l.time&&l.time.startsWith(todayStr2)})
-          klineData=todayBars.length>=5?todayBars:_pj.data
-        }
-      }catch(e2){console.warn('分钟K线代理也失败',e2)}
-    }
-    // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
+    }catch(e){console.warn('[fetchIntraday]',code,'腾讯直连失败(不走后端代理)',e)}
+    // 腾讯没数据→返回null（不走后端代理）
+    if(!klineData||klineData.length<5){return null}
+    // 上报后端做纯分析（MACD/主力散户/信号检测）
     var ac2=new AbortController();var tmr2=setTimeout(function(){ac2.abort()},10000)
-    var r2=await fetch('/api/gem/intraday-analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},body:JSON.stringify({code,kline:klineData}),signal:ac2.signal})
+    var r2=await fetch('/api/gem/intraday-analyze',{method:'POST',headers:{'Content-Type':'application/json','X-Device-Id':getOrCreateDeviceId()},body:JSON.stringify({code,kline:klineData,price:window._intradayLastPrice||0}),signal:ac2.signal})
     clearTimeout(tmr2)
     var d2=await r2.json()
     window._intradayKlineCache=window._intradayKlineCache||{}
     window._intradayKlineCache[code]=klineData
     return d2&&d2.data||null
   }catch(e){return null}finally{_intradayFetching[code]=false}
+}
 }
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 // 可选参数 analysisData：传入预取的分析数据则跳过 fetchIntraday
