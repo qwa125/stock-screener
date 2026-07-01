@@ -358,18 +358,21 @@ async function handleRescanClick(){
     txt.textContent='获取涨跌幅排行中...'
     async function fetchNodePages(node,pages,label){
       var all=[]
-      var promises=[]
       for(var p=1;p<=pages;p++){
         txt.textContent='获取 '+label+' 涨跌幅排行 '+p+'/'+pages+' 页...'
-        promises.push(
-          fetch('/api/gem/proxy/sina-pages?node='+node+'&page='+p,{signal:AbortSignal.timeout(15000)})
-            .then(function(r){return r.json()})
-            .then(function(j){
-              if(j&&j.code===200&&j.data&&j.data.length)all=all.concat(j.data)
-            })
-        )
+        try{
+          var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node)
+            .then(function(r){return r.text()})
+          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+          try{var d=JSON.parse(src);if(d&&d.length)all=all.concat(d)}catch(e){
+            var m=src.match(/\[[\s\S]*\]/)
+            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+          }
+        }catch(e){
+          console.warn('第'+p+'页获取失败:',e.message)
+        }
+        if(p<pages)await new Promise(function(r){setTimeout(r,200)})
       }
-      await Promise.all(promises)
       return all
     }
     setStatus('正在抓取沪市热门股...')
@@ -438,23 +441,19 @@ async function autoLightScan(){
   try{
     setStatus('⏳ 轻量扫描: 获取涨跌幅排行...')
     var totalList=[]
-    // ★ 新浪排行榜（通过后端代理，解决前端CORS）
+    // ★ 首选：新浪排行榜（沪市10页+深市10页，每页100只，按涨跌幅排序）
     try{
       var shStocks=[],szStocks=[]
-      var shPromises=[],szPromises=[]
       for(var p=1;p<=10;p++){
-        shPromises.push(
-          fetch('/api/gem/proxy/sina-pages?node=sh_a&page='+p,{signal:AbortSignal.timeout(15000)})
-            .then(function(r){return r.json()})
-            .then(function(j){if(j&&j.code===200&&j.data&&j.data.length)shStocks=shStocks.concat(j.data)})
-        )
-        szPromises.push(
-          fetch('/api/gem/proxy/sina-pages?node=sz_a&page='+p,{signal:AbortSignal.timeout(15000)})
-            .then(function(r){return r.json()})
-            .then(function(j){if(j&&j.code===200&&j.data&&j.data.length)szStocks=szStocks.concat(j.data)})
-        )
+        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a').then(function(r){return r.text()})
+        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+        try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}}
       }
-      await Promise.all(shPromises.concat(szPromises))
+      for(var p=1;p<=10;p++){
+        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a').then(function(r){return r.text()})
+        src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+        try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}}
+      }
       var mb_s=shStocks.filter(function(s){return s.code&&s.code.startsWith('60')})
       var sz00=szStocks.filter(function(s){return s.code&&s.code.startsWith('00')})
       var gem_s=szStocks.filter(function(s){return s.code&&s.code.startsWith('30')})
@@ -1731,10 +1730,17 @@ async function fetchAllSinaPages2(node){
   var all=[],promises=[]
   for(var p=1;p<=15;p++){
     promises.push(
-      fetch('/api/gem/proxy/sina-pages?node='+node+'&page='+p,{signal:AbortSignal.timeout(15000)})
-        .then(function(r){return r.json()})
-        .then(function(j){
-          if(j&&j.code===200&&j.data&&j.data.length)all=all.concat(j.data)
+      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,{signal:AbortSignal.timeout(15000)})
+        .then(function(r){return r.text()})
+        .then(function(src){
+          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+          try{
+            var d=JSON.parse(src)
+            if(d&&d.length)all=all.concat(d)
+          }catch(e){
+            var m=src.match(/\[[\s\S]*\]/)
+            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+          }
         })
     )
   }
@@ -1742,7 +1748,7 @@ async function fetchAllSinaPages2(node){
   return all
 }
 async function fetchAndCacheSina(){
-  // 新浪排行榜（通过后端代理，15页×100只，按涨跌幅降序）
+  // ★ 首选：新浪（15页×100只，按涨跌幅降序取全市场前1500只）
   var listSH,listSZ
   try{
     listSH=await fetchAllSinaPages2('sh_a'),listSZ=await fetchAllSinaPages2('sz_a')
@@ -1756,7 +1762,7 @@ async function fetchAndCacheSina(){
       emData.push({f12:c,f14:sc.name||'',f2:parseFloat(sc.trade)||0,f3:parseFloat(sc.changepercent)||0,f15:parseFloat(sc.high)||0,f16:parseFloat(sc.low)||0})
     }
   }
-  // 通过后端代理拉取，无CORS问题
+  // 新浪排行CORS *必通，无需东财备用
   window._cachedSinaEMData=emData
   window._lastScanCount=emData.length
   updateScanCount(emData.length)
