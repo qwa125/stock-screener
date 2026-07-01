@@ -335,6 +335,11 @@ export declare class GemScreenerController {
         msg: string;
         data: string;
     }>;
+    proxySinaPages(node: string, page: string): Promise<{
+        code: number;
+        msg: string;
+        data: any;
+    }>;
     proxyKLine(code: string): Promise<{
         code: number;
         msg: string;

@@ -553,6 +553,25 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         return { code: 200, msg: 'success', data: '' };
     }
+    async proxySinaPages(node, page) {
+        try {
+            const p = Math.min(Math.max(parseInt(page || '1'), 1), 20);
+            const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${p}&num=100&sort=changepercent&asc=0&node=${node}`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            const text = await res.text();
+            try {
+                const data = JSON.parse(text);
+                return { code: 200, msg: 'success', data };
+            }
+            catch {
+                return { code: 200, msg: 'success', data: [] };
+            }
+        }
+        catch (err) {
+            this.logger.warn(`⚠️ 新浪排行代理拉取失败: ${node} page=${page}: ${err.message}`);
+            return { code: 200, msg: 'success', data: [] };
+        }
+    }
     async proxyKLine(code) {
         if (!code)
             return { code: 400, msg: '缺少股票代码', data: null };
@@ -1047,6 +1066,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxySinaUS", null);
+__decorate([
+    (0, common_1.Get)('proxy/sina-pages'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('node')),
+    __param(1, (0, common_1.Query)('page')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "proxySinaPages", null);
 __decorate([
     (0, common_1.Get)('proxy/kline'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

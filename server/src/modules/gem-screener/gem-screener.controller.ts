@@ -642,6 +642,31 @@ export class GemScreenerController {
   }
 
   /**
+   * 代理新浪热门股排行榜（后端拉取，解决前端跨域）
+   * node=sh_a / sz_a, page=1~20
+   */
+  @Get('proxy/sina-pages')
+  @SkipAccessLimit()
+  async proxySinaPages(@Query('node') node: string, @Query('page') page: string) {
+    try {
+      const p = Math.min(Math.max(parseInt(page || '1'), 1), 20);
+      const url = `https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=${p}&num=100&sort=changepercent&asc=0&node=${node}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        return { code: 200, msg: 'success', data };
+      } catch {
+        // 有时返回空字符串或非JSON
+        return { code: 200, msg: 'success', data: [] };
+      }
+    } catch (err) {
+      this.logger.warn(`⚠️ 新浪排行代理拉取失败: ${node} page=${page}: ${err.message}`);
+      return { code: 200, msg: 'success', data: [] };
+    }
+  }
+
+  /**
    * 代理东方财富K线数据（仅数据通道，不做分析）
    * 前端同源调用，解决浏览器跨域问题
    */
