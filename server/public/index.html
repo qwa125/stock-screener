@@ -526,8 +526,21 @@ async function fetchKlineAndAnalyze(s){
     // 动态计算需要拉取的K线根数：间隔天数+5缓冲，最多120
     var _needCount=120;if(_hasCache){try{var _ld=window._klineCache[code][window._klineCache[code].length-1].day;var _gap=Math.floor((Date.now()-new Date(_ld).getTime())/86400000);_needCount=Math.min(Math.max(_gap+5,10),120)}catch(e){}}
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
-    // 腾讯日K线直连（CORS *必通，成交额用量×均价×100估算）
+
+    // ★ 优先走后端代理（PG持久缓存，重启不丢）
     try{
+      var pkr=await fetch(API+'/gem/proxy/kline?code='+code,{signal:AbortSignal.timeout(6000)})
+      if(pkr.ok){
+        var pkj=await pkr.json()
+        if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>=10){
+          klines=pkj.data
+          console.log('[scan] 后端缓存K线',code,klines.length+'bars','aged='+pkj.age+'m')
+        }
+      }
+    }catch(ee){/* 后端超时 → 降级直连腾讯 */}
+
+    // 后端无缓存/超时 → 直连腾讯API
+    if(!klines||klines.length<5) try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
       var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+_needCount+',qfq',{signal:ac.signal})
@@ -543,23 +556,14 @@ async function fetchKlineAndAnalyze(s){
               klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
               if(klines.length>120)klines=klines.slice(klines.length-120)
             }else{klines=_newLines}
-            window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()
             console.log('[scan] 腾讯K线成功',code,klines.length+'bars')
           }
         }
       }
     }catch(e){console.warn('[scan] 腾讯K线失败('+code+'):',e.message||e)}
 
-    // 腾讯失败 → 后端备选（仅拉缓存K线，不触发分析）
-    if(!klines||klines.length<5) try{
-      var pkr=await fetch(API+'/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
-      if(pkr.ok){var pkj=await pkr.json()
-        if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>5){
-          klines=pkj.data;window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()
-          console.log('[scan] proxy kline got',code,klines.length+'bars')
-        }
-      }
-    }catch(ee){console.warn('[scan] proxy kline fallback failed:',ee.message||ee)}
+    // 写入浏览器缓存（供下次gap+5复用）
+    if(klines&&klines.length>=5){window._klineCache[code]=klines;window._klineCache[code]._t=Date.now()}
 
     // 已有缓存分析结果的股跳过API调用（只更新K线缓存，doFullRescan会读取最新缓存）
     if(window._cachedStockSet&&window._cachedStockSet.has(code)){
@@ -1593,15 +1597,36 @@ async function doScan(){
       if(price<3)continue
       candidates.push({code,name,price,chg:parseFloat(item.f3)||0})
     }
-    setStatus('🔄 行情 '+candidates.length+' 只，前端拉取K线并推后端分析...')
+    setStatus('🔄 行情 '+candidates.length+' 只，检查后端缓存状态...')
 
-    // 3. 分批拉取K线(前端直调腾讯)+推送后端纯分析(后端无外部调用)
+    // 3a. 批量查询后端PG缓存状态，只对缺缓存的股拉取K线
+    var _skipSet=new Set()
+    try{
+      var allCodes=candidates.map(function(c){return c.code}).join(',')
+      var csr=await fetch(API+'/gem/kline-cache-status?codes='+allCodes,{signal:AbortSignal.timeout(5000)})
+      if(csr.ok){
+        var cst=await csr.json()
+        if(cst&&cst.data){
+          for(var ci=0;ci<candidates.length;ci++){
+            var _c=candidates[ci].code,_st=cst.data[_c]
+            if(_st&&_st.cached&&_st.count>=60&&_st.age<1440){ // 至少60条且24小时内
+              _skipSet.add(_c)
+            }
+          }
+        }
+      }
+    }catch(ee){/* 缓存状态查询失败 → 全量拉取 */}
+    if(_skipSet.size>0) console.log('[scan] 跳过缓存K线: '+_skipSet.size+' 只')
+
+    // 3b. 分批拉取K线(优先后端PG缓存，后备直连腾讯)+推送后端分析
     var bar=$('rescanBar'),txt=$('rescanText')
     for(var i=0;i<candidates.length;i+=20){
-      var batch=candidates.slice(i,i+20)
-      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
+      var batch=candidates.slice(i,i+20).filter(function(s){return !_skipSet.has(s.code)})
+      if(batch.length){
+        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
+      }
       var done=Math.min(i+20,candidates.length)
-      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length
+      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length+' (跳过'+_skipSet.size+')'
       if(bar)bar.style.width=Math.round(done/candidates.length*100)+'%'
       if(i+20<candidates.length)await new Promise(function(r){setTimeout(r,100)})
     }
@@ -1629,12 +1654,30 @@ async function backgroundSyncWithKline(){
     mainBoard=mainBoard.slice(0,500);gem=gem.slice(0,500)
     var totalList=mainBoard.concat(gem)
     if(totalList.length){
+      // 批量查询后端PG缓存，跳过已有K线的股
+      var _skipSet2=new Set()
+      try{
+        var allCodes=totalList.map(function(s){return s.f12}).join(',')
+        var csr2=await fetch(API+'/gem/kline-cache-status?codes='+allCodes,{signal:AbortSignal.timeout(5000)})
+        if(csr2.ok){
+          var cst2=await csr2.json()
+          if(cst2&&cst2.data){
+            for(var ci=0;ci<totalList.length;ci++){
+              var _c2=totalList[ci].f12,_st2=cst2.data[_c2]
+              if(_st2&&_st2.cached&&_st2.count>=60&&_st2.age<1440) _skipSet2.add(_c2)
+            }
+          }
+        }
+      }catch(ee){}
+      if(_skipSet2.size>0) console.log('[bgSync] 跳过缓存K线: '+_skipSet2.size+' 只')
       var bar=$('rescanBar'),txt=$('rescanText')
       for(var i=0;i<totalList.length;i+=20){
-        var batch=totalList.slice(i,i+20)
-        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
+        var batch=totalList.slice(i,i+20).filter(function(s){return !_skipSet2.has(s.f12)})
+        if(batch.length){
+          await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
+        }
         var done=Math.min(i+20,totalList.length)
-        if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length+' ('+Math.round(done/totalList.length*100)+'%)'
+        if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length+' (跳过'+_skipSet2.size+')'
         if(bar)bar.style.width=Math.round(done/totalList.length*100)+'%'
         if(i+20<totalList.length)await new Promise(function(r){setTimeout(r,200)})
       }

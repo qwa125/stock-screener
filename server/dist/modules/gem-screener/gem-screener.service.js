@@ -147,6 +147,45 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return null;
     }
+    async saveKlineCacheToPg(code, data, timestamp) {
+        if (!data || !data.length)
+            return;
+        await this.saveCacheToPg(`kline:${code}`, { data, ts: timestamp });
+    }
+    async loadAllKlineCacheFromPg() {
+        const map = new Map();
+        try {
+            const sql = this.pgSql;
+            if (!sql)
+                return map;
+            const rows = await sql `SELECT cache_key, cache_value FROM stock_scan_cache WHERE cache_key LIKE 'kline:%'`;
+            for (const row of rows) {
+                const code = row.cache_key.replace(/^kline:/, '');
+                const val = typeof row.cache_value === 'string' ? JSON.parse(row.cache_value) : row.cache_value;
+                if (val?.data && Array.isArray(val.data) && val.data.length >= 10) {
+                    map.set(code, { data: val.data, ts: val.ts || 0 });
+                }
+            }
+            this.logger.log(`✅ PostgreSQL K-line 缓存恢复: ${map.size} 只`);
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ PostgreSQL K-line 缓存读取失败: ${e.message}`);
+        }
+        return map;
+    }
+    async restoreKlineCacheIntoMap(targetMap) {
+        const pgMap = await this.loadAllKlineCacheFromPg();
+        let loaded = 0;
+        for (const [code, val] of pgMap) {
+            if (!targetMap.has(code)) {
+                targetMap.set(code, { data: val.data, timestamp: val.ts });
+                loaded++;
+            }
+        }
+        if (loaded > 0) {
+            this.logger.log(`📦 K-line 缓存恢复完毕: 注入 ${loaded} 只到内存`);
+        }
+    }
     constructor(dataFetcher, stockService) {
         this.dataFetcher = dataFetcher;
         this.stockService = stockService;
@@ -191,6 +230,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.marketHoursBeganAt = 0;
         this._pgSql = null;
         this._pgReady = false;
+        this._klineCacheFromPg = null;
         this.CACHE_MAX_SIZE = 3000;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
@@ -966,6 +1006,15 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                 await node_fs_1.promises.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8');
             }
             catch { }
+        }
+        this.logger.log('📦 正在恢复 PostgreSQL K-line 缓存...');
+        try {
+            const map = await this.loadAllKlineCacheFromPg();
+            this._klineCacheFromPg = map;
+            this.logger.log(`✅ K-line 缓存就绪: ${map.size} 只`);
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ K-line 缓存恢复异常: ${e.message}`);
         }
         this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length ?? 0} 只, 主板 ${this.mainBoardCache?.data?.length ?? 0} 只`);
     }

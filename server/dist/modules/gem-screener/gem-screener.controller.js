@@ -62,6 +62,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.stockService = stockService;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
         this.klineProxyCache = new Map();
+        this.klinePgRestored = false;
     }
     async getMarketState() {
         const state = this.scheduler.getState();
@@ -555,6 +556,10 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async proxyKLine(code) {
         if (!code)
             return { code: 400, msg: '缺少股票代码', data: null };
+        if (!this.klinePgRestored) {
+            await this.gemScreener.restoreKlineCacheIntoMap(this.klineProxyCache);
+            this.klinePgRestored = true;
+        }
         const cached = this.klineProxyCache.get(code);
         if (cached && cached.data && cached.data.length >= 5) {
             const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
@@ -578,6 +583,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     }));
                     this.klineProxyCache.set(code, { data, timestamp: Date.now() });
                     this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
+                    this.gemScreener.saveKlineCacheToPg(code, data, Date.now()).catch(() => { });
                     return { code: 200, msg: '代理K线成功', data, cached: false };
                 }
             }
@@ -587,6 +593,20 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             this.logger.error(`❌ K线代理拉取失败: ${code} ${e.message || e}`);
         }
         return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
+    }
+    async getKlineCacheStatus(codes) {
+        const codeList = (codes || '').split(',').map(c => c.trim()).filter(Boolean);
+        if (!codeList.length)
+            return { code: 400, msg: '缺少股票代码列表' };
+        const result = {};
+        const now = Date.now();
+        for (const code of codeList) {
+            const cached = this.klineProxyCache.get(code);
+            result[code] = cached && cached.data?.length >= 5
+                ? { cached: true, count: cached.data.length, age: Math.round((now - cached.timestamp) / 1000 / 60) }
+                : { cached: false, count: 0, age: 0 };
+        }
+        return { code: 200, msg: 'success', data: result };
     }
     async proxyMinKLine(code) {
         if (!code)
@@ -648,6 +668,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }));
             if (body.code && klineData.length >= 5) {
                 this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
+                this.gemScreener.saveKlineCacheToPg(body.code, klineData, Date.now()).catch(() => { });
                 if (this.klineProxyCache.size > 2000) {
                     const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
                     entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
@@ -1026,6 +1047,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "proxyKLine", null);
+__decorate([
+    (0, common_1.Get)('kline-cache-status'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('codes')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getKlineCacheStatus", null);
 __decorate([
     (0, common_1.Get)('proxy/minkline'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

@@ -12,6 +12,7 @@ import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
   private readonly klineProxyCache = new Map<string, { data: any[]; timestamp: number }>();
+  private klinePgRestored = false;
 
   constructor(
     private readonly gemScreener: GemScreenerService,
@@ -648,6 +649,11 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async proxyKLine(@Query('code') code: string) {
     if (!code) return { code: 400, msg: '缺少股票代码', data: null };
+    // 首次请求时从 PG 恢复 K-line 缓存
+    if (!this.klinePgRestored) {
+      await this.gemScreener.restoreKlineCacheIntoMap(this.klineProxyCache);
+      this.klinePgRestored = true;
+    }
     const cached = this.klineProxyCache.get(code);
     if (cached && cached.data && cached.data.length >= 5) {
       const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
@@ -672,6 +678,8 @@ export class GemScreenerController {
           }));
           this.klineProxyCache.set(code, { data, timestamp: Date.now() });
           this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
+          // 异步持久化到 PG
+          this.gemScreener.saveKlineCacheToPg(code, data, Date.now()).catch(() => {});
           return { code: 200, msg: '代理K线成功', data, cached: false };
         }
       }
@@ -680,6 +688,26 @@ export class GemScreenerController {
       this.logger.error(`❌ K线代理拉取失败: ${code} ${e.message || e}`);
     }
     return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
+  }
+
+  /**
+   * 批量查询 K-line 缓存状态（哪些股票有缓存、各多少条、最后更新）
+   * GET /api/gem/kline-cache-status?codes=300001,300002,...
+   */
+  @Get('kline-cache-status')
+  @SkipAccessLimit()
+  async getKlineCacheStatus(@Query('codes') codes: string) {
+    const codeList = (codes || '').split(',').map(c => c.trim()).filter(Boolean);
+    if (!codeList.length) return { code: 400, msg: '缺少股票代码列表' };
+    const result: Record<string, { cached: boolean; count: number; age: number }> = {};
+    const now = Date.now();
+    for (const code of codeList) {
+      const cached = this.klineProxyCache.get(code);
+      result[code] = cached && cached.data?.length >= 5
+        ? { cached: true, count: cached.data.length, age: Math.round((now - cached.timestamp) / 1000 / 60) }
+        : { cached: false, count: 0, age: 0 };
+    }
+    return { code: 200, msg: 'success', data: result };
   }
 
   /**
@@ -761,6 +789,8 @@ export class GemScreenerController {
       // 缓存原始K线（备选代理用，仅腾讯挂了才走）
       if (body.code && klineData.length >= 5) {
         this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
+        // 异步持久化到 PG
+        this.gemScreener.saveKlineCacheToPg(body.code, klineData, Date.now()).catch(() => {});
         if (this.klineProxyCache.size > 2000) {
           const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
           entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
