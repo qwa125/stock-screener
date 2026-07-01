@@ -700,11 +700,21 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
                 }
             }
+            const cachedResult = this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
+            if (cachedResult) {
+                if (body.price !== undefined)
+                    cachedResult.currentPrice = body.price;
+                if (body.changePercent !== undefined)
+                    cachedResult.changePercent = body.changePercent;
+                this.gemScreener.updateSingleStockInCache(cachedResult).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
+                return { code: 200, msg: 'success(cached)', data: [cachedResult] };
+            }
             let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
             if (!opp) {
                 opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
             }
             if (opp) {
+                this.gemScreener.setAnalysisCache(body.code, opp, klineData);
                 this.gemScreener.recalculateSuggestions([opp]);
                 this.gemScreener.updateSingleStockInCache(opp).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
                 return { code: 200, msg: 'success', data: [opp] };
@@ -739,8 +749,14 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             await new Promise(resolve => setImmediate(resolve));
         }
         if (this.klineProxyCache.size > 0) {
-            await this.gemScreener.persistFullKlineCache(this.klineProxyCache);
+            const mapForPersist = new Map();
+            for (const [k, v] of this.klineProxyCache) {
+                if (v?.data?.length >= 5)
+                    mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+            }
+            await this.gemScreener.persistFullKlineCache(mapForPersist);
         }
+        await this.gemScreener.saveAnalysisCache();
         return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
     }
     async intradayAnalyze(body) {

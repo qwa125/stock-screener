@@ -298,6 +298,98 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return map;
   }
 
+  // ─── 分析结果缓存（磁盘） ───
+  /** 分析结果缓存：code → { result, klineDate, timestamp } */
+  private analysisCache = new Map<string, { result: OpportunityStock; klineDate: string; klineCount: number; timestamp: number }>();
+  private readonly ANALYSIS_CACHE_FILE = '/tmp/analysis-cache.json';
+
+  /** 加载分析缓存（启动时调用） */
+  private loadAnalysisCache(): void {
+    try {
+      if (!existsSync(this.ANALYSIS_CACHE_FILE)) return;
+      const raw = readFileSync(this.ANALYSIS_CACHE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        let count = 0;
+        for (const [code, val] of Object.entries(parsed)) {
+          const entry = val as any;
+          if (entry?.result && entry?.klineDate) {
+            this.analysisCache.set(code, {
+              result: entry.result,
+              klineDate: entry.klineDate,
+              klineCount: entry.klineCount || 0,
+              timestamp: entry.timestamp || 0,
+            });
+            count++;
+          }
+        }
+        this.logger.log(`📦 加载分析结果缓存: ${count} 只`);
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ 分析缓存加载失败: ${(e as Error).message}`);
+    }
+  }
+
+  /** 持久化分析缓存到磁盘 */
+  async saveAnalysisCache(): Promise<void> {
+    try {
+      const obj: Record<string, any> = {};
+      for (const [code, entry] of this.analysisCache) {
+        obj[code] = {
+          result: entry.result,
+          klineDate: entry.klineDate,
+          klineCount: entry.klineCount,
+          timestamp: entry.timestamp,
+        };
+      }
+      await fs.writeFile(this.ANALYSIS_CACHE_FILE, JSON.stringify(obj), 'utf-8');
+    } catch (e) {
+      this.logger.warn(`⚠️ 分析缓存写入失败: ${(e as Error).message}`);
+    }
+  }
+
+  /** 检查分析缓存是否有效：K线最后日期相同且无极端涨跌幅 */
+  isCacheValid(code: string, kline: any[], changePercent?: number): OpportunityStock | null {
+    const entry = this.analysisCache.get(code);
+    if (!entry) return null;
+    // 获取当前K线最后日期
+    const lastBar = kline?.[kline.length - 1];
+    if (!lastBar) return null;
+    const lastDate = lastBar.day || lastBar.date || '';
+    if (!lastDate) return null;
+    // 日期不同 → 需要重新分析（有新K线数据）
+    if (entry.klineDate !== lastDate) return null;
+    // 极端涨跌幅 → 重新分析（黑天鹅）
+    const absChange = Math.abs(changePercent ?? 0);
+    if (absChange >= 7) {
+      this.logger.log(`📦 缓存跳过: ${code} 涨跌幅${changePercent}%≥7%，需要重新分析`);
+      return null;
+    }
+    // K线数量变化 → 重新分析
+    if ((kline?.length ?? 0) !== entry.klineCount) return null;
+    this.logger.log(`✅ 缓存命中: ${code} (${entry.result.name || ''}) 最后日期=${lastDate}, 跳过分析`);
+    return entry.result;
+  }
+
+  /** 写入分析缓存 */
+  setAnalysisCache(code: string, result: OpportunityStock, kline: any[]): void {
+    if (!result || !kline?.length) return;
+    const lastBar = kline[kline.length - 1];
+    const lastDate = lastBar.day || lastBar.date || '';
+    if (!lastDate) return;
+    this.analysisCache.set(code, {
+      result,
+      klineDate: lastDate,
+      klineCount: kline.length,
+      timestamp: Date.now(),
+    });
+    // 内存限制：最多保留 3000 只
+    if (this.analysisCache.size > 3000) {
+      const entries = [...this.analysisCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+      entries.slice(0, entries.length - 2500).forEach(([k]) => this.analysisCache.delete(k));
+    }
+  }
+
   // ─── 卖出锁定持久化 ───
 
   constructor(
@@ -310,6 +402,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
     this.loadSectorCacheFromDisk();
     this.loadSellStateCache();
     this.loadSnapshotFromDisk();
+    this.loadAnalysisCache();
     this.initStorage();
   }
 

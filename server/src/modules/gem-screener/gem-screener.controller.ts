@@ -828,11 +828,23 @@ export class GemScreenerController {
           entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
         }
       }
+      // ─── 分析结果缓存：K线日期相同且无极端涨跌幅时跳过 quickAnalyze（80行CPU密集计算） ───
+      const cachedResult = this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
+      if (cachedResult) {
+        // 用前端最新价格更新（盘中价格实时变动）
+        if (body.price !== undefined) cachedResult.currentPrice = body.price;
+        if (body.changePercent !== undefined) cachedResult.changePercent = body.changePercent;
+        // 更新入内存缓存，供机会列表展示
+        this.gemScreener.updateSingleStockInCache(cachedResult).catch(e => this.logger.warn(`更新缓存失败: ${e.message}`));
+        return { code: 200, msg: 'success(cached)', data: [cachedResult] };
+      }
       let opp = await this.gemScreener.quickAnalyze(body.code, body.name, false, klineData, body.mainForceInflow);
       if (!opp) {
         opp = await this.gemScreener.quickAnalyze(body.code, body.name, true, klineData, body.mainForceInflow);
       }
       if (opp) {
+        // 缓存分析结果（下次同日期扫描直接跳过，省去80行CPU密集计算）
+        this.gemScreener.setAnalysisCache(body.code, opp, klineData);
         // 应用信号重算，与机会列表保持一致
         this.gemScreener.recalculateSuggestions([opp]);
         // 写回缓存，机会列表自动同步
@@ -873,8 +885,14 @@ export class GemScreenerController {
     }
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
     if (this.klineProxyCache.size > 0) {
-      await this.gemScreener.persistFullKlineCache(this.klineProxyCache);
+      const mapForPersist = new Map<string, { data: any[]; ts: number }>();
+      for (const [k, v] of this.klineProxyCache) {
+        if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+      }
+      await this.gemScreener.persistFullKlineCache(mapForPersist);
     }
+    // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
+    await this.gemScreener.saveAnalysisCache();
     return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
   }
 

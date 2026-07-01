@@ -114,6 +114,12 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         data: any[];
         ts: number;
     }>>;
+    private analysisCache;
+    private readonly ANALYSIS_CACHE_FILE;
+    private loadAnalysisCache;
+    saveAnalysisCache(): Promise<void>;
+    isCacheValid(code: string, kline: any[], changePercent?: number): OpportunityStock | null;
+    setAnalysisCache(code: string, result: OpportunityStock, kline: any[]): void;
     constructor(dataFetcher: DataFetcherService, stockService: StockService);
     private initStorage;
     private isFrozenSchedule;

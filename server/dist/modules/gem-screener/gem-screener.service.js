@@ -197,6 +197,90 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         }
         return map;
     }
+    loadAnalysisCache() {
+        try {
+            if (!(0, node_fs_1.existsSync)(this.ANALYSIS_CACHE_FILE))
+                return;
+            const raw = (0, node_fs_1.readFileSync)(this.ANALYSIS_CACHE_FILE, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                let count = 0;
+                for (const [code, val] of Object.entries(parsed)) {
+                    const entry = val;
+                    if (entry?.result && entry?.klineDate) {
+                        this.analysisCache.set(code, {
+                            result: entry.result,
+                            klineDate: entry.klineDate,
+                            klineCount: entry.klineCount || 0,
+                            timestamp: entry.timestamp || 0,
+                        });
+                        count++;
+                    }
+                }
+                this.logger.log(`📦 加载分析结果缓存: ${count} 只`);
+            }
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 分析缓存加载失败: ${e.message}`);
+        }
+    }
+    async saveAnalysisCache() {
+        try {
+            const obj = {};
+            for (const [code, entry] of this.analysisCache) {
+                obj[code] = {
+                    result: entry.result,
+                    klineDate: entry.klineDate,
+                    klineCount: entry.klineCount,
+                    timestamp: entry.timestamp,
+                };
+            }
+            await node_fs_1.promises.writeFile(this.ANALYSIS_CACHE_FILE, JSON.stringify(obj), 'utf-8');
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 分析缓存写入失败: ${e.message}`);
+        }
+    }
+    isCacheValid(code, kline, changePercent) {
+        const entry = this.analysisCache.get(code);
+        if (!entry)
+            return null;
+        const lastBar = kline?.[kline.length - 1];
+        if (!lastBar)
+            return null;
+        const lastDate = lastBar.day || lastBar.date || '';
+        if (!lastDate)
+            return null;
+        if (entry.klineDate !== lastDate)
+            return null;
+        const absChange = Math.abs(changePercent ?? 0);
+        if (absChange >= 7) {
+            this.logger.log(`📦 缓存跳过: ${code} 涨跌幅${changePercent}%≥7%，需要重新分析`);
+            return null;
+        }
+        if ((kline?.length ?? 0) !== entry.klineCount)
+            return null;
+        this.logger.log(`✅ 缓存命中: ${code} (${entry.result.name || ''}) 最后日期=${lastDate}, 跳过分析`);
+        return entry.result;
+    }
+    setAnalysisCache(code, result, kline) {
+        if (!result || !kline?.length)
+            return;
+        const lastBar = kline[kline.length - 1];
+        const lastDate = lastBar.day || lastBar.date || '';
+        if (!lastDate)
+            return;
+        this.analysisCache.set(code, {
+            result,
+            klineDate: lastDate,
+            klineCount: kline.length,
+            timestamp: Date.now(),
+        });
+        if (this.analysisCache.size > 3000) {
+            const entries = [...this.analysisCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            entries.slice(0, entries.length - 2500).forEach(([k]) => this.analysisCache.delete(k));
+        }
+    }
     constructor(dataFetcher, stockService) {
         this.dataFetcher = dataFetcher;
         this.stockService = stockService;
@@ -242,6 +326,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this._pgSql = null;
         this._pgReady = false;
         this._klineCacheFile = '/tmp/kline-cache.json';
+        this.analysisCache = new Map();
+        this.ANALYSIS_CACHE_FILE = '/tmp/analysis-cache.json';
         this.CACHE_MAX_SIZE = 3000;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
@@ -249,6 +335,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.loadSectorCacheFromDisk();
         this.loadSellStateCache();
         this.loadSnapshotFromDisk();
+        this.loadAnalysisCache();
         this.initStorage();
     }
     initStorage() {
