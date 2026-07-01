@@ -1531,24 +1531,14 @@ async function doScan(){
     if(prog)prog.style.display='block'
     if(txt)txt.textContent='K线分析 0/'+candidates.length+' (0%)'
     if(bar)bar.style.width='0%'
-    // ★ 分优先级：机会区+涨幅前排（约300只）强制拉K线，其余用本地缓存
-    var _forceSet = new Set()
-    if(_forceReanalysis){
-      // 取即将进入机会区的候选（涨跌幅前列的）
-      candidates.slice(0, 200).forEach(function(s){_forceSet.add(s.code)})
-      // 以及上次机会区内的（可能已经跌下来但标签要更新）
-      if(window._upgradedSnapshot&&window._upgradedSnapshot.list){
-        window._upgradedSnapshot.list.forEach(function(s){_forceSet.add(s.code)})
-      }
-    }
     var allPayloads=[]
     for(var i=0;i<candidates.length;i+=20){
       var batch=candidates.slice(i,i+20)
-      var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg,skipBackend:true,forceKline:_forceReanalysis&&_forceSet.has(s.code)})}))
+      var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg,skipBackend:true,forceKline:_forceReanalysis})}))
       results.forEach(function(r){if(r.status==='fulfilled'&&r.value) allPayloads.push(r.value)})
       var done=Math.min(i+20,candidates.length)
       var pct=Math.round(done/candidates.length*100)
-      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length+' ('+pct+'%)' + (_forceReanalysis ? ' 强制拉取'+_forceSet.size+'只' : '')
+      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length+' ('+pct+'%)'
       if(bar)bar.style.width=pct+'%'
       if(i+20<candidates.length)await new Promise(function(r){setTimeout(r,100)})
     }
