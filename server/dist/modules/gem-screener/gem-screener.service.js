@@ -2416,34 +2416,43 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const dayRange = dayHigh - dayLow;
             if (dayRange < 0.01)
                 continue;
-            const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
             const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
             const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
-            if (startBin === endBin) {
-                bins[startBin] += dayVol;
+            let totalWeight = 0;
+            const weights = [];
+            for (let b = startBin; b <= endBin; b++) {
+                const binCenter = minPrice + (b + 0.5) * binSize;
+                const dist = Math.abs(binCenter - dayClose) / dayRange;
+                const w = Math.max(0, 1 - dist * 1.5);
+                weights.push(w);
+                totalWeight += w;
             }
-            else {
-                bins[closeBin] += dayVol * 0.8;
-                const spreadVol = dayVol * 0.2;
-                let spreadBins = 0;
-                for (let b = startBin; b <= endBin; b++) {
-                    if (b !== closeBin)
-                        spreadBins++;
-                }
-                if (spreadBins > 0) {
-                    const volPerBin = spreadVol / spreadBins;
-                    for (let b = startBin; b <= endBin; b++) {
-                        if (b !== closeBin)
-                            bins[b] += volPerBin;
-                    }
-                }
+            if (totalWeight < 0.001)
+                continue;
+            for (let j = 0; j < weights.length; j++) {
+                bins[startBin + j] += (dayVol * weights[j]) / totalWeight;
             }
         }
         const totalVol = bins.reduce((a, b) => a + b, 0);
         if (totalVol < 0.001)
             return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
-        const maxBinVol = Math.max(...bins);
-        const concentration90 = Math.round((maxBinVol / totalVol) * 100 * 100) / 100;
+        const cumVol5 = totalVol * 0.05;
+        const cumVol95 = totalVol * 0.95;
+        let cumSum = 0, p5Price = minPrice, p95Price = maxPrice;
+        for (let i = 0; i < BINS; i++) {
+            cumSum += bins[i];
+            if (cumSum >= cumVol5 && p5Price === minPrice) {
+                p5Price = minPrice + (i + 0.5) * binSize;
+            }
+            if (cumSum >= cumVol95) {
+                p95Price = minPrice + (i + 0.5) * binSize;
+                break;
+            }
+        }
+        const priceSum = Math.abs(p95Price) + Math.abs(p5Price);
+        const concentration90 = priceSum > 0.001
+            ? Math.round(((p95Price - p5Price) / priceSum) * 100 * 100) / 100
+            : 0;
         const sortedIndices = bins.map((vol, idx) => ({ vol, idx })).sort((a, b) => b.vol - a.vol);
         const mainPeakIdx = sortedIndices[0].idx;
         let secondPeakIdx = -1;

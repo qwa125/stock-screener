@@ -891,48 +891,57 @@ async function renderAuctionSection(code,low,high,price){
 function sigColor(s){return COLORS[s.suggestion]||'#999'}
 function cfgClr(v,t){return v>=t?'green':v>=t/2?'yellow':''}
 
-// 前端筹码分析（从K线数据计算筹码集中度）
+// 前端筹码分析（90%成本集中度 = (P95-P5)/(P95+P5)*100）
 function calcChipAnalysis(kline){
   if(!kline||kline.length<20) return{conc:50,peak:'mid',pattern:'dispersed'}
-  var closeArr=kline.map(function(k){return k.close||k.close||0})
   var highArr=kline.map(function(k){return k.high||0})
   var lowArr=kline.map(function(k){return k.low||0})
+  var closeArr=kline.map(function(k){return k.close||0})
   var volArr=kline.map(function(k){return k.volume||0})
-  var currentPrice=closeArr[closeArr.length-1]
   var maxH=Math.max.apply(null,highArr)
   var minL=Math.min.apply(null,lowArr)
   var range=maxH-minL
   if(range<0.01) return{conc:95,peak:'mid',pattern:'single_peak'}
-  var BINS=20;var bins=[];for(var bi=0;bi<BINS;bi++)bins.push(0)
-  var totalVol=0
+  var BINS=30;var bins=[];for(var bi=0;bi<BINS;bi++)bins.push(0);var binSize=range/BINS
   for(var i=Math.max(0,kline.length-120);i<kline.length;i++){
-    var idx=Math.min(BINS-1,Math.floor(((closeArr[i]-minL)/range)*BINS))
-    if(idx<0)idx=0
-    bins[idx]+=volArr[i]
-    totalVol+=volArr[i]
+    var dayH=highArr[i],dayL=lowArr[i],dayC=closeArr[i],dayV=volArr[i]
+    var dRange=dayH-dayL;if(dRange<0.01)continue
+    var sBin=Math.max(0,Math.floor((dayL-minL)/binSize))
+    var eBin=Math.min(BINS-1,Math.floor((dayH-minL)/binSize))
+    var totalW=0;var ws=[]
+    for(var bx=sBin;bx<=eBin;bx++){
+      var bc=minL+(bx+0.5)*binSize
+      var dist=Math.abs(bc-dayC)/dRange
+      var w=Math.max(0,1-dist*1.5);ws.push(w);totalW+=w
+    }
+    if(totalW<0.001)continue
+    for(var wj=0;wj<ws.length;wj++)bins[sBin+wj]+=(dayV*ws[wj])/totalW
   }
-  if(totalVol===0) return{conc:50,peak:'mid',pattern:'dispersed'}
-  var sorted=[];for(var si=0;si<BINS;si++)sorted.push({bin:si,vol:bins[si]})
-  sorted.sort(function(a,b){return b.vol-a.vol})
-  var cum=0;var binsNeeded=0
-  for(var si2=0;si2<sorted.length;si2++){
-    cum+=sorted[si2].vol;binsNeeded++
-    if(cum/totalVol>=0.9)break
+  var totalVol=0;for(var ti=0;ti<BINS;ti++)totalVol+=bins[ti]
+  if(totalVol<1) return{conc:50,peak:'mid',pattern:'dispersed'}
+  // P5/P95 定价
+  var cum5=totalVol*0.05,cum95=totalVol*0.95
+  var acc=0,p5Price=minL,p95Price=maxH
+  for(var bi2=0;bi2<BINS;bi2++){
+    var p=minL+(bi2+0.5)*binSize
+    acc+=bins[bi2]
+    if(acc>=cum5&&p5Price===minL)p5Price=p
+    if(acc>=cum95){p95Price=p;break}
   }
-  var conc=Math.round((binsNeeded/BINS)*100)
-  // 找筹码峰位置
+  var priceSum=Math.abs(p95Price)+Math.abs(p5Price)
+  var conc=priceSum>0.001?Math.round(((p95Price-p5Price)/priceSum)*100*100)/100:0
+  // 找筹码峰
   var peakIdx=0;var maxVol=0
   for(var pi=0;pi<BINS;pi++){if(bins[pi]>maxVol){maxVol=bins[pi];peakIdx=pi}}
   var peakPos=peakIdx/BINS
   var peakLabel=peakPos<0.33?'low':peakPos<0.66?'mid':'high'
-  // 找第二峰
+  // 找第二峰（距离主峰至少3格，体积>55%）
   var peak2Idx=-1;var maxVol2=0
   for(var pj=0;pj<BINS;pj++){
-    if(pj===peakIdx)continue
-    if(bins[pj]>maxVol2&&bins[pj]>maxVol*0.4){maxVol2=bins[pj];peak2Idx=pj}
+    if(Math.abs(pj-peakIdx)<3||bins[pj]<maxVol*0.55)continue
+    if(bins[pj]>maxVol2){maxVol2=bins[pj];peak2Idx=pj}
   }
   var pattern=peak2Idx>=0?'double_peak':'single_peak'
-  if(conc<40) pattern='dispersed'
   return{conc:conc,peak:peakLabel,pattern:pattern}
 }
 
