@@ -18,13 +18,11 @@ export class AccessControlService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AccessControlService.name);
   private readonly REGISTRY_FILE: string;
 
+  private registry: DeviceRegistry = { maxSlots: 20, devices: {} };
+
   constructor() {
     this.REGISTRY_FILE = process.env.DEVICE_REGISTRY_PATH
       || '/tmp/device-registry.json';
-    // 从环境变量读取默认限额（和 DeviceRegistryService 保持一致）
-    // Render 冷启动会清空 /tmp，此默认值作为冷启动后的兜底防线
-    const maxFromEnv = parseInt(process.env.MAX_SLOTS || '', 10);
-    this.registry = { maxSlots: (maxFromEnv > 0) ? maxFromEnv : 2, devices: {} };
   }
 
   async onApplicationBootstrap() {

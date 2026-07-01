@@ -112,7 +112,7 @@ export class AccessControlController {
   /** (管理员) 查看注册表概况 */
   @Get('admin/devices')
   async listDevices() {
-    const devices = Object.entries(this.service['registry'].devices).map(([id, rec]) => ({
+    const devices = Object.entries(this.service['registry'].devices).map(([id, rec]: [string, any]) => ({
       deviceId: id.slice(0, 16) + '...',
       registeredAt: new Date(rec.registeredAt).toLocaleString(),
       lastSeen: new Date(rec.lastSeen).toLocaleString(),

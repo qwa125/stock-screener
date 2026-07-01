@@ -2,6 +2,7 @@ import { OnApplicationBootstrap } from '@nestjs/common';
 export declare class AccessControlService implements OnApplicationBootstrap {
     private readonly logger;
     private readonly REGISTRY_FILE;
+    private registry;
     constructor();
     onApplicationBootstrap(): Promise<void>;
     private saveRegistry;
