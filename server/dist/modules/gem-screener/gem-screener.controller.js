@@ -737,6 +737,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             catch (e) {
                 this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
             }
+            await new Promise(resolve => setImmediate(resolve));
         }
         return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
     }

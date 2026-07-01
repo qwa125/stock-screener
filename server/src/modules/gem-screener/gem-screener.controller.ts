@@ -858,6 +858,7 @@ export class GemScreenerController {
     if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
     const results: any[] = [];
     // 顺序处理，不并发——避免打满Render 512MB
+    // setImmediate 让出事件循环，使其他用户请求不受阻塞
     for (const s of stocks) {
       try {
         const singleResult = await this.analyzeWithKLine({
@@ -869,6 +870,8 @@ export class GemScreenerController {
       } catch (e) {
         this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
       }
+      // 每分析一只就让出事件循环，新访客请求能插队处理
+      await new Promise<void>(resolve => setImmediate(resolve));
     }
     return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
   }
