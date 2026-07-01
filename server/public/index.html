@@ -335,10 +335,28 @@ async function handleBlurClick(){
   $('blurMsg').innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试'
 }
 // 主页面扫描按钮：全量拉取Sina（15页并行）+ 读取K线缓存 + 分批分析
+// 管理员验证（仅首次需要）
+async function checkAdmin(){
+  var k=localStorage.getItem('adminKey')
+  if(k)return true
+  k=prompt('请输入管理员密码：')
+  if(!k)return false
+  try{
+    var r=await fetch('/api/gem/verify-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k})})
+    var d=await r.json()
+    if(d.data&&d.data.verified){localStorage.setItem('adminKey',k);return true}
+    alert('密码错误！')
+    return false
+  }catch(e){alert('验证失败：'+e.message);return false}
+}
 function handleScanClick(){
   if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
-  doScan()
+  checkAdmin().then(function(ok){
+    if(!ok)return
+    _forceReanalysis=true
+    doScan()
+  })
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
@@ -1535,7 +1553,7 @@ async function doScan(){
     await doFullRescan(true)
     window._cachedSinaEMData=null
   }catch(e){setStatus('❌ '+e.message)}
-  loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
+  _forceReanalysis=false;loading=false;$('scanBtn').disabled=false;$('scanBtn').textContent='🔄 立即扫描'
 }
 
 /** 后台全量同步：拉Sina → 推K线 → doFullRescan（和autoLightScan完全一致） */

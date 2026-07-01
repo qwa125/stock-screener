@@ -64,6 +64,11 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.klineProxyCache = new Map();
         this.klineDiskRestored = false;
         this._forceMode = false;
+        this.adminKey = process.env.ADMIN_KEY || 'admin123';
+    }
+    async verifyAdmin(body) {
+        const verified = body.key === this.adminKey;
+        return { code: 200, msg: 'success', data: { verified } };
     }
     async getMarketState() {
         const state = this.scheduler.getState();
@@ -839,6 +844,13 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     }
 };
 exports.GemScreenerController = GemScreenerController;
+__decorate([
+    (0, common_1.Post)('verify-admin'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "verifyAdmin", null);
 __decorate([
     (0, common_1.Get)('market-state'),
     __metadata("design:type", Function),

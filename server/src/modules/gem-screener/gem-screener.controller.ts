@@ -14,12 +14,23 @@ export class GemScreenerController {
   private readonly klineProxyCache = new Map<string, { data: any[]; timestamp: number }>();
   private klineDiskRestored = false;
   private _forceMode = false; // 强制分析模式（跳过缓存，11:30/15:00全量重算）
+  private readonly adminKey = process.env.ADMIN_KEY || 'admin123'; // 管理员密码
 
   constructor(
     private readonly gemScreener: GemScreenerService,
     private readonly scheduler: GemScreenerScheduler,
     private readonly stockService: StockService,
   ) {}
+
+  /**
+   * 管理员验证
+   * POST /api/gem/verify-admin
+   */
+  @Post('verify-admin')
+  async verifyAdmin(@Body() body: { key?: string }) {
+    const verified = body.key === this.adminKey;
+    return { code: 200, msg: 'success', data: { verified } };
+  }
 
   /**
    * 市场状态（交易/午休/收盘/盘前）

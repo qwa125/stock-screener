@@ -10,7 +10,17 @@ export declare class GemScreenerController {
     private readonly klineProxyCache;
     private klineDiskRestored;
     private _forceMode;
+    private readonly adminKey;
     constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
+    verifyAdmin(body: {
+        key?: string;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: {
+            verified: boolean;
+        };
+    }>;
     getMarketState(): Promise<{
         code: number;
         msg: string;
