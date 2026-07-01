@@ -771,20 +771,23 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this._forceMode = body.force === true;
         if (this._forceMode)
             this.logger.log('🔁 强制完整分析模式（跳过缓存）');
-        for (const s of stocks) {
-            try {
-                const singleResult = await this.analyzeWithKLine({
-                    code: s.code, name: s.name,
-                    kline: s.kline, price: s.price,
-                    changePercent: s.changePercent,
-                });
-                if (singleResult?.data)
-                    results.push(...singleResult.data);
-            }
-            catch (e) {
+        const CON = 3;
+        for (let i = 0; i < stocks.length; i += CON) {
+            const batch = stocks.slice(i, i + CON);
+            const batchResults = await Promise.all(batch.map(s => this.analyzeWithKLine({
+                code: s.code, name: s.name,
+                kline: s.kline, price: s.price,
+                changePercent: s.changePercent,
+            }).catch(e => {
                 this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
+                return null;
+            })));
+            for (const r of batchResults) {
+                if (r?.data)
+                    results.push(...r.data);
             }
-            await new Promise(resolve => setImmediate(resolve));
+            if (i % (CON * 20) === 0)
+                await new Promise(resolve => setImmediate(resolve));
         }
         this._forceMode = false;
         if (this.klineProxyCache.size > 0) {
