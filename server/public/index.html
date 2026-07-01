@@ -309,6 +309,7 @@ function hideBlocked(){
 setInterval(function(){fetch('/api/gem/ping',{signal:AbortSignal.timeout(10000)}).catch(function(){})},300000)
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
+var _forceReanalysis=false // 11:30/15:00强制完整分析（跳过缓存）
 
 // 毛玻璃按钮：点击注册，后端决定放行还是拒绝
 async function handleBlurClick(){
@@ -1519,7 +1520,7 @@ async function doScan(){
         try{
           await fetch(API+'/gem/analyze-batch',{
             method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({stocks:sub}),
+            body:JSON.stringify({stocks:sub, force:_forceReanalysis}),
             signal:AbortSignal.timeout(30000)
           }).then(function(r){return r.json()})
         }catch(e){console.warn('[scan] 批量分析批次失败:',e.message)}
@@ -2605,9 +2606,16 @@ async function doSearch(){
 }
 
 // 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
-[['9:25',9,25],['11:30',11,30],['13:00',13,0],['15:00',15,0]].forEach(function(item){
+// 11:30和15:00强制完整分析（跳过缓存，避免积少成多）
+[['9:25',9,25],['11:30',11,30,true],['13:00',13,0],['15:00',15,0,true]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
-  if(n<t)setTimeout(async function(){if(!loading){await doScan()}},t.getTime()-n.getTime());
+  if(n<t)setTimeout(async function(){
+    if(!loading){
+      if(item[3])_forceReanalysis=true;
+      await doScan();
+      _forceReanalysis=false;
+    }
+  },t.getTime()-n.getTime());
 });
 
 // 每10分钟交易时段自动轻量扫描（统一走doScan）

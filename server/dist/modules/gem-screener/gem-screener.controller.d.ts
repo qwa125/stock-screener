@@ -9,6 +9,7 @@ export declare class GemScreenerController {
     private readonly logger;
     private readonly klineProxyCache;
     private klineDiskRestored;
+    private _forceMode;
     constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
     getMarketState(): Promise<{
         code: number;
@@ -479,6 +480,7 @@ export declare class GemScreenerController {
             changePercent?: number;
             gapPercent?: number;
         }>;
+        force?: boolean;
     }): Promise<{
         code: number;
         msg: string;

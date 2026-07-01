@@ -13,6 +13,7 @@ export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
   private readonly klineProxyCache = new Map<string, { data: any[]; timestamp: number }>();
   private klineDiskRestored = false;
+  private _forceMode = false; // 强制分析模式（跳过缓存，11:30/15:00全量重算）
 
   constructor(
     private readonly gemScreener: GemScreenerService,
@@ -829,7 +830,8 @@ export class GemScreenerController {
         }
       }
       // ─── 分析结果缓存：K线日期相同且无极端涨跌幅时跳过 quickAnalyze（80行CPU密集计算） ───
-      const cachedResult = this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
+      // force=true时跳过缓存（11:30/15:00强制完整分析）
+      const cachedResult = this._forceMode ? null : this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
       if (cachedResult) {
         // 用前端最新价格更新（盘中价格实时变动）
         if (body.price !== undefined) cachedResult.currentPrice = body.price;
@@ -863,10 +865,13 @@ export class GemScreenerController {
 
   @Post('analyze-batch')
   @SkipAccessLimit()
-  async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }> }) {
+  async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }>; force?: boolean }) {
     const stocks = body.stocks || [];
     if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
     const results: any[] = [];
+    // force=true → 跳过分析缓存，强制完整分析（用于11:30/15:00全量重算）
+    this._forceMode = body.force === true;
+    if (this._forceMode) this.logger.log('🔁 强制完整分析模式（跳过缓存）');
     // 顺序处理，不并发——避免打满Render 512MB
     // setImmediate 让出事件循环，使其他用户请求不受阻塞
     for (const s of stocks) {
@@ -883,6 +888,7 @@ export class GemScreenerController {
       // 每分析一只就让出事件循环，新访客请求能插队处理
       await new Promise<void>(resolve => setImmediate(resolve));
     }
+    this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
     if (this.klineProxyCache.size > 0) {
       const mapForPersist = new Map<string, { data: any[]; ts: number }>();

@@ -63,6 +63,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.logger = new common_1.Logger(GemScreenerController_1.name);
         this.klineProxyCache = new Map();
         this.klineDiskRestored = false;
+        this._forceMode = false;
     }
     async getMarketState() {
         const state = this.scheduler.getState();
@@ -700,7 +701,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
                 }
             }
-            const cachedResult = this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
+            const cachedResult = this._forceMode ? null : this.gemScreener.isCacheValid(body.code, klineData, body.changePercent);
             if (cachedResult) {
                 if (body.price !== undefined)
                     cachedResult.currentPrice = body.price;
@@ -733,6 +734,9 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         if (stocks.length === 0)
             return { code: 200, msg: 'empty batch', data: [] };
         const results = [];
+        this._forceMode = body.force === true;
+        if (this._forceMode)
+            this.logger.log('🔁 强制完整分析模式（跳过缓存）');
         for (const s of stocks) {
             try {
                 const singleResult = await this.analyzeWithKLine({
@@ -748,6 +752,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }
             await new Promise(resolve => setImmediate(resolve));
         }
+        this._forceMode = false;
         if (this.klineProxyCache.size > 0) {
             const mapForPersist = new Map();
             for (const [k, v] of this.klineProxyCache) {
