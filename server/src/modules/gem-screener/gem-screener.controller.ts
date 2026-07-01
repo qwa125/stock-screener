@@ -719,6 +719,32 @@ export class GemScreenerController {
   }
 
   /**
+   * 批量查询K线缓存（POST，无URL长度限制）
+   * POST /api/gem/kline-cache-check
+   * Body: { codes: string[] }
+   */
+  @Post('kline-cache-check')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async klineCacheCheck(@Body() body: { codes?: string[] }) {
+    const codeList = (body?.codes || []).filter(Boolean);
+    if (!codeList.length) return { code: 400, msg: '缺少股票代码列表', data: null };
+    const now = Date.now();
+    const cached: Record<string, { count: number; age: number }> = {};
+    const missing: string[] = [];
+    for (const code of codeList) {
+      const cachedEntry = this.klineProxyCache.get(code);
+      if (cachedEntry && cachedEntry.data?.length >= 10) {
+        cached[code] = { count: cachedEntry.data.length, age: Math.round((now - cachedEntry.timestamp) / 1000 / 60) };
+      } else {
+        missing.push(code);
+      }
+    }
+    this.logger.log(`📊 K线缓存检查: ${cached.length}只已缓存, ${missing.length}只缺失`);
+    return { code: 200, msg: 'success', data: { cached, missing } };
+  }
+
+  /**
    * 代理腾讯1分钟K线（日内分析用）
    */
   @Get('proxy/minkline')

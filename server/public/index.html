@@ -528,8 +528,10 @@ async function fetchKlineAndAnalyze(s){
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
 
     // ★ 优先直连腾讯（速度快，跨域不拦）
+    // 如后端已有缓存则跳过腾讯直连，直接走后端代理（快10x）
+    var _skipTx=window._klineBackendCached&&window._klineBackendCached.has(code)
     // 直连腾讯 ifzq.gtimg.cn（10s超时）
-    if(!klines||klines.length<5) try{
+    if(!_skipTx&&(!klines||klines.length<5)) try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
       var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+_needCount+',qfq',{signal:ac.signal})
@@ -540,7 +542,7 @@ async function fetchKlineAndAnalyze(s){
           var tk=tj.data[gtCode]
           if(tk&&tk.qfqday&&tk.qfqday.length>=10){
             var _newLines=tk.qfqday.map(function(l){var _v=parseFloat(l[5])||0;var _a=(parseFloat(l[1])+parseFloat(l[2]))/2||0;return{day:l[0],open:parseFloat(l[1])||0,close:parseFloat(l[2])||0,high:parseFloat(l[3])||0,low:parseFloat(l[4])||0,volume:_v,amount:_v*_a*100}})
-            if(_hasCache){
+            if(_hasCache&&window._klineCache[code]){
               var _merged={};window._klineCache[code].forEach(function(k){_merged[k.day]=k});_newLines.forEach(function(k){_merged[k.day]=k})
               klines=Object.values(_merged).sort(function(a,b){return a.day.localeCompare(b.day)})
               if(klines.length>120)klines=klines.slice(klines.length-120)
@@ -1608,9 +1610,24 @@ async function doScan(){
     var _mb=candidates.filter(function(s){return /^(60|00)/.test(s.code)}).sort(function(a,b){return b.chg-a.chg}).slice(0,500)
     var _ge=candidates.filter(function(s){return /^30/.test(s.code)}).sort(function(a,b){return b.chg-a.chg}).slice(0,500)
     candidates=_mb.concat(_ge)
-    setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，检查后端缓存...')
+    setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，查询后端K线缓存...')
 
-    // 4. 分批拉取K线(直连腾讯→后端降级)+推送后端分析
+    // 4a. 批量查询后端缓存，已有K线的直接跳过腾讯直连（加速10x）
+    window._klineBackendCached=null
+    try{
+      var ckRes=await fetch(API+'/gem/kline-cache-check',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({codes:candidates.map(function(s){return s.code})})
+      }).then(function(r){return r.json()})
+      if(ckRes&&ckRes.code===200&&ckRes.data){
+        var cachedKeys=Object.keys(ckRes.data.cached||{})
+        window._klineBackendCached=new Set(cachedKeys)
+        console.log('[scan] 后端缓存命中 '+cachedKeys.length+'/'+candidates.length+' 只')
+        setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，缓存命中'+cachedKeys.length+'只')
+      }
+    }catch(e){console.warn('[scan] 缓存检查失败:',e.message)}
+
+    // 4b. 分批拉取K线(直连腾讯→后端降级)+推送后端分析
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
     if(prog)prog.style.display='block'
     if(txt)txt.textContent='K线分析 0/'+candidates.length+' (0%)'

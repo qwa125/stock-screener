@@ -367,6 +367,23 @@ export declare class GemScreenerController {
             age: number;
         }>;
     }>;
+    klineCacheCheck(body: {
+        codes?: string[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: null;
+    } | {
+        code: number;
+        msg: string;
+        data: {
+            cached: Record<string, {
+                count: number;
+                age: number;
+            }>;
+            missing: string[];
+        };
+    }>;
     proxyMinKLine(code: string): Promise<{
         code: number;
         msg: string;
