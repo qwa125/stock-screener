@@ -641,6 +641,25 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.logger.log(`📊 K线缓存检查: ${Object.keys(cached).length}只已缓存, ${missing.length}只缺失`);
         return { code: 200, msg: 'success', data: { cached, missing } };
     }
+    async getKlineCacheBulk(body) {
+        const codeList = (body?.codes || []).filter(Boolean);
+        if (!codeList.length)
+            return { code: 200, msg: '没有请求码', data: {} };
+        const now = Date.now();
+        const result = {};
+        let hit = 0;
+        for (const code of codeList) {
+            const cached = this.klineProxyCache.get(code);
+            if (cached && cached.data && cached.data.length >= 10) {
+                result[code] = {
+                    data: cached.data,
+                    age: Math.round((now - cached.timestamp) / 1000 / 60)
+                };
+                hit++;
+            }
+        }
+        return { code: 200, msg: `缓存命中 ${hit}/${codeList.length}`, data: result };
+    }
     async proxyMinKLine(code) {
         if (!code)
             return { code: 400, msg: '缺少股票代码', data: null };
@@ -1148,6 +1167,15 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "klineCacheCheck", null);
+__decorate([
+    (0, common_1.Post)('kline-cache-bulk'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    (0, common_1.HttpCode)(200),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "getKlineCacheBulk", null);
 __decorate([
     (0, common_1.Get)('proxy/minkline'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

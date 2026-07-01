@@ -395,6 +395,13 @@ export declare class GemScreenerController {
             missing: string[];
         };
     }>;
+    getKlineCacheBulk(body: {
+        codes?: string[];
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: Record<string, any>;
+    }>;
     proxyMinKLine(code: string): Promise<{
         code: number;
         msg: string;

@@ -757,6 +757,33 @@ export class GemScreenerController {
   }
 
   /**
+   * 批量加载K线缓存数据（供前端预热本地缓存）
+   * POST /api/gem/kline-cache-bulk
+   * Body: { codes: string[] }
+   */
+  @Post('kline-cache-bulk')
+  @SkipAccessLimit()
+  @HttpCode(200)
+  async getKlineCacheBulk(@Body() body: { codes?: string[] }) {
+    const codeList = (body?.codes || []).filter(Boolean);
+    if (!codeList.length) return { code: 200, msg: '没有请求码', data: {} };
+    const now = Date.now();
+    const result: Record<string, any> = {};
+    let hit = 0;
+    for (const code of codeList) {
+      const cached = this.klineProxyCache.get(code);
+      if (cached && cached.data && cached.data.length >= 10) {
+        result[code] = {
+          data: cached.data,
+          age: Math.round((now - cached.timestamp) / 1000 / 60)
+        };
+        hit++;
+      }
+    }
+    return { code: 200, msg: `缓存命中 ${hit}/${codeList.length}`, data: result };
+  }
+
+  /**
    * 代理腾讯1分钟K线（日内分析用）
    */
   @Get('proxy/minkline')

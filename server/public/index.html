@@ -1526,6 +1526,29 @@ async function doScan(){
       }
     }catch(e){console.warn('[scan] 缓存检查失败:',e.message)}
 
+    // ★ K线缓存预热：从后端加载昨日缓存到本地，减少腾讯拉取量
+    if(window._klineCache&&Object.keys(window._klineCache).length<5&&candidates.length>100){
+      try{
+        console.log('[scan] 预热K线缓存 ('+candidates.length+' 只)')
+        if(setStatus)setStatus('🔄 加载昨日K线缓存...')
+        var wrRes=await fetch(API+'/gem/kline-cache-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:candidates.map(function(s){return s.code})}),signal:AbortSignal.timeout(30000)})
+        var wrj=await wrRes.json()
+        if(wrj&&wrj.code===200&&wrj.data){
+          var cnt=0
+          for(var _code in wrj.data){
+            var _entry=wrj.data[_code]
+            if(_entry&&_entry.data&&_entry.data.length>=10){
+              window._klineCache[_code]=_entry.data
+              window._klineCache[_code]._t=Date.now()-Math.min(_entry.age||999,120)*60000
+              cnt++
+            }
+          }
+          console.log('[scan] 预热完成，加载了 '+cnt+' 只K线缓存')
+          if(setStatus)setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，加载缓存'+cnt+'只')
+        }
+      }catch(e){console.warn('[scan] 预热失败:',e.message)}
+    }
+
     // 4b. 分批拉取K线(只拉不分析，收集payload)
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
     if(prog)prog.style.display='block'
