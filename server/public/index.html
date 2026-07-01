@@ -327,7 +327,7 @@ function updateScanBtn(){
 }
 
 // 页面加载时检查管理员状态
-try{var savedPwd=localStorage.getItem('adminPassword');if(savedPwd||ADMIN_PWD){_isAdmin=true;updateScanBtn()}}catch(e){}
+try{var adminTkn=localStorage.getItem('adminToken');if(adminTkn){_isAdmin=true;updateScanBtn()}}catch(e){}
 setTimeout(function(){updateScanBtn()},500)
 
 // 毛玻璃按钮：点击注册，后端决定放行还是拒绝
@@ -3056,6 +3056,7 @@ function saveAdminToken(){
         if(st){
           if(j.valid){
             st.innerHTML='<span style="color:#16a34a;font-weight:600">✅ 令牌有效</span>'
+            _isAdmin=true;updateScanBtn()
           }else{
             st.innerHTML='<span style="color:#ef4444;font-weight:600">❌ 令牌无效（默认: admin2025）</span>'
           }
