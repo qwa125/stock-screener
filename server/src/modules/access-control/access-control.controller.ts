@@ -23,10 +23,9 @@ export class AccessControlController {
     const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
     const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
     // 使用 DeviceRegistryService（PG 持久化）注册设备，冷启动不丢失
-    const result = await this.deviceRegistry.allowDevice(
+    const result = await this.deviceRegistry.touchDevice(
       deviceId,
       ua || 'unknown',
-      isAdmin ? '设备(管理员)' : '设备',
       isAdmin,
     );
     if (!result.allowed) {

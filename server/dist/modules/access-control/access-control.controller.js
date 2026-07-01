@@ -27,7 +27,7 @@ let AccessControlController = class AccessControlController {
         }
         const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
         const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
-        const result = await this.deviceRegistry.allowDevice(deviceId, ua || 'unknown', isAdmin ? '设备(管理员)' : '设备', isAdmin);
+        const result = await this.deviceRegistry.touchDevice(deviceId, ua || 'unknown', isAdmin);
         if (!result.allowed) {
             throw new common_1.HttpException({ code: 429, msg: result.message || '名额已满，请联系管理员增加设备访问名额', data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
         }
