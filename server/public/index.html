@@ -2261,7 +2261,7 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
     }
     return
   }
-  var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||0
+  var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[]
   // 高低价优先用传入的有效值，否则从信号价格推算，最后才用现价估算
   var dayLow=low>0?low:0,dayHigh=high>0?high:0
   if(sugs.length>0){
