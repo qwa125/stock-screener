@@ -2178,7 +2178,6 @@ async function fetchIntraday(code){
     return d2&&d2.data||null
   }catch(e){return null}finally{_intradayFetching[code]=false}
 }
-}
 // 实时更新股价+日内介入参考（每隔若干秒调用一次）
 // 可选参数 analysisData：传入预取的分析数据则跳过 fetchIntraday
 async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
