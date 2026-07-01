@@ -49,9 +49,10 @@ const fs = __importStar(require("fs/promises"));
 let AccessControlService = AccessControlService_1 = class AccessControlService {
     constructor() {
         this.logger = new common_1.Logger(AccessControlService_1.name);
-        this.registry = { maxSlots: 20, devices: {} };
         this.REGISTRY_FILE = process.env.DEVICE_REGISTRY_PATH
             || '/tmp/device-registry.json';
+        const maxFromEnv = parseInt(process.env.MAX_SLOTS || '', 10);
+        this.registry = { maxSlots: (maxFromEnv > 0) ? maxFromEnv : 2, devices: {} };
     }
     async onApplicationBootstrap() {
         const envRegistry = process.env.DEVICE_REGISTRY;

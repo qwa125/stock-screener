@@ -3,7 +3,6 @@ export declare class AccessControlService implements OnApplicationBootstrap {
     private readonly logger;
     private readonly REGISTRY_FILE;
     constructor();
-    private registry;
     onApplicationBootstrap(): Promise<void>;
     private saveRegistry;
     exportRegistryAsBase64(): string;
