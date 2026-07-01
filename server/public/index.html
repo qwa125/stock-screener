@@ -2126,7 +2126,11 @@ async function fetchIntraday(code){
       if(tr.ok||tr.status===0){
         var tRes=await tr.text();var tText=tRes.replace(/^var\s+\S+\s*=\s*/,'').replace(/;$/,'');var tJson=JSON.parse(tText)
         if(tJson&&tJson.data&&tJson.data[gtCode2]&&tJson.data[gtCode2].m1&&tJson.data[gtCode2].m1.length>=48){
-          klineData=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
+          var allBars=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
+          // 只保留今天的分钟数据，避免参考昨天的
+          var todayStr=new Date().toISOString().slice(0,10).replace(/-/g,'')
+          klineData=allBars.filter(function(l){return l.time&&l.time.startsWith(todayStr)})
+          if(!klineData||klineData.length<5){klineData=allBars} // 今天数据太少→回退全部
         }
       }
     }catch(e){console.warn('腾讯分钟K线直连失败，尝试代理',e)}
@@ -2135,7 +2139,11 @@ async function fetchIntraday(code){
       try{
         var _p=await fetch('/api/gem/proxy/minkline?code='+code,{signal:timeoutSignal(8000)})
         var _pj=await _p.json()
-        if(_pj&&_pj.code===200&&_pj.data&&_pj.data.length>=48){klineData=_pj.data}
+        if(_pj&&_pj.code===200&&_pj.data&&_pj.data.length>=48){
+          var todayStr2=new Date().toISOString().slice(0,10).replace(/-/g,'')
+          var todayBars=_pj.data.filter(function(l){return l.time&&l.time.startsWith(todayStr2)})
+          klineData=todayBars.length>=5?todayBars:_pj.data
+        }
       }catch(e2){console.warn('分钟K线代理也失败',e2)}
     }
     // POST到后端做纯分析（不跨境拉数据，只算MACD/主力散户/信号）
