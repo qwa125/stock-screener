@@ -477,17 +477,6 @@ async function autoLightScan(){
       if(_cr&&_cr.data&&_cr.data.stocks&&_cr.data.stocks.length) _cr.data.stocks.forEach(function(s){if(s.code)window._cachedStockSet.add(s.code)})
       console.log('[scan] cached stocks:',window._cachedStockSet.size)
     }catch(e){}
-    // 4b. 批量查询后端PG K线缓存，跳过已有K线的股
-    var _ldSkip=new Set()
-    try{
-      var _alc=totalList.map(function(s){return s.f12||s.code}).join(',')
-      var _lr=await fetch(API+'/gem/kline-cache-status?codes='+_alc,{signal:AbortSignal.timeout(5000)})
-      if(_lr.ok){var _lj=await _lr.json()
-        if(_lj&&_lj.data){for(var _li=0;_li<totalList.length;_li++){var _lc=totalList[_li].f12||totalList[_li].code,_ls=_lj.data[_lc]
-          if(_ls&&_ls.cached&&_ls.count>=60&&_ls.age<1440) _ldSkip.add(_lc)}}
-      }
-    }catch(ee){}
-    if(_ldSkip.size>0) console.log('[autoLight] 跳过缓存K线: '+_ldSkip.size+' 只')
     // ⑤ 分批抓K线+分析（每批20只，间隔200ms）
     var done=0,total=totalList.length
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
@@ -495,12 +484,10 @@ async function autoLightScan(){
     if(bar)bar.style.width='0%'
     if(txt)txt.textContent='准备中...'
     for(var i=0;i<total;i+=20){
-      var batch=totalList.slice(i,i+20).filter(function(s){return !_ldSkip.has(s.f12||s.code)})
-      if(batch.length){
-        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze(s)}))
-      }
+      var batch=totalList.slice(i,i+20)
+      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze(s)}))
       done=Math.min(i+20,total)
-      if(txt)txt.textContent='轻量分析 '+done+'/'+total+' (跳过'+_ldSkip.size+')'
+      if(txt)txt.textContent='轻量分析 '+done+'/'+total
       if(bar)bar.style.width=Math.round(done/total*100)+'%'
       if(i+20<total)await new Promise(function(r){setTimeout(r,200)})
     }
@@ -1617,34 +1604,13 @@ async function doScan(){
     candidates=_mb.concat(_ge)
     setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，检查后端缓存...')
 
-    // 4a. 批量查询后端PG缓存状态，只对缺缓存的股拉取K线
-    var _skipSet=new Set()
-    try{
-      var allCodes=candidates.map(function(c){return c.code}).join(',')
-      var csr=await fetch(API+'/gem/kline-cache-status?codes='+allCodes,{signal:AbortSignal.timeout(5000)})
-      if(csr.ok){
-        var cst=await csr.json()
-        if(cst&&cst.data){
-          for(var ci=0;ci<candidates.length;ci++){
-            var _c=candidates[ci].code,_st=cst.data[_c]
-            if(_st&&_st.cached&&_st.count>=60&&_st.age<1440){ // 至少60条且24小时内
-              _skipSet.add(_c)
-            }
-          }
-        }
-      }
-    }catch(ee){/* 缓存状态查询失败 → 全量拉取 */}
-    if(_skipSet.size>0) console.log('[scan] 跳过缓存K线: '+_skipSet.size+' 只')
-
-    // 4b. 分批拉取K线(优先后端PG缓存，后备直连腾讯)+推送后端分析
+    // 4. 分批拉取K线(直连腾讯→后端降级)+推送后端分析
     var bar=$('rescanBar'),txt=$('rescanText')
     for(var i=0;i<candidates.length;i+=20){
-      var batch=candidates.slice(i,i+20).filter(function(s){return !_skipSet.has(s.code)})
-      if(batch.length){
-        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
-      }
+      var batch=candidates.slice(i,i+20)
+      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
       var done=Math.min(i+20,candidates.length)
-      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length+' (跳过'+_skipSet.size+')'
+      if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length
       if(bar)bar.style.width=Math.round(done/candidates.length*100)+'%'
       if(i+20<candidates.length)await new Promise(function(r){setTimeout(r,100)})
     }
@@ -1672,30 +1638,12 @@ async function backgroundSyncWithKline(){
     mainBoard=mainBoard.slice(0,500);gem=gem.slice(0,500)
     var totalList=mainBoard.concat(gem)
     if(totalList.length){
-      // 批量查询后端PG缓存，跳过已有K线的股
-      var _skipSet2=new Set()
-      try{
-        var allCodes=totalList.map(function(s){return s.f12}).join(',')
-        var csr2=await fetch(API+'/gem/kline-cache-status?codes='+allCodes,{signal:AbortSignal.timeout(5000)})
-        if(csr2.ok){
-          var cst2=await csr2.json()
-          if(cst2&&cst2.data){
-            for(var ci=0;ci<totalList.length;ci++){
-              var _c2=totalList[ci].f12,_st2=cst2.data[_c2]
-              if(_st2&&_st2.cached&&_st2.count>=60&&_st2.age<1440) _skipSet2.add(_c2)
-            }
-          }
-        }
-      }catch(ee){}
-      if(_skipSet2.size>0) console.log('[bgSync] 跳过缓存K线: '+_skipSet2.size+' 只')
       var bar=$('rescanBar'),txt=$('rescanText')
       for(var i=0;i<totalList.length;i+=20){
-        var batch=totalList.slice(i,i+20).filter(function(s){return !_skipSet2.has(s.f12)})
-        if(batch.length){
-          await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
-        }
+        var batch=totalList.slice(i,i+20)
+        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
         var done=Math.min(i+20,totalList.length)
-        if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length+' (跳过'+_skipSet2.size+')'
+        if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length
         if(bar)bar.style.width=Math.round(done/totalList.length*100)+'%'
         if(i+20<totalList.length)await new Promise(function(r){setTimeout(r,200)})
       }
