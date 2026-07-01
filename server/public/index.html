@@ -413,24 +413,26 @@ async function fetchKlineAndAnalyze(s){
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
 
     // ★ 优先直连腾讯（速度快，跨域不拦）
-    // 本地缓存<15分钟且非强制刷新时跳过
+    // 缓存时效10分钟（与自动扫描同步），盘中K线实时变
     var _skipLoc = false;
     if(window._klineCache[code]&&window._klineCache[code].length>=10){
-      // 缓存有完整120根且最后一天是今天 → 直接复用，跳过腾讯
+      var _kt=window._klineCache[code]._t||0;
+      var _elapsed=(Date.now()-_kt)/60000;
+      // 缓存有完整120根且最后一天是今天且<10分钟且非强制 → 直接复用
       if(window._klineCache[code].length >= 120){
         var _lb = window._klineCache[code][window._klineCache[code].length-1];
         var _ld = _lb && _lb.day;
         var _td = new Date().toISOString().slice(0,10);
-        if(_ld === _td){
+        if(_ld === _td && params.forceKline !== true && _elapsed < 10){
           klines = window._klineCache[code];
-          console.log('[scan] 缓存120根',code,klines.length+'bars,日期匹配');
+          console.log('[scan] 缓存120根',code,klines.length+'bars,时效内');
         } else {
-          console.log('[scan] 缓存120根但最后日'+(_ld||'?')+'≠今天'+_td+',需更新',code);
+          console.log('[scan] 缓存120根需更新',code,(_ld!==_td?'日期过期':'已过'+Math.round(_elapsed)+'分'));
         }
       }
+      // 非强制扫描且缓存<10分钟 → 跳过腾讯
       if(!klines && params.forceKline !== true){
-        var _kt=window._klineCache[code]._t||0;
-        _skipLoc=((Date.now()-_kt)/60000)<15;
+        _skipLoc=_elapsed<10;
       }
     }
     // 直连腾讯 ifzq.gtimg.cn（10s超时）
