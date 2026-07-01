@@ -1680,24 +1680,21 @@ function isGEM(c){return /^30/.test(c)}
 
 // 拉取Sina全市场行情数据 → 存入_cachedSinaEMData（前置于doFullRescan，外部定时器可调用）
 async function fetchAllSinaPages2(node){
-  var all=[],promises=[]
+  var all=[]
   for(var p=1;p<=15;p++){
-    promises.push(
-      fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,{signal:AbortSignal.timeout(15000)})
-        .then(function(r){return r.text()})
-        .then(function(src){
-          src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
-          try{
-            var d=JSON.parse(src)
-            if(d&&d.length)all=all.concat(d)
-          }catch(e){
-            var m=src.match(/\[[\s\S]*\]/)
-            if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
-          }
-        })
-    )
+    try{
+      var r=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node='+node,{signal:AbortSignal.timeout(15000)})
+      var src=await r.text()
+      src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
+      try{
+        var d=JSON.parse(src)
+        if(d&&d.length)all=all.concat(d)
+      }catch(e){
+        var m=src.match(/\[[\s\S]*\]/)
+        if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)all=all.concat(d2)}catch(e2){}
+      }
+    }catch(e){/* 单页失败跳过 */}
   }
-  await Promise.all(promises)
   return all
 }
 async function fetchAndCacheSina(){
