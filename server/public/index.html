@@ -333,11 +333,11 @@ async function handleBlurClick(){
   btn.disabled=false;btn.textContent='📊 点击扫描解锁'
   $('blurMsg').innerHTML='⏳ 服务器启动超时，请稍后刷新页面重试'
 }
-// 主页面扫描按钮：立即触发扫描
+// 主页面扫描按钮：全量拉取Sina（15页并行）+ 读取K线缓存 + 分批分析
 function handleScanClick(){
   if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
-  autoLightScan()
+  doScan()
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
