@@ -21,20 +21,25 @@ let AccessControlController = class AccessControlController {
         this.service = service;
         this.deviceRegistry = deviceRegistry;
     }
-    async register(deviceId, adminToken) {
+    async register(deviceId, adminToken, ua) {
         if (!deviceId) {
             return { code: 400, msg: '缺少 x-device-id 头' };
         }
         const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
         const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
-        const result = await this.service.registerDevice(deviceId, {}, isAdmin);
-        if (!result.success) {
-            throw new common_1.HttpException({ code: 429, msg: result.reason || '名额已满，请联系管理员增加设备访问名额', data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
+        const result = await this.deviceRegistry.allowDevice(deviceId, ua || 'unknown', isAdmin ? '设备(管理员)' : '设备', isAdmin);
+        if (!result.allowed) {
+            throw new common_1.HttpException({ code: 429, msg: result.message || '名额已满，请联系管理员增加设备访问名额', data: null }, common_1.HttpStatus.TOO_MANY_REQUESTS);
         }
+        await this.service.registerDevice(deviceId, {}, isAdmin);
         return {
             code: 200,
             msg: '注册成功',
-            data: this.service.getStatus(deviceId),
+            data: {
+                registered: true,
+                maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
+                usedSlots: await this.deviceRegistry.registeredCount(),
+            },
         };
     }
     async status(deviceId) {
@@ -104,8 +109,9 @@ __decorate([
     (0, common_1.HttpCode)(200),
     __param(0, (0, common_1.Headers)('x-device-id')),
     __param(1, (0, common_1.Headers)('x-admin-token')),
+    __param(2, (0, common_1.Headers)('user-agent')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], AccessControlController.prototype, "register", null);
 __decorate([

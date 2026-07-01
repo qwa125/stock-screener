@@ -15,23 +15,36 @@ export class AccessControlController {
   async register(
     @Headers('x-device-id') deviceId: string,
     @Headers('x-admin-token') adminToken?: string,
+    @Headers('user-agent') ua?: string,
   ) {
     if (!deviceId) {
       return { code: 400, msg: '缺少 x-device-id 头' };
     }
     const expectedAdminToken = process.env.ADMIN_TOKEN || 'admin2025';
     const isAdmin = typeof adminToken === 'string' && adminToken === expectedAdminToken;
-    const result = await this.service.registerDevice(deviceId, {}, isAdmin);
-    if (!result.success) {
+    // 使用 DeviceRegistryService（PG 持久化）注册设备，冷启动不丢失
+    const result = await this.deviceRegistry.allowDevice(
+      deviceId,
+      ua || 'unknown',
+      isAdmin ? '设备(管理员)' : '设备',
+      isAdmin,
+    );
+    if (!result.allowed) {
       throw new HttpException(
-        { code: 429, msg: result.reason || '名额已满，请联系管理员增加设备访问名额', data: null },
+        { code: 429, msg: result.message || '名额已满，请联系管理员增加设备访问名额', data: null },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+    // 同步到 AccessControlService（向后兼容）
+    await this.service.registerDevice(deviceId, {}, isAdmin);
     return {
       code: 200,
       msg: '注册成功',
-      data: this.service.getStatus(deviceId),
+      data: {
+        registered: true,
+        maxSlots: await this.deviceRegistry.getEffectiveMaxSlots(),
+        usedSlots: await this.deviceRegistry.registeredCount(),
+      },
     };
   }
 

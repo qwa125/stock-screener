@@ -4,7 +4,7 @@ export declare class AccessControlController {
     private readonly service;
     private readonly deviceRegistry;
     constructor(service: AccessControlService, deviceRegistry: DeviceRegistryService);
-    register(deviceId: string, adminToken?: string): Promise<{
+    register(deviceId: string, adminToken?: string, ua?: string): Promise<{
         code: number;
         msg: string;
         data?: undefined;
@@ -12,10 +12,9 @@ export declare class AccessControlController {
         code: number;
         msg: string;
         data: {
-            allowed: boolean;
-            usedSlots: number;
-            maxSlots: number;
             registered: boolean;
+            maxSlots: number;
+            usedSlots: number;
         };
     }>;
     status(deviceId?: string): Promise<{
