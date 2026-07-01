@@ -632,7 +632,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 missing.push(code);
             }
         }
-        this.logger.log(`📊 K线缓存检查: ${cached.length}只已缓存, ${missing.length}只缺失`);
+        this.logger.log(`📊 K线缓存检查: ${Object.keys(cached).length}只已缓存, ${missing.length}只缺失`);
         return { code: 200, msg: 'success', data: { cached, missing } };
     }
     async proxyMinKLine(code) {

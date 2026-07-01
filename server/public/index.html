@@ -445,12 +445,12 @@ async function autoLightScan(){
     try{
       var shStocks=[],szStocks=[]
       for(var p=1;p<=10;p++){
-        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a').then(function(r){return r.text()})
+        var src=await fetchWithRetry('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sh_a',2).then(function(r){return r.text()})
         src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
         try{var d=JSON.parse(src);if(d&&d.length)shStocks=shStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)shStocks=shStocks.concat(d2)}catch(e2){}}
       }
       for(var p=1;p<=10;p++){
-        var src=await fetch('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a').then(function(r){return r.text()})
+        var src=await fetchWithRetry('https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page='+p+'&num=100&sort=changepercent&asc=0&node=sz_a',2).then(function(r){return r.text()})
         src=src.replace(/^var\s+\w+\s*=\s*/,'').replace(/;$/,'')
         try{var d=JSON.parse(src);if(d&&d.length)szStocks=szStocks.concat(d)}catch(e){var m=src.match(/\[[\s\S]*\]/);if(m)try{var d2=JSON.parse(m[0]);if(d2&&d2.length)szStocks=szStocks.concat(d2)}catch(e2){}}
       }
@@ -473,7 +473,7 @@ async function autoLightScan(){
     // ④ 扫描前拉取后端缓存清单，跳过已有分析结果的股（只更新价格）
     window._cachedStockSet=new Set()
     try{
-      var _cr=await fetch(API+'/gem/cache-all',{signal:8000}).then(function(r){return r.json()})
+      var _cr=await fetch(API+'/gem/cache-all',{signal:timeoutSignal(8000)}).then(function(r){return r.json()})
       if(_cr&&_cr.data&&_cr.data.stocks&&_cr.data.stocks.length) _cr.data.stocks.forEach(function(s){if(s.code)window._cachedStockSet.add(s.code)})
       console.log('[scan] cached stocks:',window._cachedStockSet.size)
     }catch(e){}
@@ -1145,7 +1145,7 @@ async function showDetail(i){
       }catch(e){console.warn('[detail] tencent kline failed:',e.message||e)}
       // 腾讯失败 → 后端备选（仅拉缓存K线）
       if(!kdata||kdata.length<5) try{
-        var pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
+        var pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:timeoutSignal(8000)})
         if(pkr.ok){var pkj=await pkr.json()
           if(pkj&&pkj.code===200&&pkj.data&&pkj.data.length>5){
             kdata=pkj.data;window._klineCache[code]=kdata
@@ -1225,7 +1225,7 @@ function _reAnalyzeDetail(code){
       var kdata=null
       try{
         var tqPrefix=code.startsWith('6')?'sh':'sz'
-        var tkline=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,120,qfq',{signal:8000})
+        var tkline=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+tqPrefix+code+',day,,,120,qfq',{signal:timeoutSignal(8000)})
         if(tkline.ok){
           var tjd=await tkline.json()
           if(tjd&&tjd.data&&tjd.data[tqPrefix+code]&&tjd.data[tqPrefix+code].qfqday&&tjd.data[tqPrefix+code].qfqday.length>=5)
@@ -1237,7 +1237,7 @@ function _reAnalyzeDetail(code){
       }catch(e){}
       // 腾讯失败 → 后端备选（仅拉缓存K线）
       if(!kdata||!kdata.length) try{
-        var _pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:8000})
+        var _pkr=await fetch('/api/gem/proxy/kline?code='+code+'&market='+(code.startsWith('6')?'sh':'sz'),{signal:timeoutSignal(8000)})
         if(_pkr.ok){var _pkj=await _pkr.json()
           if(_pkj&&_pkj.code===200&&_pkj.data&&_pkj.data.length>5){kdata=_pkj.data}
         }
@@ -1297,7 +1297,7 @@ async function fetchRealtime(codes){
     var batch=codes.slice(i,i+50)
     var q=batch.map(function(c){return (c.startsWith('6')?'sh':'sz')+c}).join(',')
     try{
-      var res=await fetch('https://qt.gtimg.cn/q='+q)
+      var res=await fetch('https://qt.gtimg.cn/q='+q,{signal:timeoutSignal(8000)})
       var buf=await res.arrayBuffer()
       var txt=decodeGBK(buf)
       var lines=txt.split(';')
@@ -1617,6 +1617,7 @@ async function doScan(){
     try{
       var ckRes=await fetch(API+'/gem/kline-cache-check',{
         method:'POST',headers:{'Content-Type':'application/json'},
+        signal:timeoutSignal(8000),
         body:JSON.stringify({codes:candidates.map(function(s){return s.code})})
       }).then(function(r){return r.json()})
       if(ckRes&&ckRes.code===200&&ckRes.data){
@@ -2138,7 +2139,7 @@ async function fetchTencentDetail(code,market){
   if(!code)return null
   var m=market||(code.startsWith('6')?'sh':code.startsWith('92')||code.startsWith('4')||code.startsWith('8')?'bj':'sz')
   try{
-    var res=await fetch('https://qt.gtimg.cn/q='+m+code)
+    var res=await fetch('https://qt.gtimg.cn/q='+m+code,{signal:timeoutSignal(5000)})
     var buf=await res.arrayBuffer()
     var txt=decodeGBK(buf)
     var p=txt.split('~')
