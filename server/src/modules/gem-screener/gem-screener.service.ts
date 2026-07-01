@@ -3309,7 +3309,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const len = closeArr.length;
     if (len < 20) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
 
-    // 单周期60天分析，不使用高斯平滑
+    // 单周期60天分析
     const N = Math.min(60, len);
     const c = closeArr.slice(-N);
     const h = highArr.slice(-N);
@@ -3325,42 +3325,55 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const binSize = range / BINS;
     const bins = new Array(BINS).fill(0);
 
-    // 成交量分配（80%在收盘价，20%均匀分配到当日区间）
+    // 三角分布：日成交量按价格距收盘价的距离自然衰减（越接近收盘价权重越高）
     for (let i = 0; i < N; i++) {
       const dayLow = l[i], dayHigh = h[i], dayClose = c[i], dayVol = v[i];
       const dayRange = dayHigh - dayLow;
       if (dayRange < 0.01) continue;
 
-      const closeBin = Math.max(0, Math.min(BINS - 1, Math.floor((dayClose - minPrice) / binSize)));
       const startBin = Math.max(0, Math.floor((dayLow - minPrice) / binSize));
       const endBin = Math.min(BINS - 1, Math.floor((dayHigh - minPrice) / binSize));
 
-      if (startBin === endBin) {
-        bins[startBin] += dayVol;
-      } else {
-        bins[closeBin] += dayVol * 0.8;
-        const spreadVol = dayVol * 0.2;
-        let spreadBins = 0;
-        for (let b = startBin; b <= endBin; b++) {
-          if (b !== closeBin) spreadBins++;
-        }
-        if (spreadBins > 0) {
-          const volPerBin = spreadVol / spreadBins;
-          for (let b = startBin; b <= endBin; b++) {
-            if (b !== closeBin) bins[b] += volPerBin;
-          }
-        }
+      let totalWeight = 0;
+      const weights: number[] = [];
+      for (let b = startBin; b <= endBin; b++) {
+        const binCenter = minPrice + (b + 0.5) * binSize;
+        const dist = Math.abs(binCenter - dayClose) / dayRange;
+        const w = Math.max(0, 1 - dist * 1.5); // 三角衰减，收盘价处权重最大
+        weights.push(w);
+        totalWeight += w;
+      }
+      if (totalWeight < 0.001) continue;
+
+      for (let j = 0; j < weights.length; j++) {
+        bins[startBin + j] += (dayVol * weights[j]) / totalWeight;
       }
     }
 
-    // 集中度90 = 最大峰成交量占比 × 100
+    // 集中度90 = (P95 - P5) / (P95 + P5) × 100
     const totalVol = bins.reduce((a, b) => a + b, 0);
     if (totalVol < 0.001) return { concentration90: 50, peakPosition: 'mid', pattern: 'dispersed' };
 
-    const maxBinVol = Math.max(...bins);
-    const concentration90 = Math.round((maxBinVol / totalVol) * 100 * 100) / 100;
+    const cumVol5 = totalVol * 0.05;
+    const cumVol95 = totalVol * 0.95;
+    let cumSum = 0, p5Price = minPrice, p95Price = maxPrice;
+    for (let i = 0; i < BINS; i++) {
+      cumSum += bins[i];
+      if (cumSum >= cumVol5 && p5Price === minPrice) {
+        p5Price = minPrice + (i + 0.5) * binSize;
+      }
+      if (cumSum >= cumVol95) {
+        p95Price = minPrice + (i + 0.5) * binSize;
+        break;
+      }
+    }
 
-    // 筹码峰检测（主峰 + 第二峰大于主峰40%视为双峰）
+    const priceSum = Math.abs(p95Price) + Math.abs(p5Price);
+    const concentration90 = priceSum > 0.001
+      ? Math.round(((p95Price - p5Price) / priceSum) * 100 * 100) / 100
+      : 0;
+
+    // 筹码峰检测（主峰 + 第二峰大于主峰55%视为双峰）
     const sortedIndices = bins.map((vol, idx) => ({ vol, idx })).sort((a, b) => b.vol - a.vol);
     const mainPeakIdx = sortedIndices[0].idx;
 
