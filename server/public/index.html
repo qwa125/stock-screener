@@ -413,9 +413,14 @@ async function fetchKlineAndAnalyze(s){
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
 
     // ★ 优先直连腾讯（速度快，跨域不拦）
-    // 不再跳过——只有腾讯才有最新的日内日K线数据
+    // 本地缓存<15分钟且非强制刷新时跳过
+    var _skipLoc = false;
+    if(window._klineCache[code]&&window._klineCache[code].length>=10&&params.forceKline!==true){
+      var _kt=window._klineCache[code]._t||0;
+      _skipLoc=((Date.now()-_kt)/60000)<15;
+    }
     // 直连腾讯 ifzq.gtimg.cn（10s超时）
-    if(!klines||klines.length<5) try{
+    if(!_skipLoc&&(!klines||klines.length<5)) try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
       var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+_needCount+',qfq',{signal:ac.signal})
@@ -1529,7 +1534,7 @@ async function doScan(){
     var allPayloads=[]
     for(var i=0;i<candidates.length;i+=20){
       var batch=candidates.slice(i,i+20)
-      var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg,skipBackend:true})}))
+      var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg,skipBackend:true,forceKline:_forceReanalysis})}))
       results.forEach(function(r){if(r.status==='fulfilled'&&r.value) allPayloads.push(r.value)})
       var done=Math.min(i+20,candidates.length)
       var pct=Math.round(done/candidates.length*100)
