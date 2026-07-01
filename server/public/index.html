@@ -2230,10 +2230,18 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
       window._lastIntradayFetchTs=window._lastIntradayFetchTs||{}
       if(!window._lastIntradayFetchTs[code]||_now-window._lastIntradayFetchTs[code]>15000){
         var fresh=await fetchIntraday(code)
-        if(fresh&&fresh.currentPrice){
-          window._lastIntradayFetchTs[code]=_now  // 仅成功时记录，失败可立即重试
+        if(fresh){
+          // 后端返回"数据不足"时没有currentPrice，用已知的lastPrice补上
+          if(!fresh.currentPrice&&lastPrice>0)fresh.currentPrice=lastPrice
           window._frozenIA[code]=fresh
-          ia=fresh
+          // 仅分析成功(有suggestions)才记录计时器，数据不足时2秒后可立即重试
+          if(fresh.suggestions&&fresh.suggestions.length>0){
+            window._lastIntradayFetchTs[code]=_now
+            ia=fresh
+          }else if(fresh.currentPrice>0){
+            // 有价格但分析未就绪：让价格先显示，继续重试分析
+            ia=fresh
+          }
         }
       }
     }
@@ -2246,8 +2254,10 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
     var e=$('intradayMacd')
     if(e){
-      if(lastPrice>0){
-        e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">📡 日内分析加载中...</div>'
+      if(ia&&ia.currentPrice>0){
+        e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">📡 日内分析加载中… 现价 '+ia.currentPrice.toFixed(2)+'</div>'
+      }else if(lastPrice>0){
+        e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">📡 日内分析加载中…</div>'
       }else{
         e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">暂无日内分析数据</div>'
       }
