@@ -2669,13 +2669,18 @@ async function doSearch(){
   },t.getTime()-n.getTime());
 });
 
-// 每10分钟交易时段自动轻量扫描（统一走doScan）
+// 每10分钟自动扫描窗口：上午9:40~11:20、下午13:10~14:50
+// 边界整点（9:25/11:30/13:00/15:00）由固定扫描覆盖，避免重叠
 var _autoScanTimer=0
 setInterval(function(){
-  if(isTH()&&!loading){
-    doScan()
-    _lastAutoScanTime=new Date()
-    _autoScanTimer=0
+  if(!loading){
+    var _b=getBJ(),_m=_b.getHours()*60+_b.getMinutes()
+    // 上午9:40(580)~11:20(680)、下午13:10(790)~14:50(890)
+    if((_m>=580&&_m<680)||(_m>=790&&_m<890)){
+      doScan()
+      _lastAutoScanTime=new Date()
+      _autoScanTimer=0
+    }
   }
   _autoScanTimer+=10
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
