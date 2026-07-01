@@ -413,10 +413,9 @@ async function fetchKlineAndAnalyze(s){
     var gtCode=(code.startsWith('6')?'sh':'sz')+code
 
     // ★ 优先直连腾讯（速度快，跨域不拦）
-    // 如后端已有缓存则跳过腾讯直连，直接走后端代理（快10x）
-    var _skipTx=window._klineBackendCached&&window._klineBackendCached.has(code)
+    // 不再跳过——只有腾讯才有最新的日内日K线数据
     // 直连腾讯 ifzq.gtimg.cn（10s超时）
-    if(!_skipTx&&(!klines||klines.length<5)) try{
+    if(!klines||klines.length<5) try{
       var ac=new AbortController()
       var tid=setTimeout(function(){ac.abort()},10000)
       var tr=await fetch('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+gtCode+',day,,,'+_needCount+',qfq',{signal:ac.signal})
