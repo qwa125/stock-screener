@@ -1610,9 +1610,13 @@ async function doScan(){
       if(price<3)continue
       candidates.push({code,name,price,chg:parseFloat(item.f3)||0})
     }
-    setStatus('🔄 行情 '+candidates.length+' 只，检查后端缓存状态...')
+    // 3. 取主板涨跌幅前500+创业板前500
+    var _mb=candidates.filter(function(s){return /^(60|00)/.test(s.code)}).sort(function(a,b){return b.chg-a.chg}).slice(0,500)
+    var _ge=candidates.filter(function(s){return /^30/.test(s.code)}).sort(function(a,b){return b.chg-a.chg}).slice(0,500)
+    candidates=_mb.concat(_ge)
+    setStatus('🔄 主板'+_mb.length+'只+创业板'+_ge.length+'只，检查后端缓存...')
 
-    // 3a. 批量查询后端PG缓存状态，只对缺缓存的股拉取K线
+    // 4a. 批量查询后端PG缓存状态，只对缺缓存的股拉取K线
     var _skipSet=new Set()
     try{
       var allCodes=candidates.map(function(c){return c.code}).join(',')
@@ -1631,7 +1635,7 @@ async function doScan(){
     }catch(ee){/* 缓存状态查询失败 → 全量拉取 */}
     if(_skipSet.size>0) console.log('[scan] 跳过缓存K线: '+_skipSet.size+' 只')
 
-    // 3b. 分批拉取K线(优先后端PG缓存，后备直连腾讯)+推送后端分析
+    // 4b. 分批拉取K线(优先后端PG缓存，后备直连腾讯)+推送后端分析
     var bar=$('rescanBar'),txt=$('rescanText')
     for(var i=0;i<candidates.length;i+=20){
       var batch=candidates.slice(i,i+20).filter(function(s){return !_skipSet.has(s.code)})
