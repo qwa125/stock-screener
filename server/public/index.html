@@ -2953,6 +2953,13 @@ setTimeout(function(){
   $('scanBtn').textContent='🔄 立即扫描'
 },3000)
 
+// ========== Render保活：每4分钟自ping防止休眠 ==========
+(function keepAlive(){
+  fetch('/api/gem/ping').catch(function(){})
+  setTimeout(keepAlive, 4*60*1000)
+})()
+console.log('[keepAlive] 保活已启动，每4分钟ping一次')
+
 // ========== Admin Panel ==========
 var ADMIN_OPEN=false
 var ADMIN_PWD='' // 前端保护密码
