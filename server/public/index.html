@@ -1996,7 +1996,8 @@ async function doFullRescan(saveToBackend){
         var resp=await fetch(API+'/gem/update-upgraded',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({list:upgradeList})
+          body:JSON.stringify({list:upgradeList}),
+          signal:AbortSignal.timeout(15000)
         })
         var j=await resp.json()
         if(j.code===200){
