@@ -359,10 +359,14 @@ export class GemScreenerService implements OnApplicationBootstrap {
     if (!lastDate) return null;
     // 日期不同 → 需要重新分析（有新K线数据）
     if (entry.klineDate !== lastDate) return null;
-    // 极端涨跌幅 → 重新分析（黑天鹅）
-    const absChange = Math.abs(changePercent ?? 0);
-    if (absChange >= 7) {
-      this.logger.log(`📦 缓存跳过: ${code} 涨跌幅${changePercent}%≥7%，需要重新分析`);
+    // 不对称阈值：涨<7%缓存（趋势延续），跌>2%重新分析（趋势可能反转）
+    const chg = changePercent ?? 0;
+    if (chg >= 7) {
+      this.logger.log(`📦 缓存跳过: ${code} 涨${changePercent}%≥7%，重新分析`);
+      return null;
+    }
+    if (chg <= -2) {
+      this.logger.log(`📦 缓存跳过: ${code} 跌${changePercent}%≤-2%，趋势可能反转，重新分析`);
       return null;
     }
     // K线数量变化 → 重新分析

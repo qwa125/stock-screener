@@ -253,9 +253,13 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             return null;
         if (entry.klineDate !== lastDate)
             return null;
-        const absChange = Math.abs(changePercent ?? 0);
-        if (absChange >= 7) {
-            this.logger.log(`📦 缓存跳过: ${code} 涨跌幅${changePercent}%≥7%，需要重新分析`);
+        const chg = changePercent ?? 0;
+        if (chg >= 7) {
+            this.logger.log(`📦 缓存跳过: ${code} 涨${changePercent}%≥7%，重新分析`);
+            return null;
+        }
+        if (chg <= -2) {
+            this.logger.log(`📦 缓存跳过: ${code} 跌${changePercent}%≤-2%，趋势可能反转，重新分析`);
             return null;
         }
         if ((kline?.length ?? 0) !== entry.klineCount)
