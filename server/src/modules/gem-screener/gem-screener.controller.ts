@@ -936,28 +936,21 @@ export class GemScreenerController {
       // force=true → 跳过分析缓存，强制完整分析（用于11:30/15:00全量重算）
       this._forceMode = body.force === true;
       if (this._forceMode) this.logger.log('🔁 强制完整分析模式（跳过缓存）');
-    // 小并发跑分析：3只一批并行，让出事件循环
-    // 1000只单线程=11分钟→3并发≈3分钟，Render 512MB安全
-    const CON = 3;
-    for (let i = 0; i < stocks.length; i += CON) {
-      const batch = stocks.slice(i, i + CON);
-      const batchResults = await Promise.all(
-        batch.map(s =>
-          this.analyzeWithKLine({
-            code: s.code, name: s.name,
-            kline: s.kline, price: s.price,
-            changePercent: s.changePercent,
-          }).catch(e => {
-            this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
-            return null;
-          })
-        )
-      );
-      for (const r of batchResults) {
+    // 0.1 CPU 单核，逐只串行最快（并行反而抢CPU更慢）
+    // 每10只让出事件循环一次，让其他用户的HTTP请求能插队
+    for (let i = 0; i < stocks.length; i++) {
+      const s = stocks[i];
+      try {
+        const r = await this.analyzeWithKLine({
+          code: s.code, name: s.name,
+          kline: s.kline, price: s.price,
+          changePercent: s.changePercent,
+        });
         if (r?.data) results.push(...r.data);
+      } catch (e) {
+        this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
       }
-      // 每批让出事件循环，其他HTTP请求可插队
-      if (i % (CON * 20) === 0) await new Promise<void>(resolve => setImmediate(resolve));
+      if (i % 10 === 0) await new Promise<void>(resolve => setImmediate(resolve));
     }
     this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
