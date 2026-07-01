@@ -312,6 +312,7 @@ setInterval(function(){fetch('/api/gem/ping',{signal:AbortSignal.timeout(10000)}
 console.log('页面初始化完成')
 var _forceReanalysis=false // 11:30/15:00强制完整分析（跳过缓存）
 var _isAdmin=false // 管理权限
+var _lastAutoScanTime=null // 上次自动扫描时间
 function updateScanBtn(){
   var btn=$('scanBtn')
   if(!btn)return
@@ -2649,10 +2650,17 @@ async function doSearch(){
 });
 
 // 每10分钟交易时段自动轻量扫描（统一走doScan）
+var _autoScanTimer=0
 setInterval(function(){
-  if(isTH()&&!loading){doScan()}
+  if(isTH()&&!loading){
+    doScan()
+    _lastAutoScanTime=new Date()
+    _autoScanTimer=0
+  }
+  _autoScanTimer+=10
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
+  if($('statusBar'))$('statusBar').textContent=$('statusBar').textContent.replace(/自动扫描[:：][^|]*/g,'')+(_lastAutoScanTime?' | 自动扫描:'+_lastAutoScanTime.toTimeString().slice(0,5):'')
 },600000)
 // 每分钟刷新市场状态
 setInterval(function(){
