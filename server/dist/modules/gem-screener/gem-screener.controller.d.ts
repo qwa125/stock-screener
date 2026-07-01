@@ -11,6 +11,8 @@ export declare class GemScreenerController {
     private klineDiskRestored;
     private _forceMode;
     private readonly adminKey;
+    private _analyzeBusy;
+    private _analyzeQueue;
     constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
     verifyAdmin(body: {
         key?: string;
@@ -502,6 +504,10 @@ export declare class GemScreenerController {
         code: number;
         msg: string;
         data: any[];
+    } | {
+        code: number;
+        msg: string;
+        data: null;
     }>;
     intradayAnalyze(body: {
         code: string;

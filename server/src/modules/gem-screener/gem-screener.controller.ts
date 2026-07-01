@@ -15,6 +15,8 @@ export class GemScreenerController {
   private klineDiskRestored = false;
   private _forceMode = false; // 强制分析模式（跳过缓存，11:30/15:00全量重算）
   private readonly adminKey = process.env.ADMIN_KEY || 'admin123'; // 管理员密码
+  private _analyzeBusy = false; // 分析队列锁
+  private _analyzeQueue: Array<{ resolve: (v: any) => void; reject: (e: any) => void }> = [];
 
   constructor(
     private readonly gemScreener: GemScreenerService,
@@ -917,10 +919,23 @@ export class GemScreenerController {
   async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }>; force?: boolean }) {
     const stocks = body.stocks || [];
     if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
-    const results: any[] = [];
-    // force=true → 跳过分析缓存，强制完整分析（用于11:30/15:00全量重算）
-    this._forceMode = body.force === true;
-    if (this._forceMode) this.logger.log('🔁 强制完整分析模式（跳过缓存）');
+    // ─── 请求队列：同一时间只处理一个加速分析请求（防3人同时触发拥堵） ───
+    if (this._analyzeBusy) {
+      this.logger.warn(`⏳ analyze-batch 排队中（已有请求在处理），${stocks.length}只等待...`);
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('分析排队超时')), 300000); // 5分钟超时
+        this._analyzeQueue.push({
+          resolve: () => { clearTimeout(timer); resolve(); },
+          reject: (e) => { clearTimeout(timer); reject(e); },
+        });
+      });
+    }
+    this._analyzeBusy = true; // 锁住，后续请求排队
+    try {
+      const results: any[] = [];
+      // force=true → 跳过分析缓存，强制完整分析（用于11:30/15:00全量重算）
+      this._forceMode = body.force === true;
+      if (this._forceMode) this.logger.log('🔁 强制完整分析模式（跳过缓存）');
     // 小并发跑分析：3只一批并行，让出事件循环
     // 1000只单线程=11分钟→3并发≈3分钟，Render 512MB安全
     const CON = 3;
@@ -958,6 +973,18 @@ export class GemScreenerController {
     // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
     await this.gemScreener.saveAnalysisCache();
     return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+    } catch (e) {
+      this.logger.error(`[analyze-batch] 异常: ${(e as Error).message}`);
+      return { code: 500, msg: `分析失败: ${(e as Error).message}`, data: null };
+    } finally {
+      // ─── 释放锁 + 处理队列中的下一个请求 ───
+      this._analyzeBusy = false;
+      const next = this._analyzeQueue.shift();
+      if (next) {
+        this.logger.log('▶️ 处理队列中下一个分析请求');
+        next.resolve(undefined);
+      }
+    }
   }
 
   @Post('intraday-analyze')

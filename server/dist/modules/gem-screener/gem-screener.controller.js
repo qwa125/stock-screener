@@ -65,6 +65,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.klineDiskRestored = false;
         this._forceMode = false;
         this.adminKey = process.env.ADMIN_KEY || 'admin123';
+        this._analyzeBusy = false;
+        this._analyzeQueue = [];
     }
     async verifyAdmin(body) {
         const verified = body.key === this.adminKey;
@@ -767,40 +769,65 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         const stocks = body.stocks || [];
         if (stocks.length === 0)
             return { code: 200, msg: 'empty batch', data: [] };
-        const results = [];
-        this._forceMode = body.force === true;
-        if (this._forceMode)
-            this.logger.log('🔁 强制完整分析模式（跳过缓存）');
-        const CON = 3;
-        for (let i = 0; i < stocks.length; i += CON) {
-            const batch = stocks.slice(i, i + CON);
-            const batchResults = await Promise.all(batch.map(s => this.analyzeWithKLine({
-                code: s.code, name: s.name,
-                kline: s.kline, price: s.price,
-                changePercent: s.changePercent,
-            }).catch(e => {
-                this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
-                return null;
-            })));
-            for (const r of batchResults) {
-                if (r?.data)
-                    results.push(...r.data);
-            }
-            if (i % (CON * 20) === 0)
-                await new Promise(resolve => setImmediate(resolve));
+        if (this._analyzeBusy) {
+            this.logger.warn(`⏳ analyze-batch 排队中（已有请求在处理），${stocks.length}只等待...`);
+            await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error('分析排队超时')), 300000);
+                this._analyzeQueue.push({
+                    resolve: () => { clearTimeout(timer); resolve(); },
+                    reject: (e) => { clearTimeout(timer); reject(e); },
+                });
+            });
         }
-        this._forceMode = false;
-        if (this.klineProxyCache.size > 0) {
-            const mapForPersist = new Map();
-            for (const [k, v] of this.klineProxyCache) {
-                if (v?.data?.length >= 5)
-                    mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+        this._analyzeBusy = true;
+        try {
+            const results = [];
+            this._forceMode = body.force === true;
+            if (this._forceMode)
+                this.logger.log('🔁 强制完整分析模式（跳过缓存）');
+            const CON = 3;
+            for (let i = 0; i < stocks.length; i += CON) {
+                const batch = stocks.slice(i, i + CON);
+                const batchResults = await Promise.all(batch.map(s => this.analyzeWithKLine({
+                    code: s.code, name: s.name,
+                    kline: s.kline, price: s.price,
+                    changePercent: s.changePercent,
+                }).catch(e => {
+                    this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
+                    return null;
+                })));
+                for (const r of batchResults) {
+                    if (r?.data)
+                        results.push(...r.data);
+                }
+                if (i % (CON * 20) === 0)
+                    await new Promise(resolve => setImmediate(resolve));
             }
-            await this.gemScreener.persistFullKlineCache(mapForPersist);
-            await this.gemScreener.saveKlineCacheToPg(mapForPersist);
+            this._forceMode = false;
+            if (this.klineProxyCache.size > 0) {
+                const mapForPersist = new Map();
+                for (const [k, v] of this.klineProxyCache) {
+                    if (v?.data?.length >= 5)
+                        mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+                }
+                await this.gemScreener.persistFullKlineCache(mapForPersist);
+                await this.gemScreener.saveKlineCacheToPg(mapForPersist);
+            }
+            await this.gemScreener.saveAnalysisCache();
+            return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
         }
-        await this.gemScreener.saveAnalysisCache();
-        return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+        catch (e) {
+            this.logger.error(`[analyze-batch] 异常: ${e.message}`);
+            return { code: 500, msg: `分析失败: ${e.message}`, data: null };
+        }
+        finally {
+            this._analyzeBusy = false;
+            const next = this._analyzeQueue.shift();
+            if (next) {
+                this.logger.log('▶️ 处理队列中下一个分析请求');
+                next.resolve(undefined);
+            }
+        }
     }
     async intradayAnalyze(body) {
         if (!body.code)
