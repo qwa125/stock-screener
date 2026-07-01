@@ -4521,11 +4521,13 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
   async doIntradayAnalysis(code: string, minData: any[]): Promise<any> {
     const _barCount = minData?.length || 0;
     if (!minData || _barCount < 5) {
+      const _lastClose = minData && minData.length > 0 ? minData[minData.length - 1].close : 0;
       return {
         code,
         date: new Date().toISOString().slice(0, 10),
         status: '数据不足',
         reason: `1分钟K线数据不足5条（实际${_barCount}条），开盘初期请等待更多数据`,
+        currentPrice: _lastClose,
         macdSignals: [],
         zhuliSanhu: { signals: [] },
         suggestions: [],

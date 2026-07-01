@@ -2161,8 +2161,11 @@ async function fetchIntraday(code){
           var allBars=tJson.data[gtCode2].m1.map(function(l){return{time:l[0],open:parseFloat(l[1]),close:parseFloat(l[2]),high:parseFloat(l[3]),low:parseFloat(l[4]),volume:parseFloat(l[5])||0,amount:0}})
           // 只保留今天的分钟数据，避免参考昨天的
           var todayStr=new Date().toISOString().slice(0,10).replace(/-/g,'')
-          klineData=allBars.filter(function(l){return l.time&&l.time.startsWith(todayStr)})
-          if(!klineData||klineData.length<5){klineData=allBars} // 今天数据太少→回退全部
+          var todayBars=allBars.filter(function(l){return l.time&&l.time.startsWith(todayStr)})
+          console.log('[fetchIntraday]',code,'腾讯总条数:',allBars.length,'今日条数:',todayBars.length)
+          klineData=todayBars.length>=5?todayBars:allBars
+        }else{
+          console.warn('[fetchIntraday]',code,'腾讯返回格式异常:',tJson)
         }
       }
     }catch(e){console.warn('腾讯分钟K线直连失败，尝试代理',e)}
@@ -2221,13 +2224,17 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
         ia=await _fetchIA(code)
       }
     }else{
-      // 交易时段：每60秒拉一次完整分析，中间用缓存不阻塞价格刷新
+      // 交易时段：每只股票独立15秒缓存，互不阻塞
       var _now=Date.now()
       ia=window._frozenIA[code]||null
-      if(!window._lastIntradayTs||_now-window._lastIntradayTs>15000){
-        window._lastIntradayTs=_now
+      window._lastIntradayFetchTs=window._lastIntradayFetchTs||{}
+      if(!window._lastIntradayFetchTs[code]||_now-window._lastIntradayFetchTs[code]>15000){
         var fresh=await fetchIntraday(code)
-        if(fresh&&fresh.currentPrice){window._frozenIA[code]=fresh;ia=fresh}
+        if(fresh&&fresh.currentPrice){
+          window._lastIntradayFetchTs[code]=_now  // 仅成功时记录，失败可立即重试
+          window._frozenIA[code]=fresh
+          ia=fresh
+        }
       }
     }
     if(!ia||!ia.currentPrice||!ia.suggestions||ia.suggestions.length===0){
@@ -2235,10 +2242,16 @@ async function refreshDetailPrice(code,low,high,lastPrice,analysisData){
 	if(_frozen&&_frozen.suggestions&&_frozen.suggestions.length>0)ia=_frozen
   }
   }
-  // ★ 无分析数据 → 显示非交易时段提示，实时买卖点由MACD/通达信做T驱动无需报价累积
+  // ★ 无分析数据 → 显示等待状态（有实时价格时不放弃，后一轮2秒重试会继续拉）
   if(!ia||!ia.currentPrice||ia.currentPrice<=0||!ia.suggestions||ia.suggestions.length===0){
     var e=$('intradayMacd')
-    if(e)e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">暂无日内分析数据</div>'
+    if(e){
+      if(lastPrice>0){
+        e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">📡 日内分析加载中...</div>'
+      }else{
+        e.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:#9ca3af">暂无日内分析数据</div>'
+      }
+    }
     return
   }
   var zs=ia.zhuliSanhu||{},sugs=ia.suggestions||[],lastPrice=ia.currentPrice||0
