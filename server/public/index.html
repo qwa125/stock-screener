@@ -2947,6 +2947,7 @@ function checkAdminPwd(){
   if(!pwd){alert('请输入密码');return}
   if(pwd===ADMIN_DEFAULT_PWD||pwd==='qws1248szx'){
     ADMIN_PWD=pwd
+    localStorage.setItem('adminPassword',pwd)
     _isAdmin=true
     updateScanBtn()
     renderAdminView()
