@@ -471,9 +471,6 @@ export class GemScreenerController {
         }
       }
 
-      // 统一排序
-      GemScreenerService.sortStocks(data);
-
       // 日志：输出信号分布
       const sigDist: Record<string, number> = {};
       for (const s of data) { sigDist[s.suggestion] = (sigDist[s.suggestion] || 0) + 1; }

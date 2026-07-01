@@ -428,7 +428,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                         item.jiGouActiveScore = full.jiGouActiveScore;
                 }
             }
-            gem_screener_service_1.GemScreenerService.sortStocks(data);
             const sigDist = {};
             for (const s of data) {
                 sigDist[s.suggestion] = (sigDist[s.suggestion] || 0) + 1;
