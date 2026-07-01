@@ -4492,19 +4492,39 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     return this.doIntradayAnalysis(code, minData);
   }
 
-  /** 接受前端传入的分钟K线数据进行分析（前端直调East Money，回避后端跨境慢速） */
+  /** 接受前端传入的分钟K线数据进行分析（前端直调East Money，回避后端跨境慢速）
+   *  ─── 自适应参数策略 ───
+   *  数据越少参数越快，让分析从第5分钟就开始出信号：
+   *    5-15根: MACD(3,8,3), MIN_RUN=3 → 超快响应开盘
+   *    15-30根: MACD(8,20,5), MIN_RUN=5 → 中速
+   *    30-60根: MACD(12,26,9), MIN_RUN=8 → 标准
+   *    60+ 根: MACD(40,120,40), MIN_RUN=15 → 平滑稳定
+   */
   async doIntradayAnalysis(code: string, minData: any[]): Promise<any> {
-    if (!minData || minData.length < 50) {
+    const _barCount = minData?.length || 0;
+    if (!minData || _barCount < 5) {
       return {
         code,
         date: new Date().toISOString().slice(0, 10),
         status: '数据不足',
-        reason: `1分钟K线数据不足50条（实际${minData?.length || 0}条），无法分析`,
+        reason: `1分钟K线数据不足5条（实际${_barCount}条），开盘初期请等待更多数据`,
         macdSignals: [],
         zhuliSanhu: { signals: [] },
         suggestions: [],
-        summary: '数据不足，无法提供日内介入参考',
+        summary: '数据不足，开盘初期请等待更多数据',
       };
+    }
+
+    // ─── 自适应参数：按当前数据量选最优 ───
+    let macdFast: number, macdSlow: number, macdSignal: number, minRun: number, dupeGap: number;
+    if (_barCount < 15) {
+      macdFast = 3; macdSlow = 8; macdSignal = 3; minRun = 3; dupeGap = 2;
+    } else if (_barCount < 30) {
+      macdFast = 8; macdSlow = 20; macdSignal = 5; minRun = 5; dupeGap = 3;
+    } else if (_barCount < 60) {
+      macdFast = 12; macdSlow = 26; macdSignal = 9; minRun = 8; dupeGap = 5;
+    } else {
+      macdFast = 40; macdSlow = 120; macdSignal = 40; minRun = 15; dupeGap = 10;
     }
 
     const close = minData.map(k => k.close);
@@ -4514,18 +4534,18 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
     const volume = minData.map(k => k.volume);
     const len = close.length;
 
-    // ─── MACD(40,120,40) ───
-    const alpha1 = 2 / (40 + 1);
-    const alpha2 = 2 / (120 + 1);
-    const alphaSignal = 2 / (40 + 1);
-    const ema40: number[] = [close[0]];
-    const ema120: number[] = [close[0]];
+    // ─── 自适应MACD ───
+    const alpha1 = 2 / (macdFast + 1);
+    const alpha2 = 2 / (macdSlow + 1);
+    const alphaSignal = 2 / (macdSignal + 1);
+    const emaFast: number[] = [close[0]];
+    const emaSlow: number[] = [close[0]];
     for (let i = 1; i < len; i++) {
-      ema40.push(alpha1 * close[i] + (1 - alpha1) * ema40[i - 1]);
-      ema120.push(alpha2 * close[i] + (1 - alpha2) * ema120[i - 1]);
+      emaFast.push(alpha1 * close[i] + (1 - alpha1) * emaFast[i - 1]);
+      emaSlow.push(alpha2 * close[i] + (1 - alpha2) * emaSlow[i - 1]);
     }
     const diff: number[] = [];
-    for (let i = 0; i < len; i++) diff.push(ema40[i] - ema120[i]);
+    for (let i = 0; i < len; i++) diff.push(emaFast[i] - emaSlow[i]);
 
     const dea: number[] = [diff[0]];
     for (let i = 1; i < len; i++) dea.push(alphaSignal * diff[i] + (1 - alphaSignal) * dea[i - 1]);
@@ -4543,39 +4563,36 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       }
     }
 
-    // ─── MACD红峰/绿峰检测（1分钟K线波段高低点） ───
-    // 绿峰: MACD柱<0, 连续下降≥15根(15分钟)后拐头向上 → 波段低点
-    // 红峰: MACD柱>0, 连续上升≥15根(15分钟)后拐头向下 → 波段高点
+    // ─── MACD红峰/绿峰检测（自适应参数） ───
     const _greenValleys: { idx: number; price: number; time: string; macdVal: number }[] = [];
     const _redPeaks: { idx: number; price: number; time: string; macdVal: number }[] = [];
-    const MIN_RUN = 15; // 1分钟K线：连续运动≥15根(15分钟)→只抓真实波段，避免中途杂波
-    for (let i = MIN_RUN + 1; i < len - 1; i++) {
-      // 绿峰检测：连续下降≥MIN_RUN根后拐头向上
+    for (let i = minRun + 1; i < len - 1; i++) {
+      // 绿峰检测：连续下降≥minRun根后拐头向上
       if (macdHist[i] < 0) {
         let dropping = true;
-        for (let j = i - MIN_RUN; j < i; j++) {
+        for (let j = i - minRun; j < i; j++) {
           if (macdHist[j] >= macdHist[j - 1]) { dropping = false; break; }
         }
         if (dropping && macdHist[i] > macdHist[i - 1]) {
           const valleyIdx = i - 1;
           const thisPrice = Math.round(close[valleyIdx] * 100) / 100;
           const last = _greenValleys[_greenValleys.length - 1];
-          if (!last || valleyIdx - last.idx >= 10) {
+          if (!last || valleyIdx - last.idx >= dupeGap) {
             _greenValleys.push({ idx: valleyIdx, price: thisPrice, time: minData[valleyIdx].time, macdVal: macdHist[valleyIdx] });
           }
         }
       }
-      // 红峰检测：连续上升≥MIN_RUN根后拐头向下
+      // 红峰检测：连续上升≥minRun根后拐头向下
       if (macdHist[i] > 0) {
         let rising = true;
-        for (let j = i - MIN_RUN; j < i; j++) {
+        for (let j = i - minRun; j < i; j++) {
           if (macdHist[j] <= macdHist[j - 1]) { rising = false; break; }
         }
         if (rising && macdHist[i] < macdHist[i - 1]) {
           const peakIdx = i - 1;
           const thisPrice = Math.round(close[peakIdx] * 100) / 100;
           const last = _redPeaks[_redPeaks.length - 1];
-          if (!last || peakIdx - last.idx >= 10) {
+          if (!last || peakIdx - last.idx >= dupeGap) {
             _redPeaks.push({ idx: peakIdx, price: thisPrice, time: minData[peakIdx].time, macdVal: macdHist[peakIdx] });
           }
         }
@@ -4855,6 +4872,7 @@ private determineBySignalRule(signals: any, bx: any, result: any, bhResult?: any
       date: new Date().toISOString().slice(0, 10),
       status: 'ok',
       dataCount: len,
+      mode: `MACD(${macdFast},${macdSlow},${macdSignal}) MIN_RUN=${minRun}`,
       currentPrice: close[lastIdx],
       currentTime: minData[lastIdx].time,
       macd: {
