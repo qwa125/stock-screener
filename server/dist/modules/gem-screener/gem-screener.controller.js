@@ -719,6 +719,27 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: `K线分析失败: ${e.message}`, data: null };
         }
     }
+    async analyzeBatch(body) {
+        const stocks = body.stocks || [];
+        if (stocks.length === 0)
+            return { code: 200, msg: 'empty batch', data: [] };
+        const results = [];
+        for (const s of stocks) {
+            try {
+                const singleResult = await this.analyzeWithKLine({
+                    code: s.code, name: s.name,
+                    kline: s.kline, price: s.price,
+                    changePercent: s.changePercent,
+                });
+                if (singleResult?.data)
+                    results.push(...singleResult.data);
+            }
+            catch (e) {
+                this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
+            }
+        }
+        return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+    }
     async intradayAnalyze(body) {
         if (!body.code)
             return { code: 400, msg: '缺少股票代码' };
@@ -1122,6 +1143,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeWithKLine", null);
+__decorate([
+    (0, common_1.Post)('analyze-batch'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "analyzeBatch", null);
 __decorate([
     (0, common_1.Post)('intraday-analyze'),
     (0, access_limit_guard_1.SkipAccessLimit)(),

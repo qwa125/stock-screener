@@ -435,6 +435,10 @@ async function fetchKlineAndAnalyze(s){
     // 每次扫描都重新分析，不再跳过已缓存股票（确保机会区随行情变化更新）
     var payload={ code, name:pname, price:curPrice, changePercent:chg, inflow:0, gapPercent }
     if(klines&&klines.length>=5)payload.kline=klines
+
+    // skipBackend=true时直接返回payload，由调用方批量POST（减少20并发打到后端）
+    if(s.skipBackend) return payload
+
     try{
       var ac2=new AbortController()
       var tid2=setTimeout(function(){ac2.abort()},10000)
@@ -1488,14 +1492,16 @@ async function doScan(){
       }
     }catch(e){console.warn('[scan] 缓存检查失败:',e.message)}
 
-    // 4b. 分批拉取K线(直连腾讯→后端降级)+推送后端分析
+    // 4b. 分批拉取K线(只拉不分析，收集payload)
     var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
     if(prog)prog.style.display='block'
     if(txt)txt.textContent='K线分析 0/'+candidates.length+' (0%)'
     if(bar)bar.style.width='0%'
+    var allPayloads=[]
     for(var i=0;i<candidates.length;i+=20){
       var batch=candidates.slice(i,i+20)
-      await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg})}))
+      var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.code,name:s.name,price:s.price,chg:s.chg,skipBackend:true})}))
+      results.forEach(function(r){if(r.status==='fulfilled'&&r.value) allPayloads.push(r.value)})
       var done=Math.min(i+20,candidates.length)
       var pct=Math.round(done/candidates.length*100)
       if(txt)txt.textContent='K线分析 '+done+'/'+candidates.length+' ('+pct+'%)'
@@ -1504,6 +1510,23 @@ async function doScan(){
     }
     if(txt)txt.textContent='✅ K线分析完成 '+candidates.length+'/'+candidates.length+' (100%)'
     if(bar)bar.style.width='100%'
+
+    // 4c. 批量推后端分析（一次20只，避免20并发打到后端）
+    if(allPayloads.length){
+      setStatus('🔄 批量推送分析 '+allPayloads.length+' 只...')
+      for(var bi=0;bi<allPayloads.length;bi+=20){
+        var sub=allPayloads.slice(bi,bi+20)
+        try{
+          await fetch(API+'/gem/analyze-batch',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({stocks:sub}),
+            signal:AbortSignal.timeout(30000)
+          }).then(function(r){return r.json()})
+        }catch(e){console.warn('[scan] 批量分析批次失败:',e.message)}
+        var done=Math.min(bi+20,allPayloads.length)
+        setStatus('🔄 后端分析 '+done+'/'+allPayloads.length+' ('+Math.round(done/allPayloads.length*100)+'%)')
+      }
+    }
 
     // 4. 读后端缓存(纯内存，无外部调用)
     setStatus('🔄 读取分析结果...')
@@ -1526,7 +1549,7 @@ async function backgroundSyncWithKline(){
       else if(c.startsWith('30')){gem.push(emData[si])}
     }
     mainBoard=mainBoard.slice(0,500);gem=gem.slice(0,500)
-    var totalList=mainBoard.concat(gem)
+    var totalList=mainBoard.concat(gem),_syncPayloads=[]
     if(totalList.length){
       var bar=$('rescanBar'),txt=$('rescanText'),prog=$('rescanProgress')
       if(prog)prog.style.display='block'
@@ -1534,12 +1557,22 @@ async function backgroundSyncWithKline(){
       if(bar)bar.style.width='0%'
       for(var i=0;i<totalList.length;i+=20){
         var batch=totalList.slice(i,i+20)
-        await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14})}))
+        var results=await Promise.allSettled(batch.map(function(s){return fetchKlineAndAnalyze({code:s.f12,name:s.f14,skipBackend:true})}))
+        results.forEach(function(r){if(r.status==='fulfilled'&&r.value)_syncPayloads.push(r.value)})
         var done=Math.min(i+20,totalList.length)
         var pct=Math.round(done/totalList.length*100)
         if(txt)txt.textContent='后台K线分析 '+done+'/'+totalList.length+' ('+pct+'%)'
         if(bar)bar.style.width=pct+'%'
         if(i+20<totalList.length)await new Promise(function(r){setTimeout(r,200)})
+      }
+      // 批量推后端分析（避免20并发）
+      if(_syncPayloads.length){
+        for(var bi=0;bi<_syncPayloads.length;bi+=20){
+          var sub=_syncPayloads.slice(bi,bi+20)
+          try{
+            await fetch(API+'/gem/analyze-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stocks:sub}),signal:AbortSignal.timeout(30000)}).then(function(r){return r.json()})
+          }catch(e){console.warn('[bgscan] 批量分析失败:',e.message)}
+        }
       }
     }
     await doFullRescan()

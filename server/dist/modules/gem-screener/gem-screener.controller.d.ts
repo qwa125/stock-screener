@@ -470,6 +470,20 @@ export declare class GemScreenerController {
         msg: string;
         data: null;
     }>;
+    analyzeBatch(body: {
+        stocks: Array<{
+            code: string;
+            name?: string;
+            kline: any[];
+            price?: number;
+            changePercent?: number;
+            gapPercent?: number;
+        }>;
+    }): Promise<{
+        code: number;
+        msg: string;
+        data: any[];
+    }>;
     intradayAnalyze(body: {
         code: string;
         kline: any[];

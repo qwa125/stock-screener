@@ -851,6 +851,28 @@ export class GemScreenerController {
     }
   }
 
+  @Post('analyze-batch')
+  @SkipAccessLimit()
+  async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }> }) {
+    const stocks = body.stocks || [];
+    if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
+    const results: any[] = [];
+    // 顺序处理，不并发——避免打满Render 512MB
+    for (const s of stocks) {
+      try {
+        const singleResult = await this.analyzeWithKLine({
+          code: s.code, name: s.name,
+          kline: s.kline, price: s.price,
+          changePercent: s.changePercent,
+        });
+        if (singleResult?.data) results.push(...singleResult.data);
+      } catch (e) {
+        this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
+      }
+    }
+    return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+  }
+
   @Post('intraday-analyze')
   @SkipAccessLimit()
   async intradayAnalyze(@Body() body: { code: string; kline: any[]; price?: number }) {
