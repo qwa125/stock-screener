@@ -100,23 +100,16 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     private marketHoursBeganAt;
     private _pgSql;
     private _pgReady;
-    _klineCacheFromPg: Map<string, {
-        data: any[];
-        ts: number;
-    }> | null;
+    private _klineCacheFile;
     private get pgSql();
     private ensurePgTable;
     private saveCacheToPg;
     private loadCacheFromPg;
-    saveKlineCacheToPg(code: string, data: any[], timestamp: number): Promise<void>;
-    loadAllKlineCacheFromPg(): Promise<Map<string, {
+    saveKlineCacheToDisk(code: string, data: any[], timestamp: number): Promise<void>;
+    loadKlineCacheFromDisk(): Promise<Map<string, {
         data: any[];
         ts: number;
     }>>;
-    restoreKlineCacheIntoMap(targetMap: Map<string, {
-        data: any[];
-        timestamp: number;
-    }>): Promise<void>;
     constructor(dataFetcher: DataFetcherService, stockService: StockService);
     private initStorage;
     private isFrozenSchedule;

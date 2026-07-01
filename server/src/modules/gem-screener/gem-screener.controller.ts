@@ -12,7 +12,7 @@ import INDUSTRY_SECTORS, { CONCEPT_SECTORS } from '../../industry-sectors/data';
 export class GemScreenerController {
   private readonly logger = new Logger(GemScreenerController.name);
   private readonly klineProxyCache = new Map<string, { data: any[]; timestamp: number }>();
-  private klinePgRestored = false;
+  private klineDiskRestored = false;
 
   constructor(
     private readonly gemScreener: GemScreenerService,
@@ -650,9 +650,17 @@ export class GemScreenerController {
   async proxyKLine(@Query('code') code: string) {
     if (!code) return { code: 400, msg: '缺少股票代码', data: null };
     // 首次请求时从 PG 恢复 K-line 缓存
-    if (!this.klinePgRestored) {
-      await this.gemScreener.restoreKlineCacheIntoMap(this.klineProxyCache);
-      this.klinePgRestored = true;
+    if (!this.klineDiskRestored) {
+      const disk = await this.gemScreener.loadKlineCacheFromDisk();
+      let loaded = 0;
+      for (const [c, v] of disk) {
+        if (!this.klineProxyCache.has(c)) {
+          this.klineProxyCache.set(c, { data: v.data, timestamp: v.ts });
+          loaded++;
+        }
+      }
+      this.logger.log(`📦 磁盘 K-line 缓存恢复: ${loaded} 只`);
+      this.klineDiskRestored = true;
     }
     const cached = this.klineProxyCache.get(code);
     if (cached && cached.data && cached.data.length >= 5) {
@@ -678,8 +686,8 @@ export class GemScreenerController {
           }));
           this.klineProxyCache.set(code, { data, timestamp: Date.now() });
           this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
-          // 异步持久化到 PG
-          this.gemScreener.saveKlineCacheToPg(code, data, Date.now()).catch(() => {});
+          // 异步持久化到磁盘
+          this.gemScreener.saveKlineCacheToDisk(code, data, Date.now()).catch(() => {});
           return { code: 200, msg: '代理K线成功', data, cached: false };
         }
       }
@@ -789,8 +797,8 @@ export class GemScreenerController {
       // 缓存原始K线（备选代理用，仅腾讯挂了才走）
       if (body.code && klineData.length >= 5) {
         this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
-        // 异步持久化到 PG
-        this.gemScreener.saveKlineCacheToPg(body.code, klineData, Date.now()).catch(() => {});
+        // 异步持久化到磁盘
+        this.gemScreener.saveKlineCacheToDisk(body.code, klineData, Date.now()).catch(() => {});
         if (this.klineProxyCache.size > 2000) {
           const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
           entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));

@@ -180,8 +180,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
   // ─── PostgreSQL 持久化（Render 上重启不丢缓存） ───
   private _pgSql: ReturnType<typeof postgres> | null = null;
   private _pgReady = false;
-  /** 从 PG 恢复的 K-line 缓存（供 controller 注入） */
-  _klineCacheFromPg: Map<string, { data: any[]; ts: number }> | null = null;
+  // ─── 磁盘 K-line 缓存 ───
+  private _klineCacheFile = '/tmp/kline-cache.json';
   private get pgSql(): ReturnType<typeof postgres> | null {
     if (this._pgSql) return this._pgSql;
     const url = process.env.PGDATABASE_URL || process.env.DATABASE_URL;
@@ -245,47 +245,44 @@ export class GemScreenerService implements OnApplicationBootstrap {
     return null;
   }
 
-  // ─── K-line 缓存持久化 ───
-  /** 保存单只股票的 K-line 数据到 PG */
-  async saveKlineCacheToPg(code: string, data: any[], timestamp: number): Promise<void> {
+  // ─── K-line 缓存持久化（磁盘，非 PG） ───
+  /** 保存单只股票的 K-line 数据到磁盘 */
+  async saveKlineCacheToDisk(code: string, data: any[], timestamp: number): Promise<void> {
     if (!data || !data.length) return;
-    await this.saveCacheToPg(`kline:${code}`, { data, ts: timestamp });
+    try {
+      let cache: Record<string, { data: any[]; ts: number }> = {};
+      try {
+        const raw = await fs.readFile(this._klineCacheFile, 'utf-8');
+        cache = JSON.parse(raw);
+      } catch {}
+      cache[code] = { data, ts: timestamp };
+      // 控制文件大小：最多保留 2000 只
+      const entries = Object.entries(cache);
+      if (entries.length > 2000) {
+        entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+        cache = Object.fromEntries(entries.slice(0, 2000));
+      }
+      await fs.writeFile(this._klineCacheFile, JSON.stringify(cache), 'utf-8');
+    } catch (e) {
+      this.logger.warn(`⚠️ K-line 磁盘缓存写入失败: ${(e as Error).message}`);
+    }
   }
 
-  /** 从 PG 加载全部 K-line 缓存，返回 Map<code, {data, ts}> */
-  async loadAllKlineCacheFromPg(): Promise<Map<string, { data: any[]; ts: number }>> {
+  /** 从磁盘加载全部 K-line 缓存，返回 Map<code, {data, ts}> */
+  async loadKlineCacheFromDisk(): Promise<Map<string, { data: any[]; ts: number }>> {
     const map = new Map<string, { data: any[]; ts: number }>();
     try {
-      const sql = this.pgSql;
-      if (!sql) return map;
-      const rows = await sql`SELECT cache_key, cache_value FROM stock_scan_cache WHERE cache_key LIKE 'kline:%'`;
-      for (const row of rows) {
-        const code = row.cache_key.replace(/^kline:/, '');
-        const val = typeof row.cache_value === 'string' ? JSON.parse(row.cache_value) : row.cache_value;
+      const raw = await fs.readFile(this._klineCacheFile, 'utf-8');
+      const cache: Record<string, { data: any[]; ts: number }> = JSON.parse(raw);
+      for (const [code, val] of Object.entries(cache)) {
         if (val?.data && Array.isArray(val.data) && val.data.length >= 10) {
           map.set(code, { data: val.data, ts: val.ts || 0 });
         }
       }
-      this.logger.log(`✅ PostgreSQL K-line 缓存恢复: ${map.size} 只`);
     } catch (e) {
-      this.logger.warn(`⚠️ PostgreSQL K-line 缓存读取失败: ${(e as Error).message}`);
+      // 文件不存在或损坏，正常返回空 map
     }
     return map;
-  }
-
-  /** 将 PG 中的 K-line 缓存注入到 controller 的 Map 中 */
-  async restoreKlineCacheIntoMap(targetMap: Map<string, { data: any[]; timestamp: number }>): Promise<void> {
-    const pgMap = await this.loadAllKlineCacheFromPg();
-    let loaded = 0;
-    for (const [code, val] of pgMap) {
-      if (!targetMap.has(code)) {
-        targetMap.set(code, { data: val.data, timestamp: val.ts });
-        loaded++;
-      }
-    }
-    if (loaded > 0) {
-      this.logger.log(`📦 K-line 缓存恢复完毕: 注入 ${loaded} 只到内存`);
-    }
   }
 
   // ─── 卖出锁定持久化 ───
@@ -1103,16 +1100,8 @@ export class GemScreenerService implements OnApplicationBootstrap {
       }
       try { await fs.writeFile('/tmp/gem-upgraded-snapshot.json', JSON.stringify(pgSnapshot), 'utf-8'); } catch {}
     }
-    // ─── K-line 缓存注入（留给 controller 的 klineProxyCache 使用） ───
-    // 每次 startup 将 PG 中持久化的 K-line 数据注入到 controller
-    this.logger.log('📦 正在恢复 PostgreSQL K-line 缓存...');
-    try {
-      const map = await this.loadAllKlineCacheFromPg();
-      this._klineCacheFromPg = map;
-      this.logger.log(`✅ K-line 缓存就绪: ${map.size} 只`);
-    } catch (e) {
-      this.logger.warn(`⚠️ K-line 缓存恢复异常: ${e.message}`);
-    }
+    // ─── K-line 磁盘缓存恢复（供 controller 懒加载） ───
+    this.logger.log('📦 K-line 磁盘缓存就绪（首次访问时懒加载）');
 
     this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length??0} 只, 主板 ${this.mainBoardCache?.data?.length??0} 只`);
 

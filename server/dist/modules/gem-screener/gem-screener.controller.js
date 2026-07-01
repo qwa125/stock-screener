@@ -62,7 +62,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         this.stockService = stockService;
         this.logger = new common_1.Logger(GemScreenerController_1.name);
         this.klineProxyCache = new Map();
-        this.klinePgRestored = false;
+        this.klineDiskRestored = false;
     }
     async getMarketState() {
         const state = this.scheduler.getState();
@@ -556,9 +556,17 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
     async proxyKLine(code) {
         if (!code)
             return { code: 400, msg: '缺少股票代码', data: null };
-        if (!this.klinePgRestored) {
-            await this.gemScreener.restoreKlineCacheIntoMap(this.klineProxyCache);
-            this.klinePgRestored = true;
+        if (!this.klineDiskRestored) {
+            const disk = await this.gemScreener.loadKlineCacheFromDisk();
+            let loaded = 0;
+            for (const [c, v] of disk) {
+                if (!this.klineProxyCache.has(c)) {
+                    this.klineProxyCache.set(c, { data: v.data, timestamp: v.ts });
+                    loaded++;
+                }
+            }
+            this.logger.log(`📦 磁盘 K-line 缓存恢复: ${loaded} 只`);
+            this.klineDiskRestored = true;
         }
         const cached = this.klineProxyCache.get(code);
         if (cached && cached.data && cached.data.length >= 5) {
@@ -583,7 +591,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     }));
                     this.klineProxyCache.set(code, { data, timestamp: Date.now() });
                     this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
-                    this.gemScreener.saveKlineCacheToPg(code, data, Date.now()).catch(() => { });
+                    this.gemScreener.saveKlineCacheToDisk(code, data, Date.now()).catch(() => { });
                     return { code: 200, msg: '代理K线成功', data, cached: false };
                 }
             }
@@ -668,7 +676,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             }));
             if (body.code && klineData.length >= 5) {
                 this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
-                this.gemScreener.saveKlineCacheToPg(body.code, klineData, Date.now()).catch(() => { });
+                this.gemScreener.saveKlineCacheToDisk(body.code, klineData, Date.now()).catch(() => { });
                 if (this.klineProxyCache.size > 2000) {
                     const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
                     entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));

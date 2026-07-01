@@ -8,7 +8,7 @@ export declare class GemScreenerController {
     private readonly stockService;
     private readonly logger;
     private readonly klineProxyCache;
-    private klinePgRestored;
+    private klineDiskRestored;
     constructor(gemScreener: GemScreenerService, scheduler: GemScreenerScheduler, stockService: StockService);
     getMarketState(): Promise<{
         code: number;
