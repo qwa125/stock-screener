@@ -900,8 +900,8 @@ export class GemScreenerController {
   @SkipAccessLimit()
   async intradayAnalyze(@Body() body: { code: string; kline: any[]; price?: number }) {
     if (!body.code) return { code: 400, msg: '缺少股票代码' };
-    if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 50) {
-      return { code: 200, msg: '分钟K线数据不足', data: { status: '数据不足', suggestions: [] } };
+    if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 5) {
+      return { code: 200, msg: '分钟K线数据不足（需≥5条）', data: { status: '数据不足', reason: '分钟K线数据不足5条', suggestions: [] } };
     }
     try {
       const result = await this.gemScreener.doIntradayAnalysis(body.code, body.kline);
