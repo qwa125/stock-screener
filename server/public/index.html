@@ -1757,6 +1757,7 @@ async function doFullRescan(saveToBackend){
         if(newStocks[si3].code===code){
           newStocks[si3].currentPrice=price
           newStocks[si3].changePercent=chg
+          newStocks[si3].priceIncrease=Math.abs(chg)  // 实时更新涨幅，供后端排序用
           newStocks[si3].intradayHigh=item.f15
           newStocks[si3].intradayLow=item.f16
           // 实时计算日内位置：现价在当天高低的百分比（低位=可介入空间大）
