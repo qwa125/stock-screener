@@ -936,21 +936,25 @@ export class GemScreenerController {
       // force=true → 跳过分析缓存，强制完整分析（用于11:30/15:00全量重算）
       this._forceMode = body.force === true;
       if (this._forceMode) this.logger.log('🔁 强制完整分析模式（跳过缓存）');
-    // 0.1 CPU 单核，逐只串行最快（并行反而抢CPU更慢）
-    // 每10只让出事件循环一次，让其他用户的HTTP请求能插队
-    for (let i = 0; i < stocks.length; i++) {
-      const s = stocks[i];
-      try {
-        const r = await this.analyzeWithKLine({
-          code: s.code, name: s.name,
-          kline: s.kline, price: s.price,
-          changePercent: s.changePercent,
-        });
-        if (r?.data) results.push(...r.data);
-      } catch (e) {
-        this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
-      }
-      if (i % 10 === 0) await new Promise<void>(resolve => setImmediate(resolve));
+    // 3并发处理，0.1CPU下需要实测是否卡崩
+    // 每60只让出事件循环一次，让其他HTTP请求能插队
+    let done = 0;
+    while (done < stocks.length) {
+      const batch = stocks.slice(done, done + 3);
+      done += 3;
+      await Promise.all(batch.map(async (s) => {
+        try {
+          const r = await this.analyzeWithKLine({
+            code: s.code, name: s.name,
+            kline: s.kline, price: s.price,
+            changePercent: s.changePercent,
+          });
+          if (r?.data) results.push(...r.data);
+        } catch (e) {
+          this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
+        }
+      }));
+      if (done % 60 === 0) await new Promise<void>(resolve => setImmediate(resolve));
     }
     this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
