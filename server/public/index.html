@@ -2894,17 +2894,22 @@ setInterval(function(){
   }
 })()
 
-// ★ 首次加载完成后，立即在后台触发一次扫描（5秒后执行，让UI先展示缓存数据）
-// 解决冷启动/页面刚打开时「机会区显示昨天数据」的问题
+// ★ 首次加载完成后，轻量刷新机会区（5秒后执行，让UI先展示缓存数据）
+// 仅拉Sina实时行情 + 读后端缓存 + 合并信号 + 更新快照 → 不推送analyze-batch（避免锁后端）
+// 解决冷启动/页面刚打开时「机会区显示昨天数据」的问题，同时不导致其他用户502
 if(isTH()&&!window._loaded){
   window._loaded=true
   setTimeout(async function(){
-    if(!loading){
-      console.log('[init] 首次加载完成，立即触发一次后台扫描...')
-      await doScan()
-      console.log('[init] 首次后台扫描完成')
-    }else{
-      console.log('[init] 首次加载完成，但已有扫描进行中')
+    if(loading){console.log('[init] 已有扫描进行中，跳过轻量刷新');return}
+    console.log('[init] 首次加载完成，轻量刷新机会区...')
+    try{
+      // 1. 拉Sina实时行情（CORS必通，3~5秒）
+      await fetchAndCacheSina()
+      // 2. 读后端缓存+Sina实时信号合并+更新快照（不推analyze-batch，不锁后端）
+      await doFullRescan(true)
+      console.log('[init] 轻量刷新完成')
+    }catch(e){
+      console.warn('[init] 轻量刷新失败:',e.message)
     }
   },5000)
 }
