@@ -510,69 +510,11 @@ export declare class GemScreenerController {
     }): Promise<{
         code: number;
         msg: string;
-        data: null;
-    } | {
-        code: number;
-        msg: string;
-        data: any[];
-    }>;
-    intradayAnalyze(body: {
-        code: string;
-        kline: any[];
-        price?: number;
-    }): Promise<{
-        code: number;
-        msg: string;
-        data?: undefined;
-    } | {
-        code: number;
-        msg: string;
-        data: any;
-    }>;
-    backtest(): Promise<{
-        code: number;
-        msg: string;
         data: any;
     } | {
         code: number;
         msg: any;
         data?: undefined;
-    }>;
-    backtestForecast(): Promise<{
-        code: number;
-        msg: string;
-        data: any;
-    } | {
-        code: number;
-        msg: any;
-        data?: undefined;
-    }>;
-    clearCache(): Promise<{
-        code: number;
-        msg: string;
-    }>;
-    technicalAnalysis(code: string): Promise<{
-        code: number;
-        msg: string;
-        data: any;
-    } | {
-        code: number;
-        msg: any;
-        data: null;
-    }>;
-    intradayAnalysis(code: string): Promise<{
-        code: number;
-        msg: string;
-        data: any;
-    } | {
-        code: number;
-        msg: any;
-        data: null;
-    }>;
-    auctionTrend(code: string): Promise<{
-        code: number;
-        msg: string;
-        data: any[];
     } | {
         code: number;
         msg: any;

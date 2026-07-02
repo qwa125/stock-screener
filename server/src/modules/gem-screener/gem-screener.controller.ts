@@ -899,9 +899,10 @@ export class GemScreenerController {
       // 缓存原始K线（备选代理用，仅腾讯挂了才走）
       if (body.code && klineData.length >= 5) {
         this.klineProxyCache.set(body.code, { data: klineData, timestamp: Date.now() });
-        if (this.klineProxyCache.size > 2000) {
+        // 内存优化：单只120根K线 ≈ 10KB, 1200只 ≈ 12MB，控制在 1200 以内
+        if (this.klineProxyCache.size > 1200) {
           const entries = [...this.klineProxyCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
-          entries.slice(0, entries.length - 1000).forEach(([k]) => this.klineProxyCache.delete(k));
+          entries.slice(0, entries.length - 600).forEach(([k]) => this.klineProxyCache.delete(k));
         }
       }
       // ─── 分析结果缓存：K线日期相同且无极端涨跌幅时跳过 quickAnalyze（80行CPU密集计算） ───
@@ -976,13 +977,16 @@ export class GemScreenerController {
     }
     const wasForced = this._forceMode;
     this._forceMode = false; // 恢复缓存模式
-    // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
-    if (this.klineProxyCache.size > 0) {
-      const mapForPersist = new Map<string, { data: any[]; ts: number }>();
-      for (const [k, v] of this.klineProxyCache) {
-        if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
-      }
-      await this.gemScreener.persistFullKlineCache(mapForPersist);
+    // 仅强制扫描（11:30/15:00）才持久化K线+分析缓存到磁盘，避免 OOM
+    // 轻量扫描只更新内存，磁盘缓存由强制扫描统一写入
+    if (wasForced) {
+      // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
+      if (this.klineProxyCache.size > 0) {
+        const mapForPersist = new Map<string, { data: any[]; ts: number }>();
+        for (const [k, v] of this.klineProxyCache) {
+          if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+        }
+        await this.gemScreener.persistFullKlineCache(mapForPersist);
       // 仅15:00收盘后强制扫描才写到PG（10分钟扫描不写PG，减少无谓写入）
       if (wasForced) {
         const h = new Date().getHours(), m = new Date().getMinutes();
@@ -1008,9 +1012,9 @@ export class GemScreenerController {
           this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
         }
       }
+      // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
+      await this.gemScreener.saveAnalysisCache();
     }
-    // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
-    await this.gemScreener.saveAnalysisCache();
     return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
     } catch (e) {
       this.logger.error(`[analyze-batch] 异常: ${(e as Error).message}`);
