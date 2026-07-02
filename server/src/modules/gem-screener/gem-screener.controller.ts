@@ -689,9 +689,14 @@ export class GemScreenerController {
     }
     const cached = this.klineProxyCache.get(code);
     if (cached && cached.data && cached.data.length >= 5) {
-      const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
-      this.logger.log(`📦 K线代理返回缓存数据: ${code} (${age}分钟前缓存)`);
-      return { code: 200, msg: `代理K线(缓存${age}分钟前)`, data: cached.data, cached: true, age };
+      const age = Date.now() - cached.timestamp;
+      const ageMin = Math.round(age / 1000 / 60);
+      // 4小时TTL：日K线盘中不会变化（今天的日K线收盘才有），
+      // 不需要盘中频繁刷新。隔天重启/首次拉取时缓存必过期。
+      if (age < 4 * 60 * 60 * 1000) {
+        return { code: 200, msg: `代理K线(缓存${ageMin}分钟前)`, data: cached.data, cached: true, age: ageMin };
+      }
+      this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);
     }
     // 无缓存 → 从腾讯API实时拉取
     try {

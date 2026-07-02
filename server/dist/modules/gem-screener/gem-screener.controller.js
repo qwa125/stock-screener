@@ -588,9 +588,12 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         const cached = this.klineProxyCache.get(code);
         if (cached && cached.data && cached.data.length >= 5) {
-            const age = Math.round((Date.now() - cached.timestamp) / 1000 / 60);
-            this.logger.log(`📦 K线代理返回缓存数据: ${code} (${age}分钟前缓存)`);
-            return { code: 200, msg: `代理K线(缓存${age}分钟前)`, data: cached.data, cached: true, age };
+            const age = Date.now() - cached.timestamp;
+            const ageMin = Math.round(age / 1000 / 60);
+            if (age < 4 * 60 * 60 * 1000) {
+                return { code: 200, msg: `代理K线(缓存${ageMin}分钟前)`, data: cached.data, cached: true, age: ageMin };
+            }
+            this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);
         }
         try {
             const prefix = code.startsWith('6') ? 'sh' : 'sz';
