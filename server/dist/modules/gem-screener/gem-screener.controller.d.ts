@@ -571,8 +571,4 @@ export declare class GemScreenerController {
         msg: any;
         data: null;
     }>;
-    triggerForceScan(): Promise<{
-        code: number;
-        msg: string;
-    }>;
 }

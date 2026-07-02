@@ -23,6 +23,7 @@ export class GemScreenerScheduler implements OnModuleInit {
     nextScanTime: 0,
   };
   private STATE_FILE = '/tmp/market-state.json';
+  private isScanning = false;
   // 上次完整扫描的"买入"股票代码列表（用于实时价格推送）
   private watchedCodes: string[] = [];
   // 缓存：assets全市场数据（只读一次，避免重复IO）
@@ -191,17 +192,58 @@ export class GemScreenerScheduler implements OnModuleInit {
     this.state.nextScanTime = now.getTime();
   }
 
+  // ===================== 扫描执行 =====================
+
+  private async doScan(label: string) {
+    if (this.isScanning) {
+      this.logger.log(`⏳ [${label}] 上一轮扫描尚未完成，跳过`);
+      return;
+    }
+
+    this.isScanning = true;
+    this.state.lastScanTime = Date.now();
+    // 记录内存水位，用于排查OOM
+    const _mem = process.memoryUsage();
+    this.logger.log(`🚀 [${label}] 开始扫描 | RSS=${Math.round(_mem.rss/1024/1024)}MB heap=${Math.round(_mem.heapUsed/1024/1024)}/${Math.round(_mem.heapTotal/1024/1024)}MB`);
+
+    try {
+      // 使用启动时预加载的全市场缓存（不重复读盘，不写 /tmp 耗内存）
+      if (!this._cacheLoaded) this._preloadCache();
+      const allStocks = this._allStocks || [];
+      
+      // 过滤买入信号
+      const buySignals = allStocks.filter(s => 
+        ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion)
+      );
+      
+      this.state.lastScanCount = allStocks.length;
+      this.watchedCodes = buySignals.map(s => s.code);
+
+      this.logger.log(`✅ [${label}] 完成: ${allStocks.length}只, 其中买入信号${buySignals.length}只`);
+      
+      // 更新状态
+      this._updateNextScanTime();
+      this.saveState();
+
+    } catch (error: any) {
+      this.logger.error(`❌ [${label}] 扫描异常: ${error.message}`);
+      this._updateNextScanTime();
+      this.saveState();
+    } finally {
+      this.isScanning = false;
+    }
+  }
+
   // ===================== Cron 定时任务 (北京时间) =====================
 
-  /** 9:25 - 集合竞价结束开盘 */
+  /** 9:25 - 首次扫描并解锁（覆盖昨天收盘数据） */
   @Cron('25 9 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async morningFirstScan() {
     if (!this._isTradingDay()) return;
     this.state.status = 'trading';
     this.state.lockUntil = 0;
-    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [9:25] 已解锁，进入交易状态');
+    await this.doScan('9:25 首次开盘扫描');
   }
 
   /** 每10分钟扫描 (9:40-11:30, 13:00-15:00) */
@@ -237,51 +279,55 @@ export class GemScreenerScheduler implements OnModuleInit {
 
     this.state.status = 'trading';
     this.state.lockUntil = 0;
-    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [每10分钟] 状态刷新');
+    await this.doScan('每10分钟扫描');
   }
 
-  /** 11:30 - 午间锁定 */
+  /** 11:30 - 午间收盘扫描+锁定 */
   @Cron('30 11 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async lunchScanAndLock() {
     if (!this._isTradingDay()) return;
     
     this.state.status = 'lunch';
+    this.saveState();
+    await this.doScan('11:30 午间扫描');
+
     // 锁定到13:00
     const bj = this._bjNow();
     bj.setUTCHours(5, 0, 0, 0); // 13:00 Beijing = 5:00 UTC
     this.state.lockUntil = bj.getTime();
-    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🔒 [11:30] 午间锁定到13:00');
+    
+    const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    this.logger.log(`🔒 午间锁定到 ${lockTime}`);
   }
 
-  /** 13:00 - 午后开盘解锁 */
+  /** 13:00 - 午后开盘扫描+解锁 */
   @Cron('0 13 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async afternoonOpen() {
     if (!this._isTradingDay()) return;
     
     this.state.status = 'trading';
     this.state.lockUntil = 0;
-    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [13:00] 午后开盘解锁');
+    await this.doScan('13:00 午后开盘扫描');
   }
 
-  /** 15:00 - 收盘锁定到下一交易日 */
+  /** 15:00 - 收盘扫描+锁定到下一交易日 */
   @Cron('0 15 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async marketClose() {
     if (!this._isTradingDay()) return;
 
     this.state.status = 'closed';
+    await this.doScan('15:00 收盘扫描');
+
     // 锁定到下一交易日9:25
     const nextOpen = this._nextTradingDayOpen();
     this.state.lockUntil = nextOpen.getTime();
-    this._updateNextScanTime();
     this.saveState();
+
     const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-    this.logger.log(`🔒 [15:00] 收盘锁定到 ${lockStr}`);
+    this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
   }
 
   // ===================== 公开 API =====================

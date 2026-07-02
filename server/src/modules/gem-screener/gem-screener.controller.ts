@@ -1080,11 +1080,4 @@ export class GemScreenerController {
       return { code: 500, msg: e.message, data: null };
     }
   }
-
-  // ─── 服务端强制扫描端点（保留，前端已改回直接调用 doScan，此端点为备用）───
-
-  @Post('trigger-force-scan')
-  async triggerForceScan() {
-    return { code: 200, msg: '请使用前端扫描功能（浏览器直连更快）' };
-  }
 }

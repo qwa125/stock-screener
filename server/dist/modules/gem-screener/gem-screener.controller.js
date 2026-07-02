@@ -903,9 +903,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             return { code: 500, msg: e.message, data: null };
         }
     }
-    async triggerForceScan() {
-        return { code: 200, msg: '请使用前端扫描功能（浏览器直连更快）' };
-    }
 };
 exports.GemScreenerController = GemScreenerController;
 __decorate([
@@ -1313,12 +1310,6 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "auctionTrend", null);
-__decorate([
-    (0, common_1.Post)('trigger-force-scan'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], GemScreenerController.prototype, "triggerForceScan", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

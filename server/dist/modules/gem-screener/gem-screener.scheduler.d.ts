@@ -12,6 +12,7 @@ export declare class GemScreenerScheduler implements OnModuleInit {
     private readonly logger;
     private state;
     private STATE_FILE;
+    private isScanning;
     private watchedCodes;
     private _cacheLoaded;
     private _allStocks;
@@ -33,6 +34,7 @@ export declare class GemScreenerScheduler implements OnModuleInit {
     private loadState;
     private saveState;
     private _updateNextScanTime;
+    private doScan;
     morningFirstScan(): Promise<void>;
     periodicScan(): Promise<void>;
     lunchScanAndLock(): Promise<void>;

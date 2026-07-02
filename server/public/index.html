@@ -357,9 +357,8 @@ function handleScanClick(){
   if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
   if(!_isAdmin){showToast('❌ 仅管理员可执行扫描','error');return}
-  // 强制重新分析所有股票（不走缓存）
   _forceReanalysis=true
-  doScan().then(function(){_forceReanalysis=false})
+  doScan()
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
