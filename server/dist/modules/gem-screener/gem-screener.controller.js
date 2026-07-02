@@ -787,8 +787,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                 this.logger.log('🔁 强制完整分析模式（跳过缓存）');
             let done = 0;
             while (done < stocks.length) {
-                const batch = stocks.slice(done, done + 3);
-                done += 3;
+                const batch = stocks.slice(done, done + 6);
+                done += 6;
                 await Promise.all(batch.map(async (s) => {
                     try {
                         const r = await this.analyzeWithKLine({
@@ -803,7 +803,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                         this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
                     }
                 }));
-                await new Promise(resolve => setImmediate(resolve));
             }
             this._forceMode = false;
             if (this.klineProxyCache.size > 0) {

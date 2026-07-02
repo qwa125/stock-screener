@@ -940,8 +940,8 @@ export class GemScreenerController {
     // 每60只让出事件循环一次，让其他HTTP请求能插队
     let done = 0;
     while (done < stocks.length) {
-      const batch = stocks.slice(done, done + 3);
-      done += 3;
+      const batch = stocks.slice(done, done + 6);
+      done += 6;
       await Promise.all(batch.map(async (s) => {
         try {
           const r = await this.analyzeWithKLine({
@@ -955,7 +955,6 @@ export class GemScreenerController {
         }
       }));
       // 每批（3只）就让出一次事件循环，其他用户请求不超时502
-	      await new Promise<void>(resolve => setImmediate(resolve));
     }
     this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
