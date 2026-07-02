@@ -974,6 +974,7 @@ export class GemScreenerController {
       }));
       // 每批（3只）就让出一次事件循环，其他用户请求不超时502
     }
+    const wasForced = this._forceMode;
     this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
     if (this.klineProxyCache.size > 0) {
@@ -982,8 +983,31 @@ export class GemScreenerController {
         if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
       }
       await this.gemScreener.persistFullKlineCache(mapForPersist);
-      // 持久化到 PostgreSQL（跨重启不丢）
-      await this.gemScreener.saveKlineCacheToPg(mapForPersist);
+      // 仅15:00收盘后强制扫描才写到PG（10分钟扫描不写PG，减少无谓写入）
+      if (wasForced) {
+        const h = new Date().getHours(), m = new Date().getMinutes();
+        if (h >= 14 && m >= 55) {
+          // 15:00附近 → 从腾讯重新拉取120根完整K线（确认最后收盘数据）→ 写入PG
+          this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
+          let refreshed = 0;
+          const pgMap = new Map<string, { data: any[]; ts: number }>();
+          for (const [code] of this.klineProxyCache) {
+            try {
+              const fresh = await this._fetchTencentKline(code, 120);
+              if (fresh && fresh.length >= 10) {
+                pgMap.set(code, { data: fresh, ts: Date.now() });
+                this.klineProxyCache.set(code, { data: fresh, timestamp: Date.now() });
+                refreshed++;
+                if (refreshed % 20 === 0) await new Promise(r => setTimeout(r, 0));
+              }
+            } catch {}
+          }
+          this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
+          if (pgMap.size > 0) await this.gemScreener.saveKlineCacheToPg(pgMap);
+        } else {
+          this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
+        }
+      }
     }
     // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
     await this.gemScreener.saveAnalysisCache();
