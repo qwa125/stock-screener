@@ -940,7 +940,7 @@ export class GemScreenerController {
 
   @Post('analyze-batch')
   @SkipAccessLimit()
-  async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }>; force?: boolean }) {
+  async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }>; force?: boolean; persistPg?: boolean }) {
     const stocks = body.stocks || [];
     if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
     // ─── 已有扫描在进行中 → 直接跳过，不排队（防多人11:30/15:00同时触发） ───
@@ -987,10 +987,9 @@ export class GemScreenerController {
         }
         await this.gemScreener.persistFullKlineCache(mapForPersist);
       }
-      // 仅15:00收盘后强制扫描才写到PG（10分钟扫描不写PG，减少无谓写入）
-      if (wasForced) {
-        const h = new Date().getHours(), m = new Date().getMinutes();
-        if (h >= 14 && m >= 55) {
+      // 15:00收盘后强制扫描 → 写K线到PG；立即扫描传递 persistPg=true 也触发（弥补遗漏）
+      const h = new Date().getHours(), m = new Date().getMinutes();
+      if (h >= 14 && m >= 55 || body.persistPg === true) {
           // 15:00附近 → 从腾讯重新拉取120根完整K线（确认最后收盘数据）→ 写入PG
           this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
           let refreshed = 0;
@@ -1009,9 +1008,8 @@ export class GemScreenerController {
           this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
           if (pgMap.size > 0) await this.gemScreener.saveKlineCacheToPg(pgMap);
         } else {
-          this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
+          this.logger.log(`📦 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）${body.persistPg?'，persistPg=true但已在15:00之前，不走PG写入':''}`);
         }
-      }
       // 持久化分析结果缓存到磁盘（下次扫描直接返回，省去80行CPU密集计算）
       await this.gemScreener.saveAnalysisCache();
     }

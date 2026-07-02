@@ -507,6 +507,7 @@ export declare class GemScreenerController {
             gapPercent?: number;
         }>;
         force?: boolean;
+        persistPg?: boolean;
     }): Promise<{
         code: number;
         msg: string;

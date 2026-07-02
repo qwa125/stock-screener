@@ -309,6 +309,7 @@ function hideBlocked(){
 // 点击仅进入页面，后台autoLightScan每10分钟自然刷新
 console.log('页面初始化完成')
 var _forceReanalysis=false // 11:30/15:00强制完整分析（跳过缓存）
+var _persistKlineToPg=false // 立即扫描时标记：15:00后需写K线到PG
 var _isAdmin=false // 管理权限
 var _lastAutoScanTime=null // 上次自动扫描时间
 function updateScanBtn(){
@@ -358,6 +359,9 @@ function handleScanClick(){
   if(loading||_autoScanning)return
   if(!_isAdmin){showToast('❌ 仅管理员可执行扫描','error');return}
   _forceReanalysis=true
+  // 15:00后（收盘）或非交易日 → 连带写K线到PG，弥补遗漏的15:00固定扫描
+  var _b=getBJ(),_hd=_b.getHours(),_md=_b.getMinutes(),_dd=_b.getDay()
+  _persistKlineToPg=(_hd>15||(_hd===15&&_md>=5)||_dd===0||_dd===6)
   doScan()
 }
 function $(id){return document.getElementById(id)}
@@ -1590,7 +1594,7 @@ async function doScan(){
         try{
           await fetch(API+'/gem/analyze-batch',{
             method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({stocks:sub, force:_forceReanalysis}),
+            body:JSON.stringify({stocks:sub, force:_forceReanalysis, persistPg:_persistKlineToPg}),
             signal:AbortSignal.timeout(30000)
           }).then(function(r){return r.json()})
         }catch(e){console.warn('[scan] 批量分析批次失败:',e.message)}

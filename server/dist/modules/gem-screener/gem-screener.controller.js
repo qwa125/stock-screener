@@ -832,32 +832,30 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                     }
                     await this.gemScreener.persistFullKlineCache(mapForPersist);
                 }
-                if (wasForced) {
-                    const h = new Date().getHours(), m = new Date().getMinutes();
-                    if (h >= 14 && m >= 55) {
-                        this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
-                        let refreshed = 0;
-                        const pgMap = new Map();
-                        for (const [code] of this.klineProxyCache) {
-                            try {
-                                const fresh = await this._fetchTencentKline(code, 120);
-                                if (fresh && fresh.length >= 10) {
-                                    pgMap.set(code, { data: fresh, ts: Date.now() });
-                                    this.klineProxyCache.set(code, { data: fresh, timestamp: Date.now() });
-                                    refreshed++;
-                                    if (refreshed % 20 === 0)
-                                        await new Promise(r => setTimeout(r, 0));
-                                }
+                const h = new Date().getHours(), m = new Date().getMinutes();
+                if (h >= 14 && m >= 55 || body.persistPg === true) {
+                    this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
+                    let refreshed = 0;
+                    const pgMap = new Map();
+                    for (const [code] of this.klineProxyCache) {
+                        try {
+                            const fresh = await this._fetchTencentKline(code, 120);
+                            if (fresh && fresh.length >= 10) {
+                                pgMap.set(code, { data: fresh, ts: Date.now() });
+                                this.klineProxyCache.set(code, { data: fresh, timestamp: Date.now() });
+                                refreshed++;
+                                if (refreshed % 20 === 0)
+                                    await new Promise(r => setTimeout(r, 0));
                             }
-                            catch { }
                         }
-                        this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
-                        if (pgMap.size > 0)
-                            await this.gemScreener.saveKlineCacheToPg(pgMap);
+                        catch { }
                     }
-                    else {
-                        this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
-                    }
+                    this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
+                    if (pgMap.size > 0)
+                        await this.gemScreener.saveKlineCacheToPg(pgMap);
+                }
+                else {
+                    this.logger.log(`📦 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）${body.persistPg ? '，persistPg=true但已在15:00之前，不走PG写入' : ''}`);
                 }
                 await this.gemScreener.saveAnalysisCache();
             }
