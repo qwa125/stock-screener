@@ -590,7 +590,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         if (cached && cached.data && cached.data.length >= 5) {
             const age = Date.now() - cached.timestamp;
             const ageMin = Math.round(age / 1000 / 60);
-            if (age < 4 * 60 * 60 * 1000) {
+            if (age < 10 * 60 * 1000) {
                 return { code: 200, msg: `代理K线(缓存${ageMin}分钟前)`, data: cached.data, cached: true, age: ageMin };
             }
             this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);

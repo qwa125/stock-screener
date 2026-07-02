@@ -693,7 +693,7 @@ export class GemScreenerController {
       const ageMin = Math.round(age / 1000 / 60);
       // 4小时TTL：日K线盘中不会变化（今天的日K线收盘才有），
       // 不需要盘中频繁刷新。隔天重启/首次拉取时缓存必过期。
-      if (age < 4 * 60 * 60 * 1000) {
+      if (age < 10 * 60 * 1000) {
         return { code: 200, msg: `代理K线(缓存${ageMin}分钟前)`, data: cached.data, cached: true, age: ageMin };
       }
       this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);
