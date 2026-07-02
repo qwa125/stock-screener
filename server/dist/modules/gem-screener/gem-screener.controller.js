@@ -803,8 +803,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                         this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${e.message}`);
                     }
                 }));
-                if (done % 60 === 0)
-                    await new Promise(resolve => setImmediate(resolve));
+                await new Promise(resolve => setImmediate(resolve));
             }
             this._forceMode = false;
             if (this.klineProxyCache.size > 0) {

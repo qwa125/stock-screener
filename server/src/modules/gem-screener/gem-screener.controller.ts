@@ -954,7 +954,8 @@ export class GemScreenerController {
           this.logger.warn(`[analyze-batch] ${s.code} 分析失败: ${(e as Error).message}`);
         }
       }));
-      if (done % 60 === 0) await new Promise<void>(resolve => setImmediate(resolve));
+      // 每批（3只）就让出一次事件循环，其他用户请求不超时502
+	      await new Promise<void>(resolve => setImmediate(resolve));
     }
     this._forceMode = false; // 恢复缓存模式
     // 批次结束时统一持久化K线缓存到磁盘（一次性写入，避免竞争条件）
