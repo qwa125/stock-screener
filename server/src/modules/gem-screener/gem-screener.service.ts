@@ -908,7 +908,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
   }
 
   /** 缓存 LRU 上限 */
-  private readonly CACHE_MAX_SIZE = 3000;
+  private readonly CACHE_MAX_SIZE = 1000;
 
   /** 按 _cachedAt 淘汰最老的，保留最新 N 只 */
   private evictToLimit(data: any[], max: number): any[] {
@@ -1081,7 +1081,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const idx = this.cache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
-        await this.saveCacheToDisk();
+        // 不逐股写磁盘（避免OOM），由批处理末尾统一持久化
         this.logger.log(`📝 缓存已更新(GEM): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
         return;
       }
@@ -1093,7 +1093,6 @@ export class GemScreenerService implements OnApplicationBootstrap {
           this.cache.data = this.evictToLimit(this.cache.data, this.CACHE_MAX_SIZE);
           this.logger.warn(`🧹 GEM缓存淘汰: >${this.CACHE_MAX_SIZE}`);
         }
-        await this.saveCacheToDisk();
         this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
         return;
       }
@@ -1107,7 +1106,7 @@ export class GemScreenerService implements OnApplicationBootstrap {
       const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
       if (idx >= 0) {
         this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
-        await this.saveMainBoardCacheToDisk();
+        // 不逐股写磁盘，由批处理末尾统一持久化
         this.logger.log(`📝 缓存已更新(主板): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
         return;
       }

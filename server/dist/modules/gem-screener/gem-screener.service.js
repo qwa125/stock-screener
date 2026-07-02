@@ -366,7 +366,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this._klineCacheFile = '/tmp/kline-cache.json';
         this.analysisCache = new Map();
         this.ANALYSIS_CACHE_FILE = '/tmp/analysis-cache.json';
-        this.CACHE_MAX_SIZE = 3000;
+        this.CACHE_MAX_SIZE = 1000;
         this.updateMarketHoursBeganAt();
         this.loadCacheFromDisk();
         this.loadMainBoardCacheFromDisk();
@@ -987,7 +987,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const idx = this.cache.data.findIndex(s => s.code === code);
             if (idx >= 0) {
                 this.cache.data[idx] = { ...this.cache.data[idx], ...opp };
-                await this.saveCacheToDisk();
                 this.logger.log(`📝 缓存已更新(GEM): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
                 return;
             }
@@ -998,7 +997,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
                     this.cache.data = this.evictToLimit(this.cache.data, this.CACHE_MAX_SIZE);
                     this.logger.warn(`🧹 GEM缓存淘汰: >${this.CACHE_MAX_SIZE}`);
                 }
-                await this.saveCacheToDisk();
                 this.logger.log(`🆕 新加入GEM缓存: ${opp.code} ${opp.name} 信号=${opp.suggestion}`);
                 return;
             }
@@ -1010,7 +1008,6 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             const idx = this.mainBoardCache.data.findIndex(s => s.code === code);
             if (idx >= 0) {
                 this.mainBoardCache.data[idx] = { ...this.mainBoardCache.data[idx], ...opp };
-                await this.saveMainBoardCacheToDisk();
                 this.logger.log(`📝 缓存已更新(主板): ${opp.code} ${opp.name} 信号=${opp.suggestion} 评分=${opp.score}`);
                 return;
             }
