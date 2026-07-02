@@ -593,7 +593,25 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
             if (age < 10 * 60 * 1000) {
                 return { code: 200, msg: `代理K线(缓存${ageMin}分钟前)`, data: cached.data, cached: true, age: ageMin };
             }
-            this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);
+            this.logger.log(`📦 K线增量刷新: ${code}`);
+            const latestBar = await this._fetchTencentKline(code, 1);
+            if (latestBar && latestBar.length > 0) {
+                const newBar = latestBar[latestBar.length - 1];
+                const merged = [...cached.data];
+                const lastCached = merged[merged.length - 1];
+                if (lastCached && lastCached.day === newBar.day) {
+                    merged[merged.length - 1] = newBar;
+                }
+                else {
+                    merged.push(newBar);
+                    if (merged.length > 125)
+                        merged.splice(0, merged.length - 120);
+                }
+                this.klineProxyCache.set(code, { data: merged, timestamp: Date.now() });
+                return { code: 200, msg: '代理K线(增量刷新)', data: merged, cached: false };
+            }
+            this.klineProxyCache.set(code, { data: cached.data, timestamp: Date.now() });
+            return { code: 200, msg: '代理K线(增量失败回退)', data: cached.data, cached: true };
         }
         const tencentResult = await this._fetchTencentKline(code);
         if (tencentResult) {
@@ -604,16 +622,16 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
     }
-    async _fetchTencentKline(code) {
+    async _fetchTencentKline(code, count = 120) {
         try {
             const prefix = code.startsWith('6') ? 'sh' : 'sz';
-            const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
+            const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,${count},qfq`;
             const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
             if (!res.ok && res.status !== 0)
                 return null;
             const json = await res.json();
             const tk = json?.data?.[prefix + code];
-            if (!tk?.qfqday || tk.qfqday.length < 10)
+            if (!tk?.qfqday || tk.qfqday.length < Math.min(count, 5) || tk.qfqday.length < 1)
                 return null;
             return tk.qfqday.map((l) => ({
                 day: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
