@@ -2701,10 +2701,13 @@ async function doSearch(){
 [['9:25',9,25],['11:30',11,30,true],['13:00',13,0],['15:00',15,0,true]].forEach(function(item){
   var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
   if(n<t)setTimeout(async function(){
-    if(!loading){
-      if(item[3])_forceReanalysis=true;
-      await doScan();
-      _forceReanalysis=false;
+    // 11:30和15:00强制扫描只有管理员触发（非管理员触发会导致所有人502）
+    if((!item[3])||_isAdmin){
+      if(!loading){
+        if(item[3])_forceReanalysis=true;
+        await doScan();
+        _forceReanalysis=false;
+      }
     }
   },t.getTime()-n.getTime());
 });
