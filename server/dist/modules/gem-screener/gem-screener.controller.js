@@ -832,127 +832,117 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
                             mapForPersist.set(k, { data: v.data, ts: v.timestamp });
                     }
                     await this.gemScreener.persistFullKlineCache(mapForPersist);
-                    if (wasForced) {
-                        const h = new Date().getHours(), m = new Date().getMinutes();
-                        if (h >= 14 && m >= 55) {
-                            this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
-                            let refreshed = 0;
-                            const pgMap = new Map();
-                            for (const [code] of this.klineProxyCache) {
-                                try {
-                                    const fresh = await this._fetchTencentKline(code, 120);
-                                    if (fresh && fresh.length >= 10) {
-                                        pgMap.set(code, { data: fresh, ts: Date.now() });
-                                        this.klineProxyCache.set(code, { data: fresh, timestamp: Date.now() });
-                                        refreshed++;
-                                        if (refreshed % 20 === 0)
-                                            await new Promise(r => setTimeout(r, 0));
-                                    }
-                                }
-                                catch { }
-                            }
-                            this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
-                            if (pgMap.size > 0)
-                                await this.gemScreener.saveKlineCacheToPg(pgMap);
-                        }
-                        else {
-                            this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
-                        }
-                    }
-                    await this.gemScreener.saveAnalysisCache();
                 }
-                return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+                if (wasForced) {
+                    const h = new Date().getHours(), m = new Date().getMinutes();
+                    if (h >= 14 && m >= 55) {
+                        this.logger.log('📦 15:00 收盘后重新拉取完整120根K线，准备写入PG...');
+                        let refreshed = 0;
+                        const pgMap = new Map();
+                        for (const [code] of this.klineProxyCache) {
+                            try {
+                                const fresh = await this._fetchTencentKline(code, 120);
+                                if (fresh && fresh.length >= 10) {
+                                    pgMap.set(code, { data: fresh, ts: Date.now() });
+                                    this.klineProxyCache.set(code, { data: fresh, timestamp: Date.now() });
+                                    refreshed++;
+                                    if (refreshed % 20 === 0)
+                                        await new Promise(r => setTimeout(r, 0));
+                                }
+                            }
+                            catch { }
+                        }
+                        this.logger.log(`📦 15:00 收盘K线写入PG: ${refreshed}只`);
+                        if (pgMap.size > 0)
+                            await this.gemScreener.saveKlineCacheToPg(pgMap);
+                    }
+                    else {
+                        this.logger.log('📦 11:30 强制扫描完成，K线存磁盘跳过PG（留到15:00统一写PG）');
+                    }
+                }
+                await this.gemScreener.saveAnalysisCache();
             }
-            try { }
-            catch (e) {
-                this.logger.error(`[analyze-batch] 异常: ${e.message}`);
-                return { code: 500, msg: `分析失败: ${e.message}`, data: null };
-            }
-            finally {
-                this._analyzeBusy = false;
-            }
+            return { code: 200, msg: `batch完成 ${results.length} 只`, data: results };
+        }
+        catch (e) {
+            this.logger.error(`[analyze-batch] 异常: ${e.message}`);
+            return { code: 500, msg: `分析失败: ${e.message}`, data: null };
         }
         finally {
+            this._analyzeBusy = false;
         }
-        intradayAnalyze(, body, { code: string, kline: any[], price: number });
-        {
-            if (!body.code)
-                return { code: 400, msg: '缺少股票代码' };
-            if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 5) {
-                return { code: 200, msg: '分钟K线数据不足（需≥5条）', data: { status: '数据不足', reason: '分钟K线数据不足5条', currentPrice: body.price || 0, suggestions: [] } };
-            }
-            try {
-                const result = await this.gemScreener.doIntradayAnalysis(body.code, body.kline);
-                return { code: 200, msg: 'success', data: result };
-            }
-            catch (e) {
-                this.logger.error(`日内分析失败: ${e.message}`);
-                return { code: 500, msg: `日内分析失败: ${e.message}`, data: null };
-            }
+    }
+    async intradayAnalyze(body) {
+        if (!body.code)
+            return { code: 400, msg: '缺少股票代码' };
+        if (!body.kline || !Array.isArray(body.kline) || body.kline.length < 5) {
+            return { code: 200, msg: '分钟K线数据不足（需≥5条）', data: { status: '数据不足', reason: '分钟K线数据不足5条', currentPrice: body.price || 0, suggestions: [] } };
         }
-        backtest();
-        {
-            try {
-                const result = await this.gemScreener.runBacktest();
-                return { code: 200, msg: 'success', data: result };
-            }
-            catch (e) {
-                return { code: 500, msg: e.message };
-            }
+        try {
+            const result = await this.gemScreener.doIntradayAnalysis(body.code, body.kline);
+            return { code: 200, msg: 'success', data: result };
         }
-        backtestForecast();
-        {
-            try {
-                const result = await this.gemScreener.runForecastBacktest();
-                return { code: 200, msg: 'success', data: result };
-            }
-            catch (e) {
-                return { code: 500, msg: e.message };
-            }
+        catch (e) {
+            this.logger.error(`日内分析失败: ${e.message}`);
+            return { code: 500, msg: `日内分析失败: ${e.message}`, data: null };
         }
-        clearCache();
-        {
-            this.gemScreener.clearCache();
-            return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
+    }
+    async backtest() {
+        try {
+            const result = await this.gemScreener.runBacktest();
+            return { code: 200, msg: 'success', data: result };
         }
-        technicalAnalysis(, code, string);
-        {
-            if (!code)
-                return { code: 400, msg: '缺少股票代码', data: null };
-            try {
-                const result = await this.gemScreener.technicalAnalysis(code);
-                return { code: 200, msg: 'success', data: result };
-            }
-            catch (e) {
-                this.logger.warn(`技术指标分析失败 ${code}: ${e.message}`);
-                return { code: 500, msg: e.message, data: null };
-            }
+        catch (e) {
+            return { code: 500, msg: e.message };
         }
-        intradayAnalysis(, code, string);
-        {
-            if (!code)
-                return { code: 400, msg: '缺少股票代码', data: null };
-            try {
-                const result = await this.gemScreener.intradayAnalysis(code);
-                return { code: 200, msg: 'success', data: result };
-            }
-            catch (e) {
-                this.logger.warn(`日内分析失败 ${code}: ${e.message}`);
-                return { code: 500, msg: e.message, data: null };
-            }
+    }
+    async backtestForecast() {
+        try {
+            const result = await this.gemScreener.runForecastBacktest();
+            return { code: 200, msg: 'success', data: result };
         }
-        auctionTrend(, code, string);
-        {
-            if (!code)
-                return { code: 400, msg: '缺少股票代码', data: null };
-            try {
-                const data = await this.gemScreener.fetchAuctionTrend(code);
-                return { code: 200, msg: 'success', data };
-            }
-            catch (e) {
-                this.logger.warn(`获取竞价走势失败 ${code}: ${e.message}`);
-                return { code: 500, msg: e.message, data: null };
-            }
+        catch (e) {
+            return { code: 500, msg: e.message };
+        }
+    }
+    async clearCache() {
+        this.gemScreener.clearCache();
+        return { code: 200, msg: '缓存已清空，可重新搜索或扫描覆盖' };
+    }
+    async technicalAnalysis(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const result = await this.gemScreener.technicalAnalysis(code);
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            this.logger.warn(`技术指标分析失败 ${code}: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
+    async intradayAnalysis(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const result = await this.gemScreener.intradayAnalysis(code);
+            return { code: 200, msg: 'success', data: result };
+        }
+        catch (e) {
+            this.logger.warn(`日内分析失败 ${code}: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
+        }
+    }
+    async auctionTrend(code) {
+        if (!code)
+            return { code: 400, msg: '缺少股票代码', data: null };
+        try {
+            const data = await this.gemScreener.fetchAuctionTrend(code);
+            return { code: 200, msg: 'success', data };
+        }
+        catch (e) {
+            this.logger.warn(`获取竞价走势失败 ${code}: ${e.message}`);
+            return { code: 500, msg: e.message, data: null };
         }
     }
 };
@@ -1309,6 +1299,59 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], GemScreenerController.prototype, "analyzeBatch", null);
+__decorate([
+    (0, common_1.Post)('intraday-analyze'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "intradayAnalyze", null);
+__decorate([
+    (0, common_1.Get)('backtest'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "backtest", null);
+__decorate([
+    (0, common_1.Get)('backtest-forecast'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "backtestForecast", null);
+__decorate([
+    (0, common_1.Get)('clear-cache'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "clearCache", null);
+__decorate([
+    (0, common_1.Get)('technical-analysis'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "technicalAnalysis", null);
+__decorate([
+    (0, common_1.Get)('intraday-analysis'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "intradayAnalysis", null);
+__decorate([
+    (0, common_1.Get)('auction-trend'),
+    (0, access_limit_guard_1.SkipAccessLimit)(),
+    __param(0, (0, common_1.Query)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], GemScreenerController.prototype, "auctionTrend", null);
 exports.GemScreenerController = GemScreenerController = GemScreenerController_1 = __decorate([
     (0, common_1.Controller)('gem'),
     __metadata("design:paramtypes", [gem_screener_service_1.GemScreenerService,

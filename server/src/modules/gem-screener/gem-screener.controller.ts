@@ -987,6 +987,7 @@ export class GemScreenerController {
           if (v?.data?.length >= 5) mapForPersist.set(k, { data: v.data, ts: v.timestamp });
         }
         await this.gemScreener.persistFullKlineCache(mapForPersist);
+      }
       // 仅15:00收盘后强制扫描才写到PG（10分钟扫描不写PG，减少无谓写入）
       if (wasForced) {
         const h = new Date().getHours(), m = new Date().getMinutes();
