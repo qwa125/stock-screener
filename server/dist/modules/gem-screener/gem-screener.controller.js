@@ -617,7 +617,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         if (tencentResult) {
             this.klineProxyCache.set(code, { data: tencentResult, timestamp: Date.now() });
             this.logger.log(`✅ K线代理拉取成功: ${code} (${tencentResult.length}条)`);
-            this.gemScreener.saveKlineCacheToDisk(code, tencentResult, Date.now()).catch(() => { });
             return { code: 200, msg: '代理K线成功', data: tencentResult, cached: false };
         }
         return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
