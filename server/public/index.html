@@ -2894,6 +2894,21 @@ setInterval(function(){
   }
 })()
 
+// ★ 首次加载完成后，立即在后台触发一次扫描（5秒后执行，让UI先展示缓存数据）
+// 解决冷启动/页面刚打开时「机会区显示昨天数据」的问题
+if(isTH()&&!window._loaded){
+  window._loaded=true
+  setTimeout(async function(){
+    if(!loading){
+      console.log('[init] 首次加载完成，立即触发一次后台扫描...')
+      await doScan()
+      console.log('[init] 首次后台扫描完成')
+    }else{
+      console.log('[init] 首次加载完成，但已有扫描进行中')
+    }
+  },5000)
+}
+
 // 个股股价每2秒刷新
 var priceTimer=null,marketTimer=null
 
