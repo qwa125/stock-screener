@@ -61,7 +61,6 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
             nextScanTime: 0,
         };
         this.STATE_FILE = '/tmp/market-state.json';
-        this.isScanning = false;
         this.watchedCodes = [];
         this._cacheLoaded = false;
         this._allStocks = [];
@@ -191,42 +190,22 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         now.setUTCHours(utcHour, nextM, 0, 0);
         this.state.nextScanTime = now.getTime();
     }
-    async doScan(label) {
-        if (this.isScanning) {
-            this.logger.log(`⏳ [${label}] 上一轮扫描尚未完成，跳过`);
-            return;
-        }
-        this.isScanning = true;
-        this.state.lastScanTime = Date.now();
-        const _mem = process.memoryUsage();
-        this.logger.log(`🚀 [${label}] 开始扫描 | RSS=${Math.round(_mem.rss / 1024 / 1024)}MB heap=${Math.round(_mem.heapUsed / 1024 / 1024)}/${Math.round(_mem.heapTotal / 1024 / 1024)}MB`);
-        try {
-            if (!this._cacheLoaded)
-                this._preloadCache();
-            const allStocks = this._allStocks || [];
-            const buySignals = allStocks.filter(s => ['重仓买入', '买入', '轻仓买入'].includes(s.suggestion));
-            this.state.lastScanCount = allStocks.length;
-            this.watchedCodes = buySignals.map(s => s.code);
-            this.logger.log(`✅ [${label}] 完成: ${allStocks.length}只, 其中买入信号${buySignals.length}只`);
-            this._updateNextScanTime();
-            this.saveState();
-        }
-        catch (error) {
-            this.logger.error(`❌ [${label}] 扫描异常: ${error.message}`);
-            this._updateNextScanTime();
-            this.saveState();
-        }
-        finally {
-            this.isScanning = false;
-        }
-    }
     async morningFirstScan() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'trading';
         this.state.lockUntil = 0;
         this.saveState();
-        await this.doScan('9:25 首次开盘扫描');
+        this.logger.log('🚀 [9:25] 触发后端轻量扫描...');
+        this.gemService.runLightScan().then(() => {
+            this.logger.log('✅ [9:25] 轻量扫描完成');
+            this._updateNextScanTime();
+            this.saveState();
+        }).catch(e => {
+            this.logger.error(`❌ [9:25] 扫描异常: ${e.message}`);
+            this._updateNextScanTime();
+            this.saveState();
+        });
     }
     async periodicScan() {
         if (!this._isTradingDay())
@@ -252,20 +231,34 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.state.status = 'trading';
         this.state.lockUntil = 0;
         this.saveState();
-        await this.doScan('每10分钟扫描');
+        this.logger.log('🚀 [每10分钟] 触发后端轻量扫描...');
+        this.gemService.runLightScan().then(() => {
+            this.logger.log('✅ [每10分钟] 轻量扫描完成');
+            this._updateNextScanTime();
+            this.saveState();
+        }).catch(e => {
+            this.logger.error(`❌ [每10分钟] 扫描异常: ${e.message}`);
+            this._updateNextScanTime();
+            this.saveState();
+        });
     }
     async lunchScanAndLock() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'lunch';
         this.saveState();
-        await this.doScan('11:30 午间扫描');
-        const bj = this._bjNow();
-        bj.setUTCHours(5, 0, 0, 0);
-        this.state.lockUntil = bj.getTime();
-        this.saveState();
-        const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-        this.logger.log(`🔒 午间锁定到 ${lockTime}`);
+        this.logger.log('🚀 [11:30] 触发后端强制扫描...');
+        this.gemService.runFullScan().then(() => {
+            this.logger.log('✅ [11:30] 强制扫描完成');
+            const bj = this._bjNow();
+            bj.setUTCHours(5, 0, 0, 0);
+            this.state.lockUntil = bj.getTime();
+            this.saveState();
+            const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            this.logger.log(`🔒 午间锁定到 ${lockTime}`);
+        }).catch(e => {
+            this.logger.error(`❌ [11:30] 强制扫描异常: ${e.message}`);
+        });
     }
     async afternoonOpen() {
         if (!this._isTradingDay())
@@ -273,18 +266,32 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         this.state.status = 'trading';
         this.state.lockUntil = 0;
         this.saveState();
-        await this.doScan('13:00 午后开盘扫描');
+        this.logger.log('🚀 [13:00] 触发后端轻量扫描...');
+        this.gemService.runLightScan().then(() => {
+            this.logger.log('✅ [13:00] 轻量扫描完成');
+            this._updateNextScanTime();
+            this.saveState();
+        }).catch(e => {
+            this.logger.error(`❌ [13:00] 扫描异常: ${e.message}`);
+            this._updateNextScanTime();
+            this.saveState();
+        });
     }
     async marketClose() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'closed';
-        await this.doScan('15:00 收盘扫描');
-        const nextOpen = this._nextTradingDayOpen();
-        this.state.lockUntil = nextOpen.getTime();
-        this.saveState();
-        const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-        this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
+        this.logger.log('🚀 [15:00] 触发后端强制扫描...');
+        this.gemService.runFullScan().then(() => {
+            this.logger.log('✅ [15:00] 强制扫描完成');
+            const nextOpen = this._nextTradingDayOpen();
+            this.state.lockUntil = nextOpen.getTime();
+            this.saveState();
+            const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
+        }).catch(e => {
+            this.logger.error(`❌ [15:00] 强制扫描异常: ${e.message}`);
+        });
     }
     getState() {
         if (this.state.lockUntil > 0 && this._isTradingDay()) {

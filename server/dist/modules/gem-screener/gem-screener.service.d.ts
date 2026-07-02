@@ -69,6 +69,8 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
         data: any[];
         ts: number;
     }> | null;
+    private _klineMemoryCache;
+    private _serverScanning;
     private intradaySignalCache;
     private readonly SELL_STATE_FILE;
     private upgradedSnapshot;
@@ -176,6 +178,10 @@ export declare class GemScreenerService implements OnApplicationBootstrap {
     syncUpgradedCache(stocks: any[]): Promise<number>;
     private triggerRefresh;
     private refreshCache;
+    private fetchKlineDirect;
+    private restoreKlineMemoryCache;
+    runFullScan(): Promise<void>;
+    runLightScan(): Promise<void>;
     onApplicationBootstrap(): Promise<void>;
     calcKDJ(kline: KLine[]): {
         k: number;

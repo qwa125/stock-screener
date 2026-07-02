@@ -1081,90 +1081,11 @@ export class GemScreenerController {
     }
   }
 
-  // ─── 服务端强制扫描（11:30 / 15:00 自动触发，不依赖前端）───
-  private _serverScanning = false;
-  private _serverScanDate = '';
+  // ─── 服务端强制扫描（11:30 / 15:00 / 用户手动触发）───
 
   @Post('trigger-force-scan')
   async triggerForceScan() {
-    if (this._serverScanning) return { code: 200, msg: '服务端扫描已在运行' };
-    this.runServerSideForceScan().catch(e => this.logger.error('服务端扫描失败:', e));
+    this.gemScreener.runFullScan().catch(e => this.logger.error('服务端强制扫描失败:', e));
     return { code: 200, msg: '服务端强制扫描已触发（后台运行）' };
-  }
-
-  private async runServerSideForceScan() {
-    if (this._serverScanning) return;
-    this._serverScanning = true;
-    this._serverScanDate = new Date().toISOString().slice(0, 10);
-    try {
-      this.logger.log('🔄 [服务端] 开始强制扫描...');
-
-      // 1. 从 EastMoney 拉取全市场股票
-      this.logger.log('📡 [服务端] 拉取全市场行情...');
-      const emRes = await fetch('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048', { signal: AbortSignal.timeout(15000) });
-      const emText = await emRes.text();
-      let candidates: any[] = [];
-      try {
-        const emJson = JSON.parse(emText);
-        candidates = (emJson?.data?.diff || []).filter((s: any) => s.f2 > 0 && s.f3 !== undefined).sort((a: any, b: any) => Math.abs(b.f3 || 0) - Math.abs(a.f3 || 0));
-      } catch { }
-      if (candidates.length === 0) {
-        this.logger.warn('⚠️ [服务端] EastMoney 未返回数据，跳过');
-        return;
-      }
-      this.logger.log(`📋 [服务端] 获取 ${candidates.length} 只股票`);
-
-      // 2. 逐只获取 K 线 + 分析（3并发）
-      this._forceMode = true;
-      const results: any[] = [];
-      for (let i = 0; i < candidates.length; i += 3) {
-        const batch = candidates.slice(i, i + 3);
-        const batchResults = await Promise.all(batch.map(async (s: any) => {
-          const code = s.f12 || '';
-          if (!code) return null;
-          try {
-            let klineData = this.klineProxyCache.get(code)?.data;
-            if (!klineData || klineData.length < 10) {
-              const proxyRes = await fetch(`http://localhost:3000/api/gem/proxy/kline?code=${code}`, { signal: AbortSignal.timeout(8000) });
-              const pj = await proxyRes.json();
-              if (pj?.code === 200 && pj?.data?.length >= 10) {
-                klineData = pj.data;
-                this.klineProxyCache.set(code, { data: klineData!, timestamp: Date.now() });
-              }
-            }
-            if (!klineData || klineData.length < 10) return null;
-
-            const name = s.f14 || '';
-            const result = await this.gemScreener.quickAnalyze(code, name, true, klineData);
-            if (result) {
-              result.code = code;
-              result.currentPrice = s.f2 ?? 0;
-              result.changePercent = s.f3 ?? 0;
-              result.name = name;
-            }
-            return result;
-          } catch (e) {
-            return null;
-          }
-        }));
-
-        for (const r of batchResults) {
-          if (r) results.push(r);
-        }
-      }
-
-      this.logger.log(`📊 [服务端] 分析完成 ${results.length}/${candidates.length} 只`);
-
-      // 3. 6 层排序并保存到 PG
-      if (results.length > 0) {
-        const sorted = GemScreenerService.sortStocks(results);
-        this.gemScreener.setUpgradedSnapshot(sorted);
-        this.logger.log(`✅ [服务端] 强制扫描完成，机会区 ${sorted.length} 只`);
-      }
-    } catch (e) {
-      this.logger.error(`❌ [服务端] 强制扫描异常: ${(e as Error).message}`);
-    } finally {
-      this._serverScanning = false;
-    }
   }
 }

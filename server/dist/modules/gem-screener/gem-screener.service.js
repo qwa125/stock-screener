@@ -328,6 +328,8 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
         this.CACHE_FILE = '/tmp/gem-opportunities-cache.json';
         this.SNAPSHOT_FILE = '/tmp/gem-upgraded-snapshot.json';
         this.klineDbCache = null;
+        this._klineMemoryCache = new Map();
+        this._serverScanning = false;
         this.intradaySignalCache = new Map();
         this.SELL_STATE_FILE = '/tmp/sell-state-cache.json';
         this.upgradedSnapshot = { list: [], timestamp: 0 };
@@ -1096,6 +1098,209 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             }
         }
     }
+    async fetchKlineDirect(code) {
+        const cached = this._klineMemoryCache.get(code);
+        if (cached && cached.data && cached.data.length >= 10) {
+            return cached.data;
+        }
+        try {
+            const prefix = code.startsWith('6') ? 'sh' : 'sz';
+            const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!res.ok && res.status !== 0)
+                return null;
+            const json = await res.json();
+            const tk = json?.data?.[prefix + code];
+            if (!tk?.qfqday || tk.qfqday.length < 10)
+                return null;
+            const data = tk.qfqday.map((l) => ({
+                day: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
+                high: parseFloat(l[3]) || 0, low: parseFloat(l[4]) || 0,
+                volume: parseFloat(l[5]) || 0,
+                amount: (parseFloat(l[5]) || 0) * ((parseFloat(l[1]) + parseFloat(l[2])) / 2 || 0) * 100
+            }));
+            this._klineMemoryCache.set(code, { data, timestamp: Date.now() });
+            this.saveKlineCacheToDisk(code, data, Date.now()).catch(() => { });
+            return data;
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ fetchKlineDirect(${code}) 失败: ${e.message}`);
+            return null;
+        }
+    }
+    async restoreKlineMemoryCache() {
+        try {
+            const disk = await this.loadKlineCacheFromDisk();
+            let loaded = 0;
+            for (const [c, v] of disk) {
+                if (!this._klineMemoryCache.has(c) && v?.data?.length >= 10) {
+                    this._klineMemoryCache.set(c, { data: v.data, timestamp: v.ts });
+                    loaded++;
+                }
+            }
+            this.logger.log(`📦 [服务端] 磁盘 K-line 缓存恢复: ${loaded} 只`);
+            if (loaded < 50 && this.klineDbCache && this.klineDbCache.size > 50) {
+                let pgLoaded = 0;
+                for (const [c, v] of this.klineDbCache) {
+                    if (!this._klineMemoryCache.has(c) && v?.data?.length >= 10) {
+                        this._klineMemoryCache.set(c, { data: v.data, timestamp: v.ts });
+                        pgLoaded++;
+                    }
+                }
+                this.logger.log(`📦 [服务端] PostgreSQL K-line 缓存补充: ${pgLoaded} 只`);
+            }
+        }
+        catch (e) {
+            this.logger.warn(`⚠️ 恢复 K 线内存缓存失败: ${e.message}`);
+        }
+    }
+    async runFullScan() {
+        if (this._serverScanning) {
+            this.logger.log('⏳ [服务端] 强制扫描已在运行，跳过');
+            return;
+        }
+        this._serverScanning = true;
+        try {
+            this.logger.log('🔄 [服务端] 开始强制扫描...');
+            const emRes = await fetch('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048', { signal: AbortSignal.timeout(15000) });
+            const emText = await emRes.text();
+            let candidates = [];
+            try {
+                const j = JSON.parse(emText);
+                candidates = (j?.data?.diff || []).filter((s) => s.f2 > 0 && s.f3 !== undefined).sort((a, b) => Math.abs(b.f3 || 0) - Math.abs(a.f3 || 0));
+            }
+            catch { }
+            if (!candidates.length) {
+                this.logger.warn('⚠️ [服务端] EastMoney 无数据');
+                return;
+            }
+            this.logger.log(`📋 [服务端] 获取 ${candidates.length} 只股票`);
+            const results = [];
+            for (let i = 0; i < candidates.length; i += 3) {
+                const batch = candidates.slice(i, i + 3);
+                const batchResults = await Promise.all(batch.map(async (s) => {
+                    const code = s.f12 || '';
+                    if (!code)
+                        return null;
+                    try {
+                        const kline = await this.fetchKlineDirect(code);
+                        if (!kline || kline.length < 10)
+                            return null;
+                        const result = await this.quickAnalyze(code, s.f14 || '', true, kline);
+                        if (result) {
+                            result.code = code;
+                            result.currentPrice = s.f2 ?? 0;
+                            result.changePercent = s.f3 ?? 0;
+                            result.name = s.f14 || '';
+                        }
+                        return result;
+                    }
+                    catch {
+                        return null;
+                    }
+                }));
+                for (const r of batchResults) {
+                    if (r)
+                        results.push(r);
+                }
+            }
+            this.logger.log(`📊 [服务端] 分析完成 ${results.length}/${candidates.length}`);
+            if (results.length > 0) {
+                const sorted = GemScreenerService_1.sortStocks(results);
+                this.setUpgradedSnapshot(sorted);
+                this.logger.log(`✅ [服务端] 强制扫描完成，机会区 ${sorted.length} 只`);
+            }
+            const mapForPersist = new Map();
+            for (const [k, v] of this._klineMemoryCache) {
+                if (v?.data?.length >= 5)
+                    mapForPersist.set(k, { data: v.data, ts: v.timestamp });
+            }
+            await this.persistFullKlineCache(mapForPersist);
+            await this.saveKlineCacheToPg(mapForPersist);
+            await this.saveAnalysisCache();
+        }
+        catch (e) {
+            this.logger.error(`❌ [服务端] 强制扫描异常: ${e.message}`);
+        }
+        finally {
+            this._serverScanning = false;
+        }
+    }
+    async runLightScan() {
+        if (this._serverScanning) {
+            this.logger.log('⏳ [服务端] 轻量扫描已在运行，跳过');
+            return;
+        }
+        this._serverScanning = true;
+        try {
+            this.logger.log('🔄 [服务端] 开始轻量扫描...');
+            const emRes = await fetch('https://push2.eastmoney.com/api/qt/clist/get?cb=&pn=1&pz=5000&po=1&np=1&fields=f12,f14,f2,f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048', { signal: AbortSignal.timeout(15000) });
+            const emText = await emRes.text();
+            let candidates = [];
+            try {
+                const j = JSON.parse(emText);
+                candidates = (j?.data?.diff || []).filter((s) => s.f2 > 0 && s.f3 !== undefined);
+            }
+            catch { }
+            if (!candidates.length) {
+                this.logger.warn('⚠️ [服务端轻量] EastMoney 无数据');
+                return;
+            }
+            const CACHE_TTL = 10 * 60 * 1000;
+            const now = Date.now();
+            const existingSnapshot = this.upgradedSnapshot.list || [];
+            const results = [];
+            for (let i = 0; i < candidates.length; i += 3) {
+                const batch = candidates.slice(i, i + 3);
+                const batchResults = await Promise.all(batch.map(async (s) => {
+                    const code = s.f12 || '';
+                    if (!code)
+                        return null;
+                    try {
+                        const hasResult = existingSnapshot.find(x => x.code === code);
+                        const cachedKline = this._klineMemoryCache.get(code);
+                        if (hasResult && cachedKline && (now - cachedKline.timestamp) < CACHE_TTL)
+                            return null;
+                        let kline = cachedKline?.data;
+                        if (!kline || kline.length < 10 || (now - (cachedKline?.timestamp || 0)) >= CACHE_TTL) {
+                            kline = await this.fetchKlineDirect(code);
+                        }
+                        if (!kline || kline.length < 10)
+                            return null;
+                        const result = await this.quickAnalyze(code, s.f14 || '', false, kline);
+                        if (result) {
+                            result.code = code;
+                            result.currentPrice = s.f2 ?? 0;
+                            result.changePercent = s.f3 ?? 0;
+                            result.name = s.f14 || '';
+                        }
+                        return result;
+                    }
+                    catch {
+                        return null;
+                    }
+                }));
+                for (const r of batchResults) {
+                    if (r)
+                        results.push(r);
+                }
+            }
+            if (results.length > 0) {
+                const sorted = GemScreenerService_1.sortStocks(results);
+                this.setUpgradedSnapshot(sorted);
+                this.logger.log(`✅ [服务端轻量] 扫描完成，机会区 ${sorted.length} 只（更新 ${results.length} 只）`);
+            }
+            else {
+                this.logger.log('✅ [服务端轻量] 所有缓存有效，无需更新');
+            }
+        }
+        catch (e) {
+            this.logger.error(`❌ [服务端轻量] 扫描异常: ${e.message}`);
+        }
+        finally {
+            this._serverScanning = false;
+        }
+    }
     async onApplicationBootstrap() {
         this.logger.log('📦 创业板: 启动跳过自动扫描, 等待前端推送数据触发引擎分析');
         try {
@@ -1150,6 +1355,7 @@ let GemScreenerService = GemScreenerService_1 = class GemScreenerService {
             this.logger.log(`✅ PostgreSQL K-line 缓存就绪: ${pgKline.size} 只（首次访问时懒加载到内存）`);
         }
         this.logger.log(`🚀 缓存就绪: 创业板 ${this.cache?.data?.length ?? 0} 只, 主板 ${this.mainBoardCache?.data?.length ?? 0} 只`);
+        await this.restoreKlineMemoryCache();
     }
     calcKDJ(kline) {
         const high = kline.map(k => k.high);
