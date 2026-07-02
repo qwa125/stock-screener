@@ -571,4 +571,11 @@ export declare class GemScreenerController {
         msg: any;
         data: null;
     }>;
+    private _serverScanning;
+    private _serverScanDate;
+    triggerForceScan(): Promise<{
+        code: number;
+        msg: string;
+    }>;
+    private runServerSideForceScan;
 }
