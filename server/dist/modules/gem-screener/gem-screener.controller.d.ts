@@ -503,11 +503,11 @@ export declare class GemScreenerController {
     }): Promise<{
         code: number;
         msg: string;
-        data: any[];
+        data: null;
     } | {
         code: number;
         msg: string;
-        data: null;
+        data: any[];
     }>;
     intradayAnalyze(body: {
         code: string;

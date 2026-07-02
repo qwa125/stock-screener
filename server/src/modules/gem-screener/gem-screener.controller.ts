@@ -919,16 +919,10 @@ export class GemScreenerController {
   async analyzeBatch(@Body() body: { stocks: Array<{ code: string; name?: string; kline: any[]; price?: number; changePercent?: number; gapPercent?: number }>; force?: boolean }) {
     const stocks = body.stocks || [];
     if (stocks.length === 0) return { code: 200, msg: 'empty batch', data: [] };
-    // ─── 请求队列：同一时间只处理一个加速分析请求（防3人同时触发拥堵） ───
+    // ─── 已有扫描在进行中 → 直接跳过，不排队（防多人11:30/15:00同时触发） ───
     if (this._analyzeBusy) {
-      this.logger.warn(`⏳ analyze-batch 排队中（已有请求在处理），${stocks.length}只等待...`);
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('分析排队超时')), 300000); // 5分钟超时
-        this._analyzeQueue.push({
-          resolve: () => { clearTimeout(timer); resolve(); },
-          reject: (e) => { clearTimeout(timer); reject(e); },
-        });
-      });
+      this.logger.warn(`⏳ analyze-batch 跳过：已有扫描在进行中`);
+      return { code: 200, msg: '扫描正在进行中，请稍候...', data: null };
     }
     this._analyzeBusy = true; // 锁住，后续请求排队
     try {
@@ -974,13 +968,8 @@ export class GemScreenerController {
       this.logger.error(`[analyze-batch] 异常: ${(e as Error).message}`);
       return { code: 500, msg: `分析失败: ${(e as Error).message}`, data: null };
     } finally {
-      // ─── 释放锁 + 处理队列中的下一个请求 ───
+      // ─── 释放锁 ───
       this._analyzeBusy = false;
-      const next = this._analyzeQueue.shift();
-      if (next) {
-        this.logger.log('▶️ 处理队列中下一个分析请求');
-        next.resolve(undefined);
-      }
     }
   }
 

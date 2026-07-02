@@ -770,14 +770,8 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         if (stocks.length === 0)
             return { code: 200, msg: 'empty batch', data: [] };
         if (this._analyzeBusy) {
-            this.logger.warn(`⏳ analyze-batch 排队中（已有请求在处理），${stocks.length}只等待...`);
-            await new Promise((resolve, reject) => {
-                const timer = setTimeout(() => reject(new Error('分析排队超时')), 300000);
-                this._analyzeQueue.push({
-                    resolve: () => { clearTimeout(timer); resolve(); },
-                    reject: (e) => { clearTimeout(timer); reject(e); },
-                });
-            });
+            this.logger.warn(`⏳ analyze-batch 跳过：已有扫描在进行中`);
+            return { code: 200, msg: '扫描正在进行中，请稍候...', data: null };
         }
         this._analyzeBusy = true;
         try {
@@ -823,11 +817,6 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
         finally {
             this._analyzeBusy = false;
-            const next = this._analyzeQueue.shift();
-            if (next) {
-                this.logger.log('▶️ 处理队列中下一个分析请求');
-                next.resolve(undefined);
-            }
         }
     }
     async intradayAnalyze(body) {
