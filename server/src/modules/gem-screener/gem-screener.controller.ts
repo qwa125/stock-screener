@@ -940,8 +940,8 @@ export class GemScreenerController {
     // 每60只让出事件循环一次，让其他HTTP请求能插队
     let done = 0;
     while (done < stocks.length) {
-      const batch = stocks.slice(done, done + 6);
-      done += 6;
+      const batch = stocks.slice(done, done + 3);
+      done += 3;
       await Promise.all(batch.map(async (s) => {
         try {
           const r = await this.analyzeWithKLine({
