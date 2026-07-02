@@ -193,26 +193,18 @@ export class GemScreenerScheduler implements OnModuleInit {
 
   // ===================== Cron 定时任务 (北京时间) =====================
 
-  /** 9:25 - 轻量扫描（使用缓存，只更新变化股票） */
+  /** 9:25 - 集合竞价结束开盘 */
   @Cron('25 9 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async morningFirstScan() {
     if (!this._isTradingDay()) return;
     this.state.status = 'trading';
     this.state.lockUntil = 0;
+    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [9:25] 触发后端轻量扫描...');
-    this.gemService.runLightScan().then(() => {
-      this.logger.log('✅ [9:25] 轻量扫描完成');
-      this._updateNextScanTime();
-      this.saveState();
-    }).catch(e => {
-      this.logger.error(`❌ [9:25] 扫描异常: ${e.message}`);
-      this._updateNextScanTime();
-      this.saveState();
-    });
+    this.logger.log('🚀 [9:25] 已解锁，进入交易状态');
   }
 
-  /** 每10分钟扫描 (9:40-11:30, 13:00-15:00) — 轻量扫描 */
+  /** 每10分钟扫描 (9:40-11:30, 13:00-15:00) */
   @Cron('*/10 9-15 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async periodicScan() {
     if (!this._isTradingDay()) return;
@@ -245,79 +237,51 @@ export class GemScreenerScheduler implements OnModuleInit {
 
     this.state.status = 'trading';
     this.state.lockUntil = 0;
+    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [每10分钟] 触发后端轻量扫描...');
-    this.gemService.runLightScan().then(() => {
-      this.logger.log('✅ [每10分钟] 轻量扫描完成');
-      this._updateNextScanTime();
-      this.saveState();
-    }).catch(e => {
-      this.logger.error(`❌ [每10分钟] 扫描异常: ${e.message}`);
-      this._updateNextScanTime();
-      this.saveState();
-    });
+    this.logger.log('🚀 [每10分钟] 状态刷新');
   }
 
-  /** 11:30 - 午间强制扫描+锁定 */
+  /** 11:30 - 午间锁定 */
   @Cron('30 11 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async lunchScanAndLock() {
     if (!this._isTradingDay()) return;
     
     this.state.status = 'lunch';
+    // 锁定到13:00
+    const bj = this._bjNow();
+    bj.setUTCHours(5, 0, 0, 0); // 13:00 Beijing = 5:00 UTC
+    this.state.lockUntil = bj.getTime();
+    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [11:30] 触发后端强制扫描...');
-    this.gemService.runFullScan().then(() => {
-      this.logger.log('✅ [11:30] 强制扫描完成');
-      // 锁定到13:00
-      const bj = this._bjNow();
-      bj.setUTCHours(5, 0, 0, 0); // 13:00 Beijing = 5:00 UTC
-      this.state.lockUntil = bj.getTime();
-      this.saveState();
-      const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-      this.logger.log(`🔒 午间锁定到 ${lockTime}`);
-    }).catch(e => {
-      this.logger.error(`❌ [11:30] 强制扫描异常: ${e.message}`);
-    });
+    this.logger.log('🔒 [11:30] 午间锁定到13:00');
   }
 
-  /** 13:00 - 午后开盘轻量扫描+解锁 */
+  /** 13:00 - 午后开盘解锁 */
   @Cron('0 13 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async afternoonOpen() {
     if (!this._isTradingDay()) return;
     
     this.state.status = 'trading';
     this.state.lockUntil = 0;
+    this._updateNextScanTime();
     this.saveState();
-    this.logger.log('🚀 [13:00] 触发后端轻量扫描...');
-    this.gemService.runLightScan().then(() => {
-      this.logger.log('✅ [13:00] 轻量扫描完成');
-      this._updateNextScanTime();
-      this.saveState();
-    }).catch(e => {
-      this.logger.error(`❌ [13:00] 扫描异常: ${e.message}`);
-      this._updateNextScanTime();
-      this.saveState();
-    });
+    this.logger.log('🚀 [13:00] 午后开盘解锁');
   }
 
-  /** 15:00 - 收盘强制扫描+锁定到下一交易日 */
+  /** 15:00 - 收盘锁定到下一交易日 */
   @Cron('0 15 * * 1-5', { timeZone: 'Asia/Shanghai' })
   async marketClose() {
     if (!this._isTradingDay()) return;
 
     this.state.status = 'closed';
-    this.logger.log('🚀 [15:00] 触发后端强制扫描...');
-    this.gemService.runFullScan().then(() => {
-      this.logger.log('✅ [15:00] 强制扫描完成');
-      // 锁定到下一交易日9:25
-      const nextOpen = this._nextTradingDayOpen();
-      this.state.lockUntil = nextOpen.getTime();
-      this.saveState();
-      const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-      this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
-    }).catch(e => {
-      this.logger.error(`❌ [15:00] 强制扫描异常: ${e.message}`);
-    });
+    // 锁定到下一交易日9:25
+    const nextOpen = this._nextTradingDayOpen();
+    this.state.lockUntil = nextOpen.getTime();
+    this._updateNextScanTime();
+    this.saveState();
+    const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    this.logger.log(`🔒 [15:00] 收盘锁定到 ${lockStr}`);
   }
 
   // ===================== 公开 API =====================

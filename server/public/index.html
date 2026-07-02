@@ -357,12 +357,9 @@ function handleScanClick(){
   if(isDetailView){alert('详情中不可使用扫描功能，请先退出详情');return}
   if(loading||_autoScanning)return
   if(!_isAdmin){showToast('❌ 仅管理员可执行扫描','error');return}
-  // 调用后端触发强制扫描
-  fetch('/api/gem/trigger-force-scan',{method:'POST'}).then(function(r){return r.json()}).then(function(d){
-    showToast(d.msg||'✅ 强制扫描已触发（后台运行）','success')
-  }).catch(function(e){
-    showToast('❌ 触发扫描失败: '+(e.message||e),'error')
-  })
+  // 强制重新分析所有股票（不走缓存）
+  _forceReanalysis=true
+  doScan().then(function(){_forceReanalysis=false})
 }
 function $(id){return document.getElementById(id)}
 // 全市场重扫：浏览器从新浪拉全部A股+批量K线推送后端分析（国内访问不超时）
@@ -2700,16 +2697,41 @@ async function doSearch(){
   }
 }
 
-// 前端不再包含定时扫描——全部由后端 cron 定时器自主完成
-// 保留"立即扫描"按钮供用户手动触发后端强制扫描
+// 四个固定扫描点：9:25（集合竞价结束开盘）、11:30（收早盘）、13:00（复盘）、15:00（收盘）
+// 11:30和15:00强制完整分析（跳过缓存，避免积少成多）
+[['9:25',9,25],['11:30',11,30,true],['13:00',13,0],['15:00',15,0,true]].forEach(function(item){
+  var n=new Date(),t=new Date(n.getFullYear(),n.getMonth(),n.getDate(),item[1],item[2],0,0);
+  if(n<t)setTimeout(async function(){
+    if(!loading){
+      if(item[3])_forceReanalysis=true;
+      await doScan();
+      _forceReanalysis=false;
+    }
+  },t.getTime()-n.getTime());
+});
+
+// 每10分钟自动扫描窗口：上午9:40~11:20、下午13:10~14:50
+// 边界整点（9:25/11:30/13:00/15:00）由固定扫描覆盖，避免重叠
+var _autoScanTimer=0
+setInterval(function(){
+  if(!loading){
+    var _b=getBJ(),_m=_b.getHours()*60+_b.getMinutes()
+    // 上午9:40(580)~11:20(680)、下午13:10(790)~14:50(890)
+    if((_m>=580&&_m<680)||(_m>=790&&_m<890)){
+      doScan()
+      _lastAutoScanTime=new Date()
+      _autoScanTimer=0
+    }
+  }
+  _autoScanTimer+=10
+  var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
+  $('scanBtn').textContent='🔄 立即扫描'
+  if($('statusBar'))$('statusBar').textContent=$('statusBar').textContent.replace(/自动扫描[:：][^|]*/g,'')+(_lastAutoScanTime?' | 自动扫描:'+_lastAutoScanTime.toTimeString().slice(0,5):'')
+},600000)
 // 每分钟刷新市场状态
 setInterval(function(){
   var f=freezeMsg();$('freezeMsg').style.display=f?'block':'none';$('freezeMsg').textContent=f
   $('scanBtn').textContent='🔄 立即扫描'
-  fetchMarketState() // 每分钟刷新市场状态
-},60000)
-
-// 首次加载（立即执行，无延迟）
   fetchMarketState() // 每分钟刷新市场状态
 },60000)
 

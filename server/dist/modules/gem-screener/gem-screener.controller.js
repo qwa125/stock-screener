@@ -904,8 +904,7 @@ let GemScreenerController = GemScreenerController_1 = class GemScreenerControlle
         }
     }
     async triggerForceScan() {
-        this.gemScreener.runFullScan().catch(e => this.logger.error('服务端强制扫描失败:', e));
-        return { code: 200, msg: '服务端强制扫描已触发（后台运行）' };
+        return { code: 200, msg: '请使用前端扫描功能（浏览器直连更快）' };
     }
 };
 exports.GemScreenerController = GemScreenerController;

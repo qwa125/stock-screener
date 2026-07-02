@@ -1081,11 +1081,10 @@ export class GemScreenerController {
     }
   }
 
-  // ─── 服务端强制扫描（11:30 / 15:00 / 用户手动触发）───
+  // ─── 服务端强制扫描端点（保留，前端已改回直接调用 doScan，此端点为备用）───
 
   @Post('trigger-force-scan')
   async triggerForceScan() {
-    this.gemScreener.runFullScan().catch(e => this.logger.error('服务端强制扫描失败:', e));
-    return { code: 200, msg: '服务端强制扫描已触发（后台运行）' };
+    return { code: 200, msg: '请使用前端扫描功能（浏览器直连更快）' };
   }
 }

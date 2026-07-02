@@ -195,17 +195,9 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
             return;
         this.state.status = 'trading';
         this.state.lockUntil = 0;
+        this._updateNextScanTime();
         this.saveState();
-        this.logger.log('🚀 [9:25] 触发后端轻量扫描...');
-        this.gemService.runLightScan().then(() => {
-            this.logger.log('✅ [9:25] 轻量扫描完成');
-            this._updateNextScanTime();
-            this.saveState();
-        }).catch(e => {
-            this.logger.error(`❌ [9:25] 扫描异常: ${e.message}`);
-            this._updateNextScanTime();
-            this.saveState();
-        });
+        this.logger.log('🚀 [9:25] 已解锁，进入交易状态');
     }
     async periodicScan() {
         if (!this._isTradingDay())
@@ -230,68 +222,40 @@ let GemScreenerScheduler = GemScreenerScheduler_1 = class GemScreenerScheduler {
         }
         this.state.status = 'trading';
         this.state.lockUntil = 0;
+        this._updateNextScanTime();
         this.saveState();
-        this.logger.log('🚀 [每10分钟] 触发后端轻量扫描...');
-        this.gemService.runLightScan().then(() => {
-            this.logger.log('✅ [每10分钟] 轻量扫描完成');
-            this._updateNextScanTime();
-            this.saveState();
-        }).catch(e => {
-            this.logger.error(`❌ [每10分钟] 扫描异常: ${e.message}`);
-            this._updateNextScanTime();
-            this.saveState();
-        });
+        this.logger.log('🚀 [每10分钟] 状态刷新');
     }
     async lunchScanAndLock() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'lunch';
+        const bj = this._bjNow();
+        bj.setUTCHours(5, 0, 0, 0);
+        this.state.lockUntil = bj.getTime();
+        this._updateNextScanTime();
         this.saveState();
-        this.logger.log('🚀 [11:30] 触发后端强制扫描...');
-        this.gemService.runFullScan().then(() => {
-            this.logger.log('✅ [11:30] 强制扫描完成');
-            const bj = this._bjNow();
-            bj.setUTCHours(5, 0, 0, 0);
-            this.state.lockUntil = bj.getTime();
-            this.saveState();
-            const lockTime = new Date(bj.getTime()).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-            this.logger.log(`🔒 午间锁定到 ${lockTime}`);
-        }).catch(e => {
-            this.logger.error(`❌ [11:30] 强制扫描异常: ${e.message}`);
-        });
+        this.logger.log('🔒 [11:30] 午间锁定到13:00');
     }
     async afternoonOpen() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'trading';
         this.state.lockUntil = 0;
+        this._updateNextScanTime();
         this.saveState();
-        this.logger.log('🚀 [13:00] 触发后端轻量扫描...');
-        this.gemService.runLightScan().then(() => {
-            this.logger.log('✅ [13:00] 轻量扫描完成');
-            this._updateNextScanTime();
-            this.saveState();
-        }).catch(e => {
-            this.logger.error(`❌ [13:00] 扫描异常: ${e.message}`);
-            this._updateNextScanTime();
-            this.saveState();
-        });
+        this.logger.log('🚀 [13:00] 午后开盘解锁');
     }
     async marketClose() {
         if (!this._isTradingDay())
             return;
         this.state.status = 'closed';
-        this.logger.log('🚀 [15:00] 触发后端强制扫描...');
-        this.gemService.runFullScan().then(() => {
-            this.logger.log('✅ [15:00] 强制扫描完成');
-            const nextOpen = this._nextTradingDayOpen();
-            this.state.lockUntil = nextOpen.getTime();
-            this.saveState();
-            const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-            this.logger.log(`🔒 收盘锁定到 ${lockStr}`);
-        }).catch(e => {
-            this.logger.error(`❌ [15:00] 强制扫描异常: ${e.message}`);
-        });
+        const nextOpen = this._nextTradingDayOpen();
+        this.state.lockUntil = nextOpen.getTime();
+        this._updateNextScanTime();
+        this.saveState();
+        const lockStr = nextOpen.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        this.logger.log(`🔒 [15:00] 收盘锁定到 ${lockStr}`);
     }
     getState() {
         if (this.state.lockUntil > 0 && this._isTradingDay()) {
