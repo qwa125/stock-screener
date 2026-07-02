@@ -699,33 +699,34 @@ export class GemScreenerController {
       this.logger.log(`📦 K线缓存过期(${ageMin}分钟前): ${code}, 重新拉取腾讯`);
     }
     // 无缓存 → 从腾讯API实时拉取
+    const tencentResult = await this._fetchTencentKline(code);
+    if (tencentResult) {
+      this.klineProxyCache.set(code, { data: tencentResult, timestamp: Date.now() });
+      this.logger.log(`✅ K线代理拉取成功: ${code} (${tencentResult.length}条)`);
+      this.gemScreener.saveKlineCacheToDisk(code, tencentResult, Date.now()).catch(() => {});
+      return { code: 200, msg: '代理K线成功', data: tencentResult, cached: false };
+    }
+    return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
+  }
+
+  private async _fetchTencentKline(code: string): Promise<any[] | null> {
     try {
       const prefix = code.startsWith('6') ? 'sh' : 'sz';
       const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${prefix}${code},day,,,120,qfq`;
-      this.logger.log(`🌐 K线代理拉取腾讯: ${url}`);
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (res.ok || res.status === 0) {
-        const json = await res.json();
-        const tk = json?.data?.[prefix + code];
-        if (tk?.qfqday && tk.qfqday.length >= 10) {
-          const data = tk.qfqday.map((l: any) => ({
-            day: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
-            high: parseFloat(l[3]) || 0, low: parseFloat(l[4]) || 0,
-            volume: parseFloat(l[5]) || 0,
-            amount: (parseFloat(l[5]) || 0) * ((parseFloat(l[1]) + parseFloat(l[2])) / 2 || 0) * 100
-          }));
-          this.klineProxyCache.set(code, { data, timestamp: Date.now() });
-          this.logger.log(`✅ K线代理拉取成功: ${code} (${data.length}条)`);
-          // 异步持久化到磁盘
-          this.gemScreener.saveKlineCacheToDisk(code, data, Date.now()).catch(() => {});
-          return { code: 200, msg: '代理K线成功', data, cached: false };
-        }
-      }
-      this.logger.warn(`⚠️ K线代理拉取无数据: ${code}`);
-    } catch (e: any) {
-      this.logger.error(`❌ K线代理拉取失败: ${code} ${e.message || e}`);
+      if (!res.ok && res.status !== 0) return null;
+      const json = await res.json();
+      const tk = json?.data?.[prefix + code];
+      if (!tk?.qfqday || tk.qfqday.length < 10) return null;
+      return tk.qfqday.map((l: any) => ({
+        day: l[0], open: parseFloat(l[1]) || 0, close: parseFloat(l[2]) || 0,
+        high: parseFloat(l[3]) || 0, low: parseFloat(l[4]) || 0,
+        volume: parseFloat(l[5]) || 0,
+        amount: (parseFloat(l[5]) || 0) * ((parseFloat(l[1]) + parseFloat(l[2])) / 2 || 0) * 100
+      }));
+    } catch {
+      return null;
     }
-    return { code: 200, msg: '无缓存K线数据', data: null, cached: false };
   }
 
   /**

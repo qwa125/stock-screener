@@ -363,10 +363,17 @@ export declare class GemScreenerController {
     } | {
         code: number;
         msg: string;
-        data: any;
+        data: any[];
+        cached: boolean;
+        age?: undefined;
+    } | {
+        code: number;
+        msg: string;
+        data: null;
         cached: boolean;
         age?: undefined;
     }>;
+    private _fetchTencentKline;
     getKlineCacheStatus(codes: string): Promise<{
         code: number;
         msg: string;
